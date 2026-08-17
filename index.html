@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <title>放置亞丁 · 即時版</title>
+  <meta name="theme-color" content="#15100b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="放置亞丁">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="rotate-warn">請將手機直立使用<br><span style="font-size:14px;font-weight:500">本遊戲僅支援直式畫面</span></div>
+  <div id="app">
+    <div id="topbar">
+      <div class="avatar keep-color" id="avatar"><img id="avatar-face" alt=""></div>
+      <div class="who">
+        <div class="nm"><span id="pname">—</span><span class="cfg" id="btn-cfg">配置</span></div>
+        <div class="meta" id="pmeta">選擇角色</div>
+      </div>
+      <div>
+        <div class="money">💰 <span id="pgold">0</span></div>
+        <div class="def">防禦AC <span id="pac">0</span>　魔防MR <span id="pmr">0</span></div>
+      </div>
+    </div>
+    <div id="xpbar"><div class="fill" id="xpfill"></div><div class="lbl" id="xplbl">0%</div></div>
+
+    <div id="battle" class="bg-hall keep-color">
+      <div class="scene-bg" id="scene-bg"></div>
+      <div class="vignette"></div>
+      <div class="fx-layer" id="fx-layer"></div>
+      <div class="bars">
+        <div class="hbar hp"><div class="f" id="hpf"></div><span id="hpt">0/0</span></div>
+        <div class="hbar mp"><div class="f" id="mpf"></div><span id="mpt">0/0</span></div>
+      </div>
+      <div id="zone-name">
+        <div class="t" id="ztitle">— 大 廳 —</div>
+        <div class="s" id="zsub"></div>
+      </div>
+      <div id="marquee"><span id="mqtext">即時連線版 · 資料存於本機</span></div>
+      <div class="btns-float">
+        <button id="btn-lobby" class="hidden">返回大廳</button>
+        <button id="btn-attack">⚔ 攻 擊</button>
+        <button id="btn-stop" class="hidden">■ 停 止</button>
+      </div>
+      <div class="sprites">
+        <div class="sprite player" id="sp-p">
+          <div class="slash-arc"></div>
+          <img class="art" id="sp-p-art" alt="">
+          <div class="ground-shadow"></div>
+        </div>
+        <div class="sprite enemy" id="sp-m">
+          <img class="art hidden" id="sp-m-art" alt="">
+          <div class="ground-shadow"></div>
+          <div class="mhp hidden" id="mhp"><i id="mhpf"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="status-wrap">狀態：<span id="stxt">無</span>
+      <div id="buffs"></div>
+    </div>
+
+    <div id="panel">
+      <div class="subtabs" id="subtabs"></div>
+      <div id="panel-scroll"></div>
+      <div class="chat-bar hidden" id="chatbar">
+        <input class="field" id="chat-in" maxlength="60" placeholder="說點什麼…">
+        <button class="btn" id="chat-send">送出</button>
+      </div>
+    </div>
+
+    <div id="tabbar">
+      <div class="tab active" data-tab="hunt">狩獵場</div>
+      <div class="tab" data-tab="bag">背包</div>
+      <div class="tab" data-tab="stat">能力</div>
+      <div class="tab" data-tab="chat">聊天</div>
+      <div class="tab" data-tab="market">交易所</div>
+      <div class="tab" data-tab="set">設定</div>
+    </div>
+
+    <div class="overlay" id="login">
+      <div class="login-art"></div>
+      <div class="logo">放置亞丁</div>
+      <div class="sub" id="net-status">連線中…</div>
+      <div class="sub">即時掛機 · 衝裝掉寶</div>
+      <input class="field" id="acc" placeholder="帳號" autocomplete="username">
+      <input class="field" id="pwd" type="password" placeholder="密碼" autocomplete="current-password">
+      <label class="check"><input type="checkbox" id="remember" checked> 記錄帳號密碼</label>
+      <div class="row">
+        <button class="btn wide" id="btn-login">登 入</button>
+        <button class="btn ghost wide" id="btn-reg">註 冊 新 帳 號</button>
+      </div>
+      <p class="small" style="text-align:center;line-height:1.5">原創放置 RPG，即時連線版。<br>帳號與角色存在伺服器，可與其他玩家聊天、交易、打世界王。</p>
+    </div>
+
+    <div class="overlay hidden" id="charsel"></div>
+    <div class="modal hidden" id="modal"></div>
+    <div class="toast hidden" id="toast"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

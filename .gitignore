@@ -1,0 +1,6 @@
+node_modules/
+data/world.json
+server/AdenServer.exe
+server/AdenServer.pdb
+.DS_Store
+.env
