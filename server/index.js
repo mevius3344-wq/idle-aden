@@ -8,7 +8,7 @@ const os = require("os");
 const ROOT = path.join(__dirname, "..");
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || "0.0.0.0";
-const SAVE = path.join(process.env.DATA_DIR || path.join(ROOT, "data"), "world.json");
+const store = require("./store");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -22,7 +22,6 @@ const MIME = {
 
 const sessions = new Map();
 let world = emptyWorld();
-let lastSave = Date.now();
 
 function emptyWorld() {
   return {
@@ -41,29 +40,13 @@ function bossTpl(max) {
   return { max, hp: max, alive: true, next: 0, ranks: {} };
 }
 
-function loadWorld() {
-  try {
-    fs.mkdirSync(path.dirname(SAVE), { recursive: true });
-    if (fs.existsSync(SAVE)) {
-      let raw = fs.readFileSync(SAVE, "utf8");
-      if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-      Object.assign(world, JSON.parse(raw));
-    }
-  } catch (e) {
-    console.log("load fail", e.message);
-  }
+function ensureBosses() {
   for (const id of ["wb1", "wb2", "wb3"]) {
     if (!world.bosses[id]) world.bosses[id] = bossTpl(id === "wb3" ? 200000 : id === "wb2" ? 80000 : 25000);
   }
 }
 function saveWorld() {
-  try {
-    fs.mkdirSync(path.dirname(SAVE), { recursive: true });
-    fs.writeFileSync(SAVE, JSON.stringify(world));
-    lastSave = Date.now();
-  } catch (e) {
-    console.log("save fail", e.message);
-  }
+  return store.save(world);
 }
 function now() { return Date.now(); }
 function hash(s) {
@@ -209,7 +192,7 @@ function sync(ses, msg) {
   acc.last = now();
   ses.charId = msg.char.id;
   if (Array.isArray(msg.warehouse)) acc.warehouse = msg.warehouse;
-  if (Date.now() - lastSave > 8000) saveWorld();
+  if (Date.now() - store.lastSaveAt() > 8000) saveWorld();
 }
 
 function chat(ses, msg) {
@@ -328,7 +311,7 @@ function tick() {
     }
   }
   broadcastWorld();
-  if (Date.now() - lastSave > 20000) saveWorld();
+  if (Date.now() - store.lastSaveAt() > 20000) saveWorld();
 }
 
 function serveFile(req, res) {
@@ -343,8 +326,6 @@ function serveFile(req, res) {
   });
 }
 
-loadWorld();
-
 let WebSocketServer;
 try {
   WebSocketServer = require("ws").WebSocketServer;
@@ -353,32 +334,50 @@ try {
   process.exit(1);
 }
 
-const server = http.createServer(serveFile);
-const wss = new WebSocketServer({ server, path: "/ws" });
+async function start() {
+  const info = await store.init();
+  await store.load(world);
+  ensureBosses();
+  if (info.mode === "postgres") console.log("存檔：PostgreSQL");
+  else console.log("存檔：檔案 " + info.path);
 
-wss.on("connection", (ws) => {
-  const ses = { id: uid(), ws, user: null, charId: null };
-  sessions.set(ses.id, ses);
-  ws.on("message", (buf) => {
-    let msg;
-    try { msg = JSON.parse(String(buf)); } catch { return; }
-    try { handle(ses, msg); } catch (e) { console.log("handle", e); }
-  });
-  ws.on("close", () => {
-    sessions.delete(ses.id);
-    broadcastWorld();
-  });
-});
+  const server = http.createServer(serveFile);
+  const wss = new WebSocketServer({ server, path: "/ws" });
 
-server.listen(PORT, HOST, () => {
-  console.log("放置亞丁雲端伺服器 http://" + HOST + ":" + PORT);
-  for (const n of Object.values(os.networkInterfaces())) {
-    for (const a of n || []) {
-      if (a.family === "IPv4" && !a.internal) console.log("區網 http://" + a.address + ":" + PORT);
+  wss.on("connection", (ws) => {
+    const ses = { id: uid(), ws, user: null, charId: null };
+    sessions.set(ses.id, ses);
+    ws.on("message", (buf) => {
+      let msg;
+      try { msg = JSON.parse(String(buf)); } catch { return; }
+      try { handle(ses, msg); } catch (e) { console.log("handle", e); }
+    });
+    ws.on("close", () => {
+      sessions.delete(ses.id);
+      broadcastWorld();
+    });
+  });
+
+  server.listen(PORT, HOST, () => {
+    console.log("放置亞丁雲端伺服器 http://" + HOST + ":" + PORT);
+    for (const n of Object.values(os.networkInterfaces())) {
+      for (const a of n || []) {
+        if (a.family === "IPv4" && !a.internal) console.log("區網 http://" + a.address + ":" + PORT);
+      }
     }
-  }
-});
+  });
 
-setInterval(tick, 2000);
-process.on("SIGINT", () => { saveWorld(); process.exit(0); });
-process.on("SIGTERM", () => { saveWorld(); process.exit(0); });
+  setInterval(tick, 2000);
+  const shutdown = async () => {
+    await saveWorld();
+    await store.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+start().catch((e) => {
+  console.log("啟動失敗", e);
+  process.exit(1);
+});

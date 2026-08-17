@@ -7,3 +7,6 @@ services:
     buildCommand: npm install
     startCommand: node server/index.js
     healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        sync: false
