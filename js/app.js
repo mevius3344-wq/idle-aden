@@ -301,61 +301,36 @@ window.App = (() => {
     if (["wand", "staff", "crystal", "archstaff", "starstaff"].includes(id) || (!id && c?.classId === "mage")) return "staff";
     return "sword";
   }
-  function heroInner() {
-    return `<div class="h-cloak"></div>
-      <div class="h-leg l"></div><div class="h-leg r"></div>
-      <div class="h-body"><i class="h-belt"></i></div>
-      <div class="h-arm off"></div>
-      <div class="h-arm wep"><i class="h-wep"></i></div>
-      <div class="h-head">
-        <div class="h-ear l"></div><div class="h-ear r"></div>
-        <div class="h-hair"></div>
-        <div class="h-hat"></div>
-        <div class="h-face"><b></b><b></b></div>
-        <div class="h-helm"></div>
-      </div>`;
-  }
   function paintHero(el, c, extra = "") {
     if (!el) return;
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
-      el.className = `hero art lin transformed ${extra}`.trim();
+      el.className = `hero img transformed ${extra}`.trim();
       el.innerHTML = mobArt(tr.mob, { morph: true });
+      if (window.ASSETS) ASSETS.hydrate(el);
       return;
     }
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
-    if (window.PIXEL) {
-      el.className = `hero art wuxia wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = `<div class="hero-lin hero-wuxia">${PIXEL.hero(cls, g)}</div>`;
-      return;
-    }
-    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
-    el.className = `hero art wuxia wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+    el.className = `hero img wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+    el.innerHTML = ASSETS.hero(cls, g);
+    ASSETS.hydrate(el);
   }
   function heroThumb(c) {
-    if (window.PIXEL) {
-      return `<div class="hero art wuxia mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-lin hero-wuxia">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
-    }
-    return `<div class="hero art wuxia mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
+    return `<div class="hero img mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${ASSETS.hero(c.classId, c.gender)}</div>`;
   }
   function mobArt(id, opts = {}) {
-    const extra = opts.morph ? " hero-morph" : "";
-    if (window.PIXEL) return `<div class="mob-svg mob-wuxia${extra}">${PIXEL.mob(id)}</div>`;
-    if (window.ASSETS) return ASSETS.mob(id);
-    return window.SPRITES ? SPRITES.mob(id) : "";
+    const morph = opts.morph ? " hero-morph" : "";
+    return `<div class="mob-svg${morph}">${ASSETS.mob(id)}</div>`;
   }
   function skillIcon(sid) {
-    return window.SPRITES ? `<span class="sk-svg">${SPRITES.skill(sid)}</span>` : "✦";
+    return ASSETS.skill(sid);
   }
   function itemIcon(it) {
     const d = E.itemDef(it) || DATA.items[(it && it.id) || it] || {};
     const id = d.id || (it && it.id) || it;
-    const r = d.rarity || "common";
-    if (window.ASSETS) return ASSETS.item(id, d);
-    const svg = (window.ITEM_ART && ITEM_ART.of(id, d)) || (window.ICONS && ICONS.of(id, d)) || "";
-    return `<span class="ico-svg item-wuxia r-${r}">${svg}</span>`;
+    return ASSETS.item(id, d);
   }
 
   function hash(s) {
