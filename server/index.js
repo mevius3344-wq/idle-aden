@@ -128,6 +128,7 @@ function handle(ses, msg) {
     case "partyJoin": return partyJoin(ses, msg);
     case "bossHit": return bossHit(ses, msg);
     case "announce": return announce(ses, msg);
+    case "changepass": return changePass(ses, msg);
     case "logout":
       ses.charId = null;
       ses.user = null;
@@ -297,6 +298,19 @@ function bossHit(ses, msg) {
 function announce(ses, msg) {
   if (!currentChar(ses) || !msg.text) return;
   broadcast({ t: "mq", text: String(msg.text) });
+}
+
+function changePass(ses, msg) {
+  const acc = accOf(ses);
+  if (!acc) return send(ses, { t: "err", msg: "請先登入" });
+  const oldRaw = String(msg.oldPass || "");
+  const nextRaw = String(msg.newPass || "");
+  if (nextRaw.length < 2) return send(ses, { t: "err", msg: "新密碼至少 2 字" });
+  if (hash(oldRaw) !== acc.pass) return send(ses, { t: "err", msg: "舊密碼錯誤" });
+  if (oldRaw === nextRaw) return send(ses, { t: "err", msg: "新密碼不可與舊密碼相同" });
+  acc.pass = hash(nextRaw);
+  saveWorld();
+  send(ses, { t: "passok", msg: "密碼已更新" });
 }
 
 function tick() {

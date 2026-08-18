@@ -739,23 +739,96 @@ window.App = (() => {
     refreshTop(); save();
   }
 
+  function slotName(slot) {
+    const row = DATA.slots.find((x) => x[0] === slot);
+    return row ? row[1] : slot;
+  }
+  function slotMatches(it, slot) {
+    const d = E.itemDef(it);
+    if (!d || !d.slot) return false;
+    if (slot === "ring1" || slot === "ring2") return d.slot === "ring1";
+    return d.slot === slot;
+  }
+  function dollSlot(slot) {
+    const it = ch.equip[slot];
+    const plus = it && it.plus ? `<i>+${it.plus}</i>` : "";
+    const img = it ? `<img src="${itemIconSrc(it)}" alt="">` : "";
+    return `<button type="button" class="doll-slot ${it ? "on" : "empty"}" data-slot="${slot}">
+      ${img}${plus}<span class="dsl">${slotName(slot)}</span></button>`;
+  }
+  function wear(slot, cls) {
+    const it = ch.equip[slot];
+    if (!it) return "";
+    return `<div class="wear ${cls}" style="--rc:${E.rarityColor(it)}"><img src="${itemIconSrc(it)}" alt=""></div>`;
+  }
+  function openSlotPick(slot) {
+    const worn = ch.equip[slot];
+    if (worn) return openItem(worn, "eq");
+    const cands = ch.bag.filter((it) => slotMatches(it, slot));
+    if (!cands.length) return toast("背包沒有可裝的" + slotName(slot));
+    openSheet(`<h3>選擇${slotName(slot)}</h3>
+      <div class="slot-pick">${cands.map((it) => {
+        const d = E.itemDef(it);
+        return `<div class="item-row" data-iid="${it.iid}">
+          <div class="ico">${itemIcon(it)}</div>
+          <div class="info"><div class="nm" style="color:${E.rarityColor(it)}">${E.displayName(it)}</div>
+          <div class="meta">${DATA.R[d?.rarity || "common"].name}　Lv.${d?.lv || 1}</div></div>
+        </div>`;
+      }).join("")}</div>`);
+    $("modal").querySelectorAll("[data-iid]").forEach((b) => {
+      b.onclick = () => {
+        const it = ch.bag.find((x) => x.iid === b.dataset.iid);
+        if (!it) return;
+        if (!E.tryEquip(ch, it)) toast("無法裝備（等級或職業不符）");
+        else toast("已裝備 " + E.displayName(it));
+        closeModal(); renderPanel(); refreshTop(); save();
+      };
+    });
+  }
+  function renderDoll(box) {
+    const st = E.totalStats(ch);
+    box.innerHTML = `
+      <div class="doll">
+        ${dollSlot("weapon")}${dollSlot("helm")}${dollSlot("shield")}
+        ${dollSlot("cloak")}${dollSlot("armor")}
+        ${dollSlot("gloves")}${dollSlot("amulet")}
+        ${dollSlot("boots")}${dollSlot("belt")}
+        ${dollSlot("ring1")}${dollSlot("ring2")}
+        <div class="doll-stage keep-color">
+          ${wear("cloak", "wear-cloak")}
+          <div class="doll-ground"></div>
+          <img class="doll-body" src="${spriteOf(ch)}" alt="">
+          ${wear("armor", "wear-armor")}
+          ${wear("helm", "wear-helm")}
+          ${wear("amulet", "wear-amulet")}
+          ${wear("belt", "wear-belt")}
+          ${wear("weapon", "wear-weapon")}
+          ${wear("shield", "wear-shield")}
+          ${wear("gloves", "wear-gloves")}
+          ${wear("gloves", "wear-gloves r")}
+          ${wear("boots", "wear-boots")}
+        </div>
+        <div class="doll-stats">
+          AC <b>${st.ac}</b>　MR <b>${st.mr}</b><br>
+          攻擊 <b>${st.dmin}~${st.dmax}</b><br>
+          負重 <b>${E.weightOf(ch)}</b>/${E.weightMax(ch)}
+        </div>
+      </div>
+      <p class="small" style="margin-top:8px;text-align:center">點空欄從背包穿上，點已穿裝備可卸下</p>`;
+    box.querySelectorAll(".doll-slot").forEach((b) => {
+      b.onclick = () => openSlotPick(b.dataset.slot);
+    });
+  }
+
   function renderBag() {
-    $("subtabs").innerHTML = ["bag:背包", "worn:裝備欄"].map((x) => {
+    $("subtabs").innerHTML = ["bag:背包", "worn:紙娃娃"].map((x) => {
       const [id, n] = x.split(":");
       return `<div class="subtab ${bagSub === id ? "active" : ""}" data-s="${id}">${n}</div>`;
     }).join("");
     $("subtabs").querySelectorAll("[data-s]").forEach((b) => b.onclick = () => { bagSub = b.dataset.s; renderPanel(); });
     const box = $("panel-scroll");
     if (bagSub === "worn") {
-      box.innerHTML = `<div class="eq-grid">${DATA.slots.map(([slot, name]) => {
-        const it = ch.equip[slot];
-        return `<div class="eq-slot" data-slot="${slot}"><div class="sn">${name}</div>
-          <div class="en" style="color:${it ? E.rarityColor(it) : "#5a4a2a"}">${it ? E.displayName(it) : "－"}</div></div>`;
-      }).join("")}</div>
-      <p class="small" style="margin-top:8px">負重 ${E.weightOf(ch)} / ${E.weightMax(ch)}</p>`;
-      box.querySelectorAll("[data-slot]").forEach((b) => {
-        b.onclick = () => { const it = ch.equip[b.dataset.slot]; if (it) openItem(it, "eq"); };
-      });
+      renderDoll(box);
       return;
     }
     if (!ch.bag.length) { box.innerHTML = `<p class="dim" style="padding:12px">背包空空如也</p>`; return; }
@@ -854,6 +927,13 @@ window.App = (() => {
       <hr class="sep">
       <label class="check"><input type="checkbox" id="sfx" ${soundOn ? "checked" : ""}> 遊戲音效（實驗）</label>
       <hr class="sep">
+      <p>修改密碼</p>
+      <p class="small">帳號名稱無法更改。目前帳號：${acc.user}</p>
+      <input class="field" id="old-pass" type="password" placeholder="舊密碼" style="margin-top:6px" autocomplete="current-password">
+      <input class="field" id="new-pass" type="password" placeholder="新密碼（至少 2 字）" style="margin-top:6px" autocomplete="new-password">
+      <input class="field" id="new-pass2" type="password" placeholder="再輸入一次新密碼" style="margin-top:6px" autocomplete="new-password">
+      <button class="btn wide" id="btn-pass" style="margin-top:8px">更新密碼</button>
+      <hr class="sep">
       <button class="btn wide" id="exp">匯出存檔</button>
       <button class="btn wide" id="imp" style="margin-top:6px">匯入存檔</button>
       <textarea class="field" id="savebox" rows="4" style="margin-top:8px" placeholder="存檔 JSON"></textarea>
@@ -865,6 +945,15 @@ window.App = (() => {
       hue = +e.target.value; document.getElementById("app").style.setProperty("--hue", hue);
     };
     $("panel-scroll").querySelector("#sfx").onchange = (e) => soundOn = e.target.checked;
+    $("panel-scroll").querySelector("#btn-pass").onclick = () => {
+      const oldPass = $("old-pass").value;
+      const newPass = $("new-pass").value;
+      const newPass2 = $("new-pass2").value;
+      if (newPass.length < 2) return toast("新密碼至少 2 字");
+      if (newPass !== newPass2) return toast("兩次新密碼不一致");
+      if (!Net.ready) return toast("尚未連上伺服器");
+      Net.send({ t: "changepass", oldPass, newPass });
+    };
     $("panel-scroll").querySelector("#exp").onclick = () => {
       $("savebox").value = JSON.stringify(store);
       toast("已填入下方，請複製保存");
@@ -904,6 +993,17 @@ window.App = (() => {
     });
     Net.on("err", (m) => toast(m.msg || "錯誤"));
     Net.on("ok", (m) => toast(m.msg || "完成"));
+    Net.on("passok", (m) => {
+      toast(m.msg || "密碼已更新");
+      try {
+        const r = JSON.parse(localStorage.getItem("aden_remember") || "null");
+        if (r && acc && r.u === acc.user) {
+          const np = $("new-pass") && $("new-pass").value;
+          if (np) localStorage.setItem("aden_remember", JSON.stringify({ u: r.u, p: np }));
+        }
+      } catch (_) {}
+      if (tab === "set") renderPanel();
+    });
     Net.on("login", (m) => {
       acc = m.account;
       if (!acc.warehouse) acc.warehouse = [];
