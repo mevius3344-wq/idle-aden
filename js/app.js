@@ -304,40 +304,37 @@ window.App = (() => {
   function heroInner() {
     return `<div class="h-cloak"></div>
       <div class="h-leg l"></div><div class="h-leg r"></div>
-      <div class="h-body"></div>
+      <div class="h-body"><i class="h-belt"></i></div>
       <div class="h-arm off"></div>
       <div class="h-arm wep"><i class="h-wep"></i></div>
-      <div class="h-head"><div class="h-hair"></div><div class="h-face"><b></b><b></b></div><div class="h-helm"></div></div>`;
+      <div class="h-head">
+        <div class="h-ear l"></div><div class="h-ear r"></div>
+        <div class="h-hair"></div>
+        <div class="h-hat"></div>
+        <div class="h-face"><b></b><b></b></div>
+        <div class="h-helm"></div>
+      </div>`;
   }
   function paintHero(el, c, extra = "") {
     if (!el) return;
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
-      el.className = `hero art q transformed ${extra}`.trim();
+      el.className = `hero art transformed ${extra}`.trim();
       el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
       if (window.ASSETS) ASSETS.hydrate(el);
       return;
     }
+    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
-    if (window.PIXEL) {
-      el.className = `hero art q wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = `<div class="hero-q">${PIXEL.hero(cls, g)}</div>`;
-      return;
-    }
-    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
   }
   function heroThumb(c) {
-    if (window.PIXEL) {
-      return `<div class="hero art q mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-q">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
-    }
     return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
     if (window.ASSETS) return ASSETS.mob(id);
-    if (window.PIXEL) return PIXEL.mob(id);
     return window.SPRITES ? SPRITES.mob(id) : "";
   }
   function skillIcon(sid) {
@@ -410,7 +407,7 @@ window.App = (() => {
     const cls0 = "knight";
     const attrs = { ...DATA.classes[cls0].base };
     const baseCopy = () => ({ ...DATA.classes[state.classId].base });
-    const state = { classId: cls0, gender: "m", name: "", attrs, remain: 5, elfElem: null };
+    const state = { classId: cls0, gender: "m", name: "", attrs, remain: 5 };
     const modal = $("modal");
     const draw = () => {
       const rows = ["str", "dex", "con", "int", "wis", "cha"].map((k) => {
@@ -427,14 +424,11 @@ window.App = (() => {
         <p class="small" style="margin:8px 0 4px">職業</p>
         <div class="class-pick">${Object.values(DATA.classes).map((c) =>
           `<button class="btn ${state.classId === c.id ? "on" : ""}" data-cls="${c.id}">${c.name}</button>`).join("")}</div>
-        <p class="small" style="margin:8px 0">${DATA.classes[state.classId].desc}</p>
+        <p class="small" style="margin:8px 0">${DATA.classes[state.classId].desc}${state.classId === "elf" ? "<br>屬性魔法請於 <b>Lv.10</b> 找<b>精靈導師</b>選擇火／水／風／地（四選一）。" : ""}</p>
         <div class="class-pick">
           <button class="btn ${state.gender === "m" ? "on" : ""}" data-g="m">男</button>
           <button class="btn ${state.gender === "f" ? "on" : ""}" data-g="f">女</button>
         </div>
-        ${state.classId === "elf" ? `<p class="small" style="margin:10px 0 4px">精靈魔法屬性（四選一，永久）</p>
-        <div class="class-pick">${(DATA.elfElements || []).map((e) =>
-          `<button class="btn ${state.elfElem === e ? "on" : ""}" data-elem="${e}">${(DATA.elfElemNames && DATA.elfElemNames[e]) || e}屬性</button>`).join("")}</div>` : ""}
         <p class="small" style="margin:10px 0 4px">分配屬性點 · 剩餘 <b class="gold">${state.remain}</b></p>
         ${rows}
         <div class="row" style="margin-top:10px">
@@ -445,11 +439,9 @@ window.App = (() => {
       modal.querySelector("#cname").oninput = (e) => state.name = e.target.value;
       modal.querySelectorAll("[data-cls]").forEach((b) => b.onclick = () => {
         state.classId = b.dataset.cls; state.attrs = baseCopy(); state.remain = 5;
-        if (state.classId !== "elf") state.elfElem = null;
         draw();
       });
       modal.querySelectorAll("[data-g]").forEach((b) => b.onclick = () => { state.gender = b.dataset.g; draw(); });
-      modal.querySelectorAll("[data-elem]").forEach((b) => b.onclick = () => { state.elfElem = b.dataset.elem; draw(); });
       modal.querySelectorAll("[data-m]").forEach((b) => b.onclick = () => {
         const k = b.dataset.m, d = +b.dataset.d;
         const min = DATA.classes[state.classId].base[k];
@@ -461,8 +453,7 @@ window.App = (() => {
         const name = (modal.querySelector("#cname").value || "").trim();
         if (name.length < 1) return toast("請輸入名稱");
         if (acc.chars.some((c) => c.name === name)) return toast("名稱重複");
-        if (state.classId === "elf" && !state.elfElem) return toast("請選擇精靈魔法屬性（火／水／風／地）");
-        const neu = E.newCharacter({ name, classId: state.classId, gender: state.gender, attrs: state.attrs, elfElem: state.elfElem });
+        const neu = E.newCharacter({ name, classId: state.classId, gender: state.gender, attrs: state.attrs });
         Net.send({ t: "create", char: neu });
         modal.classList.add("hidden");
         toast("建立中…");

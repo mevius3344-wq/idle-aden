@@ -49,7 +49,7 @@ window.ASSETS = (() => {
 
   function mob(id) {
     const src = url.mob(id);
-    const svg = (window.PIXEL ? PIXEL.mob(id) : "") || (window.SPRITES ? SPRITES.mob(id) : "");
+    const svg = window.SPRITES ? SPRITES.mob(id) : "";
     return wrap(src, `<div class="mob-svg">${svg}</div>`, "mob-asset");
   }
 
