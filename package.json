@@ -2,7 +2,7 @@
   "name": "idle-aden",
   "version": "1.1.0",
   "private": true,
-  "description": "放置亞丁即時連線放置 RPG",
+  "description": "雲州閒俠即時連線武俠放置 RPG",
   "main": "server/index.js",
   "engines": {
     "node": ">=18"

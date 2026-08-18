@@ -1,4 +1,4 @@
-/* 每個道具獨立原創 SVG 圖示（天堂系背包格風格） */
+/* 每個道具獨立原創 SVG 圖示（江湖背包格風格） */
 window.ICONS = (() => {
   const RARITY = {
     common: { stroke: "#8a7350", glow: "none" },

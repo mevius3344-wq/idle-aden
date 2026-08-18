@@ -6,7 +6,7 @@ window.App = (() => {
   let ch = null;
   let tab = "hunt";
   let huntCat = "village";
-  let huntRegion = "說話之島";
+  let huntRegion = "渡口島";
   let bagSub = "bag";
   let chatCh = "sys";
   let marketCat = "weapon";
@@ -24,7 +24,7 @@ window.App = (() => {
 
   const JUNK_PRESETS = [
     ["club", "木棍"], ["cap", "布帽"], ["cloth", "布衣"],
-    ["ssword", "短劍"], ["leather", "皮盔甲"], ["wand", "魔法杖"], ["bow", "短弓"],
+    ["ssword", "短劍"], ["leather", "皮盔甲"], ["wand", "桃木杖"], ["bow", "短弓"],
   ];
   const POT_PRESETS = [
     ["red", "紅水", "hp"], ["orange", "橙水", "hp"], ["clear", "透水", "hp"],
@@ -319,22 +319,40 @@ window.App = (() => {
     if (!el) return;
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
-      el.className = `hero art transformed ${extra}`.trim();
+      el.className = `hero art lin transformed ${extra}`.trim();
       el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
       if (window.ASSETS) ASSETS.hydrate(el);
       return;
     }
-    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
+    if (window.ASSETS) {
+      el.className = `hero art lin wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = ASSETS.hero(cls, g);
+      ASSETS.hydrate(el);
+      return;
+    }
+    if (window.PIXEL) {
+      el.className = `hero art lin wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = `<div class="hero-lin">${PIXEL.hero(cls, g)}</div>`;
+      return;
+    }
+    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
   }
   function heroThumb(c) {
+    if (window.ASSETS) {
+      return `<div class="hero art lin mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${ASSETS.hero(c.classId, c.gender)}</div>`;
+    }
+    if (window.PIXEL) {
+      return `<div class="hero art lin mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-lin">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
+    }
     return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
     if (window.ASSETS) return ASSETS.mob(id);
+    if (window.PIXEL) return PIXEL.mob(id);
     return window.SPRITES ? SPRITES.mob(id) : "";
   }
   function skillIcon(sid) {
@@ -393,6 +411,7 @@ window.App = (() => {
     box.innerHTML = `<div class="logo" style="font-size:22px">選擇角色</div>
       <div style="width:100%;max-width:360px">${slots}</div>
       <button class="btn ghost" id="btn-logout">登出</button>`;
+    if (window.ASSETS) ASSETS.hydrate(box);
     box.querySelector("#btn-logout").onclick = () => {
       Net.send({ t: "logout" });
       acc = null; ch = null;
@@ -424,7 +443,7 @@ window.App = (() => {
         <p class="small" style="margin:8px 0 4px">職業</p>
         <div class="class-pick">${Object.values(DATA.classes).map((c) =>
           `<button class="btn ${state.classId === c.id ? "on" : ""}" data-cls="${c.id}">${c.name}</button>`).join("")}</div>
-        <p class="small" style="margin:8px 0">${DATA.classes[state.classId].desc}${state.classId === "elf" ? "<br>屬性魔法請於 <b>Lv.10</b> 找<b>精靈導師</b>選擇火／水／風／地（四選一）。" : ""}</p>
+        <p class="small" style="margin:8px 0">${DATA.classes[state.classId].desc}${state.classId === "elf" ? "<br>五行心法請於 <b>Lv.10</b> 找<b>五行宗師</b>選擇火雲／寒潭／疾風／厚土（四選一）。" : ""}</p>
         <div class="class-pick">
           <button class="btn ${state.gender === "m" ? "on" : ""}" data-g="m">男</button>
           <button class="btn ${state.gender === "f" ? "on" : ""}" data-g="f">女</button>
@@ -436,6 +455,7 @@ window.App = (() => {
           <button class="btn wide" id="c-ok">建立角色</button>
         </div>
       </div>`;
+      if (window.ASSETS) ASSETS.hydrate(modal);
       modal.querySelector("#cname").oninput = (e) => state.name = e.target.value;
       modal.querySelectorAll("[data-cls]").forEach((b) => b.onclick = () => {
         state.classId = b.dataset.cls; state.attrs = baseCopy(); state.remain = 5;
@@ -570,13 +590,13 @@ window.App = (() => {
     if (!ch.mapId) return toast("請先選擇狩獵場");
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (map?.boss) {
-      if (!netOk) return toast("世界王需連線伺服器");
+      if (!netOk) return toast("江湖霸主需連線伺服器");
       ensureClientBosses();
     }
     const b = world.bosses && world.bosses[map?.id];
     if (map?.boss && b && !b.alive) {
       const sec = bossWaitSec(map.id);
-      return toast(`世界王尚未重生（${fmtWait(sec)}）`);
+      return toast(`江湖霸主尚未重生（${fmtWait(sec)}）`);
     }
     ch.hunting = true;
     combat.tPlayer = 0;
@@ -851,7 +871,7 @@ window.App = (() => {
     if (mob.boss) {
       ch.stats.kills += 1;
       stopHunt();
-      toast("世界王已擊敗，等待伺服器結算獎勵");
+      toast("江湖霸主已擊敗，等待伺服器結算獎勵");
       hideMobs();
       burst("hit", 340, 140);
       refreshTop();
@@ -879,7 +899,7 @@ window.App = (() => {
       toast(`升級！Lv.${ch.level}`);
       sfx("up");
       if (ch.classId === "elf" && ch.level >= 10 && !ch.elfElem) {
-        toast("請找精靈導師選擇魔法屬性（火／水／風／地）");
+        toast("請找五行宗師選擇心法屬性（火雲／寒潭／疾風／厚土）");
       }
     }
     combat.mobs = (combat.mobs || []).filter((m) => m.uid !== mob.uid);
@@ -1102,7 +1122,7 @@ window.App = (() => {
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (map && map.boss) {
       if (!netOk) {
-        toast("世界王需連線伺服器");
+        toast("江湖霸主需連線伺服器");
         return;
       }
       Net.send({ t: "bossHit", mapId: map.id, dmg: r.dmg });
@@ -1377,7 +1397,7 @@ window.App = (() => {
 
   function renderHunt() {
     const cats = [
-      ["village", "村莊"], ["field", "野外"], ["dungeon", "地監"], ["boss", "世界王"], ["party", "隊伍"], ["clan", "血盟"],
+      ["village", "城鎮"], ["field", "野外"], ["dungeon", "地穴"], ["boss", "江湖霸主"], ["party", "隊伍"], ["clan", "門派"],
     ];
     $("subtabs").innerHTML = cats.map(([id, n]) =>
       `<div class="cat ${huntCat === id ? "active" : ""}" data-c="${id}">${n}</div>`).join("");
@@ -1393,12 +1413,12 @@ window.App = (() => {
       }).join("");
       const npcs = `<div class="npc-grid">${DATA.npcs.map((n) =>
         `<div class="npc" data-npc="${n.id}"><div class="n">${n.name}</div><div class="d">${n.desc}</div></div>`).join("")}</div>`;
-      box.innerHTML = `<div class="sec-ttl">${DATA.gameVersion || "亞丁 2.70"} 村莊</div>${vils}<div class="sec-ttl">NPC</div>${npcs}`;
+      box.innerHTML = `<div class="sec-ttl">${DATA.gameVersion || "雲州·江湖"} 城鎮</div>${vils}<div class="sec-ttl">NPC</div>${npcs}`;
       box.querySelectorAll("[data-vil]").forEach((b) => {
         b.onclick = () => {
           setMap(b.dataset.vil, false);
           const m = DATA.maps.find((x) => x.id === b.dataset.vil);
-          toast("已抵達 " + (m ? m.name : "村莊周邊"));
+          toast("已抵達 " + (m ? m.name : "城鎮周邊"));
         };
       });
       box.querySelectorAll("[data-npc]").forEach((b) => b.onclick = () => openNpc(b.dataset.npc));
@@ -1428,16 +1448,16 @@ window.App = (() => {
           <div class="sub2">盟主：${c.leader}　${(c.members || []).join("、")}</div></div>
           ${ch.clanId === c.id
             ? `<button class="go" data-cleave="1">退出</button>`
-            : `<button class="go" data-cjoin="${c.id}">加入</button>`}</div>`).join("") : `<p class="small">尚無血盟。</p>`) +
+            : `<button class="go" data-cjoin="${c.id}">加入</button>`}</div>`).join("") : `<p class="small">尚無門派。</p>`) +
         (ch.clanId ? "" : `<div class="row" style="margin-top:8px;gap:6px;display:flex">
-          <input class="field" id="clan-name" maxlength="8" placeholder="血盟名稱 2～8 字" style="flex:1">
+          <input class="field" id="clan-name" maxlength="8" placeholder="門派名稱 2～8 字" style="flex:1">
           <button class="btn" id="mk-clan">創建</button></div>`);
       box.querySelectorAll("[data-cjoin]").forEach((b) => b.onclick = () => Net.send({ t: "clanJoin", id: b.dataset.cjoin }));
       box.querySelectorAll("[data-cleave]").forEach((b) => b.onclick = () => Net.send({ t: "clanLeave" }));
       const mkc = box.querySelector("#mk-clan");
       if (mkc) mkc.onclick = () => {
         const name = (box.querySelector("#clan-name").value || "").trim();
-        if (name.length < 2) return toast("血盟名稱至少 2 字");
+        if (name.length < 2) return toast("門派名稱至少 2 字");
         Net.send({ t: "clanCreate", name });
       };
       return;
@@ -1480,7 +1500,7 @@ window.App = (() => {
         需 ${scroll ? scroll.name : tr.scroll}（${got}）</div></div>
       </div>`;
     }).join("");
-    openSheet(`<h3>選擇變身</h3><p class="small">消耗對應卷軸。近戰型變身中無法施放魔法。精神越高，持續越久。</p>${rows}`);
+    openSheet(`<h3>選擇變身</h3><p class="small">消耗對應卷軸。近戰型變身中無法施放術法。精神越高，持續越久。</p>${rows}`);
     $("modal").querySelectorAll("[data-poly]").forEach((b) => {
       b.onclick = () => {
         const r = E.startTransform(ch, b.dataset.poly);
@@ -1525,7 +1545,7 @@ window.App = (() => {
         </div>`;
       }).join("");
       const cur = ch.transform && DATA.transforms[ch.transform.id];
-      openSheet(`<h3>變身師</h3>
+      openSheet(`<h3>易容師</h3>
         <p class="small">消耗變身卷軸變成魔物，獲得魔物能力。近戰型無法施法；精神越高持續越久。</p>
         ${cur ? `<p class="gold">目前：${cur.name}　剩餘 ${fmtWait(Math.ceil(ch.transform.left))}
           <button class="btn" id="poly-cancel" style="margin-left:8px">解除變身</button></p>` : ""}
@@ -1602,8 +1622,8 @@ window.App = (() => {
       const groups = groupedSkills(skillList());
       const elemNote = ch.classId === "elf"
         ? (ch.elfElem
-          ? `<p class="small">目前精靈屬性：<b>${(DATA.elfElemNames && DATA.elfElemNames[ch.elfElem]) || ch.elfElem}</b>　（轉換請找精靈導師）</p>`
-          : `<p class="small warn">尚未選擇精靈屬性，請找<b>精靈導師</b>選定火／水／風／地之一後，才能習得屬性魔法。</p>`)
+          ? `<p class="small">目前五行屬性：<b>${(DATA.elfElemNames && DATA.elfElemNames[ch.elfElem]) || ch.elfElem}</b>　（轉換請找五行宗師）</p>`
+          : `<p class="small warn">尚未選擇五行屬性，請找<b>五行宗師</b>選定火雲／寒潭／疾風／厚土之一後，才能習得屬性心法。</p>`)
         : "";
       const rows = groups.map((g) =>
         `<div class="sec-ttl">${g.name}</div>` + g.skills.map((sid) => {
@@ -1617,13 +1637,13 @@ window.App = (() => {
             <span class="small">${inactiveLbl}</span></div>`;
         }).join("")
       ).join("");
-      openSheet(`<h3>導師</h3>${elemNote}${rows || "<p>沒有技能</p>"}
-        <p class="small" style="margin-top:8px">升級自動習得。妖精：一般共用魔法＋精靈共用魔法＋四選一屬性魔法。點戰鬥下方技能欄可手動施放。</p>`);
+      openSheet(`<h3>武學導師</h3>${elemNote}${rows || "<p>沒有技能</p>"}
+        <p class="small" style="margin-top:8px">升級自動習得。遊俠：江湖內功＋五行心法＋四選一屬性心法。點戰鬥下方技能欄可手動施放。</p>`);
       return;
     }
     if (n.kind === "elfmaster") {
       if (ch.classId !== "elf") {
-        openSheet(`<h3>精靈導師</h3><p class="small">只有妖精能向精靈導師學習屬性魔法。</p>`);
+        openSheet(`<h3>五行宗師</h3><p class="small">只有遊俠能向五行宗師學習屬性心法。</p>`);
         return;
       }
       const cost = E.elfElemSwitchCost(ch);
@@ -1633,10 +1653,10 @@ window.App = (() => {
         const label = (DATA.elfElemNames && DATA.elfElemNames[id]) || id;
         return `<button class="btn ${on ? "ghost" : ""}" data-elem="${id}" ${on ? "disabled" : ""}>${label}屬性${on ? "（目前）" : ""}</button>`;
       }).join("");
-      openSheet(`<h3>精靈導師</h3>
-        <p class="small">比照天堂：Lv.10 起可選擇<b>一種</b>屬性精靈魔法（火／水／風／地）。一般共用魔法與精靈共用魔法不受限制。</p>
+      openSheet(`<h3>五行宗師</h3>
+        <p class="small">Lv.10 起可選擇<b>一種</b>五行心法（火雲／寒潭／疾風／厚土）。江湖內功與五行共用心法不受限制。</p>
         <p class="small">目前屬性：<b>${cur}</b>${ch.elfElem && cost > 0 ? `　轉換費用：${cost.toLocaleString()} 金幣` : ""}</p>
-        <p class="small">已學過的其他屬性魔法仍保留，但需切換回該屬性後才能施放。</p>
+        <p class="small">已學過的其他屬性心法仍保留，但需切換回該屬性後才能施放。</p>
         <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">${btns}</div>`);
       $("modal").querySelectorAll("[data-elem]").forEach((b) => {
         b.onclick = () => {
@@ -1756,7 +1776,7 @@ window.App = (() => {
         <div class="doll-stats">
           AC <b>${st.ac}</b>　MR <b>${st.mr}</b><br>
           命中 <b>${st.hit}</b>　迴避 <b>${st.er}</b><br>
-          ${st.ranged ? "遠攻" : "近攻"} <b>${st.dmin}~${st.dmax}</b>　魔法 <b>${st.magMin}~${st.magMax}</b>
+          ${st.ranged ? "遠攻" : "近攻"} <b>${st.dmin}~${st.dmax}</b>　術法 <b>${st.magMin}~${st.magMax}</b>
           負重 <b>${E.weightOf(ch)}</b>/${E.weightMax(ch)}
         </div>
       </div>
@@ -1824,7 +1844,7 @@ window.App = (() => {
         <div class="stat">HP <b>${Math.floor(ch.hp)}/${st.maxHp}</b></div>
         <div class="stat">MP <b>${Math.floor(ch.mp)}/${st.maxMp}</b></div>
         <div class="stat">${st.ranged ? "遠距離傷害" : "近距離傷害"} <b>${st.dmin}~${st.dmax}</b></div>
-        <div class="stat">魔法傷害 <b>${st.magMin}~${st.magMax}</b></div>
+        <div class="stat">術法傷害 <b>${st.magMin}~${st.magMax}</b></div>
         <div class="stat">命中 <b>${st.hit}</b></div>
         <div class="stat">迴避 <b>${st.er}</b></div>
         <div class="stat">AC <b>${st.ac}</b></div>
@@ -1989,7 +2009,7 @@ window.App = (() => {
   }
 
   function renderChat() {
-    const tabs = [["sys", "系統"], ["world", "全服"], ["clan", "血盟"], ["party", "隊伍"]];
+    const tabs = [["sys", "系統"], ["world", "全服"], ["clan", "門派"], ["party", "隊伍"]];
     $("subtabs").innerHTML = tabs.map(([id, n]) =>
       `<div class="subtab ${chatCh === id ? "active" : ""}" data-c="${id}">${n}</div>`).join("");
     $("subtabs").querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { chatCh = b.dataset.c; renderPanel(); });
@@ -2000,7 +2020,7 @@ window.App = (() => {
     $("chatbar").classList.toggle("hidden", !canTalk);
     const inp = $("chat-in");
     if (inp) {
-      inp.placeholder = chatCh === "world" ? "全服頻道…" : chatCh === "clan" ? "血盟頻道…" : "隊伍頻道…";
+      inp.placeholder = chatCh === "world" ? "全服頻道…" : chatCh === "clan" ? "門派頻道…" : "隊伍頻道…";
     }
 
     const vis = logs.filter((l) => (l.ch || "sys") === chatCh).slice(0, 80);
@@ -2012,10 +2032,10 @@ window.App = (() => {
       head = `<p class="small">全服頻道　線上 ${world.online || 0} 人</p>`;
     } else if (chatCh === "clan") {
       if (clan) {
-        head = `<p class="small">血盟「${clan.name}」　盟主 ${clan.leader}　${(clan.members || []).length}/${clan.max || 20} 人
+        head = `<p class="small">門派「${clan.name}」　盟主 ${clan.leader}　${(clan.members || []).length}/${clan.max || 20} 人
           <button class="btn ghost" id="chat-cleave" style="margin-left:6px;padding:2px 8px;font-size:11px">退出</button></p>`;
       } else {
-        head = `<p class="small">尚未加入血盟。到狩獵場 → 血盟 建立或加入。</p>`;
+        head = `<p class="small">尚未加入門派。到狩獵場 → 門派 建立或加入。</p>`;
       }
     } else if (party) {
       head = `<p class="small">${party.leader} 的隊伍　${(party.members || []).join("、")}
@@ -2251,7 +2271,7 @@ window.App = (() => {
       if (!ch) return;
       ch.gold = (ch.gold || 0) + (m.gold || 0);
       E.gainExp(ch, m.exp || 0);
-      toast(`世界王擊殺獎勵 💰${(m.gold || 0).toLocaleString()}　EXP +${(m.exp || 0).toLocaleString()}`);
+      toast(`江湖霸主擊殺獎勵 💰${(m.gold || 0).toLocaleString()}　EXP +${(m.exp || 0).toLocaleString()}`);
       if (ch.mapId === m.mapId) { hideMobs(); stopHunt(); }
       refreshTop(); save();
     });
@@ -2308,7 +2328,7 @@ window.App = (() => {
       const v = $("chat-in").value.trim();
       if (!v) return;
       if (chatCh === "sys") return toast("系統頻道無法發言");
-      if (chatCh === "clan" && !myClan()) return toast("尚未加入血盟");
+      if (chatCh === "clan" && !myClan()) return toast("尚未加入門派");
       if (chatCh === "party" && !myParty()) return toast("尚未加入隊伍");
       $("chat-in").value = "";
       const chn = chatCh === "clan" || chatCh === "party" ? chatCh : "world";

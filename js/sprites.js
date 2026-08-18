@@ -1,4 +1,4 @@
-/* 原創 SVG：怪物與技能（天堂系放置風格） */
+/* 原創 SVG：怪物與技能（武俠放置風格） */
 window.SPRITES = (() => {
   const s = (inner, vb = "0 0 64 64") =>
     `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`;

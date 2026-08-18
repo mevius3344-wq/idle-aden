@@ -43,13 +43,28 @@ window.ASSETS = (() => {
     });
   }
 
-  function hero() {
-    return "";
+  function hero(cls, gender) {
+    const c = cls || "knight";
+    const g = gender === "f" ? "f" : "m";
+    const src = url.hero(c, g);
+    const fb = window.PIXEL
+      ? `<div class="hero-lin">${PIXEL.hero(c, g)}</div>`
+      : "";
+    return wrap(src, fb, "hero-asset");
   }
 
+  const mobFile = {
+    orc_arch: "orc", orc_f: "orc", gandi: "orc",
+    kobold: "goblin", hobgob: "goblin",
+    gnoll: "wolf", wolfman: "wolf", lycan: "wolf",
+    skel_a: "skeleton", sparto: "skeleton", lich: "skeleton", zombie: "skeleton",
+    ancient: "drake", lindvior: "drake", fafurion: "drake", antharas: "drake",
+    balrog: "deathk", demon: "deathk",
+  };
+
   function mob(id) {
-    const src = url.mob(id);
-    const svg = window.SPRITES ? SPRITES.mob(id) : "";
+    const src = url.mob(mobFile[id] || id);
+    const svg = (window.PIXEL ? PIXEL.mob(id) : "") || (window.SPRITES ? SPRITES.mob(id) : "");
     return wrap(src, `<div class="mob-svg">${svg}</div>`, "mob-asset");
   }
 

@@ -513,9 +513,9 @@ window.Engine = (() => {
   }
 
   function setElfElem(ch, elem) {
-    if (ch.classId !== "elf") return { ok: false, msg: "只有妖精能選擇精靈屬性" };
+    if (ch.classId !== "elf") return { ok: false, msg: "只有遊俠能選擇五行屬性" };
     if (!SPIRIT_TREES.has(elem)) return { ok: false, msg: "無效的屬性" };
-    if (ch.level < 10) return { ok: false, msg: "需達 Lv.10 才能選擇精靈魔法屬性" };
+    if (ch.level < 10) return { ok: false, msg: "需達 Lv.10 才能選擇五行心法屬性" };
     const cost = ch.elfElem && ch.elfElem !== elem ? elfElemSwitchCost(ch) : 0;
     if (cost > 0 && ch.gold < cost) return { ok: false, msg: `需要 ${cost.toLocaleString()} 金幣才能轉換屬性` };
     if (cost > 0) ch.gold -= cost;
@@ -523,7 +523,7 @@ window.Engine = (() => {
     ch.elfElem = elem;
     learnPending(ch);
     const label = (elfElemNames && elfElemNames[elem]) || elem;
-    return { ok: true, msg: cost > 0 ? `已轉換為${label}屬性（-${cost.toLocaleString()} 金幣）` : `已選擇${label}屬性精靈魔法` };
+    return { ok: true, msg: cost > 0 ? `已轉換為${label}屬性（-${cost.toLocaleString()} 金幣）` : `已選擇${label}屬性五行心法` };
   }
 
   function canLearnSkill(ch, sid) {

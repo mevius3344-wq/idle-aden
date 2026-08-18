@@ -22,15 +22,15 @@ const MIME = {
 
 const sessions = new Map();
 const BOSS_CFG = {
-  wb1: { name: "巨大蟻后", max: 25000, respawn: 1800, reward: { gold: [800, 1200], exp: 1200 } },
-  wb2: { name: "死亡騎士", max: 80000, respawn: 3600, reward: { gold: [1200, 2000], exp: 2200 } },
-  wb3: { name: "思克巴女皇", max: 160000, respawn: 5400, reward: { gold: [1800, 2800], exp: 3200 } },
-  wb4: { name: "巴風特", max: 120000, respawn: 3600, reward: { gold: [2000, 3200], exp: 3600 } },
-  wb5: { name: "黑長老", max: 150000, respawn: 5400, reward: { gold: [2400, 3800], exp: 4200 } },
-  wb6: { name: "林德拜爾", max: 180000, respawn: 7200, reward: { gold: [3000, 4800], exp: 5000 } },
-  wb7: { name: "法利昂", max: 220000, respawn: 7200, reward: { gold: [3200, 5200], exp: 5400 } },
-  wb8: { name: "安塔瑞斯", max: 280000, respawn: 10800, reward: { gold: [4000, 6500], exp: 6500 } },
-  wb9: { name: "巴拉卡斯", max: 350000, respawn: 14400, reward: { gold: [5000, 8000], exp: 8000 } },
+  wb1: { name: "蟻后", max: 25000, respawn: 1800, reward: { gold: [800, 1200], exp: 1200 } },
+  wb2: { name: "亡魂劍客", max: 80000, respawn: 3600, reward: { gold: [1200, 2000], exp: 2200 } },
+  wb3: { name: "魅影女皇", max: 160000, respawn: 5400, reward: { gold: [1800, 2800], exp: 3200 } },
+  wb4: { name: "魔羊尊者", max: 120000, respawn: 3600, reward: { gold: [2000, 3200], exp: 3600 } },
+  wb5: { name: "黑衣長老", max: 150000, respawn: 5400, reward: { gold: [2400, 3800], exp: 4200 } },
+  wb6: { name: "青冥蛟", max: 180000, respawn: 7200, reward: { gold: [3000, 4800], exp: 5000 } },
+  wb7: { name: "寒淵蛟", max: 220000, respawn: 7200, reward: { gold: [3200, 5200], exp: 5400 } },
+  wb8: { name: "地脈巨蟒", max: 280000, respawn: 10800, reward: { gold: [4000, 6500], exp: 6500 } },
+  wb9: { name: "赤焰炎龍", max: 350000, respawn: 14400, reward: { gold: [5000, 8000], exp: 8000 } },
 };
 const BOSS_IDS = Object.keys(BOSS_CFG);
 
@@ -342,7 +342,7 @@ function enter(ses, msg) {
   ch.lastSync = now();
   send(ses, { t: "enter", char: ch, offline, warehouse: acc.warehouse || [] });
   broadcastWorld();
-  chatAll("sys", "系統", ch.name + " 進入了亞丁。", "sys");
+  chatAll("sys", "系統", ch.name + " 踏入了雲州。", "sys");
 }
 
 function sync(ses, msg) {
@@ -381,7 +381,7 @@ function chat(ses, msg) {
   }
   if (channel === "clan") {
     const clan = clanOf(ch);
-    if (!clan) return send(ses, { t: "err", msg: "尚未加入血盟" });
+    if (!clan) return send(ses, { t: "err", msg: "尚未加入門派" });
     payload.ch = "clan";
     payload.cls = "clan";
     sendToNames(clan.members, payload);
@@ -501,10 +501,10 @@ function clanCreate(ses, msg) {
   const ch = currentChar(ses);
   if (!ch) return;
   if (!world.clans) world.clans = [];
-  if (clanOf(ch)) return send(ses, { t: "err", msg: "已有血盟" });
+  if (clanOf(ch)) return send(ses, { t: "err", msg: "已有門派" });
   const name = String(msg.name || "").trim();
-  if (name.length < 2 || name.length > 8) return send(ses, { t: "err", msg: "血盟名稱 2～8 字" });
-  if (world.clans.some((c) => c.name === name)) return send(ses, { t: "err", msg: "此血盟名稱已被使用" });
+  if (name.length < 2 || name.length > 8) return send(ses, { t: "err", msg: "門派名稱 2～8 字" });
+  if (world.clans.some((c) => c.name === name)) return send(ses, { t: "err", msg: "此門派名稱已被使用" });
   const clan = { id: uid(), name, leader: ch.name, leaderId: ch.id, members: [ch.name], max: 20 };
   world.clans.unshift(clan);
   if (world.clans.length > 80) world.clans.pop();
@@ -512,24 +512,24 @@ function clanCreate(ses, msg) {
   saveWorld();
   send(ses, { t: "clan", clanId: clan.id, clanName: clan.name });
   broadcastWorld();
-  chatAll("sys", "血盟", ch.name + " 成立了血盟「" + clan.name + "」。", "sys");
+  chatAll("sys", "門派", ch.name + " 成立了門派「" + clan.name + "」。", "sys");
 }
 
 function clanJoin(ses, msg) {
   const ch = currentChar(ses);
   if (!ch) return;
   if (!world.clans) world.clans = [];
-  if (clanOf(ch)) return send(ses, { t: "err", msg: "已有血盟" });
+  if (clanOf(ch)) return send(ses, { t: "err", msg: "已有門派" });
   const clan = world.clans.find((x) => x.id === msg.id);
-  if (!clan) return send(ses, { t: "err", msg: "血盟不存在" });
+  if (!clan) return send(ses, { t: "err", msg: "門派不存在" });
   clan.members = clan.members || [];
-  if (clan.members.length >= (clan.max || 20)) return send(ses, { t: "err", msg: "血盟已滿" });
+  if (clan.members.length >= (clan.max || 20)) return send(ses, { t: "err", msg: "門派已滿" });
   if (!clan.members.includes(ch.name)) clan.members.push(ch.name);
   setCharClan(ch, clan);
   saveWorld();
   send(ses, { t: "clan", clanId: clan.id, clanName: clan.name });
   broadcastWorld();
-  sendToNames(clan.members, { t: "chat", ch: "clan", name: "血盟", msg: ch.name + " 加入了血盟。", cls: "sys", time: now() });
+  sendToNames(clan.members, { t: "chat", ch: "clan", name: "門派", msg: ch.name + " 加入了門派。", cls: "sys", time: now() });
 }
 
 function clanLeave(ses) {
@@ -537,7 +537,7 @@ function clanLeave(ses) {
   if (!ch) return;
   if (!world.clans) world.clans = [];
   const clan = clanOf(ch);
-  if (!clan) return send(ses, { t: "err", msg: "尚未加入血盟" });
+  if (!clan) return send(ses, { t: "err", msg: "尚未加入門派" });
   clan.members = (clan.members || []).filter((n) => n !== ch.name);
   if (!clan.members.length) world.clans = world.clans.filter((x) => x.id !== clan.id);
   else if (clan.leader === ch.name) clan.leader = clan.members[0];
@@ -545,7 +545,7 @@ function clanLeave(ses) {
   saveWorld();
   send(ses, { t: "clan", clanId: "", clanName: "" });
   broadcastWorld();
-  send(ses, { t: "ok", msg: "已退出血盟" });
+  send(ses, { t: "ok", msg: "已退出門派" });
 }
 
 function bossHit(ses, msg) {
@@ -564,9 +564,9 @@ function bossHit(ses, msg) {
     b.alive = false;
     const wait = bossRespawnSec(mapId);
     b.next = now() + wait * 1000;
-    const bname = (BOSS_CFG[mapId] && BOSS_CFG[mapId].name) || "世界王";
+    const bname = (BOSS_CFG[mapId] && BOSS_CFG[mapId].name) || "江湖霸主";
     broadcast({ t: "mq", text: `⚔ ${bname} 已被擊敗！${fmtWait(wait)} 後重生。` });
-    chatAll("sys", "世界王", ch.name + " 參與擊殺了「" + bname + "」。", "sys");
+    chatAll("sys", "江湖霸主", ch.name + " 參與擊殺了「" + bname + "」。", "sys");
     const rw = bossReward(mapId);
     for (const s of sessions.values()) {
       if (s.charId) send(s, { t: "bossKill", mapId, gold: rw.gold, exp: rw.exp });
@@ -611,7 +611,7 @@ function tick() {
       b.hp = b.max;
       b.ranks = {};
       b.next = 0;
-      const bname = (BOSS_CFG[id] && BOSS_CFG[id].name) || "世界王";
+      const bname = (BOSS_CFG[id] && BOSS_CFG[id].name) || "江湖霸主";
       broadcast({ t: "mq", text: `⚔ ${bname} 已重生！` });
       broadcast({ t: "boss", bosses: world.bosses });
     }
@@ -681,7 +681,7 @@ async function start() {
   });
 
   server.listen(PORT, HOST, () => {
-    console.log("放置亞丁雲端伺服器 http://" + HOST + ":" + PORT);
+    console.log("雲州閒俠雲端伺服器 http://" + HOST + ":" + PORT);
     console.log("同 IP 同時進場上限：" + MAX_ONLINE_PER_IP);
     for (const n of Object.values(os.networkInterfaces())) {
       for (const a of n || []) {

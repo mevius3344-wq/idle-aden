@@ -64,7 +64,7 @@ class AdenServer
             Console.WriteLine("無法啟動：" + ex.Message);
             return;
         }
-        Console.WriteLine("放置亞丁即時伺服器已啟動  瀏覽器開 http://127.0.0.1:" + Port);
+        Console.WriteLine("雲州閒俠即時伺服器已啟動  瀏覽器開 http://127.0.0.1:" + Port);
         Task.Run((Action)Ticker);
         while (listener.IsListening)
         {
@@ -265,7 +265,7 @@ class AdenServer
             { "t", "enter" }, { "char", ch }, { "offline", offline }, { "warehouse", Arr(acc, "warehouse") }
         });
         BroadcastWorld();
-        BroadcastChat("sys", "系統", Str(ch, "name") + " 進入了亞丁。", "sys");
+        BroadcastChat("sys", "系統", Str(ch, "name") + " 踏入了雲州。", "sys");
     }
 
     static void Sync(Session ses, Dictionary<string, object> msg)
@@ -448,8 +448,8 @@ class AdenServer
         {
             b["alive"] = false;
             b["next"] = Now() + Respawn(mapId) * 1000L;
-            Broadcast(new Dictionary<string, object> { { "t", "mq" }, { "text", "⚔ 世界王已被擊敗！" } });
-            BroadcastChat("sys", "世界王", Str(ch, "name") + " 參與擊殺了世界王。", "sys");
+            Broadcast(new Dictionary<string, object> { { "t", "mq" }, { "text", "⚔ 江湖霸主已被擊敗！" } });
+            BroadcastChat("sys", "江湖霸主", Str(ch, "name") + " 參與擊殺了江湖霸主。", "sys");
             foreach (var s in Sessions.Values)
             {
                 if (string.IsNullOrEmpty(s.CharId)) continue;
@@ -497,7 +497,7 @@ class AdenServer
                         b["alive"] = true;
                         b["hp"] = Int(b, "max");
                         b["ranks"] = new Dictionary<string, object>();
-                        Broadcast(new Dictionary<string, object> { { "t", "mq" }, { "text", "世界王已重生！" } });
+                        Broadcast(new Dictionary<string, object> { { "t", "mq" }, { "text", "江湖霸主已重生！" } });
                     }
                 }
                 BroadcastWorld();
