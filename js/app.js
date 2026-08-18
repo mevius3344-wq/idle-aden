@@ -313,7 +313,7 @@ window.App = (() => {
     if (!el) return;
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
-      el.className = `hero art pixel transformed ${extra}`.trim();
+      el.className = `hero art q transformed ${extra}`.trim();
       el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
       if (window.ASSETS) ASSETS.hydrate(el);
       return;
@@ -321,33 +321,24 @@ window.App = (() => {
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
-    if (window.ASSETS) {
-      el.className = `hero art pixel wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = ASSETS.hero(cls, g);
-      ASSETS.hydrate(el);
-      return;
-    }
     if (window.PIXEL) {
-      el.className = `hero art pixel wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = `<div class="hero-pixel">${PIXEL.hero(cls, g)}</div>`;
+      el.className = `hero art q wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = `<div class="hero-q">${PIXEL.hero(cls, g)}</div>`;
       return;
     }
     if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
   }
   function heroThumb(c) {
-    if (window.ASSETS) {
-      return `<div class="hero art pixel mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${ASSETS.hero(c.classId, c.gender)}</div>`;
-    }
     if (window.PIXEL) {
-      return `<div class="hero art pixel mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-pixel">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
+      return `<div class="hero art q mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-q">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
     }
     return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
     if (window.ASSETS) return ASSETS.mob(id);
-    if (window.PIXEL) return `<div class="mob-svg">${PIXEL.mob(id)}</div>`;
-    return window.SPRITES ? `<div class="mob-svg">${SPRITES.mob(id)}</div>` : "";
+    if (window.PIXEL) return PIXEL.mob(id);
+    return window.SPRITES ? SPRITES.mob(id) : "";
   }
   function skillIcon(sid) {
     return window.SPRITES ? `<span class="sk-svg">${SPRITES.skill(sid)}</span>` : "✦";

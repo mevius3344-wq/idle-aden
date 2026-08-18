@@ -1,4 +1,4 @@
-/* Midjourney / 外部 PNG 素材：放 assets/ 下對應檔名即自動取代像素 fallback */
+/* 外部 PNG：有檔才覆蓋；沒有就用 CSS 人物 / SVG 怪物 / SVG 道具 */
 window.ASSETS = (() => {
   const ok = new Set();
   const fail = new Set();
@@ -43,18 +43,13 @@ window.ASSETS = (() => {
     });
   }
 
-  function hero(cls, gender) {
-    const c = cls || "knight";
-    const g = gender === "f" ? "f" : "m";
-    const src = url.hero(c, g);
-    let fb = "";
-    if (window.PIXEL) fb = `<div class="hero-pixel">${PIXEL.hero(c, g)}</div>`;
-    return wrap(src, fb, "hero-asset");
+  function hero() {
+    return "";
   }
 
   function mob(id) {
     const src = url.mob(id);
-    const svg = window.PIXEL ? PIXEL.mob(id) : (window.SPRITES ? SPRITES.mob(id) : "");
+    const svg = (window.PIXEL ? PIXEL.mob(id) : "") || (window.SPRITES ? SPRITES.mob(id) : "");
     return wrap(src, `<div class="mob-svg">${svg}</div>`, "mob-asset");
   }
 
