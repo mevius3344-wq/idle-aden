@@ -302,11 +302,12 @@ window.Engine = (() => {
     return out;
   }
 
-  function makeMob(map) {
-    const id = pick(map.monsters);
+  function makeMob(map, forcedId) {
+    const id = forcedId || pick(map.monsters);
     const m = monsters[id];
     const hpMul = map.boss ? 8 : 1;
     return {
+      uid: uid(),
       id: m.id,
       name: m.name,
       icon: m.icon,
@@ -318,6 +319,7 @@ window.Engine = (() => {
       exp: map.boss ? m.exp * 6 : m.exp,
       gold: m.gold,
       stun: 0,
+      tAtk: rand(0.25, 0.9),
       boss: !!map.boss,
     };
   }

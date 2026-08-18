@@ -11,7 +11,7 @@ window.App = (() => {
   let chatCh = "sys";
   let marketCat = "weapon";
   let logs = [];
-  let combat = { mob: null, tPlayer: 0, tMob: 0, cds: {}, buffs: [] };
+  let combat = { mobs: [], focus: null, tPlayer: 0, respawn: 0, cds: {}, buffs: [] };
   let lastTick = performance.now();
   let hue = 32;
   let soundOn = false;
@@ -413,7 +413,8 @@ window.App = (() => {
     ch.mapId = map ? map.id : null;
     if (!map) {
       ch.hunting = false;
-      combat.mob = null;
+      combat.mobs = [];
+      combat.focus = null;
       $("battle").className = "bg-hall keep-color";
       $("ztitle").textContent = "— 大 廳 —";
       $("zsub").innerHTML = `稅金：${(world.tax || 0).toLocaleString()}<br>
@@ -422,8 +423,7 @@ window.App = (() => {
       $("btn-lobby").classList.add("hidden");
       $("btn-attack").classList.add("hidden");
       $("btn-stop").classList.add("hidden");
-      hideMob();
-      $("mhp").classList.add("hidden");
+      hideMobs();
     } else {
       $("battle").className = "bg-" + (map.bg || "forest") + " keep-color";
       $("ztitle").textContent = map.name;
@@ -433,9 +433,9 @@ window.App = (() => {
       $("btn-stop").classList.toggle("hidden", !keepHunt);
       if (!keepHunt) {
         ch.hunting = false;
-        combat.mob = null;
-        hideMob();
-        $("mhp").classList.add("hidden");
+        combat.mobs = [];
+        combat.focus = null;
+        hideMobs();
       }
     }
     save();
@@ -453,8 +453,8 @@ window.App = (() => {
     }
     ch.hunting = true;
     combat.tPlayer = 0;
-    combat.tMob = 0;
-    if (!combat.mob) spawn();
+    combat.respawn = 0;
+    if (!liveMobs().length) spawnPack();
     $("btn-attack").classList.add("hidden");
     $("btn-stop").classList.remove("hidden");
     log(`開始在「${DATA.maps.find((m) => m.id === ch.mapId).name}」狩獵。`, "sys");
@@ -527,28 +527,102 @@ window.App = (() => {
     if (crit) b.classList.add("shake");
   }
 
-  function spawn() {
+  function liveMobs() {
+    return (combat.mobs || []).filter((m) => m && m.hp > 0);
+  }
+  function targetMob() {
+    const live = liveMobs();
+    if (!live.length) return null;
+    return live.find((m) => m.uid === combat.focus) || live[0];
+  }
+  function mobEl(uid) {
+    return document.querySelector(`#mob-pack .sprite.enemy[data-uid="${uid}"]`);
+  }
+  function hideMobs() {
+    combat.mobs = [];
+    combat.focus = null;
+    const pack = $("mob-pack");
+    if (pack) { pack.innerHTML = ""; pack.dataset.n = "0"; }
+  }
+  function hideMob() { hideMobs(); }
+
+  function packSize(map) {
+    if (map.boss) return 1;
+    return E.irand(2, map.cat === "dungeon" ? 4 : 3);
+  }
+
+  function spawnPack() {
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (!map) return;
-    combat.mob = E.makeMob(map);
-    if (map.boss && world.bosses[map.id]) {
-      const b = world.bosses[map.id];
-      combat.mob.hp = b.hp;
-      combat.mob.maxHp = b.max || b.hp;
-      combat.mob.boss = true;
+    const n = packSize(map);
+    combat.mobs = [];
+    for (let i = 0; i < n; i++) {
+      const mob = E.makeMob(map);
+      if (map.boss && world.bosses[map.id]) {
+        const b = world.bosses[map.id];
+        mob.hp = b.hp;
+        mob.maxHp = b.max || b.hp;
+        mob.boss = true;
+      }
+      mob.tAtk = 0.2 + i * 0.4 + Math.random() * 0.25;
+      combat.mobs.push(mob);
     }
-    const img = $("sp-m-art");
-    setImg(img, mobArt(combat.mob.id));
-    img.classList.remove("hidden");
-    $("sp-m").classList.remove("spawn");
-    void $("sp-m").offsetWidth;
-    playAnim($("sp-m"), "spawn", 420);
-    $("mhp").classList.remove("hidden");
-    $("mhpf").style.width = Math.max(0, (combat.mob.hp / combat.mob.maxHp) * 100) + "%";
+    combat.focus = combat.mobs[0].uid;
+    combat.respawn = 0;
+    renderMobPack();
+    const names = [...new Set(combat.mobs.map((m) => m.name))].join("、");
+    if ($("zsub") && !map.boss) $("zsub").textContent = `建議 Lv.${map.rec}　搜尋到 ${combat.mobs.length} 隻（${names}）`;
+  }
+
+  function renderMobPack() {
+    const pack = $("mob-pack");
+    if (!pack) return;
+    const live = liveMobs();
+    pack.dataset.n = String(live.length);
+    pack.innerHTML = live.map((m) => {
+      const hp = Math.max(0, (m.hp / Math.max(1, m.maxHp)) * 100);
+      const focus = combat.focus === m.uid;
+      return `<div class="sprite enemy ${m.boss ? "boss" : ""} ${focus ? "focus" : ""}" data-uid="${m.uid}">
+        <div class="slash-arc mob"></div>
+        <img class="art" src="${mobArt(m.id)}" alt="">
+        <div class="ground-shadow"></div>
+        <div class="mhp"><i style="width:${hp}%"></i></div>
+      </div>`;
+    }).join("");
+    pack.querySelectorAll("[data-uid]").forEach((el) => {
+      playAnim(el, "spawn", 400);
+      el.onclick = () => {
+        combat.focus = el.dataset.uid;
+        markFocus();
+      };
+    });
+  }
+
+  function markFocus() {
+    const t = targetMob();
+    if (t) combat.focus = t.uid;
+    document.querySelectorAll("#mob-pack .sprite.enemy").forEach((el) => {
+      el.classList.toggle("focus", t && el.dataset.uid === t.uid);
+    });
+  }
+
+  function updateMobHp(mob) {
+    const el = mobEl(mob.uid);
+    if (!el) return;
+    const bar = el.querySelector(".mhp i");
+    if (bar) bar.style.width = Math.max(0, (mob.hp / Math.max(1, mob.maxHp)) * 100) + "%";
   }
 
   function floatDmg(target, text, cls) {
-    const box = target === "p" ? $("sp-p") : $("sp-m");
+    let box = $("sp-p");
+    if (target === "p") box = $("sp-p");
+    else if (target && target.nodeType) box = target;
+    else if (typeof target === "string" && target !== "m") box = mobEl(target) || $("sp-p");
+    else {
+      const t = targetMob();
+      box = (t && mobEl(t.uid)) || $("sp-p");
+    }
+    if (!box) return;
     const n = document.createElement("div");
     n.className = "float-dmg " + (cls || "");
     n.textContent = text;
@@ -581,10 +655,21 @@ window.App = (() => {
     if (mob.boss) {
       stopHunt();
       toast("世界王倒下了");
+      hideMobs();
+      burst("hit", 340, 140);
+      refreshTop();
+      save();
+      return;
     }
-    combat.mob = null;
-    hideMob();
+    combat.mobs = (combat.mobs || []).filter((m) => m.uid !== mob.uid);
+    const el = mobEl(mob.uid);
+    if (el) el.remove();
+    const pack = $("mob-pack");
+    if (pack) pack.dataset.n = String(liveMobs().length);
+    if (combat.focus === mob.uid) combat.focus = liveMobs()[0] ? liveMobs()[0].uid : null;
+    markFocus();
     burst("hit", 340, 140);
+    if (!liveMobs().length) combat.respawn = 0.55;
     refreshTop();
     save();
   }
@@ -595,7 +680,7 @@ window.App = (() => {
     for (const sid of ch.skills) {
       if (off.has(sid)) continue;
       const sk = DATA.skills[sid];
-      if ((combat.cds[sid] || 0) > 0 || ch.mp < sk.mp || !combat.mob) continue;
+      if ((combat.cds[sid] || 0) > 0 || ch.mp < sk.mp || !targetMob()) continue;
       if (sk.kind === "heal" && ch.hp / st.maxHp > 0.7) continue;
       if (sk.kind === "buff" && combat.buffs.some((b) => b.id === sid)) continue;
       combat.cds[sid] = sk.cd;
@@ -617,54 +702,57 @@ window.App = (() => {
       }
       const hits = sk.hits || 1;
       const magic = sk.kind === "magic";
+      const tgt = targetMob();
       for (let i = 0; i < hits; i++) {
-        const r = E.playerHit(ch, combat.mob, sk.mul, magic);
-        if (i === 0) applyPlayerHit(r, sk.name, magic);
+        const r = E.playerHit(ch, tgt, sk.mul, magic);
+        if (i === 0) applyPlayerHit(r, sk.name, magic, tgt);
         else {
-          setTimeout(() => { if (combat.mob) applyPlayerHit(r, sk.name, magic); }, i * 160);
+          setTimeout(() => { if (tgt && tgt.hp > 0) applyPlayerHit(r, sk.name, magic, tgt); }, i * 160);
         }
       }
-      if (sk.stun && combat.mob) combat.mob.stun = sk.stun;
+      if (sk.stun && tgt) tgt.stun = sk.stun;
       return true;
     }
     return false;
   }
 
-  function applyPlayerHit(r, skillName, magic) {
-    if (!combat.mob) return;
+  function applyPlayerHit(r, skillName, magic, mob) {
+    mob = mob || targetMob();
+    if (!mob) return;
     const style = pickAtkStyle(magic, r.crit);
     playAnim($("sp-p"), style, r.crit ? 540 : 480);
-    const box = $("sp-m").getBoundingClientRect();
+    const el = mobEl(mob.uid);
+    const box = (el || $("mob-pack")).getBoundingClientRect();
     const root = $("battle").getBoundingClientRect();
     const x = box.left - root.left + box.width * 0.45;
     const y = box.top - root.top + box.height * 0.35;
     burst(magic ? "magic" : "slash", x, y);
     if (r.miss) {
-      floatDmg("m", "MISS", "miss");
+      floatDmg(el, "MISS", "miss");
       log(`${skillName || "攻擊"} 未命中`);
       sfx("miss");
       return;
     }
-    combat.mob.hp -= r.dmg;
-    floatDmg("m", (r.crit ? "★" : "-") + r.dmg, r.crit ? "crit" : "");
+    mob.hp -= r.dmg;
+    floatDmg(el, (r.crit ? "★" : "-") + r.dmg, r.crit ? "crit" : "");
     shake(r.crit);
     sfx(r.crit ? "crit" : "hit");
     burst("hit", x, y);
-    playAnim($("sp-m"), "hit", 380);
+    if (el) playAnim(el, "hit", 380);
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (map && map.boss) {
       Net.send({ t: "bossHit", mapId: map.id, dmg: r.dmg });
       const b = world.bosses[map.id];
       if (b) {
-        combat.mob.hp = b.hp;
-        combat.mob.maxHp = b.max || combat.mob.maxHp;
+        mob.hp = b.hp;
+        mob.maxHp = b.max || mob.maxHp;
       }
-      $("mhpf").style.width = Math.max(0, (combat.mob.hp / combat.mob.maxHp) * 100) + "%";
-      if (b && !b.alive) { hideMob(); stopHunt(); }
+      updateMobHp(mob);
+      if (b && !b.alive) { onKill(mob); stopHunt(); }
       return;
     }
-    $("mhpf").style.width = Math.max(0, (combat.mob.hp / combat.mob.maxHp) * 100) + "%";
-    if (combat.mob.hp <= 0) onKill(combat.mob);
+    updateMobHp(mob);
+    if (mob.hp <= 0) onKill(mob);
   }
 
   function tick(now) {
@@ -680,48 +768,62 @@ window.App = (() => {
     }
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (!map) return;
-    if (!combat.mob) spawn();
-    if (!combat.mob) return;
+    if (combat.respawn > 0) {
+      combat.respawn -= dt;
+      if (combat.respawn <= 0) spawnPack();
+    } else if (!liveMobs().length) {
+      spawnPack();
+    }
+    if (!liveMobs().length) {
+      refreshTop();
+      return;
+    }
 
     const pots = E.autoPotions(ch);
     pots.forEach((p) => log(p, "sys"));
 
     combat.tPlayer -= dt;
-    combat.tMob -= dt;
     for (const sid of ch.skills) combat.cds[sid] = (combat.cds[sid] || 0) - dt;
-    if (combat.tPlayer <= 0) {
+    const tgt = targetMob();
+    if (combat.tPlayer <= 0 && tgt) {
       if (!trySkills()) {
-        applyPlayerHit(E.playerHit(ch, combat.mob, 1, false), "普通攻擊");
+        applyPlayerHit(E.playerHit(ch, tgt, 1, false), "普通攻擊", false, tgt);
       }
       combat.tPlayer = E.totalStats(ch).atkMs / 1000;
     }
-    if (combat.mob && combat.mob.stun > 0) {
-      combat.mob.stun -= dt;
-    } else if (combat.mob && combat.tMob <= 0) {
-      const reduce = combat.buffs.reduce((s, b) => s + (b.reduce || 0), 0);
-      const r = E.mobHit(ch, combat.mob);
+    const reduce = combat.buffs.reduce((s, b) => s + (b.reduce || 0), 0);
+    for (const mob of liveMobs()) {
+      if (mob.stun > 0) {
+        mob.stun -= dt;
+        continue;
+      }
+      mob.tAtk = (mob.tAtk || 0) - dt;
+      if (mob.tAtk > 0) continue;
+      mob.tAtk = 1.05 + mob.lv * 0.02 + Math.random() * 0.35;
+      const r = E.mobHit(ch, mob);
+      const el = mobEl(mob.uid);
+      if (el) playAnim(el, "mob-swing", 380);
       if (r.miss) {
         floatDmg("p", "MISS", "miss");
         sfx("miss");
-      } else {
-        const dmg = Math.max(1, Math.floor(r.dmg * (1 - reduce)));
-        ch.hp -= dmg;
-        floatDmg("p", "-" + dmg);
-        sfx("hurt");
-        playAnim($("sp-m"), "mob-swing", 380);
-        playAnim($("sp-p"), "hurt", 400);
-        if (ch.hp <= 0) {
-          ch.hp = 0;
-          ch.stats.deaths += 1;
-          ch.hunting = false;
-          log("你被擊倒了，送回大廳。", "sys");
-          toast("陣亡，已送回大廳");
-          setMap(null);
-          const st = E.totalStats(ch);
-          ch.hp = Math.floor(st.maxHp * 0.4);
-        }
+        continue;
       }
-      combat.tMob = 1.1 + combat.mob.lv * 0.02;
+      const dmg = Math.max(1, Math.floor(r.dmg * (1 - reduce)));
+      ch.hp -= dmg;
+      floatDmg("p", "-" + dmg);
+      sfx("hurt");
+      playAnim($("sp-p"), "hurt", 400);
+      if (ch.hp <= 0) {
+        ch.hp = 0;
+        ch.stats.deaths += 1;
+        ch.hunting = false;
+        log("你被擊倒了，送回大廳。", "sys");
+        toast("陣亡，已送回大廳");
+        setMap(null);
+        const st = E.totalStats(ch);
+        ch.hp = Math.floor(st.maxHp * 0.4);
+        break;
+      }
     }
     refreshTop();
   }
@@ -873,9 +975,10 @@ window.App = (() => {
     const rows = list.filter((m) => huntCat === "boss" || m.region === huntRegion).map((m) => {
       const here = ch.mapId === m.id;
       const n = (world.maps && world.maps[m.id]) || 0;
+      const mons = (m.monsters || []).map((id) => DATA.monsters[id]?.name).filter(Boolean).join("、");
       return `<div class="list-item ${here ? "here" : ""}">
         <div class="info"><div class="ttl">${m.name}${here ? "（目前）" : ""} <span class="dim">(${n} 人)</span></div>
-        <div class="sub2">建議等級 ${m.rec}${m.boss ? "　世界王" : ""}</div></div>
+        <div class="sub2">建議 Lv.${m.rec}　${m.boss ? "世界王" : "出沒 " + mons}</div></div>
         <button class="go" data-go="${m.id}">${here ? "停留" : "前往"}</button></div>`;
     }).join("");
     box.innerHTML = regionBar + rows;
@@ -1040,16 +1143,29 @@ window.App = (() => {
       renderDoll(box);
       return;
     }
-    if (!ch.bag.length) { box.innerHTML = `<p class="dim" style="padding:12px">背包空空如也</p>`; return; }
-    box.innerHTML = ch.bag.map((it) => {
-      const d = E.itemDef(it);
-      const qty = (it.qty || 1) > 1 ? ` ×${it.qty}` : "";
-      return `<div class="item-row" data-iid="${it.iid}">
-        <div class="ico">${itemIcon(it)}</div>
-        <div class="info"><div class="nm" style="color:${E.rarityColor(it)}">${E.displayName(it)}${qty}</div>
-        <div class="meta">${DATA.R[d?.rarity || "common"].name}　${d?.type === "use" ? "消耗" : "裝備"}</div></div>
-      </div>`;
-    }).join("");
+    const BAG_SLOTS = 40;
+    const used = ch.bag.length;
+    const slots = Math.max(BAG_SLOTS, Math.ceil(used / 5) * 5);
+    const cells = [];
+    for (let i = 0; i < slots; i++) {
+      const it = ch.bag[i];
+      if (!it) {
+        cells.push(`<div class="bag-cell empty"></div>`);
+        continue;
+      }
+      const qty = (it.qty || 1) > 1 ? `<span class="bq">${it.qty}</span>` : "";
+      const plus = it.plus ? `<i>+${it.plus}</i>` : "";
+      const rc = E.rarityColor(it);
+      cells.push(`<button type="button" class="bag-cell on" data-iid="${it.iid}" title="${E.displayName(it)}" style="--rc:${rc}">
+        ${itemIcon(it)}${plus}${qty}
+      </button>`);
+    }
+    box.innerHTML = `
+      <div class="bag-head">
+        <span>負重 <b>${E.weightOf(ch)}</b>/${E.weightMax(ch)}</span>
+        <span>格子 <b>${used}</b>/${slots}</span>
+      </div>
+      <div class="bag-grid">${cells.join("")}</div>`;
     box.querySelectorAll("[data-iid]").forEach((b) => {
       b.onclick = () => openItem(ch.bag.find((x) => x.iid === b.dataset.iid), "bag");
     });
@@ -1447,20 +1563,21 @@ window.App = (() => {
       ch.gold = (ch.gold || 0) + (m.gold || 0);
       E.gainExp(ch, m.exp || 0);
       toast("世界王擊殺獎勵 💰" + (m.gold || 0));
-      if (ch.mapId === m.mapId) { hideMob(); stopHunt(); }
+      if (ch.mapId === m.mapId) { hideMobs(); stopHunt(); }
       refreshTop(); save();
     });
   }
 
   function syncBossSprite() {
     const map = ch && DATA.maps.find((x) => x.id === ch.mapId);
-    if (!map || !map.boss || !combat.mob) return;
+    const boss = liveMobs().find((m) => m.boss);
+    if (!map || !map.boss || !boss) return;
     const b = world.bosses[map.id];
     if (!b) return;
-    combat.mob.hp = b.hp;
-    combat.mob.maxHp = b.max || combat.mob.maxHp;
-    $("mhpf").style.width = Math.max(0, (combat.mob.hp / Math.max(1, combat.mob.maxHp)) * 100) + "%";
-    if (!b.alive) hideMob();
+    boss.hp = b.hp;
+    boss.maxHp = b.max || boss.maxHp;
+    updateMobHp(boss);
+    if (!b.alive) hideMobs();
   }
 
   function bind() {
