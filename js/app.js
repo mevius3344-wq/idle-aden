@@ -301,14 +301,13 @@ window.App = (() => {
     if (["wand", "staff", "crystal", "archstaff", "starstaff"].includes(id) || (!id && c?.classId === "mage")) return "staff";
     return "sword";
   }
-  function heroArt(c) {
-    if (!window.SPRITES) return "";
-    const cls = c?.classId || "knight";
-    const g = c?.gender === "f" ? "f" : "m";
-    return SPRITES.hero(cls, g, wepKind(c));
-  }
-  function heroInner(c) {
-    return `<div class="hero-svg">${heroArt(c)}</div>`;
+  function heroInner() {
+    return `<div class="h-cloak"></div>
+      <div class="h-leg l"></div><div class="h-leg r"></div>
+      <div class="h-body"></div>
+      <div class="h-arm off"></div>
+      <div class="h-arm wep"><i class="h-wep"></i></div>
+      <div class="h-head"><div class="h-hair"></div><div class="h-face"><b></b><b></b></div><div class="h-helm"></div></div>`;
   }
   function paintHero(el, c, extra = "") {
     if (!el) return;
@@ -318,14 +317,14 @@ window.App = (() => {
       el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
       return;
     }
+    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
     el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-    el.innerHTML = heroInner(c);
   }
   function heroThumb(c) {
-    return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner(c)}</div>`;
+    return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
     return window.SPRITES ? SPRITES.mob(id) : "";
