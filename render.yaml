@@ -1,3 +1,8 @@
+databases:
+  - name: idle-aden-db
+    plan: free
+    region: singapore
+
 services:
   - type: web
     name: idle-aden
@@ -9,4 +14,6 @@ services:
     healthCheckPath: /
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: idle-aden-db
+          property: connectionString

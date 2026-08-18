@@ -21,24 +21,6 @@ const MIME = {
 };
 
 const sessions = new Map();
-let world = emptyWorld();
-const MAX_ONLINE_PER_IP = Math.max(1, Number(process.env.MAX_ONLINE_PER_IP || 1));
-const MAX_CONN_PER_IP = Math.max(MAX_ONLINE_PER_IP + 2, Number(process.env.MAX_CONN_PER_IP || 6));
-
-function emptyWorld() {
-  const bosses = {};
-  for (const id of BOSS_IDS) bosses[id] = bossTpl(id);
-  return {
-    accounts: {},
-    market: [],
-    parties: [],
-    clans: [],
-    bosses,
-    tax: 0,
-    taxRate: 0.05,
-    taxVer: 2,
-  };
-}
 const BOSS_CFG = {
   wb1: { name: "巨大蟻后", max: 25000, respawn: 1800, reward: { gold: [800, 1200], exp: 1200 } },
   wb2: { name: "死亡騎士", max: 80000, respawn: 3600, reward: { gold: [1200, 2000], exp: 2200 } },
@@ -56,6 +38,24 @@ function bossTpl(id) {
   const cfg = BOSS_CFG[id] || { max: 25000, respawn: 1800 };
   return { max: cfg.max, hp: cfg.max, alive: true, next: 0, ranks: {} };
 }
+
+function emptyWorld() {
+  const bosses = {};
+  for (const id of BOSS_IDS) bosses[id] = bossTpl(id);
+  return {
+    accounts: {},
+    market: [],
+    parties: [],
+    clans: [],
+    bosses,
+    tax: 0,
+    taxRate: 0.05,
+    taxVer: 2,
+  };
+}
+let world = emptyWorld();
+const MAX_ONLINE_PER_IP = Math.max(1, Number(process.env.MAX_ONLINE_PER_IP || 1));
+const MAX_CONN_PER_IP = Math.max(MAX_ONLINE_PER_IP + 2, Number(process.env.MAX_CONN_PER_IP || 6));
 
 function bossReward(mapId) {
   const r = (BOSS_CFG[mapId] && BOSS_CFG[mapId].reward) || { gold: [800, 1200], exp: 1200 };
