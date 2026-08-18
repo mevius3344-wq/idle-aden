@@ -1,4 +1,4 @@
-/* 外部 PNG：有檔才覆蓋；沒有就用 CSS 人物 / SVG 怪物 / SVG 道具 */
+/* 角色／魔物／道具：華麗 SVG（不再 probe PNG） */
 window.ASSETS = (() => {
   const ok = new Set();
   const fail = new Set();
@@ -46,32 +46,19 @@ window.ASSETS = (() => {
   function hero(cls, gender) {
     const c = cls || "knight";
     const g = gender === "f" ? "f" : "m";
-    const src = url.hero(c, g);
-    const fb = window.PIXEL
-      ? `<div class="hero-lin">${PIXEL.hero(c, g)}</div>`
-      : "";
-    return wrap(src, fb, "hero-asset");
+    const svg = window.PIXEL ? PIXEL.hero(c, g) : "";
+    return `<div class="hero-lin hero-wuxia">${svg}</div>`;
   }
 
-  const mobFile = {
-    orc_arch: "orc", orc_f: "orc", gandi: "orc",
-    kobold: "goblin", hobgob: "goblin",
-    gnoll: "wolf", wolfman: "wolf", lycan: "wolf",
-    skel_a: "skeleton", sparto: "skeleton", lich: "skeleton", zombie: "skeleton",
-    ancient: "drake", lindvior: "drake", fafurion: "drake", antharas: "drake",
-    balrog: "deathk", demon: "deathk",
-  };
-
   function mob(id) {
-    const src = url.mob(mobFile[id] || id);
     const svg = (window.PIXEL ? PIXEL.mob(id) : "") || (window.SPRITES ? SPRITES.mob(id) : "");
-    return wrap(src, `<div class="mob-svg">${svg}</div>`, "mob-asset");
+    return `<div class="mob-svg mob-wuxia">${svg}</div>`;
   }
 
   function item(id, def) {
-    const src = url.item(id);
-    const svg = window.ICONS ? ICONS.of(id, def) : "";
-    return wrap(src, `<span class="ico-svg r-${(def && def.rarity) || "common"}">${svg}</span>`, "item-asset");
+    const svg = window.ITEM_ART ? ITEM_ART.of(id, def) : (window.ICONS ? ICONS.of(id, def) : "");
+    const r = (def && def.rarity) || "common";
+    return `<span class="ico-svg item-wuxia r-${r}">${svg}</span>`;
   }
 
   return { url, hero, mob, item, hydrate, ok, fail };

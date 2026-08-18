@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#15100b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="雲州閒俠">
-  <link rel="stylesheet" href="css/style.css?v=yunzhou1">
+  <link rel="stylesheet" href="css/style.css?v=yunzhou4">
 </head>
 <body>
   <div id="rotate-warn">請將手機直立使用<br><span style="font-size:14px;font-weight:500">本遊戲僅支援直式畫面</span></div>
@@ -57,7 +57,14 @@
     <div id="status-wrap">狀態：<span id="stxt">無</span>
       <div id="buffs"></div>
     </div>
-    <div id="skillbar" class="skillbar" aria-label="技能欄"></div>
+    <div id="skillbar-wrap">
+      <div class="skillbar-head">
+        <span class="skillbar-title">技能欄</span>
+        <span class="skillbar-hint">點擊施放</span>
+        <span id="sk-pts" class="skillbar-pts"></span>
+      </div>
+      <div id="skillbar" class="skillbar" aria-label="技能欄"></div>
+    </div>
 
     <div id="panel">
       <div class="subtabs" id="subtabs"></div>
@@ -71,6 +78,7 @@
     <div id="tabbar">
       <div class="tab active" data-tab="hunt">狩獵場</div>
       <div class="tab" data-tab="bag">背包</div>
+      <div class="tab" data-tab="skills">武學</div>
       <div class="tab" data-tab="stat">能力</div>
       <div class="tab" data-tab="chat">聊天</div>
       <div class="tab" data-tab="market">交易所</div>
@@ -98,13 +106,14 @@
     <div class="toast hidden" id="toast"></div>
   </div>
 
-  <script src="js/data.js?v=yunzhou1"></script>
-  <script src="js/pixel.js?v=yunzhou1"></script>
-  <script src="js/assets.js?v=yunzhou1"></script>
-  <script src="js/sprites.js?v=yunzhou1"></script>
-  <script src="js/icons.js?v=yunzhou1"></script>
-  <script src="js/engine.js?v=yunzhou1"></script>
-  <script src="js/net.js?v=yunzhou1"></script>
-  <script src="js/app.js?v=yunzhou1"></script>
+  <script src="js/data.js?v=yunzhou4"></script>
+  <script src="js/pixel.js?v=yunzhou4"></script>
+  <script src="js/items.js?v=yunzhou4"></script>
+  <script src="js/assets.js?v=yunzhou4"></script>
+  <script src="js/sprites.js?v=yunzhou4"></script>
+  <script src="js/icons.js?v=yunzhou4"></script>
+  <script src="js/engine.js?v=yunzhou4"></script>
+  <script src="js/net.js?v=yunzhou4"></script>
+  <script src="js/app.js?v=yunzhou4"></script>
 </body>
 </html>

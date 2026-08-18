@@ -361,7 +361,7 @@ window.Engine = (() => {
       warehouse: [],
       mapId: null,
       hunting: false,
-      skills: cls.skills.filter((s) => skills[s] && skillMinLv(skills[s], classId) <= 1),
+      skills: (DATA.starterSkills && DATA.starterSkills[classId]) || cls.skills.filter((s) => skills[s] && (skills[s].cost === 0 || skillMinLv(skills[s], classId) <= 1)),
       elfElem: classId === "elf" ? (pickElem || null) : undefined,
       elfElemSwaps: classId === "elf" ? 0 : undefined,
       clanId: "",
@@ -536,10 +536,69 @@ window.Engine = (() => {
     return true;
   }
 
-  function canLearn(ch) {
+  function skillPointTotal(ch) {
+    if (!ch || ch.level < 1) return 0;
+    return Math.max(0, ch.level - 1) + Math.floor(ch.level / 5) + (ch.skillPointBonus || 0);
+  }
+
+  function skillPointSpent(ch) {
+    return (ch.skills || []).reduce((sum, sid) => {
+      const sk = skills[sid];
+      return sum + (sk && sk.cost != null ? sk.cost : 1);
+    }, 0);
+  }
+
+  function skillPointAvail(ch) {
+    return skillPointTotal(ch) - skillPointSpent(ch);
+  }
+
+  function skillReqs(sk, classId) {
+    if (!sk) return [];
+    if (sk.reqBy && classId && sk.reqBy[classId]) return sk.reqBy[classId];
+    return sk.req || [];
+  }
+
+  function meetsSkillReqs(ch, sid) {
+    const req = skillReqs(skills[sid], ch.classId);
+    const got = new Set(ch.skills || []);
+    return req.every((r) => got.has(r));
+  }
+
+  function unlockSkill(ch, sid) {
+    const sk = skills[sid];
+    if (!sk) return { ok: false, msg: "沒有這個武學" };
+    if ((ch.skills || []).includes(sid)) return { ok: false, msg: "已習得" };
+    if (!canLearnSkill(ch, sid)) {
+      if (ch.classId === "elf" && isSpiritSkill(sid) && !ch.elfElem) return { ok: false, msg: "請先找五行宗師選定屬性" };
+      if (ch.classId === "elf" && isSpiritSkill(sid) && sk.tree !== ch.elfElem && SPIRIT_TREES.has(sk.tree)) {
+        return { ok: false, msg: "需選定對應五行屬性" };
+      }
+      if (skillMinLv(sk, ch.classId) > ch.level) return { ok: false, msg: `需達 Lv.${skillMinLv(sk, ch.classId)}` };
+      return { ok: false, msg: "條件不足" };
+    }
+    if (!meetsSkillReqs(ch, sid)) {
+      const need = skillReqs(sk, ch.classId).map((r) => skills[r]?.name || r).join("、");
+      return { ok: false, msg: need ? `需先習得：${need}` : "前置武學未滿足" };
+    }
+    const cost = sk.cost != null ? sk.cost : 1;
+    if (skillPointAvail(ch) < cost) return { ok: false, msg: `武學點不足（需 ${cost} 點，剩 ${skillPointAvail(ch)} 點）` };
+    ch.skills = [...(ch.skills || []), sid];
+    return { ok: true, msg: `習得 ${sk.name}${cost ? `（-${cost} 武學點）` : ""}` };
+  }
+
+  function learnableSkills(ch) {
     const cls = classes[ch.classId];
-    const got = new Set(ch.skills);
-    return cls.skills.filter((s) => !got.has(s) && canLearnSkill(ch, s));
+    if (!cls) return [];
+    const got = new Set(ch.skills || []);
+    return cls.skills.filter((s) => !got.has(s) && canLearnSkill(ch, s) && meetsSkillReqs(ch, s));
+  }
+
+  function migrateSkillTree(ch) {
+    if (ch.skillTreeMigrated) return;
+    ch.skillTreeMigrated = true;
+    const spent = skillPointSpent(ch);
+    const base = Math.max(0, ch.level - 1) + Math.floor(ch.level / 5);
+    if (spent > base) ch.skillPointBonus = (ch.skillPointBonus || 0) + spent - base;
   }
 
   function learnPending(ch) {
@@ -550,7 +609,11 @@ window.Engine = (() => {
     };
     ch.skills = [...new Set((ch.skills || []).map((s) => remap[s] || s).filter((s) => skills[s]))];
     migrateElfMagic(ch);
-    for (const s of canLearn(ch)) ch.skills.push(s);
+    migrateSkillTree(ch);
+    const starters = (DATA.starterSkills && DATA.starterSkills[ch.classId]) || [];
+    for (const s of starters) {
+      if (skills[s] && !(ch.skills || []).includes(s)) ch.skills.push(s);
+    }
   }
 
   function gainExp(ch, n) {
@@ -923,7 +986,8 @@ window.Engine = (() => {
     newCharacter, tryEquip, unequip, removeFromBag, addToBag, gainExp,
     countItem, consumeItem, canCraft, craft,
     enchant, sellPrice, rollDrops, makeMob, playerHit, mobHit,
-    autoPotions, autoSellJunk, applyOffline, equippedList, canLearn, learnPending,
+    autoPotions, autoSellJunk, applyOffline, equippedList, canLearn: learnableSkills, learnableSkills, learnPending,
+    unlockSkill, skillPointTotal, skillPointSpent, skillPointAvail, meetsSkillReqs, skillReqs,
     enchantRate, enchantVanishRate, enchantPreview, enchantScrollLabel, enchantScrollId,
     applyCombatBuffs, skillMinLv, isSpiritSkill, canCastSkill, hasBowEquipped, setElfElem, elfElemSwitchCost,
     transformDef, availableTransforms, canTransform, startTransform, cancelTransform, tickTransform,

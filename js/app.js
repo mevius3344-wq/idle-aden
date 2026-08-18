@@ -320,39 +320,30 @@ window.App = (() => {
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
       el.className = `hero art lin transformed ${extra}`.trim();
-      el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
-      if (window.ASSETS) ASSETS.hydrate(el);
+      el.innerHTML = mobArt(tr.mob, { morph: true });
       return;
     }
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
-    if (window.ASSETS) {
-      el.className = `hero art lin wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = ASSETS.hero(cls, g);
-      ASSETS.hydrate(el);
-      return;
-    }
     if (window.PIXEL) {
-      el.className = `hero art lin wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
-      el.innerHTML = `<div class="hero-lin">${PIXEL.hero(cls, g)}</div>`;
+      el.className = `hero art wuxia wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = `<div class="hero-lin hero-wuxia">${PIXEL.hero(cls, g)}</div>`;
       return;
     }
     if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
-    el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+    el.className = `hero art wuxia wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
   }
   function heroThumb(c) {
-    if (window.ASSETS) {
-      return `<div class="hero art lin mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${ASSETS.hero(c.classId, c.gender)}</div>`;
-    }
     if (window.PIXEL) {
-      return `<div class="hero art lin mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-lin">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
+      return `<div class="hero art wuxia mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-lin hero-wuxia">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
     }
-    return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
+    return `<div class="hero art wuxia mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
-  function mobArt(id) {
+  function mobArt(id, opts = {}) {
+    const extra = opts.morph ? " hero-morph" : "";
+    if (window.PIXEL) return `<div class="mob-svg mob-wuxia${extra}">${PIXEL.mob(id)}</div>`;
     if (window.ASSETS) return ASSETS.mob(id);
-    if (window.PIXEL) return PIXEL.mob(id);
     return window.SPRITES ? SPRITES.mob(id) : "";
   }
   function skillIcon(sid) {
@@ -363,7 +354,8 @@ window.App = (() => {
     const id = d.id || (it && it.id) || it;
     const r = d.rarity || "common";
     if (window.ASSETS) return ASSETS.item(id, d);
-    return `<span class="ico-svg r-${r}">${(window.ICONS && ICONS.of(id, d)) || ""}</span>`;
+    const svg = (window.ITEM_ART && ITEM_ART.of(id, d)) || (window.ICONS && ICONS.of(id, d)) || "";
+    return `<span class="ico-svg item-wuxia r-${r}">${svg}</span>`;
   }
 
   function hash(s) {
@@ -545,6 +537,12 @@ window.App = (() => {
     $("buffs").innerHTML = buffHtml || `<span class="dim">無</span>`;
     const stxt = ch.hunting ? "狩獵中" : ch.transform ? "變身" : combat.buffs.length ? "增益" : "無";
     $("stxt").textContent = stxt;
+    const spEl = $("sk-pts");
+    if (spEl) {
+      const sp = E.skillPointAvail(ch);
+      spEl.textContent = sp > 0 ? `武學點 ${sp}` : "";
+      spEl.classList.toggle("has", sp > 0);
+    }
     updateSkillBar();
     if (window.ASSETS) {
       ASSETS.hydrate($("buffs"));
@@ -896,7 +894,8 @@ window.App = (() => {
     log(`擊殺 ${mob.name}　EXP +${mob.exp}　💰 +${gold}${sold ? `　回收 ${sold}` : ""}`);
     if (ups) {
       log(`${ch.name} 升到了 ${ch.level} 級！`, "sys");
-      toast(`升級！Lv.${ch.level}`);
+      const bonus = ch.level % 5 === 0 ? "（含五級加成）" : "";
+      toast(`升級！Lv.${ch.level}　武學點 +1${bonus}`);
       sfx("up");
       if (ch.classId === "elf" && ch.level >= 10 && !ch.elfElem) {
         toast("請找五行宗師選擇心法屬性（火雲／寒潭／疾風／厚土）");
@@ -925,14 +924,46 @@ window.App = (() => {
     const trees = [];
     const seen = new Set();
     for (const sid of list) {
-      const t = (DATA.skills[sid] && DATA.skills[sid].tree) || "other";
+      const sk = DATA.skills[sid];
+      const t = (sk && (sk.branch || sk.tree)) || "other";
       if (!seen.has(t)) { seen.add(t); trees.push(t); }
     }
     return trees.map((t) => ({
       id: t,
-      name: (DATA.skillTrees && DATA.skillTrees[t]) || t,
-      skills: list.filter((sid) => ((DATA.skills[sid] && DATA.skills[sid].tree) || "other") === t),
+      name: (DATA.classBranches && DATA.classBranches[ch.classId] && DATA.classBranches[ch.classId][t])
+        || (DATA.skillTrees && DATA.skillTrees[t]) || t,
+      skills: list.filter((sid) => {
+        const sk = DATA.skills[sid];
+        return ((sk && (sk.branch || sk.tree)) || "other") === t;
+      }),
     }));
+  }
+  function skillsInBranch(branchId) {
+    return skillList()
+      .filter((sid) => {
+        const sk = DATA.skills[sid];
+        if (!sk) return false;
+        return (sk.branch || sk.tree) === branchId;
+      })
+      .sort((a, b) => skillLv(a) - skillLv(b));
+  }
+  function skillNodeState(sid) {
+    const sk = DATA.skills[sid];
+    if (!sk) return "locked-lv";
+    if ((ch.skills || []).includes(sid)) return "learned";
+    if (!E.meetsSkillReqs(ch, sid)) return "locked-req";
+    if (!E.canLearnSkill(ch, sid)) return "locked-lv";
+    if ((sk.cost ?? 1) > E.skillPointAvail(ch)) return "locked-sp";
+    return "available";
+  }
+  function barSkillOrder() {
+    const list = barSkills();
+    const kindOrder = { phys: 0, magic: 1, buff: 2, heal: 3, mpheal: 4 };
+    return [...list].sort((a, b) => {
+      const ka = kindOrder[DATA.skills[a]?.kind] ?? 5;
+      const kb = kindOrder[DATA.skills[b]?.kind] ?? 5;
+      return ka - kb || skillLv(a) - skillLv(b);
+    });
   }
   function barSkills() {
     const known = new Set(ch.skills || []);
@@ -945,16 +976,17 @@ window.App = (() => {
       if (bar) bar.innerHTML = "";
       return;
     }
-    const list = barSkills();
+    const list = barSkillOrder();
     const sig = ch.classId + "|" + list.join(",") + "|" + (ch.skills || []).join(",");
     if (bar.dataset.sig !== sig) {
       bar.dataset.sig = sig;
       const known = new Set(ch.skills || []);
-      bar.innerHTML = list.map((sid) => {
+      bar.innerHTML = list.map((sid, i) => {
         const sk = DATA.skills[sid];
         if (!sk) return "";
         const locked = !known.has(sid);
-        return `<button type="button" class="sk-slot ${locked ? "lock" : ""} sk-${sk.tree || sk.kind || "misc"}" data-sk="${sid}" title="${sk.name}">
+        return `<button type="button" class="sk-slot ${locked ? "lock" : ""} sk-${sk.branch || sk.tree || sk.kind || "misc"}" data-sk="${sid}" title="${sk.name}">
+          <span class="sk-num">${i + 1}</span>
           <span class="sk-ico">${skillIcon(sid)}</span>
           <span class="sk-nm">${sk.name}</span>
           <span class="sk-cd"></span>
@@ -1493,7 +1525,7 @@ window.App = (() => {
       const ok = got > 0 && E.canTransform(ch, tr.id).ok;
       const dur = (tr.dur || 120) + Math.floor((ch.attrs?.wis || 10) * 2.5);
       return `<div class="item-row poly-row ${ok ? "" : "dim"}" data-poly="${tr.id}">
-        <div class="ico keep-color"><div class="mob-svg poly-thumb">${mobArt(tr.mob)}</div></div>
+        <div class="ico keep-color"><div class="poly-thumb">${mobArt(tr.mob)}</div></div>
         <div class="info"><div class="nm">${tr.name}</div>
         <div class="meta">Lv.${tr.minLv}　${tr.desc}<br>
         HP×${tr.hpMul}　AC${tr.ac || 0}　傷害 ${tr.dmg?.join("~") || "—"}　約 ${dur} 秒<br>
@@ -1537,7 +1569,7 @@ window.App = (() => {
         const dur = (tr.dur || 120) + Math.floor((ch.attrs?.wis || 10) * 2.5);
         const active = ch.transform?.id === tr.id;
         return `<div class="item-row poly-row ${ok ? "" : "dim"}" data-poly="${tr.id}">
-          <div class="ico keep-color"><div class="mob-svg poly-thumb">${mobArt(tr.mob)}</div></div>
+          <div class="ico keep-color"><div class="poly-thumb">${mobArt(tr.mob)}</div></div>
           <div class="info"><div class="nm">${tr.name}${active ? " <span style='color:#ffd24a'>(變身中)</span>" : ""}</div>
           <div class="meta">Lv.${tr.minLv}　${tr.desc}<br>
           HP×${tr.hpMul}　AC${tr.ac || 0}　${tr.dmg ? "傷害 " + tr.dmg.join("~") : ""}　約 ${dur} 秒<br>
@@ -1638,7 +1670,7 @@ window.App = (() => {
         }).join("")
       ).join("");
       openSheet(`<h3>武學導師</h3>${elemNote}${rows || "<p>沒有技能</p>"}
-        <p class="small" style="margin-top:8px">升級自動習得。遊俠：江湖內功＋五行心法＋四選一屬性心法。點戰鬥下方技能欄可手動施放。</p>`);
+        <p class="small" style="margin-top:8px">消耗武學點在「武學」分頁習得。遊俠 Lv.10 找五行宗師選定屬性後，才能修習火雲／寒潭／疾風／厚土之一。</p>`);
       return;
     }
     if (n.kind === "elfmaster") {
@@ -1826,6 +1858,73 @@ window.App = (() => {
     });
   }
 
+  function renderSkills() {
+    $("subtabs").innerHTML = "";
+    const avail = E.skillPointAvail(ch);
+    const total = E.skillPointTotal(ch);
+    const branches = (DATA.classBranches && DATA.classBranches[ch.classId]) || {};
+    const elemNote = ch.classId === "elf"
+      ? (ch.elfElem
+        ? `<p class="small">五行屬性：<b>${(DATA.elfElemNames && DATA.elfElemNames[ch.elfElem]) || ch.elfElem}</b>（轉換請找五行宗師）</p>`
+        : `<p class="small warn">Lv.10 後請找<b>五行宗師</b>選定火雲／寒潭／疾風／厚土，才能修習對應屬性心法。</p>`)
+      : "";
+    const branchHtml = Object.entries(branches).map(([bid, bname]) => {
+      const list = skillsInBranch(bid);
+      if (!list.length) return "";
+      const nodes = list.map((sid) => {
+        const sk = DATA.skills[sid];
+        const st = skillNodeState(sid);
+        const cost = sk.cost ?? 1;
+        const reqNames = E.skillReqs(sk, ch.classId).map((r) => DATA.skills[r]?.name).filter(Boolean).join("、");
+        let tag = "";
+        if (st === "learned") tag = `<span class="sk-tag ok">已習得</span>`;
+        else if (st === "available") tag = `<button type="button" class="btn sk-learn" data-sk="${sid}">習得</button>`;
+        else if (st === "locked-sp") tag = `<span class="sk-tag warn">需 ${cost} 點</span>`;
+        else if (st === "locked-req") tag = `<span class="sk-tag dim">前置未滿</span>`;
+        else tag = `<span class="sk-tag dim">Lv.${skillLv(sid)}</span>`;
+        return `<div class="sk-node ${st} sk-node-${sk.branch || sk.tree || bid}" data-sk="${sid}">
+          <div class="sk-node-ico">${skillIcon(sid)}</div>
+          <div class="sk-node-body">
+            <b>${sk.name}</b>
+            <div class="small">${sk.desc}</div>
+            <div class="small dim">Lv.${skillLv(sid)} · ${cost} 武學點 · MP ${sk.mp} · CD ${sk.cd}s</div>
+            ${reqNames ? `<div class="small dim">前置：${reqNames}</div>` : ""}
+          </div>
+          ${tag}
+        </div>`;
+      }).join("");
+      return `<div class="sk-tree-branch sk-branch-${bid}">
+        <div class="sk-tree-ttl">${bname}</div>
+        <div class="sk-tree-nodes">${nodes}</div>
+      </div>`;
+    }).join("");
+    const box = $("panel-scroll");
+    box.innerHTML = `
+      <div class="sk-tree-head">
+        <div class="sk-pts-banner">
+          <span>可用武學點</span>
+          <b>${avail}</b>
+          <span class="dim">/ 累計 ${total}</span>
+        </div>
+        <p class="small">升級 +1 武學點，每 5 級再 +1。不同路線需消耗點數與前置武學，請規劃專屬成長。</p>
+        ${elemNote}
+      </div>
+      <div class="sk-tree-grid">${branchHtml || "<p>此職業尚無武學樹</p>"}</div>
+      <p class="small" style="margin-top:10px">已習得的武學會出現在戰鬥下方<b>技能欄</b>，點擊可手動施放。</p>`;
+    box.querySelectorAll(".sk-learn").forEach((btn) => {
+      btn.onclick = () => {
+        const r = E.unlockSkill(ch, btn.dataset.sk);
+        toast(r.msg);
+        if (r.ok) {
+          log(r.msg, "sys");
+          refreshTop();
+          save();
+          renderSkills();
+        }
+      };
+    });
+  }
+
   function renderStat() {
     $("subtabs").innerHTML = "";
     const st = E.totalStats(ch);
@@ -1833,7 +1932,7 @@ window.App = (() => {
     const box = $("panel-scroll");
     box.innerHTML = `
       ${tr ? `<div class="poly-status">
-        <div class="mob-svg poly-stat">${mobArt(tr.mob)}</div>
+        <div class="poly-stat">${mobArt(tr.mob)}</div>
         <div><b style="color:#ffd24a">變身：${tr.name}</b>
         <div class="small">剩餘 ${fmtWait(Math.ceil(ch.transform.left))}　${tr.magic === false ? "無法施法" : "可施法"}</div>
         <button class="btn" id="stat-poly-off" style="margin-top:6px">解除變身</button></div>
@@ -1874,7 +1973,7 @@ window.App = (() => {
     ensureAuto();
     const junk = new Set(ch.auto.junk || []);
     const skillOff = new Set(ch.auto.skillOff || []);
-    const next = E.canLearn(ch);
+    const next = E.learnableSkills(ch);
     $("subtabs").innerHTML = "";
     $("panel-scroll").innerHTML = `
       <p class="gold">自動喝水</p>
@@ -1910,8 +2009,8 @@ window.App = (() => {
           <span class="small">MP ${k.mp}</span>
         </div>`;
         }).join("");
-      }).join("") || "<p class='small'>尚未學會技能，升級會自動習得。</p>"}
-      ${next.length ? `<p class="small" style="margin-top:6px">即將可學：${next.map((s) => DATA.skills[s].name + `(Lv.${skillLv(s)})`).join("、")}</p>` : ""}
+      }).join("") || "<p class='small'>尚未學會技能，請至「武學」分頁消耗武學點習得。</p>"}
+      ${next.length ? `<p class="small" style="margin-top:6px">可習得：${next.slice(0, 6).map((s) => DATA.skills[s].name + `(Lv.${skillLv(s)}·${DATA.skills[s].cost ?? 1}點)`).join("、")}${next.length > 6 ? "…" : ""}</p>` : ""}
       <hr class="sep">
       <p>修改密碼</p>
       <p class="small">帳號名稱無法更改。目前帳號：${acc.user}</p>
@@ -2154,6 +2253,7 @@ window.App = (() => {
     if (!ch) return;
     if (tab === "hunt") renderHunt();
     else if (tab === "bag") renderBag();
+    else if (tab === "skills") renderSkills();
     else if (tab === "stat") renderStat();
     else if (tab === "chat") renderChat();
     else if (tab === "market") renderMarket();

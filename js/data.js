@@ -699,6 +699,92 @@ window.DATA = (() => {
     blessRateBonus: 0.12,
   };
 
+  const classBranches = {
+    knight: { blade: "劍意", guard: "罡氣" },
+    mage: { shared: "內功", ice: "玄冰訣", fire: "烈焰訣", thunder: "天雷訣", spirit: "玄門" },
+    elf: { elf: "射術", shared: "江湖內功", spirit: "五行心法", fire: "火雲", water: "寒潭", wind: "疾風", earth: "厚土" },
+  };
+
+  const starterSkills = { knight: ["bounce"], mage: ["ebolt"], elf: ["light"] };
+
+  /** 武學樹：cost=武學點、req=前置、branch=成長路線 */
+  const skillUpgrade = {
+    bounce: { cost: 0, req: [], branch: "blade" },
+    stun: { cost: 1, req: ["bounce"], branch: "blade" },
+    smash: { cost: 2, req: ["stun"], branch: "blade" },
+    reduction: { cost: 1, req: [], branch: "guard" },
+    solid: { cost: 1, req: ["reduction"], branch: "guard" },
+    counter: { cost: 2, req: ["solid"], branch: "guard" },
+
+    ebolt: { cost: 0, req: [], branch: "shared" },
+    light: { cost: 1, req: ["ebolt"], branch: "shared" },
+    heal: { cost: 1, req: ["light"], branch: "shared" },
+    shield: { cost: 1, req: ["light"], branch: "shared" },
+    holywalk: { cost: 1, req: ["heal"], branch: "shared" },
+    magbar: { cost: 1, req: ["shield"], branch: "shared" },
+    extraheal: { cost: 1, req: ["heal"], branch: "shared" },
+    haste: { cost: 2, req: ["holywalk"], branch: "shared" },
+    greaterheal: { cost: 2, req: ["extraheal"], branch: "shared" },
+    fullheal: { cost: 3, req: ["greaterheal"], branch: "shared" },
+    icedagger: { cost: 1, req: ["ebolt"], branch: "ice" },
+    icelance: { cost: 1, req: ["icedagger"], branch: "ice" },
+    blizzard: { cost: 2, req: ["icelance"], branch: "ice" },
+    fireball: { cost: 1, req: ["ebolt"], branch: "fire" },
+    slow: { cost: 1, reqBy: { mage: ["fireball"], elf: ["icearrow"] }, branch: "shared" },
+    meteor: { cost: 3, req: ["slow"], branch: "fire" },
+    lightning: { cost: 2, req: ["ebolt"], branch: "thunder" },
+
+    triple: { cost: 2, req: ["firarrow"], branch: "elf" },
+    lightarrow: { cost: 1, req: ["light"], branch: "shared" },
+    windblade: { cost: 1, req: ["lightarrow"], branch: "shared" },
+    icearrow: { cost: 1, req: ["lightarrow"], branch: "shared" },
+    holyweapon: { cost: 1, req: ["shield"], branch: "shared" },
+    firarrow: { cost: 1, req: ["windblade"], branch: "shared" },
+    elfire: { cost: 3, req: ["firarrow"], branch: "shared" },
+    resist: { cost: 1, req: ["shield"], branch: "spirit" },
+    mindswap: { cost: 1, req: ["resist"], branch: "spirit" },
+    purify: { cost: 1, req: ["mindswap"], branch: "spirit" },
+    worldtree: { cost: 1, req: ["purify"], branch: "spirit" },
+    elemdef: { cost: 1, req: ["purify"], branch: "spirit" },
+    bodyswap: { cost: 2, req: ["mindswap"], branch: "spirit" },
+    singleres: { cost: 2, req: ["elemdef"], branch: "spirit" },
+    dispel: { cost: 2, req: ["bodyswap"], branch: "spirit" },
+    erase: { cost: 2, req: ["dispel"], branch: "spirit" },
+    weaken: { cost: 2, req: ["erase"], branch: "spirit" },
+    summon: { cost: 2, req: ["weaken"], branch: "spirit" },
+    mirror: { cost: 3, req: ["summon"], branch: "spirit" },
+    strongsummon: { cost: 3, req: ["mirror"], branch: "spirit" },
+    seal: { cost: 3, req: ["strongsummon"], branch: "spirit" },
+    fireweapon: { cost: 1, req: [], branch: "fire" },
+    firedance: { cost: 1, req: ["fireweapon"], branch: "fire" },
+    fireblade: { cost: 2, req: ["firedance"], branch: "fire" },
+    fireattr: { cost: 2, req: ["fireblade"], branch: "fire" },
+    firesoul: { cost: 2, req: ["fireattr"], branch: "fire" },
+    energyboost: { cost: 2, req: ["firesoul"], branch: "fire" },
+    waterele: { cost: 1, req: [], branch: "water" },
+    lifefount: { cost: 1, req: ["waterele"], branch: "water" },
+    waterprot: { cost: 1, req: ["waterele"], branch: "water" },
+    waterbless: { cost: 2, req: ["lifefount"], branch: "water" },
+    pollute: { cost: 2, req: ["waterprot"], branch: "water" },
+    windwalk: { cost: 1, req: [], branch: "wind" },
+    windshot: { cost: 1, req: ["windwalk"], branch: "wind" },
+    stormeye: { cost: 1, req: ["windshot"], branch: "wind" },
+    storm: { cost: 2, req: ["stormeye"], branch: "wind" },
+    precise: { cost: 2, req: ["stormeye"], branch: "wind" },
+    windbind: { cost: 2, req: ["storm"], branch: "wind" },
+    earthprot: { cost: 1, req: [], branch: "earth" },
+    earthsnare: { cost: 1, req: ["earthprot"], branch: "earth" },
+    earthwall: { cost: 2, req: ["earthsnare"], branch: "earth" },
+    earthguard: { cost: 1, req: ["earthprot"], branch: "earth" },
+    steelprot: { cost: 2, req: ["earthwall"], branch: "earth" },
+    vigor: { cost: 2, req: ["earthguard"], branch: "earth" },
+  };
+
+  for (const [id, meta] of Object.entries(skillUpgrade)) {
+    if (skills[id]) Object.assign(skills[id], meta);
+  }
+  if (skills.light) skills.light.minLvBy = { ...(skills.light.minLvBy || {}), elf: 1 };
+
   const marqueePool = [
     "系統：歡迎來到雲州閒俠。掛機、衝裝、掉寶，闖蕩江湖。",
     "雲州城已開放：鏡月林、雲州地穴 1~3F、傲天塔 1~50F 為高級狩獵區。",
@@ -714,5 +800,5 @@ window.DATA = (() => {
     "門派募集中：一起打江湖霸主，傷害有排名。",
   ];
 
-  return { gameVersion, R, classes, skills, skillTrees, elfElements, elfElemNames, enchant, slots, items, monsters, drops, maps, npcs, shopBuy, names, marqueePool, bossMeta, villages, recipes, transforms };
+  return { gameVersion, R, classes, skills, skillTrees, classBranches, starterSkills, elfElements, elfElemNames, enchant, slots, items, monsters, drops, maps, npcs, shopBuy, names, marqueePool, bossMeta, villages, recipes, transforms };
 })();
