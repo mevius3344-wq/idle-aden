@@ -105,6 +105,11 @@ window.DATA = (() => {
       hp: extra.hp || 0, mp: extra.mp || 0, healPct: extra.healPct || 0,
       scroll: extra.scroll || null,
     });
+  const mat = (id, name, rarity, extra = {}) =>
+    addItem({
+      id, name, rarity, lv: 1, type: "mat", slot: null, kind: "material",
+      price: extra.price || 8, weight: 1, stack: true,
+    });
 
   w("club", "木棍", "common", 1, 2, 5, { price: 8, classes: ["knight", "elf", "mage"] });
   w("ssword", "短劍", "common", 1, 3, 8, { spd: 40, classes: ["knight", "elf"] });
@@ -167,6 +172,12 @@ window.DATA = (() => {
   use("scroll_a", "防具強化卷軸", "rare", "scroll", { scroll: "armor", price: 700 });
   use("scroll_b", "祝福強化卷軸", "epic", "scroll", { scroll: "bless", price: 4000 });
 
+  mat("hide", "獸皮", "common", { price: 6 });
+  mat("bone", "骨頭", "common", { price: 8 });
+  mat("ore", "鐵礦石", "uncommon", { price: 22 });
+  mat("gem", "寶石碎片", "rare", { price: 90 });
+  mat("scale_mat", "龍鱗碎片", "epic", { price: 260 });
+
   const monsters = {
     fox: { id: "fox", name: "狐狸", lv: 1, hp: 18, ac: 8, dmg: [1, 3], exp: 12, gold: [2, 6], icon: "🦊" },
     orc: { id: "orc", name: "妖魔", lv: 3, hp: 36, ac: 6, dmg: [2, 6], exp: 28, gold: [4, 12], icon: "👺" },
@@ -187,22 +198,22 @@ window.DATA = (() => {
   };
 
   const drops = {
-    fox: [{ id: "red", p: 0.35, n: [1, 2] }, { id: "ssword", p: 0.04 }],
-    orc: [{ id: "red", p: 0.4, n: [1, 3] }, { id: "leather", p: 0.06 }, { id: "club", p: 0.05 }],
-    kobold: [{ id: "red", p: 0.4 }, { id: "cap", p: 0.08 }, { id: "bsword", p: 0.04 }],
-    gnoll: [{ id: "orange", p: 0.18 }, { id: "ringmail", p: 0.05 }, { id: "scimitar", p: 0.04 }],
-    skeleton: [{ id: "orange", p: 0.22 }, { id: "ihelm", p: 0.05 }, { id: "scroll_w", p: 0.03 }],
-    zombie: [{ id: "blue", p: 0.25 }, { id: "cloak1", p: 0.08 }, { id: "scroll_a", p: 0.03 }],
-    wolfman: [{ id: "lbow", p: 0.05 }, { id: "ring_str", p: 0.04 }, { id: "orange", p: 0.25 }],
-    ghoul: [{ id: "katana", p: 0.03 }, { id: "amu1", p: 0.05 }, { id: "scroll_w", p: 0.05 }],
-    ant: [{ id: "scale", p: 0.04 }, { id: "belt1", p: 0.06 }, { id: "orange", p: 0.3 }],
-    scorpion: [{ id: "xbow", p: 0.04 }, { id: "ring_mr", p: 0.05 }, { id: "scroll_a", p: 0.06 }],
-    lizard: [{ id: "claymore", p: 0.03 }, { id: "crystal", p: 0.03 }, { id: "clear", p: 0.12 }],
-    drake: [{ id: "dhelm", p: 0.05 }, { id: "elvenbow", p: 0.03 }, { id: "scroll_b", p: 0.02 }],
-    gargoyle: [{ id: "plate", p: 0.04 }, { id: "archstaff", p: 0.03 }, { id: "ring_imm", p: 0.03 }],
-    deathk: [{ id: "dsword", p: 0.04 }, { id: "crystalarm", p: 0.03 }, { id: "scroll_b", p: 0.05 }],
-    balrog: [{ id: "archrobe", p: 0.05 }, { id: "amu3", p: 0.02 }, { id: "belt2", p: 0.04 }],
-    ancient: [{ id: "excal", p: 0.03 }, { id: "moonbow", p: 0.03 }, { id: "starstaff", p: 0.03 }],
+    fox: [{ id: "red", p: 0.35, n: [1, 2] }, { id: "ssword", p: 0.04 }, { id: "hide", p: 0.4, n: [1, 2] }],
+    orc: [{ id: "red", p: 0.4, n: [1, 3] }, { id: "leather", p: 0.06 }, { id: "club", p: 0.05 }, { id: "bone", p: 0.28, n: [1, 2] }],
+    kobold: [{ id: "red", p: 0.4 }, { id: "cap", p: 0.08 }, { id: "bsword", p: 0.04 }, { id: "ore", p: 0.12 }],
+    gnoll: [{ id: "orange", p: 0.18 }, { id: "ringmail", p: 0.05 }, { id: "scimitar", p: 0.04 }, { id: "hide", p: 0.3, n: [1, 3] }],
+    skeleton: [{ id: "orange", p: 0.22 }, { id: "ihelm", p: 0.05 }, { id: "scroll_w", p: 0.03 }, { id: "bone", p: 0.45, n: [1, 3] }],
+    zombie: [{ id: "blue", p: 0.25 }, { id: "cloak1", p: 0.08 }, { id: "scroll_a", p: 0.03 }, { id: "bone", p: 0.3 }],
+    wolfman: [{ id: "lbow", p: 0.05 }, { id: "ring_str", p: 0.04 }, { id: "orange", p: 0.25 }, { id: "hide", p: 0.4, n: [1, 3] }],
+    ghoul: [{ id: "katana", p: 0.03 }, { id: "amu1", p: 0.05 }, { id: "scroll_w", p: 0.05 }, { id: "gem", p: 0.06 }],
+    ant: [{ id: "scale", p: 0.04 }, { id: "belt1", p: 0.06 }, { id: "orange", p: 0.3 }, { id: "ore", p: 0.22, n: [1, 2] }],
+    scorpion: [{ id: "xbow", p: 0.04 }, { id: "ring_mr", p: 0.05 }, { id: "scroll_a", p: 0.06 }, { id: "gem", p: 0.08 }],
+    lizard: [{ id: "claymore", p: 0.03 }, { id: "crystal", p: 0.03 }, { id: "clear", p: 0.12 }, { id: "ore", p: 0.2 }],
+    drake: [{ id: "dhelm", p: 0.05 }, { id: "elvenbow", p: 0.03 }, { id: "scroll_b", p: 0.02 }, { id: "scale_mat", p: 0.12 }],
+    gargoyle: [{ id: "plate", p: 0.04 }, { id: "archstaff", p: 0.03 }, { id: "ring_imm", p: 0.03 }, { id: "gem", p: 0.12 }],
+    deathk: [{ id: "dsword", p: 0.04 }, { id: "crystalarm", p: 0.03 }, { id: "scroll_b", p: 0.05 }, { id: "gem", p: 0.15 }],
+    balrog: [{ id: "archrobe", p: 0.05 }, { id: "amu3", p: 0.02 }, { id: "belt2", p: 0.04 }, { id: "scale_mat", p: 0.18 }],
+    ancient: [{ id: "excal", p: 0.03 }, { id: "moonbow", p: 0.03 }, { id: "starstaff", p: 0.03 }, { id: "scale_mat", p: 0.28, n: [1, 2] }],
   };
 
   const maps = [

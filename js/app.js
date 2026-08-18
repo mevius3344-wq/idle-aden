@@ -9,15 +9,23 @@ window.App = (() => {
   let huntRegion = "亞丁大陸";
   let bagSub = "bag";
   let chatCh = "sys";
+  let marketCat = "weapon";
   let logs = [];
   let combat = { mob: null, tPlayer: 0, tMob: 0, cds: {}, buffs: [] };
   let lastTick = performance.now();
   let hue = 32;
   let soundOn = false;
+  let soundVol = 0.4;
+  let audioCtx = null;
   let parties = [];
   let market = [];
-  let world = { online: 0, maps: {}, tax: 0, serverLv: 1, parties: [], market: [], bosses: {}, players: [] };
+  let world = { online: 0, maps: {}, tax: 0, serverLv: 1, parties: [], clans: [], market: [], bosses: {}, players: [] };
   let netOk = false;
+
+  const JUNK_PRESETS = [
+    ["club", "木棍"], ["cap", "布帽"], ["cloth", "布衣"],
+    ["ssword", "短劍"], ["leather", "皮盔甲"], ["wand", "魔法杖"], ["bow", "短弓"],
+  ];
 
   const $ = (id) => document.getElementById(id);
   const el = (html) => {
@@ -53,10 +61,150 @@ window.App = (() => {
     toast._t = setTimeout(() => t.classList.add("hidden"), 1800);
   }
 
+  function ensureAuto() {
+    if (!ch) return;
+    if (!ch.auto) ch.auto = {};
+    if (typeof ch.auto.hp !== "number") ch.auto.hp = 0.45;
+    if (typeof ch.auto.mp !== "number") ch.auto.mp = 0.3;
+    if (ch.auto.pot == null) ch.auto.pot = true;
+    if (ch.auto.sell == null) ch.auto.sell = true;
+    if (!Array.isArray(ch.auto.junk)) ch.auto.junk = ["club", "cap", "cloth"];
+    if (!Array.isArray(ch.auto.skillOff)) ch.auto.skillOff = [];
+  }
+  function persistCfg() {
+    try { localStorage.setItem("aden_cfg", JSON.stringify({ hue, sound: soundOn, vol: soundVol })); } catch (_) {}
+  }
+  function applyHue() {
+    const app = document.getElementById("app");
+    if (app) app.style.setProperty("--hue", hue);
+  }
+  function loadCfg() {
+    try {
+      const c = JSON.parse(localStorage.getItem("aden_cfg") || "null");
+      if (c) {
+        if (typeof c.hue === "number") hue = Math.max(0, Math.min(360, c.hue));
+        soundOn = !!c.sound;
+        if (typeof c.vol === "number") soundVol = Math.max(0, Math.min(1, c.vol));
+      }
+    } catch (_) {}
+    applyHue();
+  }
+  function sfx(kind) {
+    if (!soundOn || soundVol <= 0) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const notes = {
+        hit: [[220, 0.05, "square"]],
+        crit: [[330, 0.06, "sawtooth"], [520, 0.08, "square"]],
+        hurt: [[110, 0.08, "triangle"]],
+        miss: [[140, 0.04, "sine"]],
+        loot: [[523, 0.07, "sine"], [784, 0.1, "sine"]],
+        heal: [[392, 0.08, "sine"], [523, 0.1, "sine"]],
+        up: [[392, 0.08, "triangle"], [523, 0.1, "triangle"], [659, 0.14, "triangle"]],
+        click: [[480, 0.04, "square"]],
+      };
+      const seq = notes[kind] || notes.click;
+      seq.forEach((n, i) => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = n[2];
+        o.frequency.value = n[0];
+        g.gain.setValueAtTime(soundVol * 0.09, now + i * 0.07);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + n[1]);
+        o.connect(g);
+        g.connect(audioCtx.destination);
+        o.start(now + i * 0.07);
+        o.stop(now + i * 0.07 + n[1] + 0.02);
+      });
+    } catch (_) {}
+  }
+  function openCfg() {
+    const pal = [
+      { n: "金", v: 32, c: "#d4af37" },
+      { n: "綠", v: 95, c: "#6bc86b" },
+      { n: "青", v: 160, c: "#4ec9b0" },
+      { n: "藍", v: 210, c: "#5aa8e8" },
+      { n: "紫", v: 275, c: "#b48cff" },
+      { n: "赤", v: 0, c: "#e05040" },
+    ];
+    openSheet(`<h3>配置</h3>
+      <p>調色</p>
+      <div class="hue-row">${pal.map((p) =>
+        `<button type="button" class="hue-chip ${hue === p.v ? "on" : ""}" data-h="${p.v}" title="${p.n}" style="background:${p.c}"></button>`
+      ).join("")}</div>
+      <input class="range" type="range" min="0" max="360" value="${hue}" id="hue">
+      <p class="small" id="hue-lab">色調 ${hue}（角色與道具維持原色）</p>
+      <hr class="sep">
+      <p>聲音</p>
+      <label class="check"><input type="checkbox" id="sfx" ${soundOn ? "checked" : ""}> 開啟音效</label>
+      <p class="small" style="margin-top:8px">音量</p>
+      <input class="range" type="range" min="0" max="100" value="${Math.round(soundVol * 100)}" id="svol" ${soundOn ? "" : "disabled"}>
+      <button class="btn ghost wide" id="sfx-test" style="margin-top:8px">試聽</button>`);
+    const lab = $("modal").querySelector("#hue-lab");
+    const mark = () => {
+      $("modal").querySelectorAll(".hue-chip").forEach((b) => b.classList.toggle("on", +b.dataset.h === hue));
+    };
+    $("modal").querySelectorAll(".hue-chip").forEach((b) => {
+      b.onclick = () => {
+        hue = +b.dataset.h;
+        $("hue").value = hue;
+        applyHue(); persistCfg(); mark();
+        lab.textContent = `色調 ${hue}（角色與道具維持原色）`;
+        sfx("click");
+      };
+    });
+    $("hue").oninput = (e) => {
+      hue = +e.target.value;
+      applyHue(); persistCfg(); mark();
+      lab.textContent = `色調 ${hue}（角色與道具維持原色）`;
+    };
+    const vol = $("svol");
+    $("sfx").onchange = (e) => {
+      soundOn = e.target.checked;
+      vol.disabled = !soundOn;
+      persistCfg();
+      if (soundOn) sfx("click");
+    };
+    vol.oninput = (e) => {
+      soundVol = +e.target.value / 100;
+      persistCfg();
+    };
+    $("sfx-test").onclick = () => {
+      if (!soundOn) {
+        soundOn = true;
+        $("sfx").checked = true;
+        vol.disabled = false;
+        persistCfg();
+      }
+      sfx("loot");
+    };
+  }
+
   function log(msg, cls = "atk") {
-    logs.unshift({ t: Date.now(), msg, cls, ch: chatCh === "sys" ? "sys" : chatCh });
+    logs.unshift({ t: Date.now(), msg, cls, ch: "sys" });
     if (logs.length > 200) logs.pop();
     if (tab === "chat") renderPanel();
+  }
+
+  function myParty() {
+    if (!ch) return null;
+    return (world.parties || []).find((p) => (p.members || []).includes(ch.name)) || null;
+  }
+  function myClan() {
+    if (!ch) return null;
+    if (ch.clanId) return (world.clans || []).find((c) => c.id === ch.clanId) || null;
+    return (world.clans || []).find((c) => (c.members || []).includes(ch.name)) || null;
+  }
+  function applyClan(clanId, clanName) {
+    if (!ch) return;
+    ch.clanId = clanId || "";
+    ch.clanName = clanName || "";
+    save();
+    if (tab === "chat" || tab === "hunt") renderPanel();
   }
 
   function mq(text) {
@@ -84,6 +232,7 @@ window.App = (() => {
     if (!d) return "assets/ico-armor.png";
     if (d.kind === "potion") return d.hp ? "assets/ico-red.png" : "assets/ico-blue.png";
     if (d.kind === "scroll") return "assets/ico-scroll.png";
+    if (d.type === "mat") return "assets/ico-scroll.png";
     if (d.type === "weapon") return "assets/ico-sword.png";
     if (d.slot === "shield") return "assets/ico-shield.png";
     if (d.type === "acc") return "assets/ico-ring.png";
@@ -215,6 +364,7 @@ window.App = (() => {
     ch = m.char;
     if (m.warehouse) acc.warehouse = m.warehouse;
     if (!acc.warehouse) acc.warehouse = [];
+    ensureAuto();
     $("charsel").classList.add("hidden");
     E.learnPending(ch);
     const sec = Math.floor((m.offline || 0) / 1000);
@@ -320,10 +470,28 @@ window.App = (() => {
     Net.send({ t: "map", mapId: ch.mapId || "", hunting: false });
   }
 
-  function hideMob() {
-    $("sp-m-art").classList.add("hidden");
-    $("sp-m-art").removeAttribute("src");
-    $("mhp").classList.add("hidden");
+  function playAnim(el, cls, ms) {
+    if (!el) return;
+    const tags = ["swing", "atk-slash", "atk-thrust", "atk-chop", "atk-lunge", "atk-cast", "atk-crit", "hit", "hurt", "spawn", "mob-swing"];
+    tags.forEach((c) => el.classList.remove(c));
+    void el.offsetWidth;
+    cls.split(" ").forEach((c) => { if (c) el.classList.add(c); });
+    clearTimeout(el._animT);
+    el._animT = setTimeout(() => {
+      cls.split(" ").forEach((c) => { if (c) el.classList.remove(c); });
+    }, ms || 480);
+  }
+
+  function pickAtkStyle(magic, crit) {
+    if (magic) return "atk-cast";
+    if (crit) return "atk-crit";
+    const by = {
+      mage: ["atk-cast", "atk-thrust", "atk-slash"],
+      elf: ["atk-thrust", "atk-slash", "atk-lunge"],
+      knight: ["atk-slash", "atk-chop", "atk-lunge", "atk-thrust"],
+    };
+    const pool = by[ch?.classId] || by.knight;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   function burst(kind, x, y) {
@@ -374,7 +542,7 @@ window.App = (() => {
     img.classList.remove("hidden");
     $("sp-m").classList.remove("spawn");
     void $("sp-m").offsetWidth;
-    $("sp-m").classList.add("spawn");
+    playAnim($("sp-m"), "spawn", 420);
     $("mhp").classList.remove("hidden");
     $("mhpf").style.width = Math.max(0, (combat.mob.hp / combat.mob.maxHp) * 100) + "%";
   }
@@ -397,6 +565,7 @@ window.App = (() => {
     for (const it of loot) {
       E.addToBag(ch, it);
       log(`獲得 ${E.displayName(it)}`, "drop");
+      sfx("loot");
       const d = E.itemDef(it);
       if (d && (d.rarity === "rare" || d.rarity === "epic" || d.rarity === "legend" || it.plus >= 4)) {
         Net.send({ t: "announce", text: `恭喜 ${ch.name} 獲得了 ${E.displayName(it)}` });
@@ -407,6 +576,7 @@ window.App = (() => {
     if (ups) {
       log(`${ch.name} 升到了 ${ch.level} 級！`, "sys");
       toast(`升級！Lv.${ch.level}`);
+      sfx("up");
     }
     if (mob.boss) {
       stopHunt();
@@ -421,7 +591,9 @@ window.App = (() => {
 
   function trySkills() {
     const st = E.totalStats(ch);
+    const off = new Set(ch.auto?.skillOff || []);
     for (const sid of ch.skills) {
+      if (off.has(sid)) continue;
       const sk = DATA.skills[sid];
       if ((combat.cds[sid] || 0) > 0 || ch.mp < sk.mp || !combat.mob) continue;
       if (sk.kind === "heal" && ch.hp / st.maxHp > 0.7) continue;
@@ -432,18 +604,25 @@ window.App = (() => {
         const h = Math.floor(st.maxHp * sk.pct);
         ch.hp = Math.min(st.maxHp, ch.hp + h);
         floatDmg("p", "+" + h, "heal");
+        sfx("heal");
+        playAnim($("sp-p"), "atk-cast", 520);
         log(`施放 ${sk.name} 回復 ${h}`);
         return true;
       }
       if (sk.kind === "buff") {
         combat.buffs.push({ id: sid, name: sk.name, icon: "🛡️", left: sk.dur, reduce: sk.reduce });
+        playAnim($("sp-p"), "atk-cast", 520);
         log(`施放 ${sk.name}`);
         return true;
       }
       const hits = sk.hits || 1;
+      const magic = sk.kind === "magic";
       for (let i = 0; i < hits; i++) {
-        const r = E.playerHit(ch, combat.mob, sk.mul, sk.kind === "magic");
-        applyPlayerHit(r, sk.name, sk.kind === "magic");
+        const r = E.playerHit(ch, combat.mob, sk.mul, magic);
+        if (i === 0) applyPlayerHit(r, sk.name, magic);
+        else {
+          setTimeout(() => { if (combat.mob) applyPlayerHit(r, sk.name, magic); }, i * 160);
+        }
       }
       if (sk.stun && combat.mob) combat.mob.stun = sk.stun;
       return true;
@@ -453,9 +632,8 @@ window.App = (() => {
 
   function applyPlayerHit(r, skillName, magic) {
     if (!combat.mob) return;
-    $("sp-p").classList.remove("swing");
-    void $("sp-p").offsetWidth;
-    $("sp-p").classList.add("swing");
+    const style = pickAtkStyle(magic, r.crit);
+    playAnim($("sp-p"), style, r.crit ? 540 : 480);
     const box = $("sp-m").getBoundingClientRect();
     const root = $("battle").getBoundingClientRect();
     const x = box.left - root.left + box.width * 0.45;
@@ -464,15 +642,15 @@ window.App = (() => {
     if (r.miss) {
       floatDmg("m", "MISS", "miss");
       log(`${skillName || "攻擊"} 未命中`);
+      sfx("miss");
       return;
     }
     combat.mob.hp -= r.dmg;
     floatDmg("m", (r.crit ? "★" : "-") + r.dmg, r.crit ? "crit" : "");
     shake(r.crit);
+    sfx(r.crit ? "crit" : "hit");
     burst("hit", x, y);
-    $("sp-m").classList.remove("hit");
-    void $("sp-m").offsetWidth;
-    $("sp-m").classList.add("hit");
+    playAnim($("sp-m"), "hit", 380);
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (map && map.boss) {
       Net.send({ t: "bossHit", mapId: map.id, dmg: r.dmg });
@@ -522,11 +700,16 @@ window.App = (() => {
     } else if (combat.mob && combat.tMob <= 0) {
       const reduce = combat.buffs.reduce((s, b) => s + (b.reduce || 0), 0);
       const r = E.mobHit(ch, combat.mob);
-      if (r.miss) floatDmg("p", "MISS", "miss");
-      else {
+      if (r.miss) {
+        floatDmg("p", "MISS", "miss");
+        sfx("miss");
+      } else {
         const dmg = Math.max(1, Math.floor(r.dmg * (1 - reduce)));
         ch.hp -= dmg;
         floatDmg("p", "-" + dmg);
+        sfx("hurt");
+        playAnim($("sp-m"), "mob-swing", 380);
+        playAnim($("sp-p"), "hurt", 400);
         if (ch.hp <= 0) {
           ch.hp = 0;
           ch.stats.deaths += 1;
@@ -632,7 +815,7 @@ window.App = (() => {
 
   function renderHunt() {
     const cats = [
-      ["village", "村莊"], ["field", "野外"], ["dungeon", "地監"], ["boss", "世界王"], ["party", "隊伍"],
+      ["village", "村莊"], ["field", "野外"], ["dungeon", "地監"], ["boss", "世界王"], ["party", "隊伍"], ["clan", "血盟"],
     ];
     $("subtabs").innerHTML = cats.map(([id, n]) =>
       `<div class="cat ${huntCat === id ? "active" : ""}" data-c="${id}">${n}</div>`).join("");
@@ -646,14 +829,40 @@ window.App = (() => {
     }
     if (huntCat === "party") {
       const list = world.parties || [];
+      const mine = myParty();
       box.innerHTML = (list.length ? list.map((p) =>
         `<div class="list-item"><div class="info"><div class="ttl">${p.leader} 的隊伍 ${(p.members && p.members.length) || 1}/${p.max || 5}
           ${p.auto ? `<span class="party-tag">自動加入</span>` : ""}</div>
-          <div class="sub2">練功點：${p.map || "大廳"}</div></div>
-          <button class="go" data-join="${p.id}">加入</button></div>`).join("") : `<p class="small">尚無隊伍，當第一個開團的人吧。</p>`) +
-        `<button class="btn wide" id="mk-party">創建隊伍</button>`;
+          <div class="sub2">練功點：${p.map || "大廳"}　${(p.members || []).join("、")}</div></div>
+          ${mine && mine.id === p.id
+            ? `<button class="go" data-pleave="1">離開</button>`
+            : `<button class="go" data-join="${p.id}">加入</button>`}</div>`).join("") : `<p class="small">尚無隊伍，當第一個開團的人吧。</p>`) +
+        (mine ? "" : `<button class="btn wide" id="mk-party">創建隊伍</button>`);
       box.querySelectorAll("[data-join]").forEach((b) => b.onclick = () => Net.send({ t: "partyJoin", id: b.dataset.join }));
-      box.querySelector("#mk-party").onclick = () => Net.send({ t: "partyCreate", map: (DATA.maps.find((x) => x.id === ch.mapId) || {}).name || "大廳" });
+      box.querySelectorAll("[data-pleave]").forEach((b) => b.onclick = () => Net.send({ t: "partyLeave" }));
+      const mk = box.querySelector("#mk-party");
+      if (mk) mk.onclick = () => Net.send({ t: "partyCreate", map: (DATA.maps.find((x) => x.id === ch.mapId) || {}).name || "大廳" });
+      return;
+    }
+    if (huntCat === "clan") {
+      const list = world.clans || [];
+      box.innerHTML = (list.length ? list.map((c) =>
+        `<div class="list-item"><div class="info"><div class="ttl">${c.name}　${(c.members && c.members.length) || 1}/${c.max || 20}</div>
+          <div class="sub2">盟主：${c.leader}　${(c.members || []).join("、")}</div></div>
+          ${ch.clanId === c.id
+            ? `<button class="go" data-cleave="1">退出</button>`
+            : `<button class="go" data-cjoin="${c.id}">加入</button>`}</div>`).join("") : `<p class="small">尚無血盟。</p>`) +
+        (ch.clanId ? "" : `<div class="row" style="margin-top:8px;gap:6px;display:flex">
+          <input class="field" id="clan-name" maxlength="8" placeholder="血盟名稱 2～8 字" style="flex:1">
+          <button class="btn" id="mk-clan">創建</button></div>`);
+      box.querySelectorAll("[data-cjoin]").forEach((b) => b.onclick = () => Net.send({ t: "clanJoin", id: b.dataset.cjoin }));
+      box.querySelectorAll("[data-cleave]").forEach((b) => b.onclick = () => Net.send({ t: "clanLeave" }));
+      const mkc = box.querySelector("#mk-clan");
+      if (mkc) mkc.onclick = () => {
+        const name = (box.querySelector("#clan-name").value || "").trim();
+        if (name.length < 2) return toast("血盟名稱至少 2 字");
+        Net.send({ t: "clanCreate", name });
+      };
       return;
     }
     const list = DATA.maps.filter((m) => m.cat === (huntCat === "boss" ? "boss" : huntCat));
@@ -867,65 +1076,39 @@ window.App = (() => {
         <div class="stat">命中 <b>${st.hit}</b></div>
         <div class="stat">擊殺/死亡 <b>${ch.stats.kills}/${ch.stats.deaths}</b></div>
       </div>
-      <hr class="sep">
-      <p class="small">自動喝藥 HP 低於 ${(ch.auto.hp * 100).toFixed(0)}%</p>
-      <input class="range" type="range" min="10" max="80" value="${ch.auto.hp * 100}" id="ahp">
-      <p class="small">自動喝藥 MP 低於 ${(ch.auto.mp * 100).toFixed(0)}%</p>
-      <input class="range" type="range" min="5" max="80" value="${ch.auto.mp * 100}" id="amp">
-      <hr class="sep"><p class="gold">技能（戰鬥中自動施放）</p>
-      ${ch.skills.map((s) => { const k = DATA.skills[s]; return `<div class="skill"><div><b>${k.name}</b><div class="small">${k.desc}</div></div><span class="small">MP ${k.mp}</span></div>`; }).join("") || "<p class='small'>尚未學會</p>"}
     `;
-    box.querySelector("#ahp").oninput = (e) => { ch.auto.hp = e.target.value / 100; renderPanel(); save(); };
-    box.querySelector("#amp").oninput = (e) => { ch.auto.mp = e.target.value / 100; renderPanel(); save(); };
-  }
-
-  function renderChat() {
-    $("subtabs").innerHTML = ["sys:通知", "world:全服", "party:隊伍"].map((x) => {
-      const [id, n] = x.split(":");
-      return `<div class="subtab ${chatCh === id ? "active" : ""}" data-c="${id}">${n}</div>`;
-    }).join("");
-    $("subtabs").querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { chatCh = b.dataset.c; renderPanel(); });
-    $("chatbar").classList.remove("hidden");
-    const vis = logs.filter((l) => {
-      if (chatCh === "sys") return l.cls === "sys" || l.ch === "sys";
-      if (chatCh === "world") return l.ch === "world" || l.cls === "atk";
-      return l.ch === "party";
-    }).slice(0, 80);
-    $("panel-scroll").innerHTML = `<div class="chat-log">${vis.map((l) =>
-      `<div class="${l.cls}">${new Date(l.t).toLocaleTimeString()} ${l.msg}</div>`).join("") || "<p class='small' style='padding:8px'>尚無訊息，打個招呼吧。</p>"}</div>`;
-  }
-
-  function renderMarket() {
-    $("subtabs").innerHTML = "";
-    const list = world.market || market || [];
-    $("panel-scroll").innerHTML = `<p class="small">玩家上架（全服即時）　線上 ${world.online || 0} 人</p>` +
-      (list.length ? list.map((m) => `<div class="list-item">
-        <div class="info"><div class="ttl" style="color:${E.rarityColor(m.it)}">${E.displayName(m.it)}</div>
-        <div class="sub2">${m.seller}　售價 ${Number(m.price).toLocaleString()}</div></div>
-        <button class="go" data-buy="${m.id}">購買</button></div>`).join("") : `<p class="small">目前沒有商品</p>`) +
-      `<button class="btn wide" id="list-it">上架背包第一件</button>`;
-    $("panel-scroll").querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => {
-      Net.send({ t: "marketBuy", id: b.dataset.buy });
-    });
-    $("panel-scroll").querySelector("#list-it").onclick = () => {
-      if (!ch.bag.length) return toast("背包是空的");
-      const it = ch.bag[0];
-      const price = Math.max(10, E.sellPrice(it) * 3);
-      E.removeFromBag(ch, it.iid, it.qty || 1);
-      Net.send({ t: "marketList", it, price });
-      toast("已上架至全服交易所");
-      renderPanel(); save();
-    };
   }
 
   function renderSet() {
+    ensureAuto();
+    const junk = new Set(ch.auto.junk || []);
+    const skillOff = new Set(ch.auto.skillOff || []);
+    const next = E.canLearn(ch);
     $("subtabs").innerHTML = "";
     $("panel-scroll").innerHTML = `
-      <p>面板配色</p>
-      <input class="range" type="range" min="0" max="360" value="${hue}" id="hue">
-      <p class="small">選擇喜歡的色調（角色與道具維持可讀性）</p>
+      <p class="gold">自動戰鬥</p>
+      <label class="check set-row"><input type="checkbox" id="auto-pot" ${ch.auto.pot ? "checked" : ""}> 自動喝藥（狩獵中）</label>
+      <p class="small" id="pot-hp-lab">HP 低於 ${(ch.auto.hp * 100).toFixed(0)}% 時喝紅水</p>
+      <input class="range" type="range" min="10" max="80" value="${ch.auto.hp * 100}" id="ahp" ${ch.auto.pot ? "" : "disabled"}>
+      <p class="small" id="pot-mp-lab">MP 低於 ${(ch.auto.mp * 100).toFixed(0)}% 時喝藍水</p>
+      <input class="range" type="range" min="5" max="80" value="${ch.auto.mp * 100}" id="amp" ${ch.auto.pot ? "" : "disabled"}>
       <hr class="sep">
-      <label class="check"><input type="checkbox" id="sfx" ${soundOn ? "checked" : ""}> 遊戲音效（實驗）</label>
+      <label class="check set-row"><input type="checkbox" id="auto-sell" ${ch.auto.sell ? "checked" : ""}> 自動販賣（打怪後）</label>
+      <p class="small">勾選掉落的低級裝，會自動賣成金幣（不含強化裝）</p>
+      <div class="junk-grid" id="junk-grid">${JUNK_PRESETS.map(([id, name]) =>
+        `<label class="check junk-chip"><input type="checkbox" data-junk="${id}" ${junk.has(id) ? "checked" : ""} ${ch.auto.sell ? "" : "disabled"}> ${name}</label>`
+      ).join("")}</div>
+      <hr class="sep">
+      <p class="gold">技能（戰鬥中自動施放）</p>
+      ${ch.skills.map((s) => {
+        const k = DATA.skills[s];
+        return `<div class="skill set-skill">
+          <label class="check"><input type="checkbox" data-skill="${s}" ${skillOff.has(s) ? "" : "checked"}></label>
+          <div class="info"><b>${k.name}</b><div class="small">${k.desc}</div></div>
+          <span class="small">MP ${k.mp}</span>
+        </div>`;
+      }).join("") || "<p class='small'>尚未學會技能，升級會自動習得。</p>"}
+      ${next.length ? `<p class="small" style="margin-top:6px">即將可學：${next.map((s) => DATA.skills[s].name + `(Lv.${DATA.skills[s].minLv})`).join("、")}</p>` : ""}
       <hr class="sep">
       <p>修改密碼</p>
       <p class="small">帳號名稱無法更改。目前帳號：${acc.user}</p>
@@ -934,18 +1117,60 @@ window.App = (() => {
       <input class="field" id="new-pass2" type="password" placeholder="再輸入一次新密碼" style="margin-top:6px" autocomplete="new-password">
       <button class="btn wide" id="btn-pass" style="margin-top:8px">更新密碼</button>
       <hr class="sep">
-      <button class="btn wide" id="exp">匯出存檔</button>
-      <button class="btn wide" id="imp" style="margin-top:6px">匯入存檔</button>
-      <textarea class="field" id="savebox" rows="4" style="margin-top:8px" placeholder="存檔 JSON"></textarea>
+      <p>存檔</p>
+      <p class="small">角色資料會自動存到雲端資料庫，關閉網頁或伺服器休眠後進度都會保留。不必匯出。</p>
+      <p class="small" style="margin-top:6px">調色與聲音請點左上角「配置」。</p>
       <hr class="sep">
       <button class="btn ghost wide" id="back-char">返回角色選擇</button>
       <p class="small" style="margin-top:10px">擊殺 ${ch.stats.kills}　強化成功 ${ch.stats.enhanceOk}　失敗 ${ch.stats.enhanceFail}<br>
       遊玩 ${Math.floor(ch.stats.play / 60)} 分鐘　連線：${netOk ? "即時伺服器" : "未連線"}</p>`;
-    $("panel-scroll").querySelector("#hue").oninput = (e) => {
-      hue = +e.target.value; document.getElementById("app").style.setProperty("--hue", hue);
+    const box = $("panel-scroll");
+    const syncPotSliders = () => {
+      const on = !!ch.auto.pot;
+      box.querySelector("#ahp").disabled = !on;
+      box.querySelector("#amp").disabled = !on;
     };
-    $("panel-scroll").querySelector("#sfx").onchange = (e) => soundOn = e.target.checked;
-    $("panel-scroll").querySelector("#btn-pass").onclick = () => {
+    box.querySelector("#auto-pot").onchange = (e) => {
+      ch.auto.pot = e.target.checked;
+      syncPotSliders();
+      save();
+    };
+    box.querySelector("#ahp").oninput = (e) => {
+      ch.auto.hp = e.target.value / 100;
+      box.querySelector("#pot-hp-lab").textContent = `HP 低於 ${e.target.value}% 時喝紅水`;
+      save();
+    };
+    box.querySelector("#amp").oninput = (e) => {
+      ch.auto.mp = e.target.value / 100;
+      box.querySelector("#pot-mp-lab").textContent = `MP 低於 ${e.target.value}% 時喝藍水`;
+      save();
+    };
+    box.querySelector("#auto-sell").onchange = (e) => {
+      ch.auto.sell = e.target.checked;
+      box.querySelectorAll("[data-junk]").forEach((el) => { el.disabled = !ch.auto.sell; });
+      save();
+    };
+    box.querySelectorAll("[data-junk]").forEach((el) => {
+      el.onchange = () => {
+        const id = el.dataset.junk;
+        const set = new Set(ch.auto.junk || []);
+        if (el.checked) set.add(id);
+        else set.delete(id);
+        ch.auto.junk = [...set];
+        save();
+      };
+    });
+    box.querySelectorAll("[data-skill]").forEach((el) => {
+      el.onchange = () => {
+        const id = el.dataset.skill;
+        const off = new Set(ch.auto.skillOff || []);
+        if (el.checked) off.delete(id);
+        else off.add(id);
+        ch.auto.skillOff = [...off];
+        save();
+      };
+    });
+    box.querySelector("#btn-pass").onclick = () => {
       const oldPass = $("old-pass").value;
       const newPass = $("new-pass").value;
       const newPass2 = $("new-pass2").value;
@@ -954,23 +1179,152 @@ window.App = (() => {
       if (!Net.ready) return toast("尚未連上伺服器");
       Net.send({ t: "changepass", oldPass, newPass });
     };
-    $("panel-scroll").querySelector("#exp").onclick = () => {
-      $("savebox").value = JSON.stringify(store);
-      toast("已填入下方，請複製保存");
-    };
-    $("panel-scroll").querySelector("#imp").onclick = () => {
-      try {
-        store = JSON.parse($("savebox").value);
-        localStorage.setItem(KEY, $("savebox").value);
-        toast("匯入成功，請重新登入");
-        location.reload();
-      } catch { toast("格式錯誤"); }
-    };
-    $("panel-scroll").querySelector("#back-char").onclick = () => {
+    box.querySelector("#back-char").onclick = () => {
       save();
       Net.send({ t: "map", mapId: "", hunting: false });
       ch = null;
       showCharSel();
+    };
+  }
+
+  function renderChat() {
+    const tabs = [["sys", "系統"], ["world", "全服"], ["clan", "血盟"], ["party", "隊伍"]];
+    $("subtabs").innerHTML = tabs.map(([id, n]) =>
+      `<div class="subtab ${chatCh === id ? "active" : ""}" data-c="${id}">${n}</div>`).join("");
+    $("subtabs").querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { chatCh = b.dataset.c; renderPanel(); });
+
+    const party = myParty();
+    const clan = myClan();
+    const canTalk = chatCh === "world" || (chatCh === "party" && party) || (chatCh === "clan" && clan);
+    $("chatbar").classList.toggle("hidden", !canTalk);
+    const inp = $("chat-in");
+    if (inp) {
+      inp.placeholder = chatCh === "world" ? "全服頻道…" : chatCh === "clan" ? "血盟頻道…" : "隊伍頻道…";
+    }
+
+    const vis = logs.filter((l) => (l.ch || "sys") === chatCh).slice(0, 80);
+
+    let head = "";
+    if (chatCh === "sys") {
+      head = `<p class="small">戰鬥、掉寶與伺服器公告。此頻道無法發言。</p>`;
+    } else if (chatCh === "world") {
+      head = `<p class="small">全服頻道　線上 ${world.online || 0} 人</p>`;
+    } else if (chatCh === "clan") {
+      if (clan) {
+        head = `<p class="small">血盟「${clan.name}」　盟主 ${clan.leader}　${(clan.members || []).length}/${clan.max || 20} 人
+          <button class="btn ghost" id="chat-cleave" style="margin-left:6px;padding:2px 8px;font-size:11px">退出</button></p>`;
+      } else {
+        head = `<p class="small">尚未加入血盟。到狩獵場 → 血盟 建立或加入。</p>`;
+      }
+    } else if (party) {
+      head = `<p class="small">${party.leader} 的隊伍　${(party.members || []).join("、")}
+        <button class="btn ghost" id="chat-pleave" style="margin-left:6px;padding:2px 8px;font-size:11px">離開</button></p>`;
+    } else {
+      head = `<p class="small">尚未加入隊伍。到狩獵場 → 隊伍 開團或加入。</p>`;
+    }
+
+    const empty = chatCh === "sys" ? "尚無系統訊息。" : "尚無訊息，打個招呼吧。";
+    $("panel-scroll").innerHTML = head + `<div class="chat-log">${vis.map((l) =>
+      `<div class="${l.cls || l.ch}">${new Date(l.t).toLocaleTimeString()} ${l.msg}</div>`).join("") || `<p class="small" style="padding:8px">${empty}</p>`}</div>`;
+    const leaveC = $("chat-cleave");
+    if (leaveC) leaveC.onclick = () => Net.send({ t: "clanLeave" });
+    const leaveP = $("chat-pleave");
+    if (leaveP) leaveP.onclick = () => Net.send({ t: "partyLeave" });
+  }
+
+  function marketKind(it) {
+    const d = E.itemDef(it);
+    if (!d) return "use";
+    if (d.type === "weapon") return "weapon";
+    if (d.type === "armor" || d.type === "acc") return "armor";
+    if (d.type === "mat") return "mat";
+    return "use";
+  }
+
+  function renderMarket() {
+    const cats = [["weapon", "武器"], ["armor", "防具"], ["use", "道具"], ["mat", "材料"]];
+    const list = world.market || market || [];
+    const vis = list.filter((m) => (m.cat || marketKind(m.it)) === marketCat);
+    $("subtabs").innerHTML = cats.map(([id, n]) => {
+      const c = list.filter((m) => (m.cat || marketKind(m.it)) === id).length;
+      return `<div class="subtab ${marketCat === id ? "active" : ""}" data-c="${id}">${n}${c ? ` ${c}` : ""}</div>`;
+    }).join("");
+    $("subtabs").querySelectorAll("[data-c]").forEach((b) => {
+      b.onclick = () => { marketCat = b.dataset.c; renderMarket(); };
+    });
+    const mine = (m) => ch && (m.charId === ch.id || (m.seller === ch.name && m.user === acc.user));
+    $("panel-scroll").innerHTML = `
+      <p class="small">玩家交易所　線上 ${world.online || 0} 人　可自訂價格上架</p>
+      <button class="btn wide" id="list-it">上架背包物品</button>
+      ${vis.length ? vis.map((m) => {
+        const qty = m.it && m.it.qty > 1 ? ` x${m.it.qty}` : "";
+        const own = mine(m);
+        return `<div class="list-item">
+          <div class="ico">${itemIcon(m.it)}</div>
+          <div class="info"><div class="ttl" style="color:${E.rarityColor(m.it)}">${E.displayName(m.it)}${qty}</div>
+          <div class="sub2">${m.seller}　💰 ${Number(m.price).toLocaleString()}${own ? "　（我的）" : ""}</div></div>
+          ${own
+            ? `<button class="go" data-un="${m.id}">下架</button>`
+            : `<button class="go" data-buy="${m.id}">購買</button>`}
+        </div>`;
+      }).join("") : `<p class="small" style="margin-top:8px">此分類目前沒有商品</p>`}`;
+    const box = $("panel-scroll");
+    box.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => Net.send({ t: "marketBuy", id: b.dataset.buy }));
+    box.querySelectorAll("[data-un]").forEach((b) => b.onclick = () => Net.send({ t: "marketUnlist", id: b.dataset.un }));
+    box.querySelector("#list-it").onclick = openMarketList;
+  }
+
+  function openMarketList() {
+    if (!ch.bag.length) return toast("背包是空的");
+    const rows = ch.bag.map((it) => {
+      const d = E.itemDef(it);
+      const qty = (it.qty || 1) > 1 ? ` x${it.qty}` : "";
+      const sug = Math.max(1, E.sellPrice({ ...it, qty: 1 }) * 3);
+      return `<div class="item-row" data-iid="${it.iid}">
+        <div class="ico">${itemIcon(it)}</div>
+        <div class="info"><div class="nm" style="color:${E.rarityColor(it)}">${E.displayName(it)}${qty}</div>
+        <div class="meta">${DATA.R[d?.rarity || "common"].name}　建議 ${sug.toLocaleString()}</div></div>
+      </div>`;
+    }).join("");
+    openSheet(`<h3>選擇上架物品</h3><div class="slot-pick">${rows}</div>`);
+    $("modal").querySelectorAll("[data-iid]").forEach((b) => {
+      b.onclick = () => {
+        const it = ch.bag.find((x) => x.iid === b.dataset.iid);
+        if (it) openMarketPrice(it);
+      };
+    });
+  }
+
+  function openMarketPrice(it) {
+    const d = E.itemDef(it);
+    const maxQty = it.qty || 1;
+    const sug = Math.max(1, E.sellPrice({ ...it, qty: 1 }) * 3);
+    const stack = !!d?.stack && maxQty > 1;
+    openSheet(`<h3>自訂價格</h3>
+      <p style="color:${E.rarityColor(it)}">${E.displayName(it)}${maxQty > 1 ? " x" + maxQty : ""}</p>
+      <p class="small">商店回收價 ${E.sellPrice({ ...it, qty: 1 })}　建議 ${sug.toLocaleString()}</p>
+      ${stack ? `<p class="small" style="margin-top:8px">上架數量</p>
+      <input class="field" id="mk-qty" type="number" min="1" max="${maxQty}" value="${maxQty}">` : ""}
+      <p class="small" style="margin-top:8px">售價（金幣）</p>
+      <input class="field" id="mk-price" type="number" min="1" max="99999999" value="${sug}" inputmode="numeric">
+      <button class="btn wide" id="mk-ok" style="margin-top:10px">確認上架</button>`);
+    $("modal").querySelector("#mk-ok").onclick = () => {
+      const price = Math.floor(Number($("mk-price").value) || 0);
+      const qty = stack ? Math.floor(Number($("mk-qty").value) || 1) : 1;
+      if (price < 1 || price > 99999999) return toast("價格需為 1～99,999,999");
+      if (qty < 1 || qty > maxQty) return toast("數量不正確");
+      const listed = E.removeFromBag(ch, it.iid, qty);
+      if (!listed) return toast("物品不在背包");
+      const cat = marketKind(listed);
+      if (!Net.send({ t: "marketList", it: listed, price, cat })) {
+        E.addToBag(ch, listed);
+        return toast("尚未連線");
+      }
+      toast("已上架至交易所");
+      closeModal();
+      renderPanel();
+      refreshTop();
+      save();
     };
   }
 
@@ -992,6 +1346,15 @@ window.App = (() => {
       if (eln) eln.textContent = m.text;
     });
     Net.on("err", (m) => toast(m.msg || "錯誤"));
+    Net.on("kicked", (m) => {
+      toast(m.msg || "連線已中斷");
+      ch = null;
+      acc = null;
+      if ($("charsel")) $("charsel").classList.add("hidden");
+      if ($("login")) $("login").classList.remove("hidden");
+      const eln = $("net-status");
+      if (eln) eln.textContent = m.msg || "已被強制下線";
+    });
     Net.on("ok", (m) => toast(m.msg || "完成"));
     Net.on("passok", (m) => {
       toast(m.msg || "密碼已更新");
@@ -1023,6 +1386,7 @@ window.App = (() => {
       world.tax = m.tax || 0;
       world.serverLv = m.serverLv || 1;
       world.parties = m.parties || [];
+      world.clans = m.clans || [];
       world.market = m.market || [];
       world.bosses = m.bosses || {};
       world.players = m.players || [];
@@ -1041,10 +1405,12 @@ window.App = (() => {
       syncBossSprite();
     });
     Net.on("chat", (m) => {
-      logs.unshift({ t: m.time || Date.now(), msg: m.name + "：" + m.msg, cls: m.cls || "atk", ch: m.ch || "world" });
+      const chn = m.ch || "world";
+      logs.unshift({ t: m.time || Date.now(), msg: m.name + "：" + m.msg, cls: m.cls || chn, ch: chn });
       if (logs.length > 200) logs.pop();
       if (tab === "chat") renderChat();
     });
+    Net.on("clan", (m) => applyClan(m.clanId, m.clanName));
     Net.on("mq", (m) => mq(m.text));
     Net.on("market", (m) => {
       world.market = m.market || [];
@@ -1056,6 +1422,13 @@ window.App = (() => {
       E.addToBag(ch, m.it);
       ch.gold = m.gold;
       toast("買下了 " + E.displayName(m.it));
+      refreshTop(); save();
+      if (tab === "bag" || tab === "market") renderPanel();
+    });
+    Net.on("unlist", (m) => {
+      if (!ch || !m.it) return;
+      E.addToBag(ch, m.it);
+      toast("已下架，物品回到背包");
       refreshTop(); save();
       if (tab === "bag" || tab === "market") renderPanel();
     });
@@ -1096,7 +1469,7 @@ window.App = (() => {
     $("btn-attack").onclick = startHunt;
     $("btn-stop").onclick = stopHunt;
     $("btn-lobby").onclick = () => setMap(null);
-    $("btn-cfg").onclick = () => { tab = "stat"; document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "stat")); renderPanel(); };
+    $("btn-cfg").onclick = () => openCfg();
     document.querySelectorAll("#tabbar .tab").forEach((t) => {
       t.onclick = () => {
         tab = t.dataset.tab;
@@ -1108,13 +1481,21 @@ window.App = (() => {
     $("chat-send").onclick = () => {
       const v = $("chat-in").value.trim();
       if (!v) return;
+      if (chatCh === "sys") return toast("系統頻道無法發言");
+      if (chatCh === "clan" && !myClan()) return toast("尚未加入血盟");
+      if (chatCh === "party" && !myParty()) return toast("尚未加入隊伍");
       $("chat-in").value = "";
-      if (!Net.send({ t: "chat", ch: chatCh === "party" ? "party" : "world", msg: v })) toast("尚未連線");
+      const chn = chatCh === "clan" || chatCh === "party" ? chatCh : "world";
+      if (!Net.send({ t: "chat", ch: chn, msg: v })) toast("尚未連線");
     };
+    $("chat-in").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") $("chat-send").click();
+    });
     $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
   }
 
   function boot() {
+    loadCfg();
     rememberFill();
     bind();
     bindNet();

@@ -151,7 +151,9 @@ window.Engine = (() => {
       mapId: null,
       hunting: false,
       skills: cls.skills.filter((s) => skills[s].minLv <= 1),
-      auto: { hp: 0.45, mp: 0.3, junk: ["club", "cap", "cloth"] },
+      clanId: "",
+      clanName: "",
+      auto: { hp: 0.45, mp: 0.3, junk: ["club", "cap", "cloth"], pot: true, sell: true, skillOff: [] },
       stats: { kills: 0, deaths: 0, enhanceOk: 0, enhanceFail: 0, play: 0 },
       created: Date.now(),
     };
@@ -288,9 +290,12 @@ window.Engine = (() => {
       if (Math.random() < d.p * mul) {
         const n = d.n ? irand(d.n[0], d.n[1]) : 1;
         const it = instFrom(d.id, { qty: n });
-        if (Math.random() < 0.04) it.blessed = true;
-        if (!it.blessed && Math.random() < 0.03) it.cursed = true;
-        if (items[d.id] && items[d.id].type !== "use" && Math.random() < 0.08) it.plus = irand(1, 3);
+        const t = items[d.id] && items[d.id].type;
+        if (t !== "use" && t !== "mat") {
+          if (Math.random() < 0.04) it.blessed = true;
+          if (!it.blessed && Math.random() < 0.03) it.cursed = true;
+          if (Math.random() < 0.08) it.plus = irand(1, 3);
+        }
         out.push(it);
       }
     }
@@ -349,6 +354,7 @@ window.Engine = (() => {
   }
 
   function autoPotions(ch) {
+    if (ch.auto && ch.auto.pot === false) return [];
     const st = totalStats(ch);
     const logs = [];
     if (ch.hp / st.maxHp < (ch.auto.hp || 0.45)) {
@@ -373,6 +379,7 @@ window.Engine = (() => {
   }
 
   function autoSellJunk(ch) {
+    if (ch.auto && ch.auto.sell === false) return 0;
     const junk = new Set(ch.auto.junk || []);
     let gold = 0;
     const keep = [];
