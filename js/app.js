@@ -6,7 +6,7 @@ window.App = (() => {
   let ch = null;
   let tab = "hunt";
   let huntCat = "village";
-  let huntRegion = "亞丁大陸";
+  let huntRegion = "說話之島";
   let bagSub = "bag";
   let chatCh = "sys";
   let marketCat = "weapon";
@@ -19,12 +19,16 @@ window.App = (() => {
   let audioCtx = null;
   let parties = [];
   let market = [];
-  let world = { online: 0, maps: {}, tax: 0, serverLv: 1, parties: [], clans: [], market: [], bosses: {}, players: [] };
+  let world = { online: 0, maps: {}, tax: 0, taxRate: 0.05, serverLv: 1, parties: [], clans: [], market: [], bosses: {}, players: [] };
   let netOk = false;
 
   const JUNK_PRESETS = [
     ["club", "木棍"], ["cap", "布帽"], ["cloth", "布衣"],
     ["ssword", "短劍"], ["leather", "皮盔甲"], ["wand", "魔法杖"], ["bow", "短弓"],
+  ];
+  const POT_PRESETS = [
+    ["red", "紅水", "hp"], ["orange", "橙水", "hp"], ["clear", "透水", "hp"],
+    ["blue", "藍水", "mp"], ["wisdom", "慎重", "mp"],
   ];
 
   const $ = (id) => document.getElementById(id);
@@ -66,10 +70,19 @@ window.App = (() => {
     if (!ch.auto) ch.auto = {};
     if (typeof ch.auto.hp !== "number") ch.auto.hp = 0.45;
     if (typeof ch.auto.mp !== "number") ch.auto.mp = 0.3;
-    if (ch.auto.pot == null) ch.auto.pot = true;
+    if (ch.auto.potHp == null) ch.auto.potHp = ch.auto.pot !== false;
+    if (ch.auto.potMp == null) ch.auto.potMp = ch.auto.pot !== false;
+    if (!Array.isArray(ch.auto.pots)) ch.auto.pots = POT_PRESETS.map((x) => x[0]);
     if (ch.auto.sell == null) ch.auto.sell = true;
     if (!Array.isArray(ch.auto.junk)) ch.auto.junk = ["club", "cap", "cloth"];
     if (!Array.isArray(ch.auto.skillOff)) ch.auto.skillOff = [];
+    const remap = {
+      slash: "bounce", double: "triple", wind: "windshot",
+      nova: "meteor", barrier: "reduction", missile: "ebolt", ice: "icelance",
+      fireele: "fireweapon", burnstrike: "firedance", aqua: "pollute", ebolt: "lightarrow",
+    };
+    ch.auto.skillOff = ch.auto.skillOff.map((s) => remap[s] || s);
+    E.learnPending(ch);
   }
   function persistCfg() {
     try { localStorage.setItem("aden_cfg", JSON.stringify({ hue, sound: soundOn, vol: soundVol })); } catch (_) {}
@@ -105,6 +118,8 @@ window.App = (() => {
         loot: [[523, 0.07, "sine"], [784, 0.1, "sine"]],
         heal: [[392, 0.08, "sine"], [523, 0.1, "sine"]],
         up: [[392, 0.08, "triangle"], [523, 0.1, "triangle"], [659, 0.14, "triangle"]],
+        enchant: [[523, 0.07, "sine"], [784, 0.12, "sine"], [988, 0.16, "triangle"]],
+        boom: [[95, 0.18, "sawtooth"], [62, 0.22, "square"], [42, 0.28, "triangle"], [28, 0.32, "sawtooth"]],
         click: [[480, 0.04, "square"]],
       };
       const seq = notes[kind] || notes.click;
@@ -207,40 +222,121 @@ window.App = (() => {
     if (tab === "chat" || tab === "hunt") renderPanel();
   }
 
-  function mq(text) {
-    $("mqtext").textContent = text;
+  let mqIdx = 0;
+  let mqHoldUntil = 0;
+  let mqTimer = null;
+
+  function fmtWait(sec) {
+    sec = Math.max(0, Math.ceil(Number(sec) || 0));
+    if (sec >= 3600) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return m ? `${h} 小時 ${m} 分` : `${h} 小時`;
+    }
+    if (sec >= 60) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return s ? `${m} 分 ${s} 秒` : `${m} 分`;
+    }
+    return `${sec} 秒`;
+  }
+  function bossRespawnSec(mapId) {
+    const meta = DATA.bossMeta && DATA.bossMeta[mapId];
+    if (meta && meta.respawn) return meta.respawn;
+    const map = DATA.maps.find((m) => m.id === mapId);
+    return (map && map.respawn) || 1800;
   }
 
-  function portraitOf(c) {
-    if (!c) return "assets/port-knight-m.png";
-    return `assets/port-${c.classId}-${c.gender}.png`;
+  function ensureClientBosses() {
+    if (!world.bosses) world.bosses = {};
+    for (const [id, meta] of Object.entries(DATA.bossMeta || {})) {
+      const max = meta.maxHp || 25000;
+      if (!world.bosses[id]) {
+        world.bosses[id] = { max, hp: max, alive: true, next: 0, ranks: {} };
+      } else {
+        const b = world.bosses[id];
+        if (!b.max) b.max = max;
+        if (b.alive !== false && (!b.hp || b.hp > b.max)) b.hp = b.max;
+      }
+    }
   }
-  function spriteOf(c) {
-    if (!c) return "assets/spr-knight-m.png";
-    return `assets/spr-${c.classId}-${c.gender}.png`;
+  function bossWaitSec(mapId) {
+    const b = world.bosses && world.bosses[mapId];
+    if (!b || b.alive) return 0;
+    return Math.max(0, (Number(b.next) - Date.now()) / 1000);
+  }
+  function bossStatusText(mapId) {
+    const b = world.bosses && world.bosses[mapId];
+    if (!b) return "讀取中…";
+    if (b.alive !== false) return "存活";
+    const sec = bossWaitSec(mapId);
+    return sec > 0 ? `重生 ${fmtWait(sec)}` : "即將重生";
+  }
+  function mq(text, holdMs) {
+    const el = $("mqtext");
+    if (!el) return;
+    el.textContent = text;
+    el.style.animation = "none";
+    void el.offsetWidth;
+    el.style.animation = "";
+    if (holdMs > 0) mqHoldUntil = Date.now() + holdMs;
+  }
+  function nextMarquee() {
+    if (Date.now() < mqHoldUntil) return;
+    const pool = DATA.marqueePool || [];
+    if (!pool.length) return;
+    mqIdx = (mqIdx + 1) % pool.length;
+    mq(pool[mqIdx]);
+  }
+  function startMarquee() {
+    const pool = DATA.marqueePool || [];
+    if (pool.length) mq(pool[0]);
+    if (mqTimer) clearInterval(mqTimer);
+    mqTimer = setInterval(nextMarquee, 14000);
+  }
+
+  function wepKind(c) {
+    const id = c?.equip?.weapon?.id || "";
+    if (["bow", "lbow", "xbow", "elvenbow", "moonbow"].includes(id) || (!id && c?.classId === "elf")) return "bow";
+    if (["wand", "staff", "crystal", "archstaff", "starstaff"].includes(id) || (!id && c?.classId === "mage")) return "staff";
+    return "sword";
+  }
+  function heroInner() {
+    return `<div class="h-cloak"></div>
+      <div class="h-leg l"></div><div class="h-leg r"></div>
+      <div class="h-body"></div>
+      <div class="h-arm off"></div>
+      <div class="h-arm wep"><i class="h-wep"></i></div>
+      <div class="h-head"><div class="h-hair"></div><div class="h-face"><b></b><b></b></div><div class="h-helm"></div></div>`;
+  }
+  function paintHero(el, c, extra = "") {
+    if (!el) return;
+    const tr = c?.transform && DATA.transforms?.[c.transform.id];
+    if (tr) {
+      el.className = `hero art transformed ${extra}`.trim();
+      el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
+      return;
+    }
+    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
+    const cls = c?.classId || "knight";
+    const g = c?.gender === "f" ? "f" : "m";
+    const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
+    el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+  }
+  function heroThumb(c) {
+    return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
-    const map = {
-      fox: "fox", orc: "orc", kobold: "orc", gnoll: "wolf", skeleton: "skel", zombie: "skel",
-      wolfman: "wolf", ghoul: "skel", ant: "scorpion", scorpion: "scorpion", lizard: "drake",
-      drake: "drake", gargoyle: "skel", deathk: "dk", balrog: "balrog", ancient: "dragon",
-    };
-    return `assets/mob-${map[id] || "orc"}.png`;
+    return window.SPRITES ? SPRITES.mob(id) : "";
   }
-  function itemIconSrc(it) {
-    const d = E.itemDef(it) || DATA.items[it];
-    if (!d) return "assets/ico-armor.png";
-    if (d.kind === "potion") return d.hp ? "assets/ico-red.png" : "assets/ico-blue.png";
-    if (d.kind === "scroll") return "assets/ico-scroll.png";
-    if (d.type === "mat") return "assets/ico-scroll.png";
-    if (d.type === "weapon") return "assets/ico-sword.png";
-    if (d.slot === "shield") return "assets/ico-shield.png";
-    if (d.type === "acc") return "assets/ico-ring.png";
-    return "assets/ico-armor.png";
+  function skillIcon(sid) {
+    return window.SPRITES ? `<span class="sk-svg">${SPRITES.skill(sid)}</span>` : "✦";
   }
-  function setImg(el, src) {
-    if (!el) return;
-    if (el.getAttribute("src") !== src) el.setAttribute("src", src);
+  function itemIcon(it) {
+    const d = E.itemDef(it) || DATA.items[(it && it.id) || it] || {};
+    const id = d.id || (it && it.id) || it;
+    const r = d.rarity || "common";
+    return `<span class="ico-svg r-${r}">${(window.ICONS && ICONS.of(id, d)) || ""}</span>`;
   }
 
   function hash(s) {
@@ -279,7 +375,7 @@ window.App = (() => {
           <button class="go" data-create="${i}">建立</button></div>`;
       }
       return `<div class="list-item">
-        <div class="ico keep-color"><img class="ico-img" src="${portraitOf(c)}" alt=""></div>
+        <div class="ico keep-color">${heroThumb(c)}</div>
         <div class="info"><div class="ttl">${c.name}</div>
         <div class="sub2">${DATA.classes[c.classId].name}　Lv.${c.level}　💰 ${c.gold.toLocaleString()}</div></div>
         <button class="go" data-enter="${c.id}">進入</button>
@@ -302,7 +398,7 @@ window.App = (() => {
     const cls0 = "knight";
     const attrs = { ...DATA.classes[cls0].base };
     const baseCopy = () => ({ ...DATA.classes[state.classId].base });
-    const state = { classId: cls0, gender: "m", name: "", attrs, remain: 5 };
+    const state = { classId: cls0, gender: "m", name: "", attrs, remain: 5, elfElem: null };
     const modal = $("modal");
     const draw = () => {
       const rows = ["str", "dex", "con", "int", "wis", "cha"].map((k) => {
@@ -314,6 +410,7 @@ window.App = (() => {
       modal.classList.remove("hidden");
       modal.innerHTML = `<div class="sheet">
         <h3>建立角色</h3>
+        <div class="hero-preview">${heroThumb({ classId: state.classId, gender: state.gender, equip: {} })}</div>
         <input class="field" id="cname" maxlength="8" placeholder="角色名稱" value="${state.name}">
         <p class="small" style="margin:8px 0 4px">職業</p>
         <div class="class-pick">${Object.values(DATA.classes).map((c) =>
@@ -323,6 +420,9 @@ window.App = (() => {
           <button class="btn ${state.gender === "m" ? "on" : ""}" data-g="m">男</button>
           <button class="btn ${state.gender === "f" ? "on" : ""}" data-g="f">女</button>
         </div>
+        ${state.classId === "elf" ? `<p class="small" style="margin:10px 0 4px">精靈魔法屬性（四選一，永久）</p>
+        <div class="class-pick">${(DATA.elfElements || []).map((e) =>
+          `<button class="btn ${state.elfElem === e ? "on" : ""}" data-elem="${e}">${(DATA.elfElemNames && DATA.elfElemNames[e]) || e}屬性</button>`).join("")}</div>` : ""}
         <p class="small" style="margin:10px 0 4px">分配屬性點 · 剩餘 <b class="gold">${state.remain}</b></p>
         ${rows}
         <div class="row" style="margin-top:10px">
@@ -332,9 +432,12 @@ window.App = (() => {
       </div>`;
       modal.querySelector("#cname").oninput = (e) => state.name = e.target.value;
       modal.querySelectorAll("[data-cls]").forEach((b) => b.onclick = () => {
-        state.classId = b.dataset.cls; state.attrs = baseCopy(); state.remain = 5; draw();
+        state.classId = b.dataset.cls; state.attrs = baseCopy(); state.remain = 5;
+        if (state.classId !== "elf") state.elfElem = null;
+        draw();
       });
       modal.querySelectorAll("[data-g]").forEach((b) => b.onclick = () => { state.gender = b.dataset.g; draw(); });
+      modal.querySelectorAll("[data-elem]").forEach((b) => b.onclick = () => { state.elfElem = b.dataset.elem; draw(); });
       modal.querySelectorAll("[data-m]").forEach((b) => b.onclick = () => {
         const k = b.dataset.m, d = +b.dataset.d;
         const min = DATA.classes[state.classId].base[k];
@@ -346,7 +449,8 @@ window.App = (() => {
         const name = (modal.querySelector("#cname").value || "").trim();
         if (name.length < 1) return toast("請輸入名稱");
         if (acc.chars.some((c) => c.name === name)) return toast("名稱重複");
-        const neu = E.newCharacter({ name, classId: state.classId, gender: state.gender, attrs: state.attrs });
+        if (state.classId === "elf" && !state.elfElem) return toast("請選擇精靈魔法屬性（火／水／風／地）");
+        const neu = E.newCharacter({ name, classId: state.classId, gender: state.gender, attrs: state.attrs, elfElem: state.elfElem });
         Net.send({ t: "create", char: neu });
         modal.classList.add("hidden");
         toast("建立中…");
@@ -365,6 +469,9 @@ window.App = (() => {
     if (m.warehouse) acc.warehouse = m.warehouse;
     if (!acc.warehouse) acc.warehouse = [];
     ensureAuto();
+    if (ch.transform && (!ch.transform.left || ch.transform.left <= 0 || !DATA.transforms[ch.transform.id])) {
+      ch.transform = null;
+    }
     $("charsel").classList.add("hidden");
     E.learnPending(ch);
     const sec = Math.floor((m.offline || 0) / 1000);
@@ -388,9 +495,9 @@ window.App = (() => {
     if (!ch) return;
     const st = E.totalStats(ch);
     const k = E.karmaName(ch.karma);
-    setImg($("avatar-face"), portraitOf(ch));
+    paintHero($("avatar-face"), ch, "mini");
     $("pname").textContent = ch.name;
-    $("pmeta").innerHTML = `${DATA.classes[ch.classId].name} · 等級 ${ch.level} · <span style="color:${k.c}">${k.t} ${ch.karma}</span>`;
+    $("pmeta").innerHTML = `${DATA.classes[ch.classId].name} · 等級 ${ch.level}${ch.classId === "elf" && ch.elfElem ? ` · ${(DATA.elfElemNames && DATA.elfElemNames[ch.elfElem]) || ch.elfElem}屬性` : ""} · <span style="color:${k.c}">${k.t} ${ch.karma}</span>`;
     $("pgold").textContent = ch.gold.toLocaleString();
     $("pac").textContent = st.ac;
     $("pmr").textContent = st.mr;
@@ -402,10 +509,20 @@ window.App = (() => {
     $("mpf").style.width = (ch.mp / st.maxMp) * 100 + "%";
     $("hpt").textContent = `${Math.floor(ch.hp)}/${st.maxHp}`;
     $("mpt").textContent = `${Math.floor(ch.mp)}/${st.maxMp}`;
-    setImg($("sp-p-art"), spriteOf(ch));
-    const buffHtml = (combat.buffs || []).map((b) => `<div class="buff" title="${b.name}">${b.icon}</div>`).join("");
+    paintHero($("sp-p-art"), ch);
+    $("sp-p").classList.toggle("hunting", !!ch.hunting);
+    $("sp-p").classList.toggle("transformed", !!(ch.transform && ch.transform.left > 0));
+    let buffHtml = (combat.buffs || []).map((b) => `<div class="buff" title="${b.name}">${skillIcon(b.id) || b.icon || "✦"}</div>`).join("");
+    if (ch.transform && ch.transform.left > 0) {
+      const tr = DATA.transforms[ch.transform.id];
+      if (tr) {
+        buffHtml += `<div class="buff poly" title="變身：${tr.name}　剩餘 ${fmtWait(Math.ceil(ch.transform.left))}">${mobArt(tr.mob)}</div>`;
+      }
+    }
     $("buffs").innerHTML = buffHtml || `<span class="dim">無</span>`;
-    $("stxt").textContent = ch.hunting ? "狩獵中" : combat.buffs.length ? "增益" : "無";
+    const stxt = ch.hunting ? "狩獵中" : ch.transform ? "變身" : combat.buffs.length ? "增益" : "無";
+    $("stxt").textContent = stxt;
+    updateSkillBar();
   }
 
   function setMap(mapId, keepHunt) {
@@ -417,9 +534,7 @@ window.App = (() => {
       combat.focus = null;
       $("battle").className = "bg-hall keep-color";
       $("ztitle").textContent = "— 大 廳 —";
-      $("zsub").innerHTML = `稅金：${(world.tax || 0).toLocaleString()}<br>
-        <span style="color:#ff8ad0">掉寶倍率 1.0</span>　<span style="color:#7ec8ff">金幣倍率 1.0</span><br>
-        當前遊玩人數：${world.online || 0}　伺服器等級：${world.serverLv || 1}`;
+      $("zsub").innerHTML = hallTaxHtml();
       $("btn-lobby").classList.add("hidden");
       $("btn-attack").classList.add("hidden");
       $("btn-stop").classList.add("hidden");
@@ -446,10 +561,14 @@ window.App = (() => {
   function startHunt() {
     if (!ch.mapId) return toast("請先選擇狩獵場");
     const map = DATA.maps.find((m) => m.id === ch.mapId);
+    if (map?.boss) {
+      if (!netOk) return toast("世界王需連線伺服器");
+      ensureClientBosses();
+    }
     const b = world.bosses && world.bosses[map?.id];
     if (map?.boss && b && !b.alive) {
-      const sec = Math.max(0, Math.ceil((b.next - Date.now()) / 1000));
-      return toast(`世界王尚未重生（${sec}s）`);
+      const sec = bossWaitSec(map.id);
+      return toast(`世界王尚未重生（${fmtWait(sec)}）`);
     }
     ch.hunting = true;
     combat.tPlayer = 0;
@@ -518,6 +637,86 @@ window.App = (() => {
       layer.appendChild(b);
       setTimeout(() => b.remove(), 320);
     }
+    if (kind === "boom") {
+      for (let i = 0; i < 18; i++) {
+        const s = document.createElement("div");
+        s.className = "spark boom-spark";
+        s.style.left = x + "px";
+        s.style.top = y + "px";
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 20 + Math.random() * 70;
+        s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+        s.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+        s.style.background = i % 3 ? "#ff5020" : "#ffe040";
+        layer.appendChild(s);
+        setTimeout(() => s.remove(), 650);
+      }
+      const flash = document.createElement("div");
+      flash.className = "enchant-flash";
+      flash.style.left = (x - 40) + "px";
+      flash.style.top = (y - 40) + "px";
+      layer.appendChild(flash);
+      setTimeout(() => flash.remove(), 500);
+    }
+  }
+
+  function enchantFx(r) {
+    if (r.vanish) {
+      sfx("boom");
+      shake(true);
+      const battle = $("battle");
+      if (battle) {
+        battle.classList.add("enchant-boom");
+        setTimeout(() => battle.classList.remove("enchant-boom"), 900);
+      }
+      const root = $("battle")?.getBoundingClientRect();
+      const hero = $("sp-p")?.getBoundingClientRect();
+      if (root && hero) {
+        burst("boom", hero.left - root.left + hero.width * 0.5, hero.top - root.top + hero.height * 0.4);
+      }
+      floatDmg($("sp-p"), "爆裝！", "crit");
+      mq(r.msg, 14000);
+      log(r.msg, "warn");
+      toast(r.msg);
+      return;
+    }
+    if (r.ok) {
+      sfx(r.safe ? "enchant" : "up");
+      mq(r.msg, r.safe ? 5000 : 8000);
+      log(r.msg, "sys");
+      toast(r.msg);
+      return;
+    }
+    sfx("miss");
+    toast(r.msg);
+    log(r.msg);
+  }
+
+  function enchantPanelHtml(it) {
+    const prev = E.enchantPreview(ch, it, false);
+    const prevB = E.enchantPreview(ch, it, true);
+    const safeLine = prev.safe
+      ? `<span class="ok">安定區（+0～+${prev.safeMax}）— 必成功</span>`
+      : `<span class="warn">非安定（+${prev.plus} → +${prev.targetPlus}）— 成功率 ${Math.round(prev.rate * 100)}%</span>`;
+    const vanishLine = prev.vanishOnFail > 0
+      ? `<p class="small warn">失敗時 <b>${Math.round(prev.vanishOnFail * 100)}%</b> 機率爆裝消失</p>`
+      : prev.safe ? "" : `<p class="small ok">祝福保護：失敗不會爆裝</p>`;
+    const scrollW = E.countItem(ch, "scroll_w");
+    const scrollA = E.countItem(ch, "scroll_a");
+    const scrollB = E.countItem(ch, "scroll_b");
+    const need = prev.isWeapon ? "scroll_w" : "scroll_a";
+    const needLabel = prev.isWeapon ? "武卷" : "防卷";
+    return `<h3>強化 ${E.displayName(it)}</h3>
+      <p class="small">目前 <b>+${prev.plus}</b>　安定值 +${prev.safeMax}　${safeLine}</p>
+      ${vanishLine}
+      <p class="small" style="margin-top:8px">背包：武卷 ×${scrollW}　防卷 ×${scrollA}　祝福武卷 ×${scrollB}</p>
+      <button class="btn wide" id="en1" ${prev.hasScroll ? "" : "disabled"}>
+        使用${needLabel}（${DATA.items[need]?.name || needLabel}）
+      </button>
+      <button class="btn wide" id="en2" style="margin-top:6px" ${prevB.hasScroll ? "" : "disabled"}>
+        使用祝福武卷（失敗不爆裝，成功率 ${Math.round(prevB.rate * 100)}%）
+      </button>
+      <p class="small" style="margin-top:8px">${prev.isWeapon ? "武器只能用武卷。" : "防具／飾品只能用防卷。"}祝福武卷適用所有裝備。</p>`;
   }
 
   function shake(crit) {
@@ -557,12 +756,21 @@ window.App = (() => {
     const n = packSize(map);
     combat.mobs = [];
     for (let i = 0; i < n; i++) {
-      const mob = E.makeMob(map);
-      if (map.boss && world.bosses[map.id]) {
-        const b = world.bosses[map.id];
-        mob.hp = b.hp;
-        mob.maxHp = b.max || b.hp;
+      const mobId = map.boss ? (map.monsters && map.monsters[0]) : null;
+      const mob = E.makeMob(map, mobId);
+      if (!mob) continue;
+      if (map.boss) {
         mob.boss = true;
+        ensureClientBosses();
+        const meta = DATA.bossMeta && DATA.bossMeta[map.id];
+        const b = world.bosses && world.bosses[map.id];
+        const fallback = (meta && meta.maxHp) || mob.maxHp;
+        mob.maxHp = (b && b.max) || fallback;
+        mob.hp = (b && b.alive !== false) ? (b.hp != null ? b.hp : mob.maxHp) : 0;
+        if (b && !b.alive) {
+          combat.mobs = [];
+          return;
+        }
       }
       mob.tAtk = 0.2 + i * 0.4 + Math.random() * 0.25;
       combat.mobs.push(mob);
@@ -584,7 +792,7 @@ window.App = (() => {
       const focus = combat.focus === m.uid;
       return `<div class="sprite enemy ${m.boss ? "boss" : ""} ${focus ? "focus" : ""}" data-uid="${m.uid}">
         <div class="slash-arc mob"></div>
-        <img class="art" src="${mobArt(m.id)}" alt="">
+        <div class="mob-svg">${mobArt(m.id)}</div>
         <div class="ground-shadow"></div>
         <div class="mhp"><i style="width:${hp}%"></i></div>
       </div>`;
@@ -631,6 +839,16 @@ window.App = (() => {
   }
 
   function onKill(mob) {
+    if (mob.boss) {
+      ch.stats.kills += 1;
+      stopHunt();
+      toast("世界王已擊敗，等待伺服器結算獎勵");
+      hideMobs();
+      burst("hit", 340, 140);
+      refreshTop();
+      save();
+      return;
+    }
     ch.stats.kills += 1;
     const gold = E.irand(mob.gold[0], mob.gold[1]);
     ch.gold += gold;
@@ -651,15 +869,9 @@ window.App = (() => {
       log(`${ch.name} 升到了 ${ch.level} 級！`, "sys");
       toast(`升級！Lv.${ch.level}`);
       sfx("up");
-    }
-    if (mob.boss) {
-      stopHunt();
-      toast("世界王倒下了");
-      hideMobs();
-      burst("hit", 340, 140);
-      refreshTop();
-      save();
-      return;
+      if (ch.classId === "elf" && ch.level >= 10 && !ch.elfElem) {
+        toast("請找精靈導師選擇魔法屬性（火／水／風／地）");
+      }
     }
     combat.mobs = (combat.mobs || []).filter((m) => m.uid !== mob.uid);
     const el = mobEl(mob.uid);
@@ -674,44 +886,183 @@ window.App = (() => {
     save();
   }
 
-  function trySkills() {
-    const st = E.totalStats(ch);
+  function skillList() {
+    return (DATA.classes[ch.classId] && DATA.classes[ch.classId].skills) || ch.skills || [];
+  }
+  function skillLv(sid) {
+    return E.skillMinLv(DATA.skills[sid], ch.classId);
+  }
+  function groupedSkills(list) {
+    const trees = [];
+    const seen = new Set();
+    for (const sid of list) {
+      const t = (DATA.skills[sid] && DATA.skills[sid].tree) || "other";
+      if (!seen.has(t)) { seen.add(t); trees.push(t); }
+    }
+    return trees.map((t) => ({
+      id: t,
+      name: (DATA.skillTrees && DATA.skillTrees[t]) || t,
+      skills: list.filter((sid) => ((DATA.skills[sid] && DATA.skills[sid].tree) || "other") === t),
+    }));
+  }
+  function barSkills() {
+    const known = new Set(ch.skills || []);
+    return skillList().filter((sid) => known.has(sid) && DATA.skills[sid] && E.canCastSkill(ch, sid));
+  }
+
+  function updateSkillBar() {
+    const bar = $("skillbar");
+    if (!bar || !ch) {
+      if (bar) bar.innerHTML = "";
+      return;
+    }
+    const list = barSkills();
+    const sig = ch.classId + "|" + list.join(",") + "|" + (ch.skills || []).join(",");
+    if (bar.dataset.sig !== sig) {
+      bar.dataset.sig = sig;
+      const known = new Set(ch.skills || []);
+      bar.innerHTML = list.map((sid) => {
+        const sk = DATA.skills[sid];
+        if (!sk) return "";
+        const locked = !known.has(sid);
+        return `<button type="button" class="sk-slot ${locked ? "lock" : ""} sk-${sk.tree || sk.kind || "misc"}" data-sk="${sid}" title="${sk.name}">
+          <span class="sk-ico">${skillIcon(sid)}</span>
+          <span class="sk-nm">${sk.name}</span>
+          <span class="sk-cd"></span>
+        </button>`;
+      }).join("");
+      bar.querySelectorAll("[data-sk]").forEach((btn) => {
+        btn.onclick = () => {
+          const r = useSkill(btn.dataset.sk, true);
+          if (!r.ok) toast(r.msg);
+          else refreshTop();
+        };
+      });
+    }
     const off = new Set(ch.auto?.skillOff || []);
-    for (const sid of ch.skills) {
-      if (off.has(sid)) continue;
+    bar.querySelectorAll("[data-sk]").forEach((btn) => {
+      const sid = btn.dataset.sk;
       const sk = DATA.skills[sid];
-      if ((combat.cds[sid] || 0) > 0 || ch.mp < sk.mp || !targetMob()) continue;
-      if (sk.kind === "heal" && ch.hp / st.maxHp > 0.7) continue;
-      if (sk.kind === "buff" && combat.buffs.some((b) => b.id === sid)) continue;
+      const known = (ch.skills || []).includes(sid);
+      const cd = combat.cds[sid] || 0;
+      const cdEl = btn.querySelector(".sk-cd");
+      btn.classList.toggle("off", off.has(sid) && known);
+      btn.classList.toggle("lock", !known);
+      btn.classList.toggle("ready", known && cd <= 0 && !off.has(sid));
+      if (known && cd > 0) {
+        cdEl.classList.add("on");
+        cdEl.textContent = cd >= 10 ? String(Math.ceil(cd)) : cd.toFixed(1);
+      } else {
+        cdEl.classList.remove("on");
+        cdEl.textContent = "";
+      }
+      btn.title = known
+        ? `${sk.name}　MP ${sk.mp}　CD ${sk.cd}秒\n${sk.desc}`
+        : `${sk.name}（Lv.${skillLv(sid)} 學會）`;
+    });
+  }
+
+  function useSkill(sid, manual) {
+    const sk = DATA.skills[sid];
+    if (!sk) return { ok: false, msg: "沒有這個技能" };
+    if (!(ch.skills || []).includes(sid)) return { ok: false, msg: `Lv.${skillLv(sid)} 學會 ${sk.name}` };
+    if (!E.canCastSkill(ch, sid)) {
+      const sk2 = DATA.skills[sid];
+      if (sk2?.requiresBow && !E.hasBowEquipped(ch)) return { ok: false, msg: "需裝備弓才能施放" };
+      return { ok: false, msg: "未選擇此屬性，無法施放" };
+    }
+    if (!manual && (ch.auto?.skillOff || []).includes(sid)) return { ok: false, msg: "已關閉自動施放" };
+    if ((combat.cds[sid] || 0) > 0) return { ok: false, msg: "冷卻中" };
+    if (ch.mp < sk.mp) return { ok: false, msg: "魔力不足" };
+    const st = E.applyCombatBuffs(E.totalStats(ch), combat.buffs);
+    if (sk.kind === "magic" && st.canMagic === false) return { ok: false, msg: "變身中無法施法" };
+    const needTarget = sk.kind === "phys" || sk.kind === "magic";
+    const tgt = targetMob();
+    if (needTarget && !tgt && !sk.aoe) return { ok: false, msg: "沒有目標" };
+    if (sk.kind === "heal") {
+      const below = sk.below != null ? sk.below : 0.7;
+      if (!manual && ch.hp / st.maxHp > below) return { ok: false, msg: "生命充足" };
+      if (ch.hp >= st.maxHp) return { ok: false, msg: "生命已滿" };
       combat.cds[sid] = sk.cd;
       ch.mp -= sk.mp;
-      if (sk.kind === "heal") {
-        const h = Math.floor(st.maxHp * sk.pct);
-        ch.hp = Math.min(st.maxHp, ch.hp + h);
-        floatDmg("p", "+" + h, "heal");
-        sfx("heal");
-        playAnim($("sp-p"), "atk-cast", 520);
-        log(`施放 ${sk.name} 回復 ${h}`);
-        return true;
+      let pct = sk.pct;
+      for (const b of combat.buffs) {
+        if (b.healBoost) pct *= 1 + b.healBoost;
       }
-      if (sk.kind === "buff") {
-        combat.buffs.push({ id: sid, name: sk.name, icon: "🛡️", left: sk.dur, reduce: sk.reduce });
-        playAnim($("sp-p"), "atk-cast", 520);
-        log(`施放 ${sk.name}`);
-        return true;
-      }
-      const hits = sk.hits || 1;
-      const magic = sk.kind === "magic";
-      const tgt = targetMob();
+      const h = Math.floor(st.maxHp * pct);
+      ch.hp = Math.min(st.maxHp, ch.hp + h);
+      floatDmg("p", "+" + h, "heal");
+      sfx("heal");
+      playAnim($("sp-p"), "atk-cast", 520);
+      log(`施放 ${sk.name} 回復 ${h}`);
+      return { ok: true };
+    }
+    if (sk.kind === "mpheal") {
+      if (ch.mp >= st.maxMp) return { ok: false, msg: "魔力已滿" };
+      combat.cds[sid] = sk.cd;
+      ch.mp -= sk.mp;
+      const hpLoss = Math.max(1, Math.floor(st.maxHp * (sk.hpCost || 0.12)));
+      ch.hp = Math.max(1, ch.hp - hpLoss);
+      const m = Math.floor(st.maxMp * (sk.mpPct || 0.35));
+      ch.mp = Math.min(st.maxMp, ch.mp + m);
+      floatDmg("p", "+" + m, "heal");
+      playAnim($("sp-p"), "atk-cast", 520);
+      log(`施放 ${sk.name} 回復魔力 ${m}`);
+      return { ok: true };
+    }
+    if (sk.kind === "buff") {
+      if (combat.buffs.some((b) => b.id === sid || (sk.tag && b.tag === sk.tag))) return { ok: false, msg: "效果尚在" };
+      combat.cds[sid] = sk.cd;
+      ch.mp -= sk.mp;
+      combat.buffs.push({
+        id: sid, name: sk.name, icon: sk.icon || "✦", left: sk.dur, tag: sk.tag,
+        reduce: sk.reduce, ac: sk.ac, mr: sk.mr, haste: sk.haste,
+        er: sk.er, dmgMul: sk.dmgMul, hit: sk.hit, immune: sk.immune,
+        regen: sk.regen, mpRegen: sk.mpRegen, healBoost: sk.healBoost, hp: sk.hp,
+      });
+      playAnim($("sp-p"), "atk-cast", 520);
+      log(`施放 ${sk.name}`);
+      return { ok: true };
+    }
+    const pack = sk.aoe ? liveMobs().slice() : (tgt ? [tgt] : []);
+    if (!pack.length) return { ok: false, msg: "沒有目標" };
+    if (!manual && sk.slow && pack.every((m) => m.slowed)) return { ok: false, msg: "已緩速" };
+    combat.cds[sid] = sk.cd;
+    ch.mp -= sk.mp;
+    const hits = sk.hits || 1;
+    const magic = sk.kind === "magic";
+    pack.forEach((mob, mi) => {
+      if (sk.slow) mob.slowed = true;
       for (let i = 0; i < hits; i++) {
-        const r = E.playerHit(ch, tgt, sk.mul, magic);
-        if (i === 0) applyPlayerHit(r, sk.name, magic, tgt);
-        else {
-          setTimeout(() => { if (tgt && tgt.hp > 0) applyPlayerHit(r, sk.name, magic, tgt); }, i * 160);
-        }
+        const delay = mi * 70 + i * 150;
+        const r = E.playerHit(ch, mob, sk.mul, magic, combat.buffs);
+        const go = () => {
+          if (mob && mob.hp > 0) {
+            applyPlayerHit(r, sk.name, magic, mob);
+            if (sk.stun) mob.stun = Math.max(mob.stun || 0, sk.stun);
+            if (sk.slow) mob.tAtk = (mob.tAtk || 0) + sk.slow;
+          }
+        };
+        if (delay <= 0) go();
+        else setTimeout(go, delay);
       }
-      if (sk.stun && tgt) tgt.stun = sk.stun;
-      return true;
+    });
+    return { ok: true };
+  }
+
+  function trySkills() {
+    const list = (ch.skills || []).filter((sid) => DATA.skills[sid] && E.canCastSkill(ch, sid));
+    const by = (pred) => list.filter((sid) => pred(DATA.skills[sid]));
+    const score = (sid) => {
+      const s = DATA.skills[sid];
+      return (s.mul || 1) * (s.hits || 1) * (s.aoe ? 1.35 : 1);
+    };
+    const heals = by((s) => s.kind === "heal").sort((a, b) => (DATA.skills[b].pct || 0) - (DATA.skills[a].pct || 0));
+    const buffs = by((s) => s.kind === "buff").sort((a, b) => skillLv(b) - skillLv(a));
+    const debuffs = by((s) => s.slow && (s.kind === "magic" || s.kind === "phys"));
+    const dmg = by((s) => (s.kind === "phys" || s.kind === "magic") && !s.slow).sort((a, b) => score(b) - score(a));
+    for (const sid of [...heals, ...buffs, ...debuffs, ...dmg]) {
+      if (useSkill(sid, false).ok) return true;
     }
     return false;
   }
@@ -741,6 +1092,10 @@ window.App = (() => {
     if (el) playAnim(el, "hit", 380);
     const map = DATA.maps.find((m) => m.id === ch.mapId);
     if (map && map.boss) {
+      if (!netOk) {
+        toast("世界王需連線伺服器");
+        return;
+      }
       Net.send({ t: "bossHit", mapId: map.id, dmg: r.dmg });
       const b = world.bosses[map.id];
       if (b) {
@@ -761,7 +1116,24 @@ window.App = (() => {
     requestAnimationFrame(tick);
     if (!ch) return;
     ch.stats.play += dt;
+    tickBossUi(dt);
+    if (E.tickTransform(ch, dt)) {
+      log("變身效果結束。", "sys");
+      toast("變身已解除");
+    }
     combat.buffs = combat.buffs.filter((b) => (b.left -= dt) > 0);
+    if (combat.buffs.some((b) => b.regen)) {
+      const stR = E.applyCombatBuffs(E.totalStats(ch), combat.buffs);
+      let regen = 0;
+      for (const b of combat.buffs) regen += b.regen || 0;
+      if (regen > 0) ch.hp = Math.min(stR.maxHp, ch.hp + regen * dt);
+    }
+    if (combat.buffs.some((b) => b.mpRegen)) {
+      const stR = E.applyCombatBuffs(E.totalStats(ch), combat.buffs);
+      let mpRegen = 0;
+      for (const b of combat.buffs) mpRegen += b.mpRegen || 0;
+      if (mpRegen > 0) ch.mp = Math.min(stR.maxMp, ch.mp + mpRegen * dt);
+    }
     if (!ch.hunting) {
       refreshTop();
       return;
@@ -787,9 +1159,9 @@ window.App = (() => {
     const tgt = targetMob();
     if (combat.tPlayer <= 0 && tgt) {
       if (!trySkills()) {
-        applyPlayerHit(E.playerHit(ch, tgt, 1, false), "普通攻擊", false, tgt);
+        applyPlayerHit(E.playerHit(ch, tgt, 1, false, combat.buffs), "普通攻擊", false, tgt);
       }
-      combat.tPlayer = E.totalStats(ch).atkMs / 1000;
+      combat.tPlayer = E.applyCombatBuffs(E.totalStats(ch), combat.buffs).atkMs / 1000;
     }
     const reduce = combat.buffs.reduce((s, b) => s + (b.reduce || 0), 0);
     for (const mob of liveMobs()) {
@@ -800,11 +1172,11 @@ window.App = (() => {
       mob.tAtk = (mob.tAtk || 0) - dt;
       if (mob.tAtk > 0) continue;
       mob.tAtk = 1.05 + mob.lv * 0.02 + Math.random() * 0.35;
-      const r = E.mobHit(ch, mob);
+      const r = E.mobHit(ch, mob, combat.buffs);
       const el = mobEl(mob.uid);
       if (el) playAnim(el, "mob-swing", 380);
       if (r.miss) {
-        floatDmg("p", "MISS", "miss");
+        floatDmg("p", r.immune ? "IMMUNE" : "MISS", "miss");
         sfx("miss");
         continue;
       }
@@ -816,6 +1188,7 @@ window.App = (() => {
       if (ch.hp <= 0) {
         ch.hp = 0;
         ch.stats.deaths += 1;
+        E.cancelTransform(ch, true);
         ch.hunting = false;
         log("你被擊倒了，送回大廳。", "sys");
         toast("陣亡，已送回大廳");
@@ -836,15 +1209,84 @@ window.App = (() => {
   }
   function closeModal() { $("modal").classList.add("hidden"); }
 
-  function itemIcon(it) {
-    return `<img class="ico-img" src="${itemIconSrc(it)}" alt="">`;
+  const BAG_LIMIT = 40;
+  const WH_LIMIT = 80;
+
+  function bagWouldBeFull(it) {
+    const d = E.itemDef(it);
+    if (d?.stack) {
+      const found = ch.bag.find((x) => x.id === it.id && !x.plus && !x.blessed);
+      if (found) return false;
+    }
+    return ch.bag.length >= BAG_LIMIT;
+  }
+
+  function whCell(it) {
+    if (!it) return `<div class="bag-cell empty"></div>`;
+    const qty = (it.qty || 1) > 1 ? `<span class="bq">${it.qty}</span>` : "";
+    const plus = it.plus ? `<i>+${it.plus}</i>` : "";
+    return `<button type="button" class="bag-cell on" data-iid="${it.iid}" title="${E.displayName(it)}" style="--rc:${E.rarityColor(it)}">
+      ${itemIcon(it)}${plus}${qty}
+    </button>`;
+  }
+
+  function openWarehouse(side) {
+    if (!acc.warehouse) acc.warehouse = [];
+    side = side === "wh" ? "wh" : "bag";
+    const list = side === "bag" ? ch.bag : acc.warehouse;
+    const slots = Math.max(10, Math.ceil(Math.max(list.length, 10) / 5) * 5);
+    const cells = [];
+    for (let i = 0; i < slots; i++) cells.push(whCell(list[i]));
+    openSheet(`<h3>倉庫</h3>
+      <p class="small">背包 <b>${ch.bag.length}</b>/${BAG_LIMIT}　倉庫 <b>${acc.warehouse.length}</b>/${WH_LIMIT}</p>
+      <div class="subtabs" style="padding-left:0">
+        <div class="subtab ${side === "bag" ? "active" : ""}" data-wh="bag">背包（點選存入）</div>
+        <div class="subtab ${side === "wh" ? "active" : ""}" data-wh="wh">倉庫（點選領出）</div>
+      </div>
+      <p class="small">${side === "bag" ? "點要放進倉庫的物品" : "點要領回背包的物品"}</p>
+      <div class="bag-grid">${cells.join("")}</div>`);
+    $("modal").querySelectorAll("[data-wh]").forEach((b) => {
+      b.onclick = () => openWarehouse(b.dataset.wh);
+    });
+    $("modal").querySelectorAll("[data-iid]").forEach((b) => {
+      b.onclick = () => {
+        if (side === "bag") stashToWh(b.dataset.iid);
+        else takeFromWh(b.dataset.iid);
+      };
+    });
+  }
+
+  function stashToWh(iid) {
+    if (!acc.warehouse) acc.warehouse = [];
+    if (acc.warehouse.length >= WH_LIMIT) return toast("倉庫已滿");
+    const i = ch.bag.findIndex((x) => x.iid === iid);
+    if (i < 0) return;
+    const it = ch.bag.splice(i, 1)[0];
+    acc.warehouse.push(it);
+    save();
+    toast("已存入 " + E.displayName(it));
+    openWarehouse("bag");
+  }
+
+  function takeFromWh(iid) {
+    if (!acc.warehouse) acc.warehouse = [];
+    const i = acc.warehouse.findIndex((x) => x.iid === iid);
+    if (i < 0) return;
+    const it = acc.warehouse[i];
+    if (bagWouldBeFull(it)) return toast("背包已滿");
+    acc.warehouse.splice(i, 1);
+    E.addToBag(ch, it);
+    save();
+    toast("已領出 " + E.displayName(it));
+    openWarehouse("wh");
   }
 
   function openItem(it, where) {
     const d = E.itemDef(it);
     const st = E.itemStats(it);
     const lines = [];
-    if (d.dmax) lines.push(`傷害 ${st.dmin} ~ ${st.dmax}`);
+    if (d.dmax) lines.push(`${d.ranged ? "遠距離" : "近距離"}傷害 ${st.dmin} ~ ${st.dmax}`);
+    if (d.hit) lines.push(`命中 ${st.hit}`);
     if (d.ac) lines.push(`AC ${st.ac}`);
     if (d.mr || st.mr) lines.push(`MR ${st.mr}`);
     if (st.str) lines.push(`力量 +${st.str}`);
@@ -852,16 +1294,23 @@ window.App = (() => {
     if (st.int) lines.push(`智力 +${st.int}`);
     if (st.hp) lines.push(`HP +${st.hp}`);
     if (st.mp) lines.push(`MP +${st.mp}`);
+    if (d.type !== "use") {
+      const plus = it.plus || 0;
+      const safeMax = DATA.enchant?.safeMax ?? 6;
+      lines.push(`強化 +${plus}　安定值 +${safeMax}${plus >= safeMax ? "　<span class=\"warn\">已進入爆裝區</span>" : ""}`);
+    }
     lines.push(`重量 ${d.weight || 1}　賣價 ${E.sellPrice({ ...it, qty: 1 })}`);
     if (d.classes) lines.push("職業：" + d.classes.map((x) => DATA.classes[x].name).join(" / "));
     const btns = [];
     if (d.slot && where === "bag") btns.push(`<button class="btn wide" id="i-eq">裝 備</button>`);
     if (d.kind === "potion") btns.push(`<button class="btn wide" id="i-use">使 用</button>`);
+    if (d.kind === "poly") btns.push(`<button class="btn wide" id="i-poly">變 身</button>`);
     if (where === "eq") btns.push(`<button class="btn wide" id="i-ue">卸下</button>`);
     if (d.type !== "use") btns.push(`<button class="btn wide" id="i-en">強 化</button>`);
     btns.push(`<button class="btn ghost wide" id="i-sell">出 售</button>`);
     if (where === "bag") btns.push(`<button class="btn danger wide" id="i-drop">丟 棄</button>`);
     openSheet(`<h3 style="color:${E.rarityColor(it)}">${E.displayName(it)}</h3>
+      <div class="item-preview">${itemIcon(it)}</div>
       <p class="small">${DATA.R[d.rarity]?.name || ""}　需求等級 ${d.lv || 1}</p>
       <p style="margin:8px 0;line-height:1.6">${lines.join("<br>")}</p>
       <div class="row" style="flex-wrap:wrap">${btns.join("")}</div>`);
@@ -883,20 +1332,22 @@ window.App = (() => {
       E.removeFromBag(ch, it.iid, 1);
       closeModal(); renderPanel(); refreshTop(); save();
     });
+    q("#i-poly", () => {
+      closeModal();
+      openPolyPicker(d.polyTier || 1);
+    });
     q("#i-en", () => {
       closeModal();
-      openSheet(`<h3>強化 ${E.displayName(it)}</h3>
-        <p class="small">目前 +${it.plus || 0}　成功率約 ${Math.round(E.enchantRate(it.plus || 0, false) * 100)}%</p>
-        <p class="small">+7 以上失敗可能消失。祝福卷軸較安全。</p>
-        <button class="btn wide" id="en1">使用對應卷軸</button>
-        <button class="btn wide" id="en2" style="margin-top:6px">使用祝福卷軸</button>`);
+      openSheet(enchantPanelHtml(it));
       $("modal").querySelector("#en1").onclick = () => {
         const r = E.enchant(ch, it, false);
-        toast(r.msg); mq(r.msg); closeModal(); renderPanel(); refreshTop(); save();
+        enchantFx(r);
+        closeModal(); renderPanel(); refreshTop(); save();
       };
       $("modal").querySelector("#en2").onclick = () => {
         const r = E.enchant(ch, it, true);
-        toast(r.msg); mq(r.msg); closeModal(); renderPanel(); refreshTop(); save();
+        enchantFx(r);
+        closeModal(); renderPanel(); refreshTop(); save();
       };
     });
     q("#i-sell", () => {
@@ -924,8 +1375,23 @@ window.App = (() => {
     $("subtabs").querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { huntCat = b.dataset.c; renderPanel(); });
     const box = $("panel-scroll");
     if (huntCat === "village") {
-      box.innerHTML = `<div class="npc-grid">${DATA.npcs.map((n) =>
+      const vils = (DATA.villages || []).map((v) => {
+        const here = ch.mapId === v.map;
+        return `<div class="list-item ${here ? "here" : ""}">
+          <div class="info"><div class="ttl">${v.name}${here ? "（目前）" : ""}</div>
+          <div class="sub2">建議 Lv.${v.rec}　${v.desc}</div></div>
+          <button class="go" data-vil="${v.map}">前往周邊</button></div>`;
+      }).join("");
+      const npcs = `<div class="npc-grid">${DATA.npcs.map((n) =>
         `<div class="npc" data-npc="${n.id}"><div class="n">${n.name}</div><div class="d">${n.desc}</div></div>`).join("")}</div>`;
+      box.innerHTML = `<div class="sec-ttl">${DATA.gameVersion || "亞丁 2.70"} 村莊</div>${vils}<div class="sec-ttl">NPC</div>${npcs}`;
+      box.querySelectorAll("[data-vil]").forEach((b) => {
+        b.onclick = () => {
+          setMap(b.dataset.vil, false);
+          const m = DATA.maps.find((x) => x.id === b.dataset.vil);
+          toast("已抵達 " + (m ? m.name : "村莊周邊"));
+        };
+      });
       box.querySelectorAll("[data-npc]").forEach((b) => b.onclick = () => openNpc(b.dataset.npc));
       return;
     }
@@ -976,14 +1442,47 @@ window.App = (() => {
       const here = ch.mapId === m.id;
       const n = (world.maps && world.maps[m.id]) || 0;
       const mons = (m.monsters || []).map((id) => DATA.monsters[id]?.name).filter(Boolean).join("、");
-      return `<div class="list-item ${here ? "here" : ""}">
+      const bossLine = m.boss
+        ? `<span class="${(world.bosses && world.bosses[m.id] && world.bosses[m.id].alive !== false) ? "ok" : "warn"}">${bossStatusText(m.id)}</span>　重生 ${fmtWait(bossRespawnSec(m.id))}`
+        : `出沒 ${mons}`;
+      return `<div class="list-item ${here ? "here" : ""}" data-boss-row="${m.boss ? m.id : ""}">
         <div class="info"><div class="ttl">${m.name}${here ? "（目前）" : ""} <span class="dim">(${n} 人)</span></div>
-        <div class="sub2">建議 Lv.${m.rec}　${m.boss ? "世界王" : "出沒 " + mons}</div></div>
+        <div class="sub2">建議 Lv.${m.rec}　${bossLine}</div></div>
         <button class="go" data-go="${m.id}">${here ? "停留" : "前往"}</button></div>`;
     }).join("");
     box.innerHTML = regionBar + rows;
     box.querySelectorAll("[data-r]").forEach((b) => b.onclick = () => { huntRegion = b.dataset.r; renderPanel(); });
     box.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => { setMap(b.dataset.go, false); toast("已抵達 " + DATA.maps.find((m) => m.id === b.dataset.go).name); });
+  }
+
+  function openPolyPicker(tierFilter) {
+    const list = E.availableTransforms(ch).filter((tr) => !tierFilter || tr.tier === tierFilter);
+    if (!list.length) return toast("等級或職業不符，尚無可用變身");
+    const rows = list.map((tr) => {
+      const scroll = DATA.items[tr.scroll];
+      const got = E.countItem(ch, tr.scroll);
+      const ok = got > 0 && E.canTransform(ch, tr.id).ok;
+      const dur = (tr.dur || 120) + Math.floor((ch.attrs?.wis || 10) * 2.5);
+      return `<div class="item-row poly-row ${ok ? "" : "dim"}" data-poly="${tr.id}">
+        <div class="ico keep-color"><div class="mob-svg poly-thumb">${mobArt(tr.mob)}</div></div>
+        <div class="info"><div class="nm">${tr.name}</div>
+        <div class="meta">Lv.${tr.minLv}　${tr.desc}<br>
+        HP×${tr.hpMul}　AC${tr.ac || 0}　傷害 ${tr.dmg?.join("~") || "—"}　約 ${dur} 秒<br>
+        需 ${scroll ? scroll.name : tr.scroll}（${got}）</div></div>
+      </div>`;
+    }).join("");
+    openSheet(`<h3>選擇變身</h3><p class="small">消耗對應卷軸。近戰型變身中無法施放魔法。精神越高，持續越久。</p>${rows}`);
+    $("modal").querySelectorAll("[data-poly]").forEach((b) => {
+      b.onclick = () => {
+        const r = E.startTransform(ch, b.dataset.poly);
+        toast(r.msg);
+        if (r.ok) {
+          log(`變身為 ${r.tr.name}。`, "sys");
+          mq(`【變身】${ch.name} 變身為 ${r.tr.name}`);
+          closeModal(); refreshTop(); save();
+        }
+      };
+    });
   }
 
   function openNpc(id) {
@@ -993,18 +1492,92 @@ window.App = (() => {
         const d = DATA.items[iid];
         return `<div class="item-row" data-buy="${iid}">
           <div class="ico keep-color">${itemIcon({ id: iid })}</div>
-          <div class="info"><div class="nm">${d.name}</div><div class="meta">💰 ${d.price}　Lv.${d.lv || 1}</div></div>
+          <div class="info"><div class="nm">${d.name}</div><div class="meta">💰 ${d.price}　稅金 ${shopFee(d.price)}　共 ${d.price + shopFee(d.price)}　Lv.${d.lv || 1}</div></div>
         </div>`;
       }).join("");
       openSheet(`<h3>${n.name}</h3>${rows}`);
       $("modal").querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy));
       return;
     }
+    if (n.kind === "poly") {
+      const list = E.availableTransforms(ch);
+      const rows = list.map((tr) => {
+        const scroll = DATA.items[tr.scroll];
+        const got = E.countItem(ch, tr.scroll);
+        const ok = got > 0;
+        const dur = (tr.dur || 120) + Math.floor((ch.attrs?.wis || 10) * 2.5);
+        const active = ch.transform?.id === tr.id;
+        return `<div class="item-row poly-row ${ok ? "" : "dim"}" data-poly="${tr.id}">
+          <div class="ico keep-color"><div class="mob-svg poly-thumb">${mobArt(tr.mob)}</div></div>
+          <div class="info"><div class="nm">${tr.name}${active ? " <span style='color:#ffd24a'>(變身中)</span>" : ""}</div>
+          <div class="meta">Lv.${tr.minLv}　${tr.desc}<br>
+          HP×${tr.hpMul}　AC${tr.ac || 0}　${tr.dmg ? "傷害 " + tr.dmg.join("~") : ""}　約 ${dur} 秒<br>
+          需 ${scroll ? scroll.name : tr.scroll}（${got}）</div></div>
+        </div>`;
+      }).join("");
+      const cur = ch.transform && DATA.transforms[ch.transform.id];
+      openSheet(`<h3>變身師</h3>
+        <p class="small">消耗變身卷軸變成魔物，獲得魔物能力。近戰型無法施法；精神越高持續越久。</p>
+        ${cur ? `<p class="gold">目前：${cur.name}　剩餘 ${fmtWait(Math.ceil(ch.transform.left))}
+          <button class="btn" id="poly-cancel" style="margin-left:8px">解除變身</button></p>` : ""}
+        ${rows || "<p>等級不足或職業不符</p>"}`);
+      const cancel = $("modal").querySelector("#poly-cancel");
+      if (cancel) {
+        cancel.onclick = () => {
+          const r = E.cancelTransform(ch);
+          toast(r.msg);
+          if (r.ok) { log(r.msg, "sys"); refreshTop(); save(); openNpc("poly"); }
+        };
+      }
+      $("modal").querySelectorAll("[data-poly]").forEach((b) => {
+        b.onclick = () => {
+          const r = E.startTransform(ch, b.dataset.poly);
+          toast(r.msg);
+          if (r.ok) {
+            log(`變身為 ${r.tr.name}。`, "sys");
+            mq(`【變身】${ch.name} 變身為 ${r.tr.name}`);
+            refreshTop(); save(); openNpc("poly");
+          }
+        };
+      });
+      return;
+    }
+    if (n.kind === "craft") {
+      const recs = DATA.recipes || [];
+      const rows = recs.map((r) => {
+        const out = DATA.items[r.out];
+        const ok = E.canCraft(ch, r);
+        const need = (r.need || []).map(([id, n]) => {
+          const d = DATA.items[id];
+          const got = E.countItem(ch, id);
+          const miss = got < n;
+          return `<span style="color:${miss ? "#ff8a8a" : "#9be37d"}">${d ? d.name : id} ${got}/${n}</span>`;
+        }).join("　");
+        return `<div class="item-row ${ok ? "" : "dim"}" data-craft="${r.id}">
+          <div class="ico">${itemIcon({ id: r.out })}</div>
+          <div class="info"><div class="nm">${out ? out.name : r.name}</div>
+          <div class="meta">${need}<br>金幣 ${r.gold}${ok ? "" : "　材料或金幣不足"}</div></div>
+        </div>`;
+      }).join("");
+      openSheet(`<h3>製作師</h3><p class="small">消耗材料與金幣，製成金屬塊或裝備。不另收稅金。</p>${rows || "<p>沒有配方</p>"}`);
+      $("modal").querySelectorAll("[data-craft]").forEach((b) => {
+        b.onclick = () => {
+          const rec = recs.find((x) => x.id === b.dataset.craft);
+          if (!rec) return;
+          if (bagWouldBeFull(E.instFrom(rec.out, { qty: rec.qty || 1 }))) return toast("背包已滿");
+          const r = E.craft(ch, rec);
+          toast(r.msg);
+          if (r.ok) { refreshTop(); save(); openNpc("craft"); }
+        };
+      });
+      return;
+    }
     if (n.kind === "smith") {
       const eqs = [...E.equippedList(ch), ...ch.bag.filter((it) => {
         const d = E.itemDef(it); return d && d.type !== "use";
       })];
-      openSheet(`<h3>鐵匠</h3><p class="small">選擇要強化的裝備</p>` +
+      openSheet(`<h3>鐵匠</h3>
+        <p class="small">選擇要強化的裝備。武卷衝武器、防卷衝防具；+0～+${DATA.enchant?.safeMax ?? 6} 安定必成，+7 起失敗可能爆裝。</p>` +
         eqs.map((it) => `<div class="item-row" data-iid="${it.iid}"><div class="ico">${itemIcon(it)}</div>
           <div class="nm" style="color:${E.rarityColor(it)}">${E.displayName(it)}</div></div>`).join("") || "<p>沒有可強化物品</p>");
       $("modal").querySelectorAll("[data-iid]").forEach((b) => {
@@ -1016,25 +1589,57 @@ window.App = (() => {
       return;
     }
     if (n.kind === "trainer") {
-      const known = ch.skills.map((s) => DATA.skills[s]).map((s) => `<div class="skill"><div><b>${s.name}</b><div class="small">${s.desc}　MP ${s.mp}</div></div></div>`).join("");
-      const next = E.canLearn(ch);
-      openSheet(`<h3>導師</h3>${known || "<p>尚未學會技能</p>"}
-        <p class="small" style="margin-top:8px">${next.length ? "即將可學：" + next.map((s) => DATA.skills[s].name + `(Lv.${DATA.skills[s].minLv})`).join("、") : "目前沒有新技能可學。升級會自動習得。"}</p>`);
+      const known = new Set(ch.skills || []);
+      const groups = groupedSkills(skillList());
+      const elemNote = ch.classId === "elf"
+        ? (ch.elfElem
+          ? `<p class="small">目前精靈屬性：<b>${(DATA.elfElemNames && DATA.elfElemNames[ch.elfElem]) || ch.elfElem}</b>　（轉換請找精靈導師）</p>`
+          : `<p class="small warn">尚未選擇精靈屬性，請找<b>精靈導師</b>選定火／水／風／地之一後，才能習得屬性魔法。</p>`)
+        : "";
+      const rows = groups.map((g) =>
+        `<div class="sec-ttl">${g.name}</div>` + g.skills.map((sid) => {
+          const s = DATA.skills[sid];
+          const ok = known.has(sid);
+          const inactive = ok && !E.canCastSkill(ch, sid);
+          const inactiveLbl = inactive
+            ? (s.requiresBow && !E.hasBowEquipped(ch) ? "已學（需裝備弓）" : "已學（非當前屬性）")
+            : (ok ? "已學會" : "Lv." + skillLv(sid));
+          return `<div class="skill ${inactive ? "dim" : ""}"><div class="sk-icon">${skillIcon(sid)}</div><div><b>${s.name}</b><div class="small">${s.desc}　MP ${s.mp}　CD ${s.cd}秒</div></div>
+            <span class="small">${inactiveLbl}</span></div>`;
+        }).join("")
+      ).join("");
+      openSheet(`<h3>導師</h3>${elemNote}${rows || "<p>沒有技能</p>"}
+        <p class="small" style="margin-top:8px">升級自動習得。妖精：一般共用魔法＋精靈共用魔法＋四選一屬性魔法。點戰鬥下方技能欄可手動施放。</p>`);
+      return;
+    }
+    if (n.kind === "elfmaster") {
+      if (ch.classId !== "elf") {
+        openSheet(`<h3>精靈導師</h3><p class="small">只有妖精能向精靈導師學習屬性魔法。</p>`);
+        return;
+      }
+      const cost = E.elfElemSwitchCost(ch);
+      const cur = ch.elfElem ? (DATA.elfElemNames[ch.elfElem] || ch.elfElem) : "尚未選擇";
+      const btns = (DATA.elfElements || []).map((id) => {
+        const on = ch.elfElem === id;
+        const label = (DATA.elfElemNames && DATA.elfElemNames[id]) || id;
+        return `<button class="btn ${on ? "ghost" : ""}" data-elem="${id}" ${on ? "disabled" : ""}>${label}屬性${on ? "（目前）" : ""}</button>`;
+      }).join("");
+      openSheet(`<h3>精靈導師</h3>
+        <p class="small">比照天堂：Lv.10 起可選擇<b>一種</b>屬性精靈魔法（火／水／風／地）。一般共用魔法與精靈共用魔法不受限制。</p>
+        <p class="small">目前屬性：<b>${cur}</b>${ch.elfElem && cost > 0 ? `　轉換費用：${cost.toLocaleString()} 金幣` : ""}</p>
+        <p class="small">已學過的其他屬性魔法仍保留，但需切換回該屬性後才能施放。</p>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">${btns}</div>`);
+      $("modal").querySelectorAll("[data-elem]").forEach((b) => {
+        b.onclick = () => {
+          const r = E.setElfElem(ch, b.dataset.elem);
+          toast(r.msg);
+          if (r.ok) { refreshTop(); save(); closeModal(); openNpc("elfmaster"); }
+        };
+      });
       return;
     }
     if (n.kind === "warehouse") {
-      openSheet(`<h3>倉庫</h3><p class="small">角色共用倉庫 ${acc.warehouse.length} 件</p>
-        <p class="small">點背包物品可存入；點倉庫物品可領出。</p>
-        <button class="btn wide" id="wh-in">從背包存入第一件</button>
-        <button class="btn wide" id="wh-out" style="margin-top:6px">領出第一件</button>`);
-      $("modal").querySelector("#wh-in").onclick = () => {
-        if (!ch.bag.length) return toast("背包是空的");
-        acc.warehouse.push(ch.bag.shift()); save(); toast("已存入"); closeModal();
-      };
-      $("modal").querySelector("#wh-out").onclick = () => {
-        if (!acc.warehouse.length) return toast("倉庫是空的");
-        ch.bag.push(acc.warehouse.shift()); save(); toast("已領出"); closeModal(); renderPanel();
-      };
+      openWarehouse("bag");
       return;
     }
     if (n.kind === "tele") {
@@ -1042,12 +1647,31 @@ window.App = (() => {
     }
   }
 
+  function taxRate() {
+    const r = Number(world.taxRate);
+    return r > 0 && r < 1 ? r : 0.05;
+  }
+  function shopFee(price) {
+    const p = Math.max(0, Math.floor(Number(price) || 0));
+    if (p <= 0) return 0;
+    return Math.max(1, Math.floor(p * taxRate()));
+  }
+  function hallTaxHtml() {
+    const pct = Math.round(taxRate() * 100);
+    return `稅金：${pct}%（NPC購物手續費）　已收 ${(world.tax || 0).toLocaleString()}<br>
+        <span style="color:#ff8ad0">掉寶倍率 1.0</span>　<span style="color:#7ec8ff">金幣倍率 1.0</span><br>
+        當前遊玩人數：${world.online || 0}　伺服器等級：${world.serverLv || 1}`;
+  }
+
   function buy(id) {
     const d = DATA.items[id];
-    if (ch.gold < d.price) return toast("金幣不足");
-    ch.gold -= d.price;
+    const fee = shopFee(d.price);
+    const total = d.price + fee;
+    if (ch.gold < total) return toast(`金幣不足（售價 ${d.price}＋稅金 ${fee}）`);
+    ch.gold -= total;
     E.addToBag(ch, E.instFrom(id, { qty: d.stack ? 1 : 1 }));
-    toast(`買下 ${d.name}`);
+    if (Net.send) Net.send({ t: "shopTax", fee });
+    toast(`買下 ${d.name}（稅金 ${fee}）`);
     refreshTop(); save();
   }
 
@@ -1064,14 +1688,14 @@ window.App = (() => {
   function dollSlot(slot) {
     const it = ch.equip[slot];
     const plus = it && it.plus ? `<i>+${it.plus}</i>` : "";
-    const img = it ? `<img src="${itemIconSrc(it)}" alt="">` : "";
+    const img = it ? itemIcon(it) : "";
     return `<button type="button" class="doll-slot ${it ? "on" : "empty"}" data-slot="${slot}">
       ${img}${plus}<span class="dsl">${slotName(slot)}</span></button>`;
   }
   function wear(slot, cls) {
     const it = ch.equip[slot];
     if (!it) return "";
-    return `<div class="wear ${cls}" style="--rc:${E.rarityColor(it)}"><img src="${itemIconSrc(it)}" alt=""></div>`;
+    return `<div class="wear ${cls}" style="--rc:${E.rarityColor(it)}">${itemIcon(it)}</div>`;
   }
   function openSlotPick(slot) {
     const worn = ch.equip[slot];
@@ -1109,7 +1733,7 @@ window.App = (() => {
         <div class="doll-stage keep-color">
           ${wear("cloak", "wear-cloak")}
           <div class="doll-ground"></div>
-          <img class="doll-body" src="${spriteOf(ch)}" alt="">
+          <div class="hero art doll-body" id="doll-hero"></div>
           ${wear("armor", "wear-armor")}
           ${wear("helm", "wear-helm")}
           ${wear("amulet", "wear-amulet")}
@@ -1122,7 +1746,8 @@ window.App = (() => {
         </div>
         <div class="doll-stats">
           AC <b>${st.ac}</b>　MR <b>${st.mr}</b><br>
-          攻擊 <b>${st.dmin}~${st.dmax}</b><br>
+          命中 <b>${st.hit}</b>　迴避 <b>${st.er}</b><br>
+          ${st.ranged ? "遠攻" : "近攻"} <b>${st.dmin}~${st.dmax}</b>　魔法 <b>${st.magMin}~${st.magMax}</b>
           負重 <b>${E.weightOf(ch)}</b>/${E.weightMax(ch)}
         </div>
       </div>
@@ -1130,10 +1755,11 @@ window.App = (() => {
     box.querySelectorAll(".doll-slot").forEach((b) => {
       b.onclick = () => openSlotPick(b.dataset.slot);
     });
+    paintHero(box.querySelector("#doll-hero"), ch);
   }
 
   function renderBag() {
-    $("subtabs").innerHTML = ["bag:背包", "worn:紙娃娃"].map((x) => {
+    $("subtabs").innerHTML = ["bag:背包", "worn:裝備"].map((x) => {
       const [id, n] = x.split(":");
       return `<div class="subtab ${bagSub === id ? "active" : ""}" data-s="${id}">${n}</div>`;
     }).join("");
@@ -1143,7 +1769,7 @@ window.App = (() => {
       renderDoll(box);
       return;
     }
-    const BAG_SLOTS = 40;
+    const BAG_SLOTS = BAG_LIMIT;
     const used = ch.bag.length;
     const slots = Math.max(BAG_SLOTS, Math.ceil(used / 5) * 5);
     const cells = [];
@@ -1174,14 +1800,27 @@ window.App = (() => {
   function renderStat() {
     $("subtabs").innerHTML = "";
     const st = E.totalStats(ch);
+    const tr = ch.transform && DATA.transforms[ch.transform.id];
     const box = $("panel-scroll");
     box.innerHTML = `
+      ${tr ? `<div class="poly-status">
+        <div class="mob-svg poly-stat">${mobArt(tr.mob)}</div>
+        <div><b style="color:#ffd24a">變身：${tr.name}</b>
+        <div class="small">剩餘 ${fmtWait(Math.ceil(ch.transform.left))}　${tr.magic === false ? "無法施法" : "可施法"}</div>
+        <button class="btn" id="stat-poly-off" style="margin-top:6px">解除變身</button></div>
+      </div><hr class="sep">` : ""}
       <div class="stat-grid">
         <div class="stat">等級 <b>${ch.level}</b></div>
         <div class="stat">經驗 <b>${ch.exp}/${E.xpNeed(ch.level)}</b></div>
         <div class="stat">HP <b>${Math.floor(ch.hp)}/${st.maxHp}</b></div>
         <div class="stat">MP <b>${Math.floor(ch.mp)}/${st.maxMp}</b></div>
-        <div class="stat">攻擊 <b>${st.dmin}~${st.dmax}</b></div>
+        <div class="stat">${st.ranged ? "遠距離傷害" : "近距離傷害"} <b>${st.dmin}~${st.dmax}</b></div>
+        <div class="stat">魔法傷害 <b>${st.magMin}~${st.magMax}</b></div>
+        <div class="stat">命中 <b>${st.hit}</b></div>
+        <div class="stat">迴避 <b>${st.er}</b></div>
+        <div class="stat">AC <b>${st.ac}</b></div>
+        <div class="stat">MR <b>${st.mr}</b></div>
+        <div class="stat">SP <b>${st.sp}</b></div>
         <div class="stat">攻速 <b>${st.atkMs} ms</b></div>
         <div class="stat">力量 <b>${st.str}</b></div>
         <div class="stat">敏捷 <b>${st.dex}</b></div>
@@ -1189,10 +1828,17 @@ window.App = (() => {
         <div class="stat">智力 <b>${st.int}</b></div>
         <div class="stat">精神 <b>${st.wis}</b></div>
         <div class="stat">魅力 <b>${st.cha}</b></div>
-        <div class="stat">命中 <b>${st.hit}</b></div>
         <div class="stat">擊殺/死亡 <b>${ch.stats.kills}/${ch.stats.deaths}</b></div>
       </div>
     `;
+    const offBtn = box.querySelector("#stat-poly-off");
+    if (offBtn) {
+      offBtn.onclick = () => {
+        const r = E.cancelTransform(ch);
+        toast(r.msg);
+        if (r.ok) { log(r.msg, "sys"); refreshTop(); save(); renderStat(); }
+      };
+    }
   }
 
   function renderSet() {
@@ -1202,12 +1848,19 @@ window.App = (() => {
     const next = E.canLearn(ch);
     $("subtabs").innerHTML = "";
     $("panel-scroll").innerHTML = `
-      <p class="gold">自動戰鬥</p>
-      <label class="check set-row"><input type="checkbox" id="auto-pot" ${ch.auto.pot ? "checked" : ""}> 自動喝藥（狩獵中）</label>
-      <p class="small" id="pot-hp-lab">HP 低於 ${(ch.auto.hp * 100).toFixed(0)}% 時喝紅水</p>
-      <input class="range" type="range" min="10" max="80" value="${ch.auto.hp * 100}" id="ahp" ${ch.auto.pot ? "" : "disabled"}>
-      <p class="small" id="pot-mp-lab">MP 低於 ${(ch.auto.mp * 100).toFixed(0)}% 時喝藍水</p>
-      <input class="range" type="range" min="5" max="80" value="${ch.auto.mp * 100}" id="amp" ${ch.auto.pot ? "" : "disabled"}>
+      <p class="gold">自動喝水</p>
+      <label class="check set-row"><input type="checkbox" id="auto-hp" ${ch.auto.potHp ? "checked" : ""}> HP 過低時自動喝紅水</label>
+      <p class="small" id="pot-hp-lab">HP 低於 ${(ch.auto.hp * 100).toFixed(0)}% 時使用</p>
+      <input class="range" type="range" min="10" max="80" value="${ch.auto.hp * 100}" id="ahp" ${ch.auto.potHp ? "" : "disabled"}>
+      <label class="check set-row"><input type="checkbox" id="auto-mp" ${ch.auto.potMp ? "checked" : ""}> MP 過低時自動喝藍水</label>
+      <p class="small" id="pot-mp-lab">MP 低於 ${(ch.auto.mp * 100).toFixed(0)}% 時使用</p>
+      <input class="range" type="range" min="5" max="80" value="${ch.auto.mp * 100}" id="amp" ${ch.auto.potMp ? "" : "disabled"}>
+      <p class="small" style="margin-top:8px">勾選要自動喝的藥水（沒勾的不會用）</p>
+      <div class="junk-grid">${POT_PRESETS.map(([id, name, kind]) => {
+        const on = (ch.auto.pots || []).includes(id);
+        const dis = kind === "hp" ? !ch.auto.potHp : !ch.auto.potMp;
+        return `<label class="check junk-chip"><input type="checkbox" data-pot="${id}" data-kind="${kind}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}> ${name}</label>`;
+      }).join("")}</div>
       <hr class="sep">
       <label class="check set-row"><input type="checkbox" id="auto-sell" ${ch.auto.sell ? "checked" : ""}> 自動販賣（打怪後）</label>
       <p class="small">勾選掉落的低級裝，會自動賣成金幣（不含強化裝）</p>
@@ -1215,16 +1868,21 @@ window.App = (() => {
         `<label class="check junk-chip"><input type="checkbox" data-junk="${id}" ${junk.has(id) ? "checked" : ""} ${ch.auto.sell ? "" : "disabled"}> ${name}</label>`
       ).join("")}</div>
       <hr class="sep">
-      <p class="gold">技能（戰鬥中自動施放）</p>
-      ${ch.skills.map((s) => {
-        const k = DATA.skills[s];
-        return `<div class="skill set-skill">
+      <p class="gold">技能（戰鬥中自動施放，也可點下方技能欄）</p>
+      ${groupedSkills(skillList()).map((g) => {
+        const mine = g.skills.filter((s) => (ch.skills || []).includes(s) && E.canCastSkill(ch, s));
+        if (!mine.length) return "";
+        return `<div class="sec-ttl">${g.name}</div>` + mine.map((s) => {
+          const k = DATA.skills[s];
+          return `<div class="skill set-skill">
           <label class="check"><input type="checkbox" data-skill="${s}" ${skillOff.has(s) ? "" : "checked"}></label>
+          <div class="sk-icon">${skillIcon(s)}</div>
           <div class="info"><b>${k.name}</b><div class="small">${k.desc}</div></div>
           <span class="small">MP ${k.mp}</span>
         </div>`;
+        }).join("");
       }).join("") || "<p class='small'>尚未學會技能，升級會自動習得。</p>"}
-      ${next.length ? `<p class="small" style="margin-top:6px">即將可學：${next.map((s) => DATA.skills[s].name + `(Lv.${DATA.skills[s].minLv})`).join("、")}</p>` : ""}
+      ${next.length ? `<p class="small" style="margin-top:6px">即將可學：${next.map((s) => DATA.skills[s].name + `(Lv.${skillLv(s)})`).join("、")}</p>` : ""}
       <hr class="sep">
       <p>修改密碼</p>
       <p class="small">帳號名稱無法更改。目前帳號：${acc.user}</p>
@@ -1241,26 +1899,44 @@ window.App = (() => {
       <p class="small" style="margin-top:10px">擊殺 ${ch.stats.kills}　強化成功 ${ch.stats.enhanceOk}　失敗 ${ch.stats.enhanceFail}<br>
       遊玩 ${Math.floor(ch.stats.play / 60)} 分鐘　連線：${netOk ? "即時伺服器" : "未連線"}</p>`;
     const box = $("panel-scroll");
-    const syncPotSliders = () => {
-      const on = !!ch.auto.pot;
-      box.querySelector("#ahp").disabled = !on;
-      box.querySelector("#amp").disabled = !on;
+    const syncPot = () => {
+      box.querySelector("#ahp").disabled = !ch.auto.potHp;
+      box.querySelector("#amp").disabled = !ch.auto.potMp;
+      box.querySelectorAll("[data-pot]").forEach((el) => {
+        el.disabled = el.dataset.kind === "hp" ? !ch.auto.potHp : !ch.auto.potMp;
+      });
     };
-    box.querySelector("#auto-pot").onchange = (e) => {
-      ch.auto.pot = e.target.checked;
-      syncPotSliders();
+    box.querySelector("#auto-hp").onchange = (e) => {
+      ch.auto.potHp = e.target.checked;
+      ch.auto.pot = !!(ch.auto.potHp || ch.auto.potMp);
+      syncPot();
+      save();
+    };
+    box.querySelector("#auto-mp").onchange = (e) => {
+      ch.auto.potMp = e.target.checked;
+      ch.auto.pot = !!(ch.auto.potHp || ch.auto.potMp);
+      syncPot();
       save();
     };
     box.querySelector("#ahp").oninput = (e) => {
       ch.auto.hp = e.target.value / 100;
-      box.querySelector("#pot-hp-lab").textContent = `HP 低於 ${e.target.value}% 時喝紅水`;
+      box.querySelector("#pot-hp-lab").textContent = `HP 低於 ${e.target.value}% 時使用`;
       save();
     };
     box.querySelector("#amp").oninput = (e) => {
       ch.auto.mp = e.target.value / 100;
-      box.querySelector("#pot-mp-lab").textContent = `MP 低於 ${e.target.value}% 時喝藍水`;
+      box.querySelector("#pot-mp-lab").textContent = `MP 低於 ${e.target.value}% 時使用`;
       save();
     };
+    box.querySelectorAll("[data-pot]").forEach((el) => {
+      el.onchange = () => {
+        const set = new Set(ch.auto.pots || []);
+        if (el.checked) set.add(el.dataset.pot);
+        else set.delete(el.dataset.pot);
+        ch.auto.pots = [...set];
+        save();
+      };
+    });
     box.querySelector("#auto-sell").onchange = (e) => {
       ch.auto.sell = e.target.checked;
       box.querySelectorAll("[data-junk]").forEach((el) => { el.disabled = !ch.auto.sell; });
@@ -1500,11 +2176,13 @@ window.App = (() => {
       world.online = m.online || 0;
       world.maps = m.maps || {};
       world.tax = m.tax || 0;
+      world.taxRate = m.taxRate > 0 ? m.taxRate : 0.05;
       world.serverLv = m.serverLv || 1;
       world.parties = m.parties || [];
       world.clans = m.clans || [];
       world.market = m.market || [];
       world.bosses = m.bosses || {};
+      ensureClientBosses();
       world.players = m.players || [];
       market = world.market;
       parties = world.parties;
@@ -1512,9 +2190,7 @@ window.App = (() => {
       if (ch && tab === "hunt") {
         const hall = $("zsub");
         if (hall && !ch.mapId) {
-          hall.innerHTML = `稅金：${(world.tax || 0).toLocaleString()}<br>
-            <span style="color:#ff8ad0">掉寶倍率 1.0</span>　<span style="color:#7ec8ff">金幣倍率 1.0</span><br>
-            當前遊玩人數：${world.online || 0}　伺服器等級：${world.serverLv || 1}`;
+          hall.innerHTML = hallTaxHtml();
         }
       }
       if (ch && (tab === "hunt" || tab === "market")) renderPanel();
@@ -1527,7 +2203,9 @@ window.App = (() => {
       if (tab === "chat") renderChat();
     });
     Net.on("clan", (m) => applyClan(m.clanId, m.clanName));
-    Net.on("mq", (m) => mq(m.text));
+    Net.on("mq", (m) => {
+      mq(m.text, 12000);
+    });
     Net.on("market", (m) => {
       world.market = m.market || [];
       market = world.market;
@@ -1556,15 +2234,37 @@ window.App = (() => {
     });
     Net.on("boss", (m) => {
       world.bosses = m.bosses || world.bosses;
+      ensureClientBosses();
       syncBossSprite();
+      if (tab === "hunt" && huntCat === "boss") renderPanel();
     });
     Net.on("bossKill", (m) => {
       if (!ch) return;
       ch.gold = (ch.gold || 0) + (m.gold || 0);
       E.gainExp(ch, m.exp || 0);
-      toast("世界王擊殺獎勵 💰" + (m.gold || 0));
+      toast(`世界王擊殺獎勵 💰${(m.gold || 0).toLocaleString()}　EXP +${(m.exp || 0).toLocaleString()}`);
       if (ch.mapId === m.mapId) { hideMobs(); stopHunt(); }
       refreshTop(); save();
+    });
+  }
+
+  let bossUiTick = 0;
+  function tickBossUi(dt) {
+    if (!ch || tab !== "hunt" || huntCat !== "boss") return;
+    bossUiTick += dt;
+    if (bossUiTick < 1) return;
+    bossUiTick = 0;
+    const box = $("panel-scroll");
+    if (!box) return;
+    box.querySelectorAll("[data-boss-row]").forEach((row) => {
+      const id = row.dataset.bossRow;
+      const sub = row.querySelector(".sub2");
+      if (!sub || !id) return;
+      const map = DATA.maps.find((m) => m.id === id);
+      if (!map) return;
+      const alive = world.bosses && world.bosses[id] && world.bosses[id].alive !== false;
+      const st = bossStatusText(id);
+      sub.innerHTML = `建議 Lv.${map.rec}　<span class="${alive ? "ok" : "warn"}">${st}</span>　重生 ${fmtWait(bossRespawnSec(id))}`;
     });
   }
 
@@ -1617,6 +2317,7 @@ window.App = (() => {
     bind();
     bindNet();
     Net.connect();
+    startMarquee();
     requestAnimationFrame(tick);
     setInterval(save, 8000);
   }

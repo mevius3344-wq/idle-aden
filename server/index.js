@@ -26,27 +26,112 @@ const MAX_ONLINE_PER_IP = Math.max(1, Number(process.env.MAX_ONLINE_PER_IP || 1)
 const MAX_CONN_PER_IP = Math.max(MAX_ONLINE_PER_IP + 2, Number(process.env.MAX_CONN_PER_IP || 6));
 
 function emptyWorld() {
+  const bosses = {};
+  for (const id of BOSS_IDS) bosses[id] = bossTpl(id);
   return {
     accounts: {},
     market: [],
     parties: [],
     clans: [],
-    bosses: {
-      wb1: bossTpl(25000),
-      wb2: bossTpl(80000),
-      wb3: bossTpl(200000),
-    },
+    bosses,
     tax: 0,
+    taxRate: 0.05,
+    taxVer: 2,
   };
 }
-function bossTpl(max) {
-  return { max, hp: max, alive: true, next: 0, ranks: {} };
+const BOSS_CFG = {
+  wb1: { name: "巨大蟻后", max: 25000, respawn: 1800, reward: { gold: [800, 1200], exp: 1200 } },
+  wb2: { name: "死亡騎士", max: 80000, respawn: 3600, reward: { gold: [1200, 2000], exp: 2200 } },
+  wb3: { name: "思克巴女皇", max: 160000, respawn: 5400, reward: { gold: [1800, 2800], exp: 3200 } },
+  wb4: { name: "巴風特", max: 120000, respawn: 3600, reward: { gold: [2000, 3200], exp: 3600 } },
+  wb5: { name: "黑長老", max: 150000, respawn: 5400, reward: { gold: [2400, 3800], exp: 4200 } },
+  wb6: { name: "林德拜爾", max: 180000, respawn: 7200, reward: { gold: [3000, 4800], exp: 5000 } },
+  wb7: { name: "法利昂", max: 220000, respawn: 7200, reward: { gold: [3200, 5200], exp: 5400 } },
+  wb8: { name: "安塔瑞斯", max: 280000, respawn: 10800, reward: { gold: [4000, 6500], exp: 6500 } },
+  wb9: { name: "巴拉卡斯", max: 350000, respawn: 14400, reward: { gold: [5000, 8000], exp: 8000 } },
+};
+const BOSS_IDS = Object.keys(BOSS_CFG);
+
+function bossTpl(id) {
+  const cfg = BOSS_CFG[id] || { max: 25000, respawn: 1800 };
+  return { max: cfg.max, hp: cfg.max, alive: true, next: 0, ranks: {} };
+}
+
+function bossReward(mapId) {
+  const r = (BOSS_CFG[mapId] && BOSS_CFG[mapId].reward) || { gold: [800, 1200], exp: 1200 };
+  const g = r.gold || [800, 1200];
+  const gold = g[0] + Math.floor(Math.random() * Math.max(1, g[1] - g[0] + 1));
+  return { gold, exp: r.exp || 1200 };
+}
+
+function bossRespawnSec(mapId) {
+  return (BOSS_CFG[mapId] && BOSS_CFG[mapId].respawn) || 1800;
+}
+
+function fmtWait(sec) {
+  sec = Math.max(0, Math.ceil(Number(sec) || 0));
+  if (sec >= 3600) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return m ? `${h} 小時 ${m} 分` : `${h} 小時`;
+  }
+  if (sec >= 60) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s ? `${m} 分 ${s} 秒` : `${m} 分`;
+  }
+  return `${sec} 秒`;
 }
 
 function ensureBosses() {
-  for (const id of ["wb1", "wb2", "wb3"]) {
-    if (!world.bosses[id]) world.bosses[id] = bossTpl(id === "wb3" ? 200000 : id === "wb2" ? 80000 : 25000);
+  if (!world.bosses) world.bosses = {};
+  let dirty = false;
+  const needVer = 2;
+  if (world.bossVer !== needVer) {
+    for (const id of BOSS_IDS) {
+      if (!world.bosses[id]) {
+        world.bosses[id] = bossTpl(id);
+        dirty = true;
+      }
+    }
+    world.bossVer = needVer;
+    dirty = true;
   }
+  for (const id of BOSS_IDS) {
+    const cfg = BOSS_CFG[id];
+    if (!cfg) continue;
+    if (!world.bosses[id]) {
+      world.bosses[id] = bossTpl(id);
+      dirty = true;
+    }
+    const b = world.bosses[id];
+    if (cfg.max && b.max !== cfg.max) {
+      b.max = cfg.max;
+      if (b.alive !== false) b.hp = cfg.max;
+      dirty = true;
+    }
+    if (b.alive !== false && (!b.hp || b.hp > b.max)) {
+      b.hp = b.max;
+      dirty = true;
+    }
+  }
+  return dirty;
+}
+function ensureTax() {
+  let dirty = false;
+  if (world.taxVer !== 2) {
+    world.tax = 0;
+    world.taxVer = 2;
+    dirty = true;
+  }
+  const rate = Number(world.taxRate);
+  const nextRate = rate > 0 && rate < 1 ? rate : 0.05;
+  if (world.taxRate !== nextRate) {
+    world.taxRate = nextRate;
+    dirty = true;
+  }
+  world.tax = Math.max(0, Math.floor(Number(world.tax) || 0));
+  return dirty;
 }
 function saveWorld() {
   return store.save(world);
@@ -129,20 +214,18 @@ function nameTaken(name, exceptId) {
 function broadcastWorld() {
   const maps = {};
   const players = [];
-  let online = 0, maxLv = 1, tax = 0;
+  let online = 0, maxLv = 1;
   for (const ses of sessions.values()) {
     const ch = currentChar(ses);
     if (!ch) continue;
     online += 1;
     const lv = Number(ch.level) || 1;
     if (lv > maxLv) maxLv = lv;
-    tax += Number(ch.gold) || 0;
     if (ch.mapId) maps[ch.mapId] = (maps[ch.mapId] || 0) + 1;
     players.push({ name: ch.name, lv, classId: ch.classId, mapId: ch.mapId || "", hunting: !!ch.hunting });
   }
-  world.tax = tax;
   broadcast({
-    t: "world", online, maps, tax, serverLv: maxLv,
+    t: "world", online, maps, tax: world.tax || 0, taxRate: world.taxRate || 0.05, serverLv: maxLv,
     parties: world.parties, clans: world.clans || [], market: world.market, bosses: world.bosses, players,
   });
 }
@@ -193,6 +276,7 @@ function handle(ses, msg) {
     case "bossHit": return bossHit(ses, msg);
     case "announce": return announce(ses, msg);
     case "changepass": return changePass(ses, msg);
+    case "shopTax": return shopTax(ses, msg);
     case "logout":
       ses.charId = null;
       ses.user = null;
@@ -478,16 +562,26 @@ function bossHit(ses, msg) {
   b.ranks[ch.name] = (Number(b.ranks[ch.name]) || 0) + dmg;
   if (b.hp <= 0) {
     b.alive = false;
-    const wait = mapId === "wb3" ? 480 : mapId === "wb2" ? 300 : 180;
+    const wait = bossRespawnSec(mapId);
     b.next = now() + wait * 1000;
-    broadcast({ t: "mq", text: "⚔ 世界王已被擊敗！" });
-    chatAll("sys", "世界王", ch.name + " 參與擊殺了世界王。", "sys");
-    const gold = 800 + Math.floor(Math.random() * 400);
+    const bname = (BOSS_CFG[mapId] && BOSS_CFG[mapId].name) || "世界王";
+    broadcast({ t: "mq", text: `⚔ ${bname} 已被擊敗！${fmtWait(wait)} 後重生。` });
+    chatAll("sys", "世界王", ch.name + " 參與擊殺了「" + bname + "」。", "sys");
+    const rw = bossReward(mapId);
     for (const s of sessions.values()) {
-      if (s.charId) send(s, { t: "bossKill", mapId, gold, exp: 1200 });
+      if (s.charId) send(s, { t: "bossKill", mapId, gold: rw.gold, exp: rw.exp });
     }
   }
   broadcast({ t: "boss", bosses: world.bosses });
+}
+
+function shopTax(ses, msg) {
+  if (!currentChar(ses)) return;
+  const fee = Math.floor(Number(msg.fee) || 0);
+  if (fee < 1 || fee > 100000) return;
+  world.tax = Math.max(0, Math.floor(Number(world.tax) || 0)) + fee;
+  saveWorld();
+  broadcastWorld();
 }
 
 function announce(ses, msg) {
@@ -509,14 +603,17 @@ function changePass(ses, msg) {
 }
 
 function tick() {
-  for (const id of ["wb1", "wb2", "wb3"]) {
+  for (const id of BOSS_IDS) {
     const b = world.bosses[id];
     if (!b) continue;
     if (!b.alive && now() >= Number(b.next || 0)) {
       b.alive = true;
       b.hp = b.max;
       b.ranks = {};
-      broadcast({ t: "mq", text: "世界王已重生！" });
+      b.next = 0;
+      const bname = (BOSS_CFG[id] && BOSS_CFG[id].name) || "世界王";
+      broadcast({ t: "mq", text: `⚔ ${bname} 已重生！` });
+      broadcast({ t: "boss", bosses: world.bosses });
     }
   }
   broadcastWorld();
@@ -551,7 +648,8 @@ try {
 async function start() {
   const info = await store.init();
   await store.load(world);
-  ensureBosses();
+  if (ensureBosses()) await saveWorld();
+  if (ensureTax()) await saveWorld();
   if (!Array.isArray(world.clans)) world.clans = [];
   if (!Array.isArray(world.parties)) world.parties = [];
   if (info.mode === "postgres") console.log("存檔：PostgreSQL");

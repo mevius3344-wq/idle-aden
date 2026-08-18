@@ -7,20 +7,20 @@
   <meta name="theme-color" content="#15100b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="放置亞丁">
-  <link rel="stylesheet" href="css/style.css?v=0a53641">
+  <link rel="stylesheet" href="css/style.css?v=enchant1">
 </head>
 <body>
   <div id="rotate-warn">請將手機直立使用<br><span style="font-size:14px;font-weight:500">本遊戲僅支援直式畫面</span></div>
   <div id="app">
     <div id="topbar">
-      <div class="avatar keep-color" id="avatar"><img id="avatar-face" alt=""></div>
+      <div class="avatar keep-color" id="avatar"><div class="hero mini" id="avatar-face"></div></div>
       <div class="who">
         <div class="nm"><span id="pname">—</span><span class="cfg" id="btn-cfg">配置</span></div>
         <div class="meta" id="pmeta">選擇角色</div>
       </div>
       <div>
         <div class="money">💰 <span id="pgold">0</span></div>
-        <div class="def">防禦AC <span id="pac">0</span>　魔防MR <span id="pmr">0</span></div>
+        <div class="def">AC <span id="pac">0</span>　MR <span id="pmr">0</span></div>
       </div>
     </div>
     <div id="xpbar"><div class="fill" id="xpfill"></div><div class="lbl" id="xplbl">0%</div></div>
@@ -37,7 +37,7 @@
         <div class="t" id="ztitle">— 大 廳 —</div>
         <div class="s" id="zsub"></div>
       </div>
-      <div id="marquee"><span id="mqtext">即時連線版 · 資料存於本機</span></div>
+      <div id="marquee"><span id="mqtext">放置亞丁 · 亞丁 2.70</span></div>
       <div class="btns-float">
         <button id="btn-lobby" class="hidden">返回大廳</button>
         <button id="btn-attack">⚔ 攻 擊</button>
@@ -47,7 +47,7 @@
         <div class="sprite player" id="sp-p">
           <div class="slash-arc"></div>
           <div class="slash-arc alt"></div>
-          <img class="art" id="sp-p-art" alt="">
+          <div class="hero art" id="sp-p-art"></div>
           <div class="ground-shadow"></div>
         </div>
         <div class="mob-pack" id="mob-pack"></div>
@@ -57,6 +57,7 @@
     <div id="status-wrap">狀態：<span id="stxt">無</span>
       <div id="buffs"></div>
     </div>
+    <div id="skillbar" class="skillbar" aria-label="技能欄"></div>
 
     <div id="panel">
       <div class="subtabs" id="subtabs"></div>
@@ -81,7 +82,7 @@
       <div class="logo">放置亞丁</div>
       <div class="sub" id="net-status">連線中…</div>
       <div class="sub">即時掛機 · 衝裝掉寶</div>
-      <div class="small" style="text-align:center;opacity:.75;margin:-4px 0 8px">版本 0a53641</div>
+      <div class="small" style="text-align:center;opacity:.75;margin:-4px 0 8px">版本 亞丁 2.70</div>
       <input class="field" id="acc" placeholder="帳號" autocomplete="username">
       <input class="field" id="pwd" type="password" placeholder="密碼" autocomplete="current-password">
       <label class="check"><input type="checkbox" id="remember" checked> 記錄帳號密碼</label>
@@ -97,9 +98,11 @@
     <div class="toast hidden" id="toast"></div>
   </div>
 
-  <script src="js/data.js?v=0a53641"></script>
-  <script src="js/engine.js?v=0a53641"></script>
-  <script src="js/net.js?v=0a53641"></script>
-  <script src="js/app.js?v=0a53641"></script>
+  <script src="js/data.js?v=aden270dungeon3"></script>
+  <script src="js/sprites.js?v=elfmagic2"></script>
+  <script src="js/icons.js?v=poly1"></script>
+  <script src="js/engine.js?v=aden270loot1"></script>
+  <script src="js/net.js?v=icons1"></script>
+  <script src="js/app.js?v=aden270loot1"></script>
 </body>
 </html>
