@@ -8,17 +8,20 @@ window.ICONS = (() => {
     legend: { stroke: "#c9a030", glow: "0 0 7px rgba(255,210,74,.5)" },
   };
 
-  const s = (inner, rarity) => {
+  let _seq = 0;
+  const s = (inner, rarity, id) => {
     const r = RARITY[rarity] || RARITY.common;
+    const gid = `ibg-${id ?? _seq++}`;
     return `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="filter:drop-shadow(${r.glow === "none" ? "0 0 0 transparent" : r.glow.replace("0 0", "0 1px")})">
-      <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a2018"/><stop offset="100%" stop-color="#120e08"/></linearGradient></defs>
-      <rect x="1" y="1" width="30" height="30" rx="4" fill="url(#bg)" stroke="${r.stroke}" stroke-width="1.5"/>
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a2018"/><stop offset="100%" stop-color="#120e08"/></linearGradient></defs>
+      <rect x="1" y="1" width="30" height="30" rx="4" fill="url(#${gid})" stroke="${r.stroke}" stroke-width="1.5"/>
       <rect x="3" y="3" width="26" height="26" rx="3" fill="none" stroke="${r.stroke}" stroke-width=".5" opacity=".35"/>
       ${inner}
     </svg>`;
   };
 
-  const raw = {    club: s(`<rect x="14" y="4" width="4" height="22" rx="1.5" fill="#8a5a28"/><rect x="13" y="24" width="6" height="5" rx="1" fill="#5a3818"/>`),
+  const rawInner = {
+    club: s(`<rect x="14" y="4" width="4" height="22" rx="1.5" fill="#8a5a28"/><rect x="13" y="24" width="6" height="5" rx="1" fill="#5a3818"/>`),
     ssword: s(`<path d="M16 3 L18.5 18 H13.5 Z" fill="#c8d0dc"/><rect x="12" y="18" width="8" height="2.5" fill="#c19a4a"/><rect x="14.5" y="20" width="3" height="8" fill="#6a4a20"/>`),
     bsword: s(`<path d="M16 2 L20 19 H12 Z" fill="#b8c0cc"/><rect x="10" y="19" width="12" height="2.5" fill="#a07830"/><rect x="14" y="21" width="4" height="8" fill="#4a3018"/>`),
     scimitar: s(`<path d="M8 6 Q22 4 24 16 Q18 12 12 20 Z" fill="#d0d6e0"/><rect x="10" y="18" width="7" height="2" transform="rotate(-30 13 19)" fill="#c19a4a"/><rect x="8" y="20" width="3" height="8" transform="rotate(-30 9 24)" fill="#5a3818"/>`),
@@ -102,8 +105,21 @@ window.ICONS = (() => {
     axe: s(`<rect x="14.5" y="6" width="3" height="22" fill="#6a4018"/><path d="M17 8 L28 12 L17 18 Z" fill="#a8b0bc"/><path d="M15 8 L4 14 L15 16 Z" fill="#8a949e"/>`),
     spear: s(`<rect x="15" y="8" width="2.2" height="21" fill="#8a5a28"/><path d="M16 2 L19 10 H13 Z" fill="#c8d0dc"/>`),
     ohelm: s(`<path d="M7 18 Q7 8 16 7 Q25 8 25 18 Z" fill="#8a6a40"/><rect x="6" y="17" width="20" height="4" rx="1" fill="#5a3a18"/><rect x="12" y="12" width="8" height="3" fill="#c19a4a"/>`),
-    oring: s(`<path d="M9 8 L16 5 L23 8 L25 27 H7 Z" fill="#8a6a40"/><circle cx="12" cy="14" r="1.4" fill="#c19a4a"/><circle cx="16" cy="16" r="1.4" fill="#c19a4a"/><circle cx="20" cy="14" r="1.4" fill="#c19a4a"/>`, "common"),
+    oring: s(`<path d="M9 8 L16 5 L23 8 L25 27 H7 Z" fill="#8a6a40"/><circle cx="12" cy="14" r="1.4" fill="#c19a4a"/><circle cx="16" cy="16" r="1.4" fill="#c19a4a"/><circle cx="20" cy="14" r="1.4" fill="#c19a4a"/>`),
+
+    odagger: s(`<path d="M16 3 L18 16 H14 Z" fill="#c0b090"/><rect x="13" y="16" width="6" height="2" fill="#6a4018"/><rect x="14.5" y="18" width="3" height="9" fill="#4a2810"/>`),
+    obow: s(`<path d="M9 6 Q7 16 9 26 Q16 16 9 6" fill="none" stroke="#8a6a40" stroke-width="2.2"/><line x1="10" y1="8" x2="10" y2="24" stroke="#d8c8a0" stroke-width="1"/><rect x="8" y="14" width="4" height="2" fill="#c19a4a"/>`),
+    ochain: s(`<path d="M9 8 L16 5 L23 8 L25 27 H7 Z" fill="#8a6a40"/><path d="M11 12 H21 M11 17 H21 M11 22 H21" stroke="#c19a4a" stroke-width="1.2"/>`),
+    bronze: s(`<path d="M8 8 L16 4 L24 8 L26 27 H6 Z" fill="#8a7a50"/><path d="M16 6 V25" stroke="#6a5a38" stroke-width="2"/><rect x="12" y="12" width="8" height="6" fill="#a09060"/>`),
+    ocloak: s(`<path d="M8 8 Q16 4 24 8 L26 26 Q16 22 6 26 Z" fill="#8a6a40"/><path d="M16 8 V24" stroke="#6a4a28" stroke-width="1.2"/>`),
+    rough_mith: s(`<path d="M6 14 L10 10 H22 L26 14 V22 H6 Z" fill="#98b8c8"/><path d="M8 14 H24 V20 H8 Z" fill="#6a8898" opacity=".7"/>`),
+    gem_r: s(`<polygon points="16,4 24,12 16,28 8,12" fill="#e05040"/><polygon points="16,4 20,12 16,18 12,12" fill="#ff9080"/>`),
+    gem_g: s(`<polygon points="16,4 24,12 16,28 8,12" fill="#48a858"/><polygon points="16,4 20,12 16,18 12,12" fill="#9be37d"/>`),
+    haste_pot: s(`<path d="M12 8 H20 V12 Q24 14 24 22 Q24 28 16 28 Q8 28 8 22 Q8 14 12 12 Z" fill="#e08030"/><rect x="13" y="4" width="6" height="5" rx="1" fill="#a05018"/><path d="M14 16 L18 22 L14 24" stroke="#ffe040" stroke-width="1.5" fill="none"/>`),
+    candle: s(`<rect x="14" y="10" width="4" height="16" rx="1" fill="#e8dcc8"/><ellipse cx="16" cy="8" rx="3" ry="4" fill="#ffe27a" opacity=".85"/><rect x="15" y="4" width="2" height="4" fill="#404040"/>`),
   };
+
+  const raw = rawInner;
 
   const map = {};
   for (const [id, svg] of Object.entries(raw)) map[id] = svg;
@@ -128,7 +144,7 @@ window.ICONS = (() => {
 
   function of(id, def) {
     const rarity = (def && def.rarity) || "common";
-    if (inners[id]) return s(inners[id], rarity);
+    if (inners[id]) return s(inners[id], rarity, id);
     return fallback(def);
   }
 

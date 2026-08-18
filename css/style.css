@@ -272,7 +272,31 @@ button { font-family: inherit; }
   filter: drop-shadow(0 8px 6px rgba(0,0,0,.55));
   pointer-events: none;
 }
-.mob-svg svg { width: 100%; height: auto; display: block; max-height: 100px; }
+.mob-svg svg { width: 100%; height: auto; display: block; max-height: 100px; image-rendering: pixelated; image-rendering: crisp-edges; }
+.hero-pixel {
+  width: 100%; height: 100%; display: flex; align-items: flex-end; justify-content: center;
+}
+.hero-pixel svg {
+  width: auto; height: 88px; max-width: 100%; display: block;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.hero.mini .hero-pixel svg { height: 44px; }
+.hero.pixel { mix-blend-mode: normal; }
+.game-asset {
+  display: block; width: 100%; height: auto; max-height: 100px;
+  object-fit: contain; object-position: bottom center;
+  filter: drop-shadow(0 8px 6px rgba(0,0,0,.55));
+  pointer-events: none; user-select: none;
+}
+.asset-box.hero-asset .game-asset { max-height: 96px; }
+.hero.mini .asset-box.hero-asset .game-asset { max-height: 48px; }
+.asset-box.item-asset .game-asset {
+  width: 32px; height: 32px; max-height: 32px; border-radius: 4px;
+  filter: none;
+}
+.asset-box.item-asset, .asset-box.mob-asset, .asset-box.hero-asset {
+  display: block; width: 100%;
+}
 .mob-pack .sprite.enemy.boss .mob-svg { max-height: 112px; }
 .mob-pack .sprite.enemy.boss .mob-svg svg { max-height: 112px; }
 .sprite .hero.art {

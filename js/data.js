@@ -579,6 +579,24 @@ window.DATA = (() => {
       hpMul: 1.25, ac: -3, mr: 12, dmg: [6, 13], haste: 0.94, magic: true,
       desc: "平衡型，可施放魔法，抗魔提升。",
     },
+    poly_goblin: {
+      id: "poly_goblin", name: "哥布林", mob: "goblin", tier: 1, minLv: 8,
+      classes: ["knight", "elf"], scroll: "scroll_poly", dur: 150,
+      hpMul: 1.18, ac: -2, dmg: [4, 9], haste: 0.93, magic: false,
+      desc: "初級近戰，攻速略快。",
+    },
+    poly_floating: {
+      id: "poly_floating", name: "漂浮之眼", mob: "floating", tier: 1, minLv: 20,
+      classes: ["mage"], scroll: "scroll_poly", dur: 200,
+      hpMul: 1.15, ac: -1, mr: 22, dmg: [5, 11], haste: 0.96, magic: true,
+      desc: "法師專用，高抗魔、可施法。",
+    },
+    poly_ant: {
+      id: "poly_ant", name: "兵蟻", mob: "ant", tier: 1, minLv: 22,
+      classes: ["knight", "elf"], scroll: "scroll_poly", dur: 170,
+      hpMul: 1.32, ac: -4, dmg: [7, 14], haste: 0.91, magic: false,
+      desc: "初級坦克型，生命偏高。",
+    },
     poly_lycan: {
       id: "poly_lycan", name: "萊肯", mob: "wolf", tier: 2, minLv: 22,
       classes: ["knight", "elf"], scroll: "scroll_poly2", dur: 220,
@@ -603,6 +621,36 @@ window.DATA = (() => {
       hpMul: 1.5, ac: -8, dmg: [15, 26], haste: 0.84, magic: false,
       desc: "高速近戰，火系魔物外型。",
     },
+    poly_hobgob: {
+      id: "poly_hobgob", name: "哈柏哥布林", mob: "hobgob", tier: 2, minLv: 26,
+      classes: ["knight", "elf"], scroll: "scroll_poly2", dur: 230,
+      hpMul: 1.42, ac: -5, dmg: [11, 20], haste: 0.89, magic: false,
+      desc: "中級近戰，攻防均衡。",
+    },
+    poly_bear: {
+      id: "poly_bear", name: "熊", mob: "bear", tier: 2, minLv: 30,
+      classes: ["knight"], scroll: "scroll_poly2", dur: 250,
+      hpMul: 1.68, ac: -6, dmg: [14, 25], haste: 0.95, magic: false,
+      desc: "中級高生命，近戰重擊。",
+    },
+    poly_golem: {
+      id: "poly_golem", name: "石頭高崙", mob: "golem", tier: 2, minLv: 34,
+      classes: ["knight", "mage"], scroll: "scroll_poly2", dur: 270,
+      hpMul: 1.75, ac: -8, mr: 14, dmg: [12, 22], haste: 1.05, magic: true,
+      desc: "中級坦克，防禦極高但攻速慢。",
+    },
+    poly_succubus: {
+      id: "poly_succubus", name: "思克巴", mob: "succubus", tier: 2, minLv: 36,
+      classes: ["mage"], scroll: "scroll_poly2", dur: 260,
+      hpMul: 1.38, ac: -4, mr: 20, dmg: [10, 18], haste: 0.9, magic: true,
+      desc: "法師中級變身，抗魔與魔法兼備。",
+    },
+    poly_mushroom: {
+      id: "poly_mushroom", name: "妖魔法師", mob: "mushroom", tier: 2, minLv: 28,
+      classes: ["mage"], scroll: "scroll_poly2", dur: 240,
+      hpMul: 1.3, ac: -3, mr: 18, dmg: [8, 15], haste: 0.92, magic: true,
+      desc: "法師專用，魔法型中級變身。",
+    },
     poly_gargoyle: {
       id: "poly_gargoyle", name: "石像鬼", mob: "gargoyle", tier: 3, minLv: 38,
       classes: ["knight", "mage"], scroll: "scroll_poly3", dur: 280,
@@ -620,6 +668,24 @@ window.DATA = (() => {
       classes: ["knight"], scroll: "scroll_poly3", dur: 360,
       hpMul: 1.85, ac: -12, mr: 8, dmg: [22, 38], haste: 0.9, magic: false,
       desc: "騎士終極變身，極高攻防。",
+    },
+    poly_demon: {
+      id: "poly_demon", name: "惡魔", mob: "demon", tier: 3, minLv: 42,
+      classes: ["mage"], scroll: "scroll_poly3", dur: 320,
+      hpMul: 1.6, ac: -8, mr: 24, dmg: [16, 28], haste: 0.88, magic: true,
+      desc: "法師高級變身，高抗魔與魔法傷害。",
+    },
+    poly_lich: {
+      id: "poly_lich", name: "巫妖", mob: "lich", tier: 3, minLv: 44,
+      classes: ["mage"], scroll: "scroll_poly3", dur: 340,
+      hpMul: 1.55, ac: -6, mr: 28, dmg: [14, 26], haste: 0.94, magic: true,
+      desc: "法師終極魔法變身，抗魔極高。",
+    },
+    poly_ancient: {
+      id: "poly_ancient", name: "古代飛龍", mob: "ancient", tier: 3, minLv: 48,
+      classes: ["knight", "elf"], scroll: "scroll_poly3", dur: 380,
+      hpMul: 1.9, ac: -11, mr: 12, dmg: [20, 36], haste: 0.86, magic: false,
+      desc: "高級物理變身，極高生命與傷害。",
     },
   };
 

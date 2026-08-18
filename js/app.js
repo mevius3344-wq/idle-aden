@@ -313,21 +313,41 @@ window.App = (() => {
     if (!el) return;
     const tr = c?.transform && DATA.transforms?.[c.transform.id];
     if (tr) {
-      el.className = `hero art transformed ${extra}`.trim();
+      el.className = `hero art pixel transformed ${extra}`.trim();
       el.innerHTML = `<div class="mob-svg hero-morph">${mobArt(tr.mob)}</div>`;
+      if (window.ASSETS) ASSETS.hydrate(el);
       return;
     }
-    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     const cls = c?.classId || "knight";
     const g = c?.gender === "f" ? "f" : "m";
     const mini = el.classList.contains("mini") || extra.includes("mini") ? " mini" : "";
+    if (window.ASSETS) {
+      el.className = `hero art pixel wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = ASSETS.hero(cls, g);
+      ASSETS.hydrate(el);
+      return;
+    }
+    if (window.PIXEL) {
+      el.className = `hero art pixel wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
+      el.innerHTML = `<div class="hero-pixel">${PIXEL.hero(cls, g)}</div>`;
+      return;
+    }
+    if (!el.querySelector(".h-body")) el.innerHTML = heroInner();
     el.className = `hero art wep-${wepKind(c)} cls-${cls} g-${g}${mini} ${extra}`.trim();
   }
   function heroThumb(c) {
+    if (window.ASSETS) {
+      return `<div class="hero art pixel mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${ASSETS.hero(c.classId, c.gender)}</div>`;
+    }
+    if (window.PIXEL) {
+      return `<div class="hero art pixel mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}"><div class="hero-pixel">${PIXEL.hero(c.classId, c.gender)}</div></div>`;
+    }
     return `<div class="hero art mini wep-${wepKind(c)} cls-${c.classId} g-${c.gender === "f" ? "f" : "m"}">${heroInner()}</div>`;
   }
   function mobArt(id) {
-    return window.SPRITES ? SPRITES.mob(id) : "";
+    if (window.ASSETS) return ASSETS.mob(id);
+    if (window.PIXEL) return `<div class="mob-svg">${PIXEL.mob(id)}</div>`;
+    return window.SPRITES ? `<div class="mob-svg">${SPRITES.mob(id)}</div>` : "";
   }
   function skillIcon(sid) {
     return window.SPRITES ? `<span class="sk-svg">${SPRITES.skill(sid)}</span>` : "✦";
@@ -336,6 +356,7 @@ window.App = (() => {
     const d = E.itemDef(it) || DATA.items[(it && it.id) || it] || {};
     const id = d.id || (it && it.id) || it;
     const r = d.rarity || "common";
+    if (window.ASSETS) return ASSETS.item(id, d);
     return `<span class="ico-svg r-${r}">${(window.ICONS && ICONS.of(id, d)) || ""}</span>`;
   }
 
@@ -523,6 +544,11 @@ window.App = (() => {
     const stxt = ch.hunting ? "狩獵中" : ch.transform ? "變身" : combat.buffs.length ? "增益" : "無";
     $("stxt").textContent = stxt;
     updateSkillBar();
+    if (window.ASSETS) {
+      ASSETS.hydrate($("buffs"));
+      ASSETS.hydrate($("topbar"));
+      ASSETS.hydrate($("battle"));
+    }
   }
 
   function setMap(mapId, keepHunt) {
@@ -792,11 +818,12 @@ window.App = (() => {
       const focus = combat.focus === m.uid;
       return `<div class="sprite enemy ${m.boss ? "boss" : ""} ${focus ? "focus" : ""}" data-uid="${m.uid}">
         <div class="slash-arc mob"></div>
-        <div class="mob-svg">${mobArt(m.id)}</div>
+        ${mobArt(m.id)}
         <div class="ground-shadow"></div>
         <div class="mhp"><i style="width:${hp}%"></i></div>
       </div>`;
     }).join("");
+    if (window.ASSETS) ASSETS.hydrate(pack);
     pack.querySelectorAll("[data-uid]").forEach((el) => {
       playAnim(el, "spawn", 400);
       el.onclick = () => {

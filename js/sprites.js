@@ -128,6 +128,7 @@ window.SPRITES = (() => {
   };
 
   function mob(id) {
+    if (window.PIXEL) return PIXEL.mob(id);
     const key = mobAlias[id] || id;
     return mobs[key] || mobs.orc;
   }
