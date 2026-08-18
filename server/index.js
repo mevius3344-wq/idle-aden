@@ -530,7 +530,12 @@ function serveFile(req, res) {
   const file = path.join(ROOT, urlPath.replace(/^\//, "").replace(/\//g, path.sep));
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("not found"); return; }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    });
     res.end(data);
   });
 }
