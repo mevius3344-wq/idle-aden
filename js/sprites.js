@@ -127,6 +127,139 @@ window.SPRITES = (() => {
     meteor: sk(`<rect x="2" y="2" width="28" height="28" rx="4" fill="#181008" stroke="#ffd040" stroke-width="1.5"/><circle cx="12" cy="10" r="4" fill="#ff8040"/><circle cx="24" cy="14" r="3" fill="#ff6040" opacity=".8"/><path d="M10 8 L14 16" stroke="#ffe040" stroke-width="1.5" opacity=".6"/><path d="M22 10 L18 18" stroke="#ffe040" stroke-width="1.5" opacity=".6"/>`),
   };
 
+  const h = (inner) => s(inner, "0 0 64 80");
+  const heroSh = `<ellipse cx="32" cy="76" rx="17" ry="3.5" fill="rgba(0,0,0,.38)"/>`;
+
+  const wepSword = `<g transform="translate(44,28) rotate(18)"><rect x="-2" y="0" width="4" height="26" rx="1" fill="#8a9098"/><rect x="-5" y="22" width="10" height="3" rx="1" fill="#c19a4a"/><rect x="-7" y="24" width="14" height="2" rx="1" fill="#806830"/><path d="M0 0 L0 -18" stroke="#e8ecf4" stroke-width="3" stroke-linecap="round"/><path d="M0 -18 L0 -24" stroke="#ffe27a" stroke-width="1.5" stroke-linecap="round" opacity=".85"/></g>`;
+  const wepBow = `<g transform="translate(46,30)"><path d="M0 0 Q-14 10 -14 24 Q-14 38 0 48" fill="none" stroke="#a87830" stroke-width="2.5"/><path d="M0 2 L0 46" stroke="#c8a860" stroke-width="1"/><line x1="0" y1="2" x2="-12" y2="24" stroke="#e8dcc0" stroke-width=".8"/></g>`;
+  const wepStaff = `<g transform="translate(44,22)"><rect x="-2" y="0" width="4" height="38" rx="2" fill="#6a4020"/><circle cx="0" cy="-2" r="7" fill="#9050e0" opacity=".35"/><circle cx="0" cy="-2" r="5" fill="#c090ff"/><circle cx="-2" cy="-4" r="2" fill="#fff" opacity=".55"/></g>`;
+
+  const heroes = {
+    knight_m_sword: h(`${heroSh}
+      <defs>
+        <linearGradient id="kA1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e4e8f0"/><stop offset="100%" stop-color="#788090"/></linearGradient>
+        <linearGradient id="kA2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#a0a8b8"/><stop offset="100%" stop-color="#505868"/></linearGradient>
+      </defs>
+      <rect x="24" y="52" width="7" height="18" rx="3" fill="#586068"/><rect x="33" y="52" width="7" height="18" rx="3" fill="#687078"/>
+      <path d="M20 48 L44 48 L42 34 L22 34 Z" fill="url(#kA1)" stroke="#c19a4a" stroke-width=".8"/>
+      <path d="M22 34 L42 34 L40 26 L24 26 Z" fill="url(#kA2)" stroke="#c19a4a" stroke-width=".6"/>
+      <rect x="18" y="28" width="8" height="12" rx="3" fill="#889098" stroke="#c19a4a" stroke-width=".5"/>
+      <rect x="38" y="26" width="8" height="14" rx="3" fill="#889098" stroke="#c19a4a" stroke-width=".5"/>
+      <circle cx="32" cy="20" r="11" fill="#e8c4a0"/>
+      <path d="M21 12 Q32 4 43 12 L41 18 Q32 10 23 18 Z" fill="url(#kA1)" stroke="#c19a4a" stroke-width=".7"/>
+      <rect x="26" y="16" width="12" height="3" rx="1" fill="#283040" opacity=".85"/>
+      <circle cx="28" cy="20" r="1.8" fill="#1a1008"/><circle cx="36" cy="20" r="1.8" fill="#1a1008"/>
+      <path d="M30 24 Q32 26 34 24" stroke="#a07050" fill="none" stroke-width=".8"/>
+      ${wepSword}
+      <path d="M14 30 L8 38 L14 42 Z" fill="#708090" stroke="#c19a4a" stroke-width=".5" opacity=".9"/>`),
+
+    knight_f_sword: h(`${heroSh}
+      <defs><linearGradient id="kf1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8ecf4"/><stop offset="100%" stop-color="#8090a0"/></linearGradient></defs>
+      <rect x="25" y="52" width="6" height="18" rx="3" fill="#687078"/><rect x="33" y="52" width="6" height="18" rx="3" fill="#788088"/>
+      <path d="M22 48 L42 48 L40 32 L24 32 Z" fill="url(#kf1)" stroke="#c19a4a" stroke-width=".8"/>
+      <path d="M24 32 L40 32 L38 26 L26 26 Z" fill="#98a0b0" stroke="#c19a4a" stroke-width=".5"/>
+      <rect x="19" y="28" width="7" height="11" rx="3" fill="#98a0b0"/><rect x="38" y="27" width="7" height="12" rx="3" fill="#98a0b0"/>
+      <circle cx="32" cy="19" r="10" fill="#f0c8a8"/>
+      <path d="M22 10 Q32 2 42 10 L40 16 Q32 8 24 16 Z" fill="url(#kf1)" stroke="#c19a4a" stroke-width=".7"/>
+      <path d="M24 8 Q32 4 40 8 L38 14 Q32 10 26 14 Z" fill="#6a4830"/>
+      <circle cx="28" cy="19" r="1.6" fill="#2a1810"/><circle cx="36" cy="19" r="1.6" fill="#2a1810"/>
+      <path d="M30 23 Q32 25 34 23" stroke="#b08060" fill="none" stroke-width=".7"/>
+      ${wepSword}`),
+
+    elf_m_bow: h(`${heroSh}
+      <defs><linearGradient id="eA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#58b868"/><stop offset="100%" stop-color="#1e5028"/></linearGradient></defs>
+      <rect x="24" y="52" width="7" height="18" rx="3" fill="#284830"/><rect x="33" y="52" width="7" height="18" rx="3" fill="#305838"/>
+      <path d="M21 48 L43 48 L41 30 L23 30 Z" fill="url(#eA)"/>
+      <path d="M20 30 L18 38 L22 40 Z" fill="#387848"/><path d="M44 30 L46 38 L42 40 Z" fill="#387848"/>
+      <ellipse cx="32" cy="18" rx="10" ry="11" fill="#e8c4a0"/>
+      <path d="M20 12 L18 6 L22 12 Z" fill="#e8c4a0"/><path d="M44 12 L46 6 L42 12 Z" fill="#e8c4a0"/>
+      <path d="M22 8 Q32 2 42 8 L40 14 Q32 8 24 14 Z" fill="#e8d878"/>
+      <circle cx="28" cy="18" r="1.8" fill="#1a3820"/><circle cx="36" cy="18" r="1.8" fill="#1a3820"/>
+      <path d="M30 22 Q32 24 34 22" stroke="#a07050" fill="none" stroke-width=".7"/>
+      <path d="M18 28 L14 34 L18 36" fill="none" stroke="#387848" stroke-width="3" stroke-linecap="round"/>
+      ${wepBow}`),
+
+    elf_f_bow: h(`${heroSh}
+      <defs><linearGradient id="efA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#68c878"/><stop offset="100%" stop-color="#286838"/></linearGradient></defs>
+      <rect x="25" y="52" width="6" height="18" rx="3" fill="#305838"/><rect x="33" y="52" width="6" height="18" rx="3" fill="#387040"/>
+      <path d="M22 48 L42 48 L40 30 L24 30 Z" fill="url(#efA)"/>
+      <path d="M21 30 L19 36 L23 38 Z" fill="#409050"/><path d="M43 30 L45 36 L41 38 Z" fill="#409050"/>
+      <ellipse cx="32" cy="17" rx="9" ry="10" fill="#f0c8a8"/>
+      <path d="M20 12 L18 4 L24 12 Z" fill="#f0c8a8"/><path d="M44 12 L46 4 L40 12 Z" fill="#f0c8a8"/>
+      <path d="M22 4 Q32 -2 42 4 L40 18 Q32 12 24 18 Q22 12 22 4 Z" fill="#98e890"/>
+      <circle cx="28" cy="17" r="1.6" fill="#1a3820"/><circle cx="36" cy="17" r="1.6" fill="#1a3820"/>
+      <path d="M30 21 Q32 23 34 21" stroke="#b08060" fill="none" stroke-width=".6"/>
+      ${wepBow}`),
+
+    elf_m_sword: h(`${heroSh}
+      <defs><linearGradient id="esA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#58b868"/><stop offset="100%" stop-color="#1e5028"/></linearGradient></defs>
+      <rect x="24" y="52" width="7" height="18" rx="3" fill="#284830"/><rect x="33" y="52" width="7" height="18" rx="3" fill="#305838"/>
+      <path d="M21 48 L43 48 L41 30 L23 30 Z" fill="url(#esA)"/>
+      <ellipse cx="32" cy="18" rx="10" ry="11" fill="#e8c4a0"/>
+      <path d="M20 12 L18 6 L22 12 Z" fill="#e8c4a0"/><path d="M44 12 L46 6 L42 12 Z" fill="#e8c4a0"/>
+      <path d="M22 8 Q32 2 42 8 L40 14 Q32 8 24 14 Z" fill="#e8d878"/>
+      <circle cx="28" cy="18" r="1.8" fill="#1a3820"/><circle cx="36" cy="18" r="1.8" fill="#1a3820"/>
+      ${wepSword}`),
+
+    elf_f_sword: h(`${heroSh}
+      <defs><linearGradient id="efsA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#68c878"/><stop offset="100%" stop-color="#286838"/></linearGradient></defs>
+      <rect x="25" y="52" width="6" height="18" rx="3" fill="#305838"/><rect x="33" y="52" width="6" height="18" rx="3" fill="#387040"/>
+      <path d="M22 48 L42 48 L40 30 L24 30 Z" fill="url(#efsA)"/>
+      <ellipse cx="32" cy="17" rx="9" ry="10" fill="#f0c8a8"/>
+      <path d="M20 12 L18 4 L24 12 Z" fill="#f0c8a8"/><path d="M44 12 L46 4 L40 12 Z" fill="#f0c8a8"/>
+      <path d="M22 4 Q32 -2 42 4 L40 18 Q32 12 24 18 Q22 12 22 4 Z" fill="#98e890"/>
+      <circle cx="28" cy="17" r="1.6" fill="#1a3820"/><circle cx="36" cy="17" r="1.6" fill="#1a3820"/>
+      ${wepSword}`),
+
+    mage_m_staff: h(`${heroSh}
+      <defs><linearGradient id="mA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9060d8"/><stop offset="100%" stop-color="#301858"/></linearGradient></defs>
+      <rect x="24" y="52" width="7" height="18" rx="3" fill="#281840"/><rect x="33" y="52" width="7" height="18" rx="3" fill="#302050"/>
+      <path d="M19 48 L45 48 Q48 38 44 28 L20 28 Q16 38 19 48 Z" fill="url(#mA)"/>
+      <path d="M17 28 L14 36 L18 38" fill="#503878" opacity=".8"/><path d="M47 28 L50 36 L46 38" fill="#503878" opacity=".8"/>
+      <circle cx="32" cy="18" r="10" fill="#e0b890"/>
+      <path d="M20 10 Q32 0 44 10 L42 20 Q32 12 22 20 Q20 14 20 10 Z" fill="#382060" stroke="#9060c8" stroke-width=".6"/>
+      <circle cx="28" cy="18" r="2" fill="#c0a0ff" opacity=".9"/><circle cx="36" cy="18" r="2" fill="#c0a0ff" opacity=".9"/>
+      <path d="M30 22 Q32 24 34 22" stroke="#806040" fill="none" stroke-width=".7"/>
+      ${wepStaff}`),
+
+    mage_f_staff: h(`${heroSh}
+      <defs><linearGradient id="mfA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a070e8"/><stop offset="100%" stop-color="#402068"/></linearGradient></defs>
+      <rect x="25" y="52" width="6" height="18" rx="3" fill="#302050"/><rect x="33" y="52" width="6" height="18" rx="3" fill="#382858"/>
+      <path d="M20 48 L44 48 Q47 36 43 28 L21 28 Q17 36 20 48 Z" fill="url(#mfA)"/>
+      <ellipse cx="32" cy="17" rx="9" ry="10" fill="#f0c0a0"/>
+      <path d="M22 6 Q32 0 42 6 L40 16 Q32 10 24 16 Q22 10 22 6 Z" fill="#483878"/>
+      <path d="M24 4 Q32 -2 40 4 L38 12 Q32 8 26 12 Q24 8 24 4 Z" fill="#2a1848"/>
+      <circle cx="28" cy="17" r="1.8" fill="#d0b0ff"/><circle cx="36" cy="17" r="1.8" fill="#d0b0ff"/>
+      ${wepStaff}`),
+
+    mage_m_sword: h(`${heroSh}
+      <defs><linearGradient id="msA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9060d8"/><stop offset="100%" stop-color="#301858"/></linearGradient></defs>
+      <rect x="24" y="52" width="7" height="18" rx="3" fill="#281840"/><rect x="33" y="52" width="7" height="18" rx="3" fill="#302050"/>
+      <path d="M19 48 L45 48 Q48 38 44 28 L20 28 Q16 38 19 48 Z" fill="url(#msA)"/>
+      <circle cx="32" cy="18" r="10" fill="#e0b890"/>
+      <path d="M20 10 Q32 0 44 10 L42 20 Q32 12 22 20 Q20 14 20 10 Z" fill="#382060"/>
+      <circle cx="28" cy="18" r="2" fill="#c0a0ff" opacity=".9"/><circle cx="36" cy="18" r="2" fill="#c0a0ff" opacity=".9"/>
+      ${wepSword}`),
+
+    mage_f_sword: h(`${heroSh}
+      <defs><linearGradient id="mfsA" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a070e8"/><stop offset="100%" stop-color="#402068"/></linearGradient></defs>
+      <rect x="25" y="52" width="6" height="18" rx="3" fill="#302050"/><rect x="33" y="52" width="6" height="18" rx="3" fill="#382858"/>
+      <path d="M20 48 L44 48 Q47 36 43 28 L21 28 Q17 36 20 48 Z" fill="url(#mfsA)"/>
+      <ellipse cx="32" cy="17" rx="9" ry="10" fill="#f0c0a0"/>
+      <path d="M24 4 Q32 -2 40 4 L38 12 Q32 8 26 12 Q24 8 24 4 Z" fill="#2a1848"/>
+      <circle cx="28" cy="17" r="1.8" fill="#d0b0ff"/><circle cx="36" cy="17" r="1.8" fill="#d0b0ff"/>
+      ${wepSword}`),
+  };
+
+  const heroDefault = { knight: "sword", elf: "bow", mage: "staff" };
+
+  function hero(cls, gender, wep) {
+    const g = gender === "f" ? "f" : "m";
+    const c = cls || "knight";
+    const w = wep || heroDefault[c] || "sword";
+    return heroes[`${c}_${g}_${w}`] || heroes[`${c}_${g}_${heroDefault[c]}`] || heroes.knight_m_sword;
+  }
+
   function mob(id) {
     const key = mobAlias[id] || id;
     return mobs[key] || mobs.orc;
@@ -137,5 +270,5 @@ window.SPRITES = (() => {
     return skills[key] || sk(`<rect x="2" y="2" width="28" height="28" rx="4" fill="#2a2018" stroke="#c19a4a" stroke-width="1"/><text x="16" y="20" text-anchor="middle" fill="#ffe27a" font-size="14" font-family="serif">✦</text>`);
   }
 
-  return { mob, skill };
+  return { mob, skill, hero };
 })();
