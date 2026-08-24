@@ -1997,36 +1997,44 @@ const ALLY_GUILD_TOWN_SPOTS = {
 };
 function _isClanGuildNpc(npc) {
     if (!npc) return false;
+    if (npc.n === '傭兵公會' || npc.n === '創公會') return true;
     if (npc.type === 'clan' || npc.type === 'ally' || npc.type === 'ally_disabled') return true;
     return !!(npc.id && String(npc.id).indexOf('npc_ally_') === 0);
 }
+function normalizeClanGuildNpc(npc) {
+    if (!_isClanGuildNpc(npc)) return npc;
+    npc.n = '創公會';
+    npc.title = '血盟';
+    npc.type = 'clan';
+    npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。';
+    return npc;
+}
 function ensureTownAllyGuilds() {
     if (!DB || !DB.towns) return;
-    // 先把全圖舊「傭兵公會」改成「創公會」
+    // 先把全圖舊「傭兵公會／協力」改成「創公會〔血盟〕」（含村莊動態補點）
     Object.keys(DB.towns).forEach(townId => {
         let town = DB.towns[townId];
         if (!town || !Array.isArray(town.npcs)) return;
-        town.npcs.forEach(npc => {
-            if (!_isClanGuildNpc(npc)) return;
-            npc.n = '創公會';
-            npc.title = '血盟';
-            npc.type = 'clan';
-            npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。';
-        });
+        town.npcs.forEach(normalizeClanGuildNpc);
     });
     Object.keys(ALLY_GUILD_TOWN_SPOTS).forEach(townId => {
         let town = DB.towns[townId];
-        if (!town || !Array.isArray(town.npcs) || town.npcs.some(_isClanGuildNpc)) return;
-        let id = 'npc_ally_' + townId.replace(/^town_/, '');
-        town.npcs.push({
-            id: id,
-            n: '創公會',
-            title: '血盟',
-            type: 'clan',
-            d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。'
-        });
+        if (!town || !Array.isArray(town.npcs)) return;
+        let existing = town.npcs.find(_isClanGuildNpc);
+        let id = existing ? existing.id : ('npc_ally_' + townId.replace(/^town_/, ''));
+        if (!existing) {
+            town.npcs.push(normalizeClanGuildNpc({
+                id: id,
+                n: '創公會',
+                title: '血盟',
+                type: 'clan',
+                d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。'
+            }));
+        } else {
+            normalizeClanGuildNpc(existing);
+        }
         let overrides = TOWN_NPC_POS_OVERRIDE[townId] || (TOWN_NPC_POS_OVERRIDE[townId] = {});
-        overrides[id] = ALLY_GUILD_TOWN_SPOTS[townId];
+        if (!overrides[id]) overrides[id] = ALLY_GUILD_TOWN_SPOTS[townId];
     });
 }
 ensureTownAllyGuilds();
@@ -2161,6 +2169,7 @@ function renderTownNPCMap(townId) {
     map.innerHTML = '';
     _townNpcSprites = [];
     try { map.style.backgroundImage = _townMapBg(townId); } catch (e) {}
+    try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會」改成創公會
     let td = DB.towns[townId];
     if (!td) return;
     // 與舊卡片清單相同的可見性過濾
