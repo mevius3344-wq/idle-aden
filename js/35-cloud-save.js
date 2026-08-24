@@ -1,10 +1,20 @@
-// 雲端共用存檔：寫入伺服器 data/cloud/，載入優先讀雲端。
-// 帳號預設「天堂」——所有人共用同一份進度（localStorage 作快取）。
+// 雲端共用存檔：寫入伺服器 data/cloud/<帳號>/，載入優先讀雲端。
+// 依目前登入帳號分桶（localStorage 作快取）。
 (function () {
   'use strict';
 
-  var ACCOUNT = '天堂';
   var _ready = null; // null unknown, true/false
+
+  function currentAccount() {
+    try {
+      if (window.__fb5AuthAccount) return String(window.__fb5AuthAccount);
+      if (window.GameAccountAuth && typeof window.GameAccountAuth.currentAccount === 'function') {
+        var a = window.GameAccountAuth.currentAccount();
+        if (a) return String(a);
+      }
+    } catch (e) {}
+    return 'guest';
+  }
 
   function _httpOk() {
     try {
@@ -46,9 +56,8 @@
     var r = _xhrJson('GET', '/api/cloud/status', null, true);
     if (r && r.ok && r.data && r.data.ok) {
       _ready = true;
-      if (r.data.account) ACCOUNT = r.data.account;
       try {
-        console.info('[cloud-save] 已啟用共用雲端存檔', r.data.dir || '');
+        console.info('[cloud-save] 已啟用雲端存檔', r.data.dir || '');
         if (r.data.ephemeralHint) {
           console.warn('[cloud-save] Render 免費碟為暫存：重新部署可能清空，建議設定 CLOUD_SAVE_DIR 持久碟');
         }
@@ -60,7 +69,7 @@
   }
 
   function _base() {
-    return '/api/cloud/' + encodeURIComponent(ACCOUNT);
+    return '/api/cloud/' + encodeURIComponent(currentAccount());
   }
 
   function _parseLzPayload(raw) {

@@ -335,7 +335,7 @@ const ENABLE_CLOUD_SAVE = process.env.CLOUD_SAVE !== "0";
 const CLOUD_ROOT = process.env.CLOUD_SAVE_DIR
   ? path.resolve(process.env.CLOUD_SAVE_DIR)
   : path.join(ROOT, "data", "cloud");
-const CLOUD_ACCOUNT_DEFAULT = "天堂";
+const CLOUD_ACCOUNT_DEFAULT = "guest";
 
 function safeAccount(name) {
   const s = String(name || CLOUD_ACCOUNT_DEFAULT).trim();

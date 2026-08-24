@@ -1,18 +1,24 @@
 "use strict";
 
 /**
- * 登入閘門：帳號／密碼皆為「天堂」。
- * 通過後才顯示主選單「開始遊戲」。
+ * 登入閘門：帳號／密碼預設空白（不再固定為「天堂」）。
+ * 註冊後寫入本機；登入成功才顯示主選單。
  * 登入時佔用 IP 連線名額（同 IP 最多雙開）。
  */
 (function () {
   const ACC_PREFIX = "fb5_account_";
   const SESSION_KEY = "fb5_auth_session";
-  const FIXED_ACCOUNT = "天堂";
-  const FIXED_PASSWORD = "天堂";
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function normalizeCred(s) {
+    var t = String(s == null ? "" : s).replace(/^\s+|\s+$/g, "");
+    try {
+      if (typeof t.normalize === "function") t = t.normalize("NFC");
+    } catch (e) {}
+    return t;
   }
 
   function setStatus(msg, tone) {
@@ -24,27 +30,48 @@
     else if (tone === false || tone === "err") el.classList.add("err");
   }
 
+  function clearCredFields() {
+    const acc = $("auth-account");
+    const pass = $("auth-password");
+    if (acc) acc.value = "";
+    if (pass) pass.value = "";
+  }
+
   function readAccount() {
     const el = $("auth-account");
-    return el ? el.value.trim() : "";
+    return el ? normalizeCred(el.value) : "";
   }
 
   function readPassword() {
     const el = $("auth-password");
-    return el ? el.value : "";
+    return el ? String(el.value == null ? "" : el.value) : "";
   }
 
-  function ensureFixedAccount() {
+  function saveAccount(account, password) {
     try {
       localStorage.setItem(
-        ACC_PREFIX + FIXED_ACCOUNT,
-        JSON.stringify({ password: FIXED_PASSWORD, createdAt: Date.now() })
+        ACC_PREFIX + account,
+        JSON.stringify({ password: String(password), createdAt: Date.now() })
       );
-    } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getStoredPassword(account) {
+    try {
+      const raw = localStorage.getItem(ACC_PREFIX + account);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data && typeof data.password === "string" ? data.password : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function isRegistered(account) {
-    return !!localStorage.getItem(ACC_PREFIX + account);
+    return getStoredPassword(account) !== null;
   }
 
   function currentSession() {
@@ -70,6 +97,9 @@
     });
     const welcome = $("auth-welcome");
     if (welcome) welcome.textContent = "歡迎「" + account + "」進入經典天堂";
+    try {
+      window.__fb5AuthAccount = account;
+    } catch (e) {}
   }
 
   function showLoggedOut() {
@@ -80,65 +110,73 @@
     });
     const welcome = $("auth-welcome");
     if (welcome) welcome.textContent = "";
-    setStatus("請輸入帳號與密碼（皆為「天堂」）。");
+    clearCredFields();
+    setStatus("請輸入帳號與密碼。");
+    try {
+      window.__fb5AuthAccount = "";
+    } catch (e) {}
+  }
+
+  function claimIp() {
+    if (window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function") {
+      return window.IpSessionLimit.claim();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  function syncCloud() {
+    if (window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function") {
+      return window.cloudSyncOnLogin();
+    }
+    return Promise.resolve(false);
+  }
+
+  function enterGame(account) {
+    setSession(account);
+    setStatus("驗證成功，正在進入……", "ok");
+    return syncCloud().finally(function () {
+      showLoggedIn(account);
+    });
   }
 
   function registerAccount() {
     const account = readAccount();
     const password = readPassword();
-    if (!account || !password) {
-      setStatus("請輸入帳號與密碼。", "err");
+    if (!account) {
+      setStatus("請輸入帳號。", "err");
       return;
     }
-    if (account !== FIXED_ACCOUNT || password !== FIXED_PASSWORD) {
-      setStatus("本伺服器僅開放帳號／密碼「天堂」。", "err");
+    if (isRegistered(account)) {
+      setStatus("此帳號已註冊，請直接登入。", "err");
       return;
     }
-    ensureFixedAccount();
-    setStatus("帳號已就緒，請點登入。", "ok");
-  }
-
-  function enterAfterClaim(account) {
-    setSession(account);
-    setStatus("驗證成功，正在同步雲端進度……", "ok");
-    var sync =
-      window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function"
-        ? window.cloudSyncOnLogin
-        : function () {
-            return Promise.resolve(false);
-          };
-    sync().finally(function () {
-      setStatus("驗證成功，正在進入……", "ok");
-      setTimeout(function () {
-        showLoggedIn(account);
-      }, 200);
-    });
+    if (!saveAccount(account, password)) {
+      setStatus("註冊失敗（本機儲存空間不足）。", "err");
+      return;
+    }
+    setStatus("註冊成功，請點登入。", "ok");
   }
 
   function loginAccount() {
     const account = readAccount();
     const password = readPassword();
-    if (!account || !password) {
-      setStatus("請輸入帳號與密碼。", "err");
+    if (!account) {
+      setStatus("請輸入帳號。", "err");
       return;
     }
-    if (account !== FIXED_ACCOUNT || password !== FIXED_PASSWORD) {
-      setStatus("帳號或密碼錯誤。（應為「天堂」）", "err");
+    const stored = getStoredPassword(account);
+    if (stored === null) {
+      setStatus("帳號不存在，請先註冊。", "err");
       return;
     }
-    ensureFixedAccount();
+    if (stored !== password) {
+      setStatus("帳號或密碼錯誤。", "err");
+      return;
+    }
     setStatus("驗證中……", "ok");
-
-    const claimer =
-      window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function"
-        ? window.IpSessionLimit.claim
-        : function () {
-            return Promise.resolve({ ok: true });
-          };
-
-    claimer().then(function (r) {
+    claimIp().then(function (r) {
       if (r && r.ok) {
-        enterAfterClaim(FIXED_ACCOUNT);
+        enterGame(account);
         return;
       }
       const msg =
@@ -158,8 +196,6 @@
       } catch (e) {}
     }
     setSession("");
-    const pass = $("auth-password");
-    if (pass) pass.value = "";
     showLoggedOut();
     setStatus("已登出。", "ok");
   }
@@ -171,12 +207,7 @@
   }
 
   function boot() {
-    ensureFixedAccount();
-
-    const acc = $("auth-account");
-    const pass = $("auth-password");
-    if (acc && !acc.value) acc.value = FIXED_ACCOUNT;
-    if (pass && !pass.value) pass.placeholder = FIXED_PASSWORD;
+    clearCredFields();
 
     const btnReg = $("btn-auth-register");
     const btnLogin = $("btn-auth-login");
@@ -185,6 +216,7 @@
     if (btnLogin) btnLogin.addEventListener("click", loginAccount);
     if (btnLogout) btnLogout.addEventListener("click", logoutAccount);
 
+    const pass = $("auth-password");
     if (pass) {
       pass.addEventListener("keydown", function (e) {
         if (e.key === "Enter") loginAccount();
@@ -192,23 +224,10 @@
     }
 
     const session = currentSession();
-    if (session === FIXED_ACCOUNT && isRegistered(session)) {
-      // 重新整理後仍要重新佔位；失敗則退回登入畫面
-      const claimer =
-        window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function"
-          ? window.IpSessionLimit.claim
-          : function () {
-              return Promise.resolve({ ok: true });
-            };
-      claimer().then(function (r) {
+    if (session && isRegistered(session)) {
+      claimIp().then(function (r) {
         if (r && r.ok) {
-          var sync =
-            window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function"
-              ? window.cloudSyncOnLogin
-              : function () {
-                  return Promise.resolve(false);
-                };
-          sync().finally(function () {
+          syncCloud().finally(function () {
             showLoggedIn(session);
           });
         } else {
