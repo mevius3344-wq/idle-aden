@@ -736,6 +736,24 @@ Object.keys(DB.items).forEach(function(id){ let d = DB.items[id]; if (d && d.eff
 // 🎮 經典模式：tooltip 不顯示已被停用的武器/盾牌特效字樣（共鳴/魔爆/連射/反擊/出血/穿透/切割/居合/魔擊/鈍擊/重擊/格檔）；連擊/月光爆裂/即死等未停用者照常顯示
 const CLASSIC_HIDDEN_EFF_LABELS = ['共鳴','魔爆','連射','反擊','出血','穿透','切割','居合','魔擊','鈍擊','重擊','格檔','雙刃'];   // ⚔️ 雙刃＝雙刀 5% 傷害×2（經典停用）；鋼爪額外重擊以「重擊」開頭已涵蓋
 function filterClassicEffLabels(effArr, d){ return (player && player.classicMode && !(d && d.classicOk)) ? effArr.filter(e => !CLASSIC_HIDDEN_EFF_LABELS.some(h => e.startsWith(h))) : effArr; }   // ⚔️ v3.2.38 classicOk 特例（黑虎的雙尾鞭）：經典模式特效照常顯示
+// ⚔️ 武器戰鬥特效全關（weaponCombatProcsOn=false）時：武器 tooltip 只保留仍生效的被動字樣（貫穿/加速/重擊骰/雙刃/奇古獸攻擊形態等）
+const WEAPON_PROC_OFF_KEEP_PREFIXES = [
+    '貫穿', '自我加速', '裝備加速', '重擊', '雙刃', '奇古獸攻擊',
+    '免疫', '唯一', '可單手', '一般攻擊化為', '技能增幅', '自動施法',
+    '箭矢不會', '寒冰氣息', '施放寒冰', '施放加速',
+    'MP自然恢復', '魔法傷害成長', '沙哈之箭', '無限箭矢',
+    '衝擊之暈', '范德劍術', '不死／狼人'
+];
+function filterDisabledWeaponEffLabels(effArr, d) {
+    if (!d || d.type !== 'wpn') return filterClassicEffLabels(effArr, d);
+    if (typeof weaponCombatProcsOn === 'function' && !weaponCombatProcsOn()) {
+        return (effArr || []).filter(e => {
+            if (e.startsWith('重擊時') || e.startsWith('重擊威力') || e.startsWith('重擊率')) return false;   // 重擊骰／鋼爪+5% 保留；proc 類重擊加成隱藏
+            return WEAPON_PROC_OFF_KEEP_PREFIXES.some(k => e.startsWith(k));
+        });
+    }
+    return filterClassicEffLabels(effArr, d);
+}
 function weaponHasBleed(id){ let d = DB.items[id]; if (d && d.noBleed) return false; let t = getWeaponTags(id); return t.includes('匕首') || (t.includes('矛') && !(d && d.w2h)); }   // 🩸 匕首與「單手矛」帶出血；雙手矛只有穿透不出血（用戶規則：雙手矛=穿透無出血／單手矛=出血無穿透）·noBleed 旗標仍可個別停用
 
 // ⚔️ 武器資料欄位補充說明：集中處理「戰鬥中實際生效、但一般特效列沒有對應項目」的機制。
@@ -924,6 +942,14 @@ function tooltipItemDescription(d, itemId) {
     if (tags.includes('單手鈍器')) legacyTags.push('鉤擊');
     if (tags.includes('雙刀')) legacyTags.push('雙刃');
     if (typeof weaponHasBleed === 'function' && weaponHasBleed(itemId)) legacyTags.push('(?:帶)?出血');
+    // ⚔️ 武器戰鬥特效關閉：背景敘述裡殘留的特效詞一併清掉（結構化「特效：」列另由 filterDisabledWeaponEffLabels 處理）
+    if (d.type === 'wpn' && typeof weaponCombatProcsOn === 'function' && !weaponCombatProcsOn()) {
+        ['共鳴','魔爆','連射(?:\\d+%?)?','反擊','(?:帶)?出血','穿透','切割','居合','魔擊','鈍擊','鉤擊','雙刃','格檔',
+         '月光爆裂','即死','雙擊','弱點曝光','吸取HP','紅惡靈(?:逆襲)?','藍惡靈(?:奪魔)?','猛爆劇毒','龍的一擊',
+         '附毒','灼燒','碎甲','稻草詛咒'].forEach(t => legacyTags.push(t));
+        desc = desc.replace(/(?:攻擊|命中)時[^。；;、]{0,40}(?:施放|觸發|發動|附加)[^。；;]*[。；;]?/g, '');
+        desc = desc.replace(/(?:機率|有機率)[^。；;、]{0,24}(?:施放|觸發|發動)[^。；;]*[。；;]?/g, '');
+    }
     for (const tag of legacyTags) {
         desc = desc.replace(new RegExp(`(^|[、；;。])\\s*${tag}(?:（[^）]*）)?(?=[、；;。]|$)`, 'g'), '$1');
     }
@@ -990,8 +1016,8 @@ function buildItemDescHTML(item) {
             }
         }
 
-        // 瑪那魔杖等「命中恢復MP」武器：依此物品的強化等級(+N)動態顯示恢復量
-        if(d.eff === 'mp_drain' || d.mpOnHit) {
+        // 瑪那魔杖等「命中恢復MP」武器：依此物品的強化等級(+N)動態顯示恢復量（⚔️ 武器戰鬥特效關閉時不顯示）
+        if((d.eff === 'mp_drain' || d.mpOnHit) && (typeof weaponCombatProcsOn !== 'function' || weaponCombatProcsOn())) {
             let en = capEn(item.en, d);
             let mpGain = mpOnHitAmount(d, en);   // 💧 單一真相 mpOnHitAmount（js/03）：固定量(mpOnHitAmt) → 基底(mpOnHitBase)＋突破安定值加成
             let _grow = (d.mpOnHitAmt == null) ? '（+7 起每強化 +1）' : '';   // 🏺 固定恢復量者（邪惡蜥蜴的眼瞳 +6）不隨強化成長→不顯示成長註記
@@ -1151,7 +1177,7 @@ function buildItemDescHTML(item) {
         _eff.push(...weaponPurposeLabels(d));
         if (d.relic) _eff.push(...relicPurposeLabels(d));
         _eff = dedupeGeneratedTooltipEffects([...new Set(_eff)], d, { main:true });
-        _eff = filterClassicEffLabels(_eff, d);   // 🎮 經典模式：移除已停用特效字樣（classicOk 物品不過濾）
+        _eff = filterDisabledWeaponEffLabels(_eff, d);   // ⚔️ 武器特效全關／🎮 經典模式：移除已停用特效字樣
         if (_eff.length) desc += `<br><span class="text-rose-300 font-bold">特效：${_eff.join(' / ')}</span>`;
     }
     // 👆
@@ -1238,7 +1264,8 @@ function buildItemDescHTML(item) {
         desc += `<br><span class="c-attr-${attrCanon(item.attr)}">${_aff.n}（屬性第${_aff.tier}階）：額外傷害+${_aff.dmg}、額外魔法點數+${_aff.mp}，一般攻擊轉為${eleName}屬性（剋${counterName} ×1.4）。</span>`;   // 🔥 v3.0.77 五階制
     }
     let _attrMagic = getAttrMagicProc(item);
-    if (_attrMagic) {
+    // ⚔️ 屬性附加魔法屬武器戰鬥特效；關閉時不顯示敘述
+    if (_attrMagic && (d.type !== 'wpn' || typeof weaponCombatProcsOn !== 'function' || weaponCombatProcsOn())) {
         let _attrMagicName = (DB.skills[_attrMagic.skId] && DB.skills[_attrMagic.skId].n) || _attrMagic.skId;
         let _attrMagicStars = '★'.repeat(_attrMagic.star);
         let _attrMagicRateNote = _attrMagic.star > 1 ? `（基礎 ${_attrMagic.baseRate}% × ${_attrMagic.star}）` : '';

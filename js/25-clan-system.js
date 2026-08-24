@@ -1676,6 +1676,10 @@ function clanCreateFromInput() {
     if (typeof logSys === 'function') logSys(`<span class="text-amber-300 font-bold">你創立了血盟「${clanEsc(name)}」。</span>`);
     if (typeof updateUI === 'function') updateUI();
     renderClanTab();
+    try {
+        let panel = document.getElementById('interaction-content');
+        if (panel && typeof renderClanCreateNPC === 'function') renderClanCreateNPC(panel);
+    } catch (e) {}
 }
 
 function _clanAdjustContribution(points) {
@@ -1937,6 +1941,58 @@ function _npcClanHostilePanelHtml() {
     return `<div class="flex flex-col gap-3">
         ${rows || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前世界上沒有 NPC 血盟。</div>'}
     </div>`;
+}
+
+function renderClanCreateNPC(div) {
+    if (!div) return;
+    if (!player || !player.cls) {
+        div.innerHTML = `<div class="p-4 text-slate-400">請先進入遊戲。</div>`;
+        return;
+    }
+    if (typeof clanSyncCurrentPlayer === 'function') clanSyncCurrentPlayer();
+    let read = _clanReadStateResult();
+    if (!read.ok) {
+        div.innerHTML = `<div class="p-3 text-red-300 font-bold">${clanEsc(read.error)}</div>`;
+        return;
+    }
+    let st = read.state, mode = clanModeKey(player), info = st.modes[mode];
+    let gold = Math.floor(Number(player.gold) || 0);
+    if (!info) {
+        div.innerHTML = `
+            <div class="flex flex-col gap-4 p-2">
+                <div class="border-b border-slate-600 pb-3">
+                    <div class="text-amber-200 font-bold text-lg">創立血盟</div>
+                    <div class="text-sm text-slate-400 mt-1 leading-relaxed">
+                        僅王族可創立血盟，費用 ${CLAN_CREATE_COST.toLocaleString()} 金幣。<br>
+                        創立後，同模式其他角色會自動成為成員。
+                    </div>
+                </div>
+                ${player.cls === 'royal' ? `
+                <div class="flex flex-col gap-2">
+                    <div class="text-sm text-slate-300">目前金幣：<span class="text-amber-200 font-bold">${gold.toLocaleString()}</span></div>
+                    <label class="text-sm text-slate-300" for="clan-name-input">血盟名稱</label>
+                    <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字">
+                    <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanCreateFromInput()">創立血盟（${CLAN_CREATE_COST.toLocaleString()} 金幣）</button>
+                </div>` : `
+                <div class="text-sm text-slate-400 bg-slate-900/60 border border-slate-700 rounded p-3 leading-relaxed">
+                    你目前是「${clanEsc(CLAN_CLASS_NAMES[player.cls] || player.cls)}」，無法創立血盟。<br>
+                    請用王族角色來此創立；創立完成後再回來查看。
+                </div>`}
+            </div>`;
+        return;
+    }
+    let levelInfo = clanLevelInfo(st.xp);
+    let castle = info.castle ? CLAN_CASTLE_NAMES[info.castle] : '尚未佔領';
+    div.innerHTML = `
+        <div class="flex flex-col gap-4 p-2">
+            <div class="border-b border-slate-600 pb-3">
+                <div class="text-amber-200 font-bold text-xl">${clanEsc(info.name)}</div>
+                <div class="text-sm text-slate-400 mt-1">盟主：${clanEsc(clanLeaderDisplayName(player))}　城堡：${clanEsc(castle)}</div>
+                <div class="text-sm text-cyan-200 mt-1">血盟 Lv.${levelInfo.level}</div>
+            </div>
+            <div class="text-sm text-slate-300 leading-relaxed">此模式已有血盟。詳細管理、捐獻與宣戰請至右側「血盟」分頁。</div>
+            <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="try{closeNpcInteraction()}catch(e){};switchTab('clan', document.getElementById('btn-clan'))">開啟血盟分頁</button>
+        </div>`;
 }
 
 function renderClanTab() {

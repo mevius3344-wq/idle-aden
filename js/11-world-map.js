@@ -1744,14 +1744,9 @@ function interactNPC(npcId, townId) {
         renderCastleGuard(contentDiv, 'windwood');
     } else if (npc.id === 'npc_heine_guard') {
         renderCastleGuard(contentDiv, 'heine');
-    } else if (npc.type === 'ally' || npc.type === 'ally_disabled') {
-        contentDiv.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-full text-slate-400 py-12 gap-3">
-                <span class="text-5xl">🚫</span>
-                <span class="text-xl font-bold text-amber-200">傭兵系統已關閉</span>
-                <span class="text-sm text-center leading-relaxed max-w-md">協力傭兵招募、裝備與任務管理功能已移除。</span>
-            </div>
-        `;
+    } else if (npc.type === 'clan' || npc.type === 'ally' || npc.type === 'ally_disabled') {
+        if (typeof renderClanCreateNPC === 'function') renderClanCreateNPC(contentDiv);
+        else contentDiv.innerHTML = `<div class="p-4 text-amber-200">血盟系統載入中…</div>`;
     } else if (npc.type === 'warehouse') {
         renderWarehouseNPC(contentDiv);   // 🔧 v2.6.77 正常情況已在 interactNPC 開頭早退開浮動倉庫；此分支僅剩 openWarehouseWindow 不存在時的舊式後備
     } else if (npc.type === 'petstore') {   // 🐾 v3.7.7 改依 type 分派（包武／奧斯丁共用同一個保管桶）——新增寵物保管 NPC 不必再回來加 id
@@ -1852,7 +1847,7 @@ const NPC_SPR_POOL = {
     bless: ['1788'], pray: ['918'], mastery: ['1222'], synth: ['1307'], skill: ['237'], travel: ['1045'], petstore: ['100', '727']   // 🐾 v3.4.75 包武(petstore)原池['54']＝舊倉庫寶箱造型·v3.4.74 倉庫改用10669後54被釋出→包武誤拿寶箱圖；改人類外型(甘特/萊恩)·54 全面除役
 };
 // 依 type 的單一固定 sprite（每城鎮至多一個→恆不重複）
-const NPC_SPR_ROLE = { warehouse: '10669', ally: '51', castleguard: '1222' };   // 🏦 v3.4.74 倉庫通用外型 54→10669（朵琳新造型·妖精森林倉庫=npc_wh_elf 走 FIXED '918' 不受影響）
+const NPC_SPR_ROLE = { warehouse: '10669', ally: '51', clan: '51', castleguard: '1222' };   // 🏦 v3.4.74 倉庫通用外型 54→10669（朵琳新造型·妖精森林倉庫=npc_wh_elf 走 FIXED '918' 不受影響）
 // 全域後備順序（池與 role 都耗盡時取用；人形/商販在前、怪物型在後，避免奇怪配對）
 const NPC_SPR_FALLBACK = ['1256', '1307', '1314', '1768', '1305', '1254', '1278', '1766', '3858', '1276',
     '237', '261', '902', '1045', '457', '460', '727', '914', '916', '918', '920', '949', '100', '118', '1788', '1222', '1049',
@@ -1992,7 +1987,7 @@ const TOWN_NPC_POS_OVERRIDE = {
     town_pride: { _pride_entrance: [49, 58] },                          // 新增公會後仍維持原入口告示位置
     town_rift: { _rift_entrance: [48, 58] }                             // 新增公會後仍維持原入口告示位置
 };
-// 每個安全區都提供同一個隊員管理入口。既有公會不動；缺少者在地圖初始化時補入，避免把同一份 NPC 資料散落到各城鎮清單。
+// 每個安全區提供「創公會」入口（舊傭兵公會站位沿用）。既有站點不動；缺少者於地圖初始化時補入。
 const ALLY_GUILD_TOWN_SPOTS = {
     town_silver_knight: [70, 72], town_windwood_castle: [31, 70], town_talking: [43, 52], town_elf: [75, 78],
     town_gludio: [72, 60], town_giran: [75, 68], town_aden: [48, 84], town_elder_council: [74, 70],
@@ -2000,13 +1995,36 @@ const ALLY_GUILD_TOWN_SPOTS = {
     town_sherine: [28, 72], town_silent: [64, 74], town_hyperia: [73, 65], town_behemoth: [75, 52],
     town_flame_audience: [65, 74], town_pirate_village: [28, 70]
 };
+function _isClanGuildNpc(npc) {
+    if (!npc) return false;
+    if (npc.type === 'clan' || npc.type === 'ally' || npc.type === 'ally_disabled') return true;
+    return !!(npc.id && String(npc.id).indexOf('npc_ally_') === 0);
+}
 function ensureTownAllyGuilds() {
     if (!DB || !DB.towns) return;
+    // 先把全圖舊「傭兵公會」改成「創公會」
+    Object.keys(DB.towns).forEach(townId => {
+        let town = DB.towns[townId];
+        if (!town || !Array.isArray(town.npcs)) return;
+        town.npcs.forEach(npc => {
+            if (!_isClanGuildNpc(npc)) return;
+            npc.n = '創公會';
+            npc.title = '血盟';
+            npc.type = 'clan';
+            npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。';
+        });
+    });
     Object.keys(ALLY_GUILD_TOWN_SPOTS).forEach(townId => {
         let town = DB.towns[townId];
-        if (!town || !Array.isArray(town.npcs) || town.npcs.some(npc => npc && npc.type === 'ally')) return;
+        if (!town || !Array.isArray(town.npcs) || town.npcs.some(_isClanGuildNpc)) return;
         let id = 'npc_ally_' + townId.replace(/^town_/, '');
-        town.npcs.push({ id:id, n:'傭兵公會', title:'協力', type:'ally_disabled', d:'傭兵系統已關閉。' });
+        town.npcs.push({
+            id: id,
+            n: '創公會',
+            title: '血盟',
+            type: 'clan',
+            d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。'
+        });
         let overrides = TOWN_NPC_POS_OVERRIDE[townId] || (TOWN_NPC_POS_OVERRIDE[townId] = {});
         overrides[id] = ALLY_GUILD_TOWN_SPOTS[townId];
     });

@@ -1987,7 +1987,9 @@ window.onload = () => {
             _eff = typeof dedupeGeneratedTooltipEffects === 'function'
                 ? dedupeGeneratedTooltipEffects([...new Set(_eff)], d)
                 : [...new Set(_eff)];
-            _eff = filterClassicEffLabels(_eff, d);   // 🎮 經典模式：移除已停用特效字樣（classicOk 物品不過濾）
+            _eff = (typeof filterDisabledWeaponEffLabels === 'function')
+                ? filterDisabledWeaponEffLabels(_eff, d)
+                : filterClassicEffLabels(_eff, d);   // ⚔️ 武器特效全關／🎮 經典模式：移除已停用特效字樣
             if(_eff.length) parts.push(`<div class="text-rose-300 font-bold" style="font-size:12px;">特效：${_eff.join(' / ')}</div>`);
         }
         if(!hidePrice && typeof d.p === 'number' && d.p > 0) parts.push(`<div class="text-yellow-400" style="font-size:12px;">售價 ${d.p.toLocaleString()} 金幣</div>`);   // 🗡️ 裝備收集冊 hidePrice=true：隱藏售價
