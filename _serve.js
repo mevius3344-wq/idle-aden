@@ -401,7 +401,7 @@ async function handleCloudApi(req, res, u) {
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
       }
-      // 雲端存檔時同步鎖定角色名稱（全站唯一）；若被他人佔用則拒絕寫入
+      // 雲端存檔時同步鎖定角色名稱（全站唯一）；若被他人佔用或試圖改名則拒絕寫入
       const display = normalizeCharName(data.p && data.p.name);
       if (display) {
         const map = loadCharNames();
@@ -417,27 +417,23 @@ async function handleCloudApi(req, res, u) {
           return json(res, 409, {
             ok: false,
             error: "name_taken",
-            message: "此角色名稱已被使用，請先改名後再存檔。",
+            message: "此角色名稱已被使用，請換一個名稱。",
           });
         }
-        // 釋放此欄位先前佔用的其他名稱
-        Object.keys(map).forEach((k) => {
-          const r = map[k];
-          if (
-            r &&
-            accountKey(r.account || "") === accountKey(account) &&
-            Number(r.slot) === slot &&
-            k !== key
-          ) {
-            delete map[k];
-          }
-        });
+        const locked = findRegisteredCharNameForSlot(map, account, slot, enSeed);
+        if (locked && charNameKey(locked.name) !== key) {
+          return json(res, 403, {
+            ok: false,
+            error: "name_locked",
+            message: "角色名稱設定後不可更改。",
+          });
+        }
         map[key] = {
           name: display,
           account: account,
           slot: slot,
-          enSeed: enSeed,
-          claimedAt: Date.now(),
+          enSeed: enSeed || (row && row.enSeed) || (locked && locked.enSeed) || "",
+          claimedAt: (locked && locked.claimedAt) || Date.now(),
         };
         saveCharNames(map);
       }
@@ -756,6 +752,20 @@ function charNameKey(name) {
   return normalizeCharName(name).toLowerCase();
 }
 
+/** 查詢此帳號＋存檔位（＋可選 enSeed）已登錄的角色名稱；用於禁止改名 */
+function findRegisteredCharNameForSlot(map, account, slot, enSeed) {
+  const ak = accountKey(account);
+  for (const k of Object.keys(map || {})) {
+    const r = map[k];
+    if (!r) continue;
+    if (accountKey(r.account || "") !== ak) continue;
+    if (Number(r.slot) !== slot) continue;
+    if (enSeed && r.enSeed && String(r.enSeed) !== String(enSeed)) continue;
+    return r;
+  }
+  return null;
+}
+
 function loadAccounts() {
   return readJsonFile(ACCOUNTS_FILE, {});
 }
@@ -947,28 +957,29 @@ async function handleNamesApi(req, res, u) {
       });
     }
 
+    const locked = findRegisteredCharNameForSlot(map, account, slot, enSeed);
+    if (locked && charNameKey(locked.name) !== key) {
+      return json(res, 403, {
+        ok: false,
+        error: "name_locked",
+        message: "角色名稱設定後不可更改。",
+      });
+    }
+    if (prevName && charNameKey(prevName) !== key) {
+      return json(res, 403, {
+        ok: false,
+        error: "name_locked",
+        message: "角色名稱設定後不可更改。",
+      });
+    }
+
     map[key] = {
       name: name,
       account: account,
       slot: slot,
-      enSeed: enSeed || (row && row.enSeed) || "",
-      claimedAt: Date.now(),
+      enSeed: enSeed || (row && row.enSeed) || (locked && locked.enSeed) || "",
+      claimedAt: (locked && locked.claimedAt) || Date.now(),
     };
-
-    // 改名：釋放舊名稱（僅限同一主人）
-    if (prevName) {
-      const prevKey = charNameKey(prevName);
-      if (prevKey && prevKey !== key) {
-        const prev = map[prevKey];
-        if (
-          prev &&
-          accountKey(prev.account || "") === accountKey(account) &&
-          Number(prev.slot) === slot
-        ) {
-          delete map[prevKey];
-        }
-      }
-    }
 
     saveCharNames(map);
     return json(res, 200, { ok: true, name, account, slot });

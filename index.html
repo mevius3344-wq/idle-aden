@@ -138,7 +138,7 @@
                 <div class="creation-stat-control stat-int"><span id="c-int" class="creation-stat-value"></span><button class="creation-stat-btn" onclick="adjStat('int', -1)">-</button><button class="creation-stat-btn" onclick="adjStat('int', 1)">+</button></div>
             </div>
 
-            <label id="creation-name-control" title="創建角色時請輸入名稱（之後仍可於狀態欄點擊改名）">
+            <label id="creation-name-control" title="創建角色時請輸入名稱（設定後不可更改）">
                 <span>角色名稱</span>
                 <input id="create-name-input" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="請輸入角色名稱">
             </label>
@@ -190,7 +190,7 @@
         <div id="col-left" class="w-[340px] flex flex-col gap-4">
             <!-- 新增了 id="status-panel"，並加入去底色與加深背景的樣式確保文字可讀 -->
             <div id="status-panel" class="panel bg-cover bg-top bg-no-repeat" style="background-blend-mode: multiply; background-color: rgba(30, 41, 59, 0.85);">
-                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="classic-badge" class="hidden font-bold ml-1" style="color:#fbbf24;text-shadow:0 0 5px rgba(251,191,36,0.7);font-size:0.85rem;line-height:1;" title="經典模式（硬核）：死亡損失該等級 5% 最大經驗（不降等）、無祝福/精通">⚔經典</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.6.36" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold cursor-pointer hover:bg-slate-700/50 rounded px-2 inline-block min-w-[4.5rem] text-right" title="點擊此處修改名稱" onclick="startEditName()"></span></div>
+                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="classic-badge" class="hidden font-bold ml-1" style="color:#fbbf24;text-shadow:0 0 5px rgba(251,191,36,0.7);font-size:0.85rem;line-height:1;" title="經典模式（硬核）：死亡損失該等級 5% 最大經驗（不降等）、無祝福/精通">⚔經典</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.6.36" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold rounded px-2 inline-block min-w-[4.5rem] text-right" title="角色名稱"></span></div>
                 <div class="status-compact-body text-base">
                     <div class="status-level-row text-slate-400">
                         <span>等級</span><span class="text-white font-bold text-xl" id="st-lv">1</span>
@@ -586,13 +586,13 @@
 <script src="js/05-kill-progression.js?v=v3.8.57-boss-marquee"></script>
     <script src="js/06-status-allies.js?v=v3.8.43-no-wpn-procs"></script>
     <script src="js/07-skills-cast.js?v=v3.8.26-flywing-relics"></script>
-<script src="js/08-items-equip.js?v=v3.8.40-no-sherine"></script>
+<script src="js/08-items-equip.js?v=v3.8.65-name-locked"></script>
 <script src="js/09-vfx-render.js?v=v3.8.40-no-sherine"></script>
     <script src="js/10-ui-tabs.js?v=v3.8.63-no-wild-pvp"></script>
 <script src="js/11-world-map.js?v=v3.8.64-no-wanderers"></script>
 <script src="js/12-npc-quests.js?v=v3.8.50-classic-only"></script>
-<script src="js/13-shop-save.js?v=v3.8.60-offline-hunt"></script>
-<script src="js/14-craft-pandora.js?v=v3.8.59-unique-ids"></script>
+<script src="js/13-shop-save.js?v=v3.8.65-name-locked"></script>
+    <script src="js/14-craft-pandora.js?v=v3.8.65-name-locked"></script>
 <script src="js/15-cards.js?v=v3.7.66"></script>
 <script src="js/16-equip-book.js?v=v3.8.15-legacy-import-smooth"></script>
 <script src="js/18-misc-book.js?v=v3.8.15-legacy-import-smooth"></script>

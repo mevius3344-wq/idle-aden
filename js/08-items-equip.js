@@ -1440,6 +1440,10 @@ function _updateUIImpl() {
             _nameEl.innerText = player.name || '點擊取名';
             _nameEl.classList.toggle('st-class-unnamed', !player.name);
         }
+        _nameEl.classList.toggle('cursor-pointer', !player.name);
+        _nameEl.classList.toggle('hover:bg-slate-700/50', !player.name);
+        _nameEl.title = player.name ? '角色名稱（不可更改）' : '點擊設定角色名稱（僅可設定一次）';
+        _nameEl.onclick = player.name ? null : (typeof startEditName === 'function' ? startEditName : null);
         if (typeof pvpAlignmentColor === 'function') {
             _nameEl.style.color = player.name ? pvpAlignmentColor(player.alignmentValue) : '#94a3b8';
             _nameEl.style.textShadow = '0 0 6px rgba(0,0,0,.75)';

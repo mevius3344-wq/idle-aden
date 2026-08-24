@@ -436,7 +436,7 @@ function _namesApiSync(method, url, body) {
         return { ok: false, offline: true, status: 0, data: null };
     }
 }
-/** 創角／改名前鎖定角色名稱。回傳 { ok, message } */
+/** 創角／首次取名前鎖定角色名稱（設定後不可更改）。回傳 { ok, message } */
 function claimCharNameId(name, opts) {
     opts = opts || {};
     const display = normalizeCharNameId(name);
@@ -1485,7 +1485,7 @@ function startGame() {
     player.cls = curCreate.cls;
     player.bloodPledge = null;   // 血盟改由同模式王族花費金幣創立，不再於創角時自動加入。
     player.classicMode = true;   // 🎮 一般模式已移除：所有角色固定經典模式
-    player.name = createName;   // 創角必填名稱；進遊戲後仍可於狀態欄點擊改名
+    player.name = createName;   // 創角必填名稱；設定後不可更改
     player.enSeed = _newEnSeed;   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
     player._roleEpoch = _roleEpoch();        // 🛡️ 角色世代：刪除後舊分頁不得把同欄位的舊角色寫回
     if (typeof clanSyncCurrentPlayer === 'function') clanSyncCurrentPlayer();   // 同模式已有血盟時，新角色自動成為成員。

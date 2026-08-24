@@ -1743,9 +1743,13 @@ function buyPandoraItem(i) {
 }
 
 
-/* ===== 玩家自訂名稱：點擊左上狀態欄名稱 → 輸入框 → 確認 ===== */
+/* ===== 玩家自訂名稱：僅未取名舊存檔可於狀態欄補填一次；取名後不可更改 ===== */
 function startEditName() {
     if (window._editingName || !player.cls) return;
+    if (player.name) {
+        alert('角色名稱設定後不可更改。');
+        return;
+    }
     window._editingName = true;
     let el = document.getElementById('st-class');
     if (!el) { window._editingName = false; return; }
@@ -1775,38 +1779,32 @@ function startEditName() {
     }
 }
 function confirmEditName() {
+    let prev = (player && player.name) ? String(player.name) : '';
+    if (prev) {
+        alert('角色名稱設定後不可更改。');
+        window._editingName = false;
+        updateUI();
+        return;
+    }
     let input = document.getElementById('name-edit-input');
     let v = input ? input.value.trim() : '';
     v = (typeof normalizeCharNameId === 'function') ? normalizeCharNameId(v) : v.replace(/[<>&"']/g, '').slice(0, 12);
-    let prev = (player && player.name) ? String(player.name) : '';
     if (!v) {
-        // 清空名稱：釋放舊 ID
-        if (prev && typeof releaseCharNameId === 'function') {
-            try {
-                releaseCharNameId(prev, {
-                    slot: typeof currentSlot !== 'undefined' ? currentSlot : 0,
-                    enSeed: (player && player.enSeed) || ''
-                });
-            } catch (e) {}
-        }
-        player.name = null;
-    } else if (prev && (typeof charNameIdKey === 'function' ? charNameIdKey(prev) === charNameIdKey(v) : prev === v)) {
-        player.name = v;
-    } else {
-        let claim = (typeof claimCharNameId === 'function')
-            ? claimCharNameId(v, {
-                excludeSlot: typeof currentSlot !== 'undefined' ? currentSlot : null,
-                slot: typeof currentSlot !== 'undefined' ? currentSlot : 1,
-                enSeed: (player && player.enSeed) || '',
-                prevName: prev
-            })
-            : { ok: true };
-        if (!claim.ok) {
-            alert(claim.message || '此角色名稱已被使用。');
-            return;
-        }
-        player.name = v;
+        alert('請輸入角色名稱。');
+        return;
     }
+    let claim = (typeof claimCharNameId === 'function')
+        ? claimCharNameId(v, {
+            excludeSlot: typeof currentSlot !== 'undefined' ? currentSlot : null,
+            slot: typeof currentSlot !== 'undefined' ? currentSlot : 1,
+            enSeed: (player && player.enSeed) || ''
+        })
+        : { ok: true };
+    if (!claim.ok) {
+        alert(claim.message || '此角色名稱已被使用。');
+        return;
+    }
+    player.name = v;
     window._editingName = false;
     updateUI();
     saveGame();
