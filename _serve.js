@@ -401,11 +401,71 @@ async function handleCloudApi(req, res, u) {
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
       }
+      // 雲端存檔時同步鎖定角色名稱（全站唯一）；若被他人佔用則拒絕寫入
+      const display = normalizeCharName(data.p && data.p.name);
+      if (display) {
+        const map = loadCharNames();
+        const key = charNameKey(display);
+        const row = map[key];
+        const enSeed = String((data.p && data.p.enSeed) || "");
+        const sameOwner =
+          row &&
+          accountKey(row.account || "") === accountKey(account) &&
+          Number(row.slot) === slot &&
+          (!enSeed || !row.enSeed || String(row.enSeed) === enSeed);
+        if (row && !sameOwner) {
+          return json(res, 409, {
+            ok: false,
+            error: "name_taken",
+            message: "此角色名稱已被使用，請先改名後再存檔。",
+          });
+        }
+        // 釋放此欄位先前佔用的其他名稱
+        Object.keys(map).forEach((k) => {
+          const r = map[k];
+          if (
+            r &&
+            accountKey(r.account || "") === accountKey(account) &&
+            Number(r.slot) === slot &&
+            k !== key
+          ) {
+            delete map[k];
+          }
+        });
+        map[key] = {
+          name: display,
+          account: account,
+          slot: slot,
+          enSeed: enSeed,
+          claimedAt: Date.now(),
+        };
+        saveCharNames(map);
+      }
       fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
       return json(res, 200, { ok: true, account, slot, meta: cloudFileMeta(file) });
     }
     if (req.method === "DELETE") {
-      if (fs.existsSync(file)) fs.unlinkSync(file);
+      if (fs.existsSync(file)) {
+        try {
+          const raw = fs.readFileSync(file, "utf8");
+          const data = JSON.parse(raw);
+          const display = normalizeCharName(data && data.p && data.p.name);
+          if (display) {
+            const map = loadCharNames();
+            const key = charNameKey(display);
+            const row = map[key];
+            if (
+              row &&
+              accountKey(row.account || "") === accountKey(account) &&
+              Number(row.slot) === slot
+            ) {
+              delete map[key];
+              saveCharNames(map);
+            }
+          }
+        } catch (e) {}
+        fs.unlinkSync(file);
+      }
       return json(res, 200, { ok: true, account, slot });
     }
   }
@@ -640,6 +700,312 @@ async function handleChatApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown chat api" });
 }
 
+// ===== 帳號註冊（全站唯一）＋角色名稱登錄（全站唯一 ID）=====
+const ACCOUNTS_FILE = path.join(ROOT, "data", "accounts.json");
+const CHAR_NAMES_FILE = path.join(ROOT, "data", "char-names.json");
+
+function ensureDataDir() {
+  try {
+    fs.mkdirSync(path.join(ROOT, "data"), { recursive: true });
+  } catch (e) {}
+}
+
+function readJsonFile(file, fallback) {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const raw = fs.readFileSync(file, "utf8");
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" ? data : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function writeJsonFile(file, data) {
+  ensureDataDir();
+  fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+}
+
+function normalizeAccountId(raw) {
+  let s = String(raw == null ? "" : raw).replace(/^\s+|\s+$/g, "");
+  try {
+    if (typeof s.normalize === "function") s = s.normalize("NFC");
+  } catch (e) {}
+  if (!s || s.length > 32) return "";
+  if (!/^[\u4e00-\u9fffA-Za-z0-9_-]+$/.test(s)) return "";
+  return s;
+}
+
+function accountKey(name) {
+  return normalizeAccountId(name).toLowerCase();
+}
+
+function normalizeCharName(raw) {
+  let s = String(raw == null ? "" : raw)
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[<>&"']/g, "")
+    .replace(/^\s+|\s+$/g, "")
+    .slice(0, 12);
+  try {
+    if (typeof s.normalize === "function") s = s.normalize("NFC");
+  } catch (e) {}
+  return s;
+}
+
+function charNameKey(name) {
+  return normalizeCharName(name).toLowerCase();
+}
+
+function loadAccounts() {
+  return readJsonFile(ACCOUNTS_FILE, {});
+}
+
+function saveAccounts(map) {
+  writeJsonFile(ACCOUNTS_FILE, map || {});
+}
+
+function loadCharNames() {
+  return readJsonFile(CHAR_NAMES_FILE, {});
+}
+
+function saveCharNames(map) {
+  writeJsonFile(CHAR_NAMES_FILE, map || {});
+}
+
+/** 掃描雲端存檔，補建角色名稱登錄（先到先得，不覆蓋既有登錄） */
+function bootstrapCharNamesFromCloud() {
+  if (!ENABLE_CLOUD_SAVE) return;
+  try {
+    if (!fs.existsSync(CLOUD_ROOT)) return;
+    const map = loadCharNames();
+    let changed = false;
+    const accounts = fs.readdirSync(CLOUD_ROOT, { withFileTypes: true });
+    for (const ent of accounts) {
+      if (!ent.isDirectory()) continue;
+      const account = normalizeAccountId(ent.name) || ent.name;
+      for (let i = 1; i <= 8; i++) {
+        const file = path.join(CLOUD_ROOT, ent.name, `slot-${i}.json`);
+        if (!fs.existsSync(file)) continue;
+        try {
+          const data = JSON.parse(fs.readFileSync(file, "utf8"));
+          const p = data && data.p;
+          if (!p || !p.cls) continue;
+          const display = normalizeCharName(p.name || "");
+          if (!display) continue;
+          const key = charNameKey(display);
+          if (map[key]) continue;
+          map[key] = {
+            name: display,
+            account: account,
+            slot: i,
+            enSeed: String(p.enSeed || ""),
+            claimedAt: Date.now(),
+          };
+          changed = true;
+        } catch (e) {}
+      }
+    }
+    if (changed) saveCharNames(map);
+  } catch (e) {
+    console.log("CHAR_NAMES_BOOTSTRAP_ERR " + (e && e.message ? e.message : e));
+  }
+}
+
+async function handleAccountsApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    return res.end();
+  }
+
+  if (u === "/api/accounts/status" && req.method === "GET") {
+    return json(res, 200, { ok: true, enabled: true });
+  }
+
+  if (u === "/api/accounts/check" && req.method === "GET") {
+    const q = new URL(req.url || "/", "http://localhost");
+    const account = normalizeAccountId(q.searchParams.get("account") || "");
+    if (!account) return json(res, 400, { ok: false, error: "bad account", taken: false });
+    const map = loadAccounts();
+    const taken = !!map[accountKey(account)];
+    return json(res, 200, { ok: true, account, taken });
+  }
+
+  if (u === "/api/accounts/register" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = normalizeAccountId(data.account);
+    const password = String(data.password == null ? "" : data.password);
+    if (!account) return json(res, 400, { ok: false, error: "bad account" });
+    if (password.length > 64) return json(res, 400, { ok: false, error: "password too long" });
+    const map = loadAccounts();
+    const key = accountKey(account);
+    if (map[key]) {
+      return json(res, 409, { ok: false, error: "taken", message: "此帳號已被註冊，請換一個帳號。" });
+    }
+    map[key] = {
+      account: account,
+      password: password,
+      createdAt: Date.now(),
+    };
+    saveAccounts(map);
+    return json(res, 200, { ok: true, account });
+  }
+
+  if (u === "/api/accounts/login" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = normalizeAccountId(data.account);
+    const password = String(data.password == null ? "" : data.password);
+    if (!account) return json(res, 400, { ok: false, error: "bad account" });
+    const map = loadAccounts();
+    const row = map[accountKey(account)];
+    if (!row) {
+      return json(res, 404, { ok: false, error: "missing", message: "帳號不存在，請先註冊。" });
+    }
+    if (String(row.password) !== password) {
+      return json(res, 401, { ok: false, error: "bad password", message: "帳號或密碼錯誤。" });
+    }
+    return json(res, 200, { ok: true, account: row.account || account });
+  }
+
+  return json(res, 404, { ok: false, error: "unknown accounts api" });
+}
+
+async function handleNamesApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    return res.end();
+  }
+
+  if (u === "/api/names/status" && req.method === "GET") {
+    return json(res, 200, { ok: true, enabled: true, count: Object.keys(loadCharNames()).length });
+  }
+
+  if (u === "/api/names/check" && req.method === "GET") {
+    const q = new URL(req.url || "/", "http://localhost");
+    const name = normalizeCharName(q.searchParams.get("name") || "");
+    if (!name) return json(res, 400, { ok: false, error: "bad name", taken: false });
+    const map = loadCharNames();
+    const row = map[charNameKey(name)];
+    return json(res, 200, {
+      ok: true,
+      name,
+      taken: !!row,
+      owner: row
+        ? { account: row.account || "", slot: row.slot || 0, enSeed: row.enSeed || "" }
+        : null,
+    });
+  }
+
+  if (u === "/api/names/claim" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const name = normalizeCharName(data.name);
+    const account = normalizeAccountId(data.account) || "guest";
+    const slot = Math.max(1, Math.min(8, parseInt(data.slot, 10) || 1));
+    const enSeed = String(data.enSeed || "");
+    const prevName = normalizeCharName(data.prevName || "");
+    if (!name) return json(res, 400, { ok: false, error: "bad name", message: "請輸入角色名稱。" });
+
+    const map = loadCharNames();
+    const key = charNameKey(name);
+    const row = map[key];
+    const sameOwner =
+      row &&
+      accountKey(row.account || "") === accountKey(account) &&
+      Number(row.slot) === slot &&
+      (!enSeed || !row.enSeed || String(row.enSeed) === enSeed);
+
+    if (row && !sameOwner) {
+      return json(res, 409, {
+        ok: false,
+        error: "taken",
+        message: "此角色名稱已被使用，請換一個名稱。",
+      });
+    }
+
+    map[key] = {
+      name: name,
+      account: account,
+      slot: slot,
+      enSeed: enSeed || (row && row.enSeed) || "",
+      claimedAt: Date.now(),
+    };
+
+    // 改名：釋放舊名稱（僅限同一主人）
+    if (prevName) {
+      const prevKey = charNameKey(prevName);
+      if (prevKey && prevKey !== key) {
+        const prev = map[prevKey];
+        if (
+          prev &&
+          accountKey(prev.account || "") === accountKey(account) &&
+          Number(prev.slot) === slot
+        ) {
+          delete map[prevKey];
+        }
+      }
+    }
+
+    saveCharNames(map);
+    return json(res, 200, { ok: true, name, account, slot });
+  }
+
+  if (u === "/api/names/release" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const name = normalizeCharName(data.name);
+    const account = normalizeAccountId(data.account) || "";
+    const slot = Math.max(0, Math.min(8, parseInt(data.slot, 10) || 0));
+    const enSeed = String(data.enSeed || "");
+    if (!name) return json(res, 200, { ok: true, released: false });
+    const map = loadCharNames();
+    const key = charNameKey(name);
+    const row = map[key];
+    if (!row) return json(res, 200, { ok: true, released: false });
+    const ownerOk =
+      (!account || accountKey(row.account || "") === accountKey(account)) &&
+      (!slot || Number(row.slot) === slot) &&
+      (!enSeed || !row.enSeed || String(row.enSeed) === enSeed);
+    if (!ownerOk) {
+      return json(res, 403, { ok: false, error: "forbidden", message: "無法釋放他人角色名稱。" });
+    }
+    delete map[key];
+    saveCharNames(map);
+    return json(res, 200, { ok: true, released: true, name });
+  }
+
+  return json(res, 404, { ok: false, error: "unknown names api" });
+}
+
 const server = http.createServer(async (req, res) => {
   let u = decodeURIComponent((req.url || "/").split("?")[0]);
   try {
@@ -653,6 +1019,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/chat")) {
       await handleChatApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/accounts")) {
+      await handleAccountsApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/names")) {
+      await handleNamesApi(req, res, u);
       return;
     }
     if (u.startsWith("/api/player-data")) {
@@ -701,6 +1075,12 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(
     "CLOUD_SAVE " + (ENABLE_CLOUD_SAVE ? CLOUD_ROOT : "off")
   );
+  try {
+    bootstrapCharNamesFromCloud();
+    console.log("ACCOUNTS " + Object.keys(loadAccounts()).length + " CHAR_NAMES " + Object.keys(loadCharNames()).length);
+  } catch (e) {
+    console.log("REGISTRY_ERR " + (e && e.message ? e.message : e));
+  }
   console.log("CHAT online ring=" + CHAT_MAX);
   if (ENABLE_DESKTOP_SAVES) {
     try {

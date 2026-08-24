@@ -584,6 +584,7 @@ function killMob(idx) {
     if(isSiegeArea(mapState.current)) mapState.suppressSiegeBoss = false;   // 攻城區擊殺後，重生開始可出現城門/守護塔(10%)
     handleSiegeKill(mob);   // 攻城戰：擊殺計數 + 城門/守護塔判定
     if ((mob.boss || (mob.trollPlayer && !mob._siegePlayer)) && !player.dead) saveGame();   // 頭目／PVP玩家擊殺後存檔：保護稀有掉落與一小時密語排程
+    if (typeof announceBossDeath === 'function') announceBossDeath(mob);   // 📢 頭目死亡跑馬燈／世界廣播
     if (_kbRoom && mob.boss && !player.dead) {   // 🔧 軍王之室：擊敗頭目並取得掉落後，於清算時傳送回村/回城（🏛️ 雙BOSS祭壇：場上不再有其他存活BOSS時才算全滅）
         let _krm = KING_ROOMS[mapState.current];
         if (!_krm.dual || !mapState.mobs.some(m => m && m.boss && !m._dead && m.uid !== mob.uid)) state._kbVictory = true;
@@ -1302,6 +1303,7 @@ function spawnRiftMob(idx) {
     if (mapState.mobs[idx].hard) initHardSkin(mapState.mobs[idx]);
     applySherineGrace(idx);   // 🔮 席琳的恩賜（1% 機率）
     if (base.boss && typeof vfxBossEntrance === 'function') { try { vfxBossEntrance(mapState.mobs[idx]); } catch (e) {} }   // 🐉 v3.4.95 時空裂痕頭目也播出場特效（函式內部吃 _vfxMute → 補跑不播）
+    if (typeof announceBossSpawn === 'function') { try { announceBossSpawn(mapState.mobs[idx]); } catch (e) {} }
     if (!state.ff) renderMobs();
 }
 // 🌅 變身鏈「非第一階」id 集合（transformTo 的目標·載入時建一次）：裂痕動態抽怪排除用
@@ -1468,6 +1470,113 @@ function updateReviveInPlaceBtn() {
     let hasScroll = player.inv.some(i => i.id === 'scroll_revive');
     if(player.dead && !onCd && (hasRez || hasScroll)) btn.classList.remove('hidden');
     else btn.classList.add('hidden');
+}
+
+// ===================== 📢 頭目死亡／重生跑馬燈 =====================
+let _bossMarqueeQueue = [];
+let _bossMarqueeBusy = false;
+let _bossMarqueeTimer = null;
+
+function bossAnnounceEligible(mob) {
+    if (!mob || !mob.boss) return false;
+    if (mob.siegeEnemy || mob.race === '建築') return false;   // 城門／守護塔／樓梯等不播
+    if (mob.trollPlayer || mob._troll || mob._siegePlayer) return false;   // 假玩家不播
+    if (mob.noAutoTeleport && mob.race === '建築') return false;
+    return true;
+}
+function bossAnnounceMapName() {
+    let v = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+    if (typeof mapDisplayName === 'function') {
+        let n = mapDisplayName(v);
+        if (n) return n;
+    }
+    if (typeof mapEntryOf === 'function') {
+        let e = mapEntryOf(v);
+        if (e && e.t) return e.t;
+    }
+    if (v === 'windwood_dungeon') return '風木地監';
+    if (v === 'arena_pvp') return '決鬥競技場';
+    return v || '未知地點';
+}
+function bossAnnounceEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+function bossAnnouncePlayerName() {
+    try {
+        if (player && player.name) return String(player.name);
+    } catch (e) {}
+    return '冒險者';
+}
+function _bossMarqueeShowNext() {
+    if (_bossMarqueeBusy) return;
+    let next = _bossMarqueeQueue.shift();
+    let box = document.getElementById('boss-marquee');
+    let textEl = box && box.querySelector('.boss-marquee-text');
+    let track = box && box.querySelector('.boss-marquee-track');
+    if (!next || !box || !textEl || !track) {
+        if (box) box.classList.add('hidden');
+        _bossMarqueeBusy = false;
+        return;
+    }
+    _bossMarqueeBusy = true;
+    box.classList.remove('hidden');
+    textEl.innerHTML = next.html;
+    track.classList.remove('boss-marquee-run');
+    void track.offsetWidth;
+    track.classList.add('boss-marquee-run');
+    if (_bossMarqueeTimer) clearTimeout(_bossMarqueeTimer);
+    _bossMarqueeTimer = setTimeout(function () {
+        _bossMarqueeBusy = false;
+        if (!_bossMarqueeQueue.length) box.classList.add('hidden');
+        _bossMarqueeShowNext();
+    }, 9000);
+}
+function pushBossMarquee(html, plainText, opts) {
+    opts = opts || {};
+    _bossMarqueeQueue.push({ html: html });
+    if (_bossMarqueeQueue.length > 12) _bossMarqueeQueue.splice(0, _bossMarqueeQueue.length - 12);
+    _bossMarqueeShowNext();
+    if (plainText && typeof logWorld === 'function') {
+        try { logWorld('<span class="wc-sys boss-announce-line">' + html + '</span>'); } catch (e) {}
+    }
+    // 擊殺廣播可選上傳世界頻道（重生不傳，避免全服刷屏）
+    if (opts.online && plainText && typeof _chatOnlineSend === 'function' && typeof _chatIsHttpOrigin === 'function' && _chatIsHttpOrigin()) {
+        try {
+            let align = 0;
+            try { align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player && player.alignmentValue) : (Number(player && player.alignmentValue) || 0); } catch (e) {}
+            _chatOnlineSend({
+                id: 'boss_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+                ch: 'world',
+                text: plainText,
+                name: '系統',
+                alignment: align,
+                classic: !(player && player.classicMode === false),
+                clanKey: '',
+                slot: (typeof currentSlot !== 'undefined' ? currentSlot : 0),
+                sessionId: (typeof _roleSessionId !== 'undefined' ? _roleSessionId : ''),
+                fp: ''
+            });
+        } catch (e) {}
+    }
+}
+function announceBossDeath(mob) {
+    if (!bossAnnounceEligible(mob)) return;
+    if (typeof state !== 'undefined' && state && state.ff) return;   // 離線補跑不刷跑馬燈
+    let who = bossAnnounceEsc(bossAnnouncePlayerName());
+    let boss = bossAnnounceEsc(mob.n);
+    let map = bossAnnounceEsc(bossAnnounceMapName());
+    let html = '<span class="boss-announce-tag">頭目戰報</span> <span class="boss-announce-player">' + who + '</span> 於 <span class="boss-announce-map">' + map + '</span> 擊敗了 <span class="boss-announce-boss">' + boss + '</span>！';
+    let plain = '【頭目戰報】' + bossAnnouncePlayerName() + ' 於 ' + bossAnnounceMapName() + ' 擊敗了 ' + mob.n + '！';
+    pushBossMarquee(html, plain, { online: true });
+}
+function announceBossSpawn(mob) {
+    if (!bossAnnounceEligible(mob)) return;
+    if (typeof state !== 'undefined' && state && state.ff) return;
+    let boss = bossAnnounceEsc(mob.n);
+    let map = bossAnnounceEsc(bossAnnounceMapName());
+    let html = '<span class="boss-announce-tag">頭目戰報</span> <span class="boss-announce-boss">' + boss + '</span> 出現在 <span class="boss-announce-map">' + map + '</span>！';
+    let plain = '【頭目戰報】' + mob.n + ' 出現在 ' + bossAnnounceMapName() + '！';
+    pushBossMarquee(html, plain, { online: false });
 }
 
 // ===================== 異常狀態 / 召喚物 / 手動技能 引擎 =====================

@@ -355,6 +355,103 @@ function _summaryFromRaw(s){
     } catch(e){ return null; }
 }
 function slotSummary(n){ return _summaryFromRaw(_lzGet('lineage_idle_save_' + n)); }
+
+// 🆔 角色名稱（ID）唯一：本機各存檔位不可重複；線上另經 /api/names 全站鎖定。
+function normalizeCharNameId(name) {
+    let s = String(name == null ? '' : name).replace(/[<>&"']/g, '').replace(/^\s+|\s+$/g, '').slice(0, 12);
+    try { if (typeof s.normalize === 'function') s = s.normalize('NFC'); } catch (e) {}
+    return s;
+}
+function charNameIdKey(name) {
+    return normalizeCharNameId(name).toLowerCase();
+}
+function findLocalCharNameOwner(name, excludeSlot) {
+    const key = charNameIdKey(name);
+    if (!key) return null;
+    for (let n = 1; n <= 8; n++) {
+        if (excludeSlot != null && String(n) === String(excludeSlot)) continue;
+        const sum = slotSummary(n);
+        if (sum && sum.name && charNameIdKey(sum.name) === key) {
+            return { slot: n, name: sum.name };
+        }
+    }
+    return null;
+}
+function _authAccountForNames() {
+    try {
+        if (window.__fb5AuthAccount) return String(window.__fb5AuthAccount);
+        if (window.GameAccountAuth && typeof window.GameAccountAuth.currentAccount === 'function') {
+            return String(window.GameAccountAuth.currentAccount() || '');
+        }
+    } catch (e) {}
+    return '';
+}
+function _namesApiSync(method, url, body) {
+    try {
+        if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+            return { ok: false, offline: true, status: 0, data: null };
+        }
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, url, false);
+        if (body != null) xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+        xhr.send(body != null ? JSON.stringify(body) : null);
+        let data = null;
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { data = null; }
+        return {
+            ok: xhr.status >= 200 && xhr.status < 300 && !!(data && data.ok),
+            status: xhr.status,
+            data: data,
+            offline: false
+        };
+    } catch (e) {
+        return { ok: false, offline: true, status: 0, data: null };
+    }
+}
+/** 創角／改名前鎖定角色名稱。回傳 { ok, message } */
+function claimCharNameId(name, opts) {
+    opts = opts || {};
+    const display = normalizeCharNameId(name);
+    if (!display) return { ok: false, message: '請輸入角色名稱。' };
+    const excludeSlot = opts.excludeSlot != null ? opts.excludeSlot : (typeof currentSlot !== 'undefined' ? currentSlot : null);
+    const localHit = findLocalCharNameOwner(display, excludeSlot);
+    if (localHit) {
+        return { ok: false, message: '此角色名稱已存在於存檔 ' + localHit.slot + '（' + localHit.name + '），請換一個名稱。' };
+    }
+    const account = _authAccountForNames() || 'guest';
+    const slot = Math.max(1, Math.min(8, parseInt(opts.slot != null ? opts.slot : currentSlot, 10) || 1));
+    const enSeed = String(opts.enSeed || (typeof player !== 'undefined' && player && player.enSeed) || '');
+    const prevName = normalizeCharNameId(opts.prevName || '');
+    const st = _namesApiSync('GET', '/api/names/status');
+    if (st.offline || !(st.data && st.data.ok)) {
+        // 離線／無 API：至少保證本機不重複
+        return { ok: true, name: display, offline: true };
+    }
+    const r = _namesApiSync('POST', '/api/names/claim', {
+        name: display,
+        account: account,
+        slot: slot,
+        enSeed: enSeed,
+        prevName: prevName
+    });
+    if (r.ok) return { ok: true, name: display };
+    const msg = (r.data && r.data.message) || (r.status === 409 ? '此角色名稱已被使用，請換一個名稱。' : '無法鎖定角色名稱，請稍後再試。');
+    return { ok: false, message: msg };
+}
+function releaseCharNameId(name, opts) {
+    opts = opts || {};
+    const display = normalizeCharNameId(name);
+    if (!display) return;
+    const account = _authAccountForNames() || '';
+    const slot = Math.max(0, Math.min(8, parseInt(opts.slot != null ? opts.slot : 0, 10) || 0));
+    const enSeed = String(opts.enSeed || '');
+    _namesApiSync('POST', '/api/names/release', {
+        name: display,
+        account: account,
+        slot: slot,
+        enSeed: enSeed
+    });
+}
+
 // 🎮 一般模式已移除：離線把各存檔格 classicMode 改為 true（角色選擇畫面立即顯示「經典」）。
 function _migrateAllSavesToClassicMode(){
     for (let n = 1; n <= 8; n++) {
@@ -650,6 +747,15 @@ function importSave(n){
                     alert(`匯入失敗：相同角色已存在於存檔 ${slotN}。請先刪除原角色後再還原備份，避免角色與寵物身分重複。`);
                     return;
                 }
+            }
+            let importName = (typeof normalizeCharNameId === 'function') ? normalizeCharNameId(d.p.name || '') : String(d.p.name || '').trim();
+            if(importName && typeof claimCharNameId === 'function'){
+                let claim = claimCharNameId(importName, { slot: n, enSeed: importSeed, excludeSlot: n });
+                if(!claim.ok){
+                    alert(claim.message || '匯入失敗：角色名稱已被使用。');
+                    return;
+                }
+                d.p.name = importName;
             }
             d.p.enSeed = importSeed;
             d.p._roleEpoch = _roleEpoch();   // 匯入視為新的角色世代，已刪角色的舊分頁不能覆蓋這份匯入檔
@@ -1029,6 +1135,14 @@ function loadDeleteSelected(){
     if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return; }
     try { if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot); } catch (_deskDelE) {}
     try { if (typeof cloudDeleteSlot === 'function') cloudDeleteSlot(slot); } catch (_cloudDelE) {}
+    try {
+        if (typeof releaseCharNameId === 'function') {
+            releaseCharNameId(expected === '未命名' ? (oldPlayer && oldPlayer.name) : expected, {
+                slot: slot,
+                enSeed: (oldPlayer && oldPlayer.enSeed) || ''
+            });
+        }
+    } catch (_nameRelE) {}
     try { if(typeof clanOnRoleDeleted === 'function') clanOnRoleDeleted(oldPlayer); } catch(e){ console.warn('clan delete cleanup', e); }
     renderLoadSelect();
     alert(`角色「${expected}」已刪除。現在可以在此欄位創建新角色。`);
@@ -1285,9 +1399,23 @@ function startGame() {
         if(nameInput){ try { nameInput.focus(); } catch(e){} }
         return;
     }
+    createName = normalizeCharNameId(createName);
+    if(!createName){
+        alert('請輸入有效的角色名稱。');
+        if(nameInput){ try { nameInput.focus(); } catch(e){} }
+        return;
+    }
     if(slotSummary(currentSlot)){
         alert(`存檔 ${currentSlot} 已有角色，無法直接覆蓋。請返回角色選擇畫面並先刪除原角色。`);
         backToMenu();
+        return;
+    }
+    // 先預產生種子以便全站鎖定名稱（創角途中才寫入 player）
+    let _newEnSeed = 'es' + uid() + uid();
+    let _nameClaim = claimCharNameId(createName, { slot: currentSlot, enSeed: _newEnSeed, excludeSlot: currentSlot });
+    if(!_nameClaim.ok){
+        alert(_nameClaim.message || '此角色名稱已被使用。');
+        if(nameInput){ try { nameInput.focus(); } catch(e){} }
         return;
     }
     // 🧼 v3.7.73 新角色＝乾淨的 player（修「刪角後創新職業，上一個角色的傭兵／萬能藥瓶數／精通狀態還在」）：
@@ -1325,7 +1453,7 @@ function startGame() {
     player.bloodPledge = null;   // 血盟改由同模式王族花費金幣創立，不再於創角時自動加入。
     player.classicMode = true;   // 🎮 一般模式已移除：所有角色固定經典模式
     player.name = createName;   // 創角必填名稱；進遊戲後仍可於狀態欄點擊改名
-    player.enSeed = 'es' + uid() + uid();   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
+    player.enSeed = _newEnSeed;   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
     player._roleEpoch = _roleEpoch();        // 🛡️ 角色世代：刪除後舊分頁不得把同欄位的舊角色寫回
     if (typeof clanSyncCurrentPlayer === 'function') clanSyncCurrentPlayer();   // 同模式已有血盟時，新角色自動成為成員。
     player.expMigV = 3;   // ⚠️ 新角色天生使用最新經驗刻度（Lv70+ 同級怪等比例曲線）→ 標記免遷移

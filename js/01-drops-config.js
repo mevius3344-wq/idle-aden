@@ -1942,32 +1942,91 @@ function logSys(msg, rare) {
     let _max = _sysLogLocked ? SYS_LOG_MAX_LOCKED : SYS_LOG_MAX;
     while(el.children.length > _max && el.children.length > 1) el.removeChild(el.firstChild);
     if(!_sysLogLocked) el.scrollTop = el.scrollHeight;   // 鎖定時不自動捲到底，保留玩家檢視位置
-    if (_logTab !== 'sys' && (rare === 'legend' || rare === 'relic')) {   // 🗂️ v3.6.73 只有稀有掉落才亮未讀點（不在系統分頁時）
+    // 🗂️ 統一日誌：不在系統分頁時才亮未讀點（含切到聊天分頁）
+    let notOnSys = (typeof _unifiedLogTab !== 'undefined') ? (_unifiedLogTab !== 'sys') : (_logTab !== 'sys');
+    if (notOnSys && (rare === 'legend' || rare === 'relic')) {
         let d = document.getElementById('logtab-dot-sys');
-        if (d) { d.classList.remove('hidden', 'logtab-dot-legend', 'logtab-dot-relic'); d.classList.add('logtab-dot-' + rare); }   // 後到的稀有度覆蓋前一顆（點只有一顆）
+        if (d) { d.classList.remove('hidden', 'logtab-dot-legend', 'logtab-dot-relic'); d.classList.add('logtab-dot-' + rare); }
     }
 }
 
-// 🗂️ v3.6.50 戰鬥／系統日誌合併於同一視窗：標題列分頁鈕切換（過濾 pill 只在戰鬥分頁顯示）。
+// 🗂️ 統一日誌視窗：戰鬥／系統／世界／血盟／隊伍 同一個面板分頁切換。
 let _logTab = 'combat';
-function switchLogTab(tab) {
+let _unifiedLogTab = 'combat';
+function switchUnifiedLogTab(tab) {
+    const valid = { combat:1, sys:1, world:1, clan:1, party:1 };
+    if (!valid[tab]) tab = 'combat';
+    _unifiedLogTab = tab;
+    // _logTab 只區分戰鬥／系統（舊呼叫端）；聊天分頁視為「非系統」以便稀有掉落未讀點
     _logTab = (tab === 'sys') ? 'sys' : 'combat';
-    let onSys = (_logTab === 'sys');
-    let cl = document.getElementById('combat-log'), sl = document.getElementById('sys-log');
-    if (cl) cl.classList.toggle('hidden', onSys);
-    if (sl) sl.classList.toggle('hidden', !onSys);
-    let bc = document.getElementById('logtab-btn-combat'), bs = document.getElementById('logtab-btn-sys');
-    if (bc) bc.classList.toggle('logtab-on', !onSys);
-    if (bs) bs.classList.toggle('logtab-on', onSys);
-    let pills = document.getElementById('combat-filter-pills'); if (pills) pills.classList.toggle('hidden', onSys);
-    // 兩顆捲動鎖定提示各自只在自己的分頁出現（切走時先收起，避免浮在另一個日誌上）
-    let cu = document.getElementById('combat-log-unlock'); if (cu && onSys) cu.classList.add('hidden');
-    let su = document.getElementById('sys-log-unlock'); if (su && !onSys) su.classList.add('hidden');
-    if (onSys) {
-        let d = document.getElementById('logtab-dot-sys'); if (d) { d.classList.add('hidden'); d.classList.remove('logtab-dot-legend', 'logtab-dot-relic'); }   // 進系統分頁＝已讀（連稀有度顏色一併清掉，下次才不會沿用舊色）
-        if (sl && !_sysLogLocked) sl.scrollTop = sl.scrollHeight;
-        initSysLogLock();
-    } else if (cl && !_combatLogLocked) cl.scrollTop = cl.scrollHeight;
+    if (tab === 'world' || tab === 'clan' || tab === 'party') {
+        if (typeof _chatActiveChannel !== 'undefined') _chatActiveChannel = tab;
+    }
+
+    let isCombat = tab === 'combat';
+    let isSys = tab === 'sys';
+    let isChat = (tab === 'world' || tab === 'clan' || tab === 'party');
+
+    let cl = document.getElementById('combat-log');
+    let sl = document.getElementById('sys-log');
+    if (cl) cl.classList.toggle('hidden', !isCombat);
+    if (sl) sl.classList.toggle('hidden', !isSys);
+    ['world', 'clan', 'party'].forEach(function (id) {
+        let pane = document.getElementById(id + '-log');
+        if (pane) pane.classList.toggle('hidden', tab !== id);
+    });
+
+    let bc = document.getElementById('logtab-btn-combat');
+    let bs = document.getElementById('logtab-btn-sys');
+    if (bc) bc.classList.toggle('logtab-on', isCombat);
+    if (bs) bs.classList.toggle('logtab-on', isSys);
+    ['world', 'clan', 'party'].forEach(function (id) {
+        let btn = document.getElementById('chattab-btn-' + id);
+        if (btn) btn.classList.toggle('logtab-on', tab === id);
+    });
+
+    let pills = document.getElementById('combat-filter-pills');
+    if (pills) pills.classList.toggle('hidden', !isCombat);
+    let inputRow = document.getElementById('world-input-row');
+    if (inputRow) inputRow.classList.toggle('hidden', !isChat);
+    let pins = document.getElementById('sys-log-pins');
+    if (pins) {
+        let hasPins = pins.children && pins.children.length > 0;
+        pins.classList.toggle('hidden', !(tab === 'world' && hasPins));
+        pins.style.display = (tab === 'world' && hasPins) ? '' : 'none';
+    }
+    let input = document.getElementById('world-input');
+    if (input && isChat && typeof _CHAT_PLACEHOLDERS !== 'undefined') {
+        input.placeholder = _CHAT_PLACEHOLDERS[tab] || _CHAT_PLACEHOLDERS.world;
+    }
+
+    let cu = document.getElementById('combat-log-unlock');
+    let su = document.getElementById('sys-log-unlock');
+    let wu = document.getElementById('world-log-unlock');
+    if (cu && !isCombat) cu.classList.add('hidden');
+    if (su && !isSys) su.classList.add('hidden');
+    if (wu) {
+        if (!isChat) wu.classList.add('hidden');
+        wu.style.bottom = isChat ? '3.5rem' : '0.5rem';
+    }
+
+    if (isSys) {
+        let d = document.getElementById('logtab-dot-sys');
+        if (d) { d.classList.add('hidden'); d.classList.remove('logtab-dot-legend', 'logtab-dot-relic'); }
+        if (sl && typeof _sysLogLocked !== 'undefined' && !_sysLogLocked) sl.scrollTop = sl.scrollHeight;
+        if (typeof initSysLogLock === 'function') initSysLogLock();
+    } else if (isCombat) {
+        if (cl && typeof _combatLogLocked !== 'undefined' && !_combatLogLocked) cl.scrollTop = cl.scrollHeight;
+    } else if (isChat) {
+        let dot = document.getElementById(tab === 'clan' ? 'chattab-dot-clan' : (tab === 'party' ? 'chattab-dot-party' : ''));
+        if (dot) dot.classList.add('hidden');
+        let el = document.getElementById(tab + '-log');
+        if (el && !(typeof _worldLogLocked !== 'undefined' && _worldLogLocked)) el.scrollTop = el.scrollHeight;
+        if (typeof initWorldLogLock === 'function') initWorldLogLock();
+    }
+}
+function switchLogTab(tab) {
+    switchUnifiedLogTab(tab === 'sys' ? 'sys' : 'combat');
 }
 
 // 🌐 聊天日誌：世界頻道（含叫賣系統訊息）／血盟／隊伍；玩家發言僅真實角色。

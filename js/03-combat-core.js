@@ -1965,6 +1965,7 @@ function spawnMob(idx) {
             applySherineBuff(idx);   // 🐉 v3.7.61 初始區域頭目也套用席琳世界，與後續變身階段一致
             if (_ab.hard) initHardSkin(mapState.mobs[idx]);
             if (_ab.boss && typeof vfxBossEntrance === 'function') vfxBossEntrance(mapState.mobs[idx]);
+            if (typeof announceBossSpawn === 'function') { try { announceBossSpawn(mapState.mobs[idx]); } catch (e) {} }
             renderMobs(); return;
         }
         // 其餘格落到下方一般出怪（喀瑪/荒龍池）
@@ -1980,6 +1981,7 @@ function spawnMob(idx) {
         applySherineBuff(idx);   // 🔮 軍王之室／底比斯歐西里斯祭壇也吃「席琳的世界」強化＋_sherine（與一般出怪一致；不含恩賜 grace；須在 initHardSkin 之前）
         if(mapState.mobs[idx].hard) initHardSkin(mapState.mobs[idx]);
         if (_b.boss && typeof vfxBossEntrance === 'function') { try { vfxBossEntrance(mapState.mobs[idx]); } catch (e) {} }   // 🐉 v3.4.95 軍王之室／祭壇頭目也播出場特效
+        if (typeof announceBossSpawn === 'function') { try { announceBossSpawn(mapState.mobs[idx]); } catch (e) {} }
         return;
     }
     // 🆕 2026-06：後排格(3,4)現在也會 roll 頭目——原本後排不出王，但死亡輸送帶把存活怪往前壓實、空格往後堆→補位幾乎都落在後排、跳過頭目判定而稀釋出王率；故 wantBoss/卡瑞/林德拜爾改成全 5 格皆判定（idx>=3 不再排除頭目）
@@ -2200,6 +2202,7 @@ function spawnMob(idx) {
 
     applySherineGrace(idx);   // 🔮 席琳的恩賜：1% 機率場上一隻一般怪變恩賜怪（與時空裂痕共用 applySherineGrace）
     if (base.boss && typeof vfxBossEntrance === 'function') { try { vfxBossEntrance(mapState.mobs[idx]); } catch (e) {} }   // 🐉 頭目出場特效＋螢幕震動（cosmetic·v3.4.95 起全頭目通用：名單有專屬配色/稱號·未註冊者依屬性配色·吃 __vfxOff/補跑）
+    if (typeof announceBossSpawn === 'function') { try { announceBossSpawn(mapState.mobs[idx]); } catch (e) {} }   // 📢 頭目出現／重生跑馬燈
     if (mapState.mobs[idx]._wcMassTauntBattle && typeof wcMassTauntGroupBattleFill === 'function') wcMassTauntGroupBattleFill();
     if (!state.ff && !mapState._wcMassTauntBattleFilling) renderMobs();
 }

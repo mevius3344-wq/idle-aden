@@ -1777,8 +1777,36 @@ function startEditName() {
 function confirmEditName() {
     let input = document.getElementById('name-edit-input');
     let v = input ? input.value.trim() : '';
-    v = v.replace(/[<>&"']/g, '');   // 🔧 過濾 HTML 特殊字元：名稱會以 innerHTML 呈現，避免自我注入標籤
-    player.name = v ? v.slice(0, 12) : null;   // 留空則回到未取名狀態（顯示「點擊取名」）
+    v = (typeof normalizeCharNameId === 'function') ? normalizeCharNameId(v) : v.replace(/[<>&"']/g, '').slice(0, 12);
+    let prev = (player && player.name) ? String(player.name) : '';
+    if (!v) {
+        // 清空名稱：釋放舊 ID
+        if (prev && typeof releaseCharNameId === 'function') {
+            try {
+                releaseCharNameId(prev, {
+                    slot: typeof currentSlot !== 'undefined' ? currentSlot : 0,
+                    enSeed: (player && player.enSeed) || ''
+                });
+            } catch (e) {}
+        }
+        player.name = null;
+    } else if (prev && (typeof charNameIdKey === 'function' ? charNameIdKey(prev) === charNameIdKey(v) : prev === v)) {
+        player.name = v;
+    } else {
+        let claim = (typeof claimCharNameId === 'function')
+            ? claimCharNameId(v, {
+                excludeSlot: typeof currentSlot !== 'undefined' ? currentSlot : null,
+                slot: typeof currentSlot !== 'undefined' ? currentSlot : 1,
+                enSeed: (player && player.enSeed) || '',
+                prevName: prev
+            })
+            : { ok: true };
+        if (!claim.ok) {
+            alert(claim.message || '此角色名稱已被使用。');
+            return;
+        }
+        player.name = v;
+    }
     window._editingName = false;
     updateUI();
     saveGame();

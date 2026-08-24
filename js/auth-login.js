@@ -2,7 +2,7 @@
 
 /**
  * 登入閘門：帳號／密碼預設空白（不再固定為「天堂」）。
- * 註冊後寫入本機；登入成功才顯示主選單。
+ * 線上：帳號全站唯一（/api/accounts）；本機快取密碼以便同瀏覽器自動續登。
  * 登入時佔用 IP 連線名額（同 IP 最多雙開）。
  */
 (function () {
@@ -19,6 +19,11 @@
       if (typeof t.normalize === "function") t = t.normalize("NFC");
     } catch (e) {}
     return t;
+  }
+
+  function accountLooksValid(account) {
+    if (!account || account.length > 32) return false;
+    return /^[\u4e00-\u9fffA-Za-z0-9_-]+$/.test(account);
   }
 
   function setStatus(msg, tone) {
@@ -139,6 +144,41 @@
     });
   }
 
+  function httpJson(method, url, body) {
+    return fetch(url, {
+      method: method,
+      headers: body != null ? { "Content-Type": "application/json" } : undefined,
+      body: body != null ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    }).then(function (res) {
+      return res.json().then(
+        function (data) {
+          return { status: res.status, data: data };
+        },
+        function () {
+          return { status: res.status, data: null };
+        }
+      );
+    });
+  }
+
+  function accountsApiReady() {
+    try {
+      if (location.protocol !== "http:" && location.protocol !== "https:") {
+        return Promise.resolve(false);
+      }
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+    return httpJson("GET", "/api/accounts/status")
+      .then(function (r) {
+        return !!(r && r.data && r.data.ok);
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
   function registerAccount() {
     const account = readAccount();
     const password = readPassword();
@@ -146,15 +186,40 @@
       setStatus("請輸入帳號。", "err");
       return;
     }
+    if (!accountLooksValid(account)) {
+      setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
+      return;
+    }
     if (isRegistered(account)) {
-      setStatus("此帳號已註冊，請直接登入。", "err");
+      setStatus("此帳號已在本機註冊，請直接登入。", "err");
       return;
     }
-    if (!saveAccount(account, password)) {
-      setStatus("註冊失敗（本機儲存空間不足）。", "err");
-      return;
-    }
-    setStatus("註冊成功，請點登入。", "ok");
+    setStatus("註冊中……", "ok");
+    accountsApiReady().then(function (online) {
+      if (!online) {
+        if (!saveAccount(account, password)) {
+          setStatus("註冊失敗（本機儲存空間不足）。", "err");
+          return;
+        }
+        setStatus("註冊成功（離線本機），請點登入。", "ok");
+        return;
+      }
+      httpJson("POST", "/api/accounts/register", { account: account, password: password })
+        .then(function (r) {
+          if (r && r.data && r.data.ok) {
+            saveAccount(account, password);
+            setStatus("註冊成功，請點登入。", "ok");
+            return;
+          }
+          const msg =
+            (r && r.data && r.data.message) ||
+            (r && r.status === 409 ? "此帳號已被註冊，請換一個帳號。" : "註冊失敗，請稍後再試。");
+          setStatus(msg, "err");
+        })
+        .catch(function () {
+          setStatus("無法連線伺服器註冊，請稍後再試。", "err");
+        });
+    });
   }
 
   function loginAccount() {
@@ -164,28 +229,77 @@
       setStatus("請輸入帳號。", "err");
       return;
     }
-    const stored = getStoredPassword(account);
-    if (stored === null) {
-      setStatus("帳號不存在，請先註冊。", "err");
-      return;
-    }
-    if (stored !== password) {
-      setStatus("帳號或密碼錯誤。", "err");
+    if (!accountLooksValid(account)) {
+      setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
       return;
     }
     setStatus("驗證中……", "ok");
-    claimIp().then(function (r) {
-      if (r && r.ok) {
-        enterGame(account);
+    accountsApiReady().then(function (online) {
+      const finishOk = function (acc) {
+        saveAccount(acc || account, password);
+        claimIp().then(function (r) {
+          if (r && r.ok) {
+            enterGame(acc || account);
+            return;
+          }
+          const msg =
+            (r && r.message) ||
+            "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
+          setStatus(msg, "err");
+          try {
+            alert(msg);
+          } catch (e) {}
+        });
+      };
+
+      if (!online) {
+        const stored = getStoredPassword(account);
+        if (stored === null) {
+          setStatus("帳號不存在，請先註冊（需連線伺服器）。", "err");
+          return;
+        }
+        if (stored !== password) {
+          setStatus("帳號或密碼錯誤。", "err");
+          return;
+        }
+        finishOk(account);
         return;
       }
-      const msg =
-        (r && r.message) ||
-        "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
-      setStatus(msg, "err");
-      try {
-        alert(msg);
-      } catch (e) {}
+
+      httpJson("POST", "/api/accounts/login", { account: account, password: password })
+        .then(function (r) {
+          if (r && r.data && r.data.ok) {
+            finishOk((r.data && r.data.account) || account);
+            return;
+          }
+          // 相容：伺服器尚無此帳號時，若本機已有且密碼正確，自動補註冊一次
+          if (r && r.status === 404) {
+            const stored = getStoredPassword(account);
+            if (stored !== null && stored === password) {
+              return httpJson("POST", "/api/accounts/register", {
+                account: account,
+                password: password,
+              }).then(function (reg) {
+                if (reg && reg.data && reg.data.ok) {
+                  finishOk(account);
+                  return;
+                }
+                if (reg && reg.status === 409) {
+                  setStatus("此帳號已被他人註冊，請換帳號或確認密碼。", "err");
+                  return;
+                }
+                setStatus((reg && reg.data && reg.data.message) || "帳號同步失敗。", "err");
+              });
+            }
+          }
+          const msg =
+            (r && r.data && r.data.message) ||
+            (r && r.status === 404 ? "帳號不存在，請先註冊。" : "帳號或密碼錯誤。");
+          setStatus(msg, "err");
+        })
+        .catch(function () {
+          setStatus("無法連線伺服器登入，請稍後再試。", "err");
+        });
     });
   }
 

@@ -983,7 +983,55 @@
 #game-screen { position: absolute; inset: 0; padding: 16px; }   /* 吃滿整個舞台（取代舊 max-w-[1600px] 置中→改用滿版 1920） */
 /* 中央欄：地圖/戰鬥面板吃滿剩餘高度（最大化戰鬥與村莊畫面）；兩個日誌改「並排一列」(戰鬥日誌左、系統日誌右)、各佔一半寬 */
 #map-view-panel { flex: 1 1 0; min-height: 0; }
-#log-row { flex: 0 0 340px; min-height: 0; }   /* 日誌列固定高度(並排)；其餘高度全給地圖/戰鬥面板 */
+
+/* 📢 頭目死亡／重生跑馬燈（地圖標題列下方） */
+.boss-marquee {
+    position: relative;
+    height: 28px;
+    overflow: hidden;
+    border-bottom: 1px solid #805839;
+    background: linear-gradient(180deg, rgba(48, 28, 18, 0.95) 0%, rgba(22, 16, 18, 0.92) 100%);
+    box-shadow: inset 0 1px rgba(210, 164, 102, 0.12);
+}
+.boss-marquee.hidden { display: none !important; }
+.boss-marquee-track {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    will-change: transform;
+}
+.boss-marquee-track.boss-marquee-run {
+    animation: bossMarqueeScroll 9s linear forwards;
+}
+.boss-marquee-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fde68a;
+    text-shadow: 0 0 6px rgba(251, 191, 36, 0.35), 1px 1px 0 #000;
+    padding-right: 2rem;
+}
+.boss-announce-tag {
+    color: #f87171;
+    margin-right: 0.35rem;
+}
+.boss-announce-tag::before { content: '【'; }
+.boss-announce-tag::after { content: '】'; }
+.boss-announce-player { color: #93c5fd; }
+.boss-announce-map { color: #86efac; }
+.boss-announce-boss { color: #fca5a5; }
+@keyframes bossMarqueeScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(calc(-100% - 100vw)); }
+}
+@media (max-width: 900px) {
+    .boss-marquee { height: 26px; }
+    .boss-marquee-text { font-size: 12px; }
+}
+#log-row { flex: 0 0 340px; min-height: 0; }   /* 日誌列固定高度；其餘高度全給地圖/戰鬥面板 */
 /* ⚠️v2.6.37 狩獵區域改 1920/580 條狀後，戰鬥框變矮→地圖面板縮到內容(標題列+條狀框)、省下的高度由日誌列吸收長高。
    :has 掛在共同祖先 #col-center(其下 #map-view-panel 與 #log-row 為兄弟)；僅「狩獵中(battle-view 顯示且 area-fit)」套用→安全區(town-view·battle-view 隱藏)/攻城/裂痕(非 area-fit·仍 16:9 吃滿)維持原樣。 */
 #col-center:has(#battle-view.area-fit:not(.hidden)) #map-view-panel { flex: 0 0 auto; }
@@ -991,8 +1039,9 @@
 /* 🏘️ v3.2.87 安全區(town-view 顯示·battle-view 隱藏)比照狩獵：地圖面板依內容(標題列+800×450地圖)自適、其餘高度全給日誌列→地圖下方不再被 flex:1 撐出深色空隙、日誌緊接地圖下方（修「安全區背景把日誌撐開」） */
 #col-center:has(#town-view:not(.hidden)) #map-view-panel { flex: 0 0 auto; }
 #col-center:has(#town-view:not(.hidden)) #log-row { flex: 1 1 0; }
-#combat-log-panel { flex: 1 1 0; min-width: 0; min-height: 0; }   /* 左半·覆寫原 .flex-1(原垂直堆疊) */
-#syslog-panel { flex: 1 1 0; height: auto; min-width: 0; min-height: 0; }   /* 右半·覆寫原 h-1/3 */
+/* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼 */
+#combat-log-panel { flex: 1 1 0; min-width: 0; min-height: 0; width: 100%; }
+#syslog-panel.hidden { display: none !important; flex: 0 0 0 !important; width: 0 !important; height: 0 !important; overflow: hidden; }
 /* 戰鬥框填滿地圖面板（村莊 town-view 已 flex-1 自動吃滿）；area-fit 怪物 height:100% 隨之等比放大 */
 #battle-view { flex: 1 1 auto; min-height: 0; }
 #battle-view { position: relative; }   /* 🏷️ 供 #status-icon-bar 絕對定位錨定 */
@@ -2041,11 +2090,13 @@ button.classic-skill-cell { cursor:pointer; }
     #battle-view .mob-name { font-size: 11px; line-height: 1.1; }
     #town-npc-map { width: 100%; height: 100%; }
 
-    #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 8px !important; }
-    #combat-log-panel, #syslog-panel { flex: 0 0 190px !important; width: 100%; height: 190px !important; min-height: 190px; }
+    #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 0 !important; }
+    #combat-log-panel { flex: 0 0 280px !important; width: 100%; height: 280px !important; min-height: 280px; }
+    #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 7px 9px; font-size: 14px !important; }
-    #combat-log, #sys-log { padding: 9px !important; font-size: 13px !important; }
+    #combat-log, #sys-log, #world-log, #clan-log, #party-log { padding: 9px !important; font-size: 13px !important; }
     #combat-log-panel .cf-pill { min-height: 30px; padding: 3px 7px; }
+    #combat-log-panel .logtab-btn { font-size: .72rem; padding: 3px 7px; }
 
     #status-panel .panel-header, #squad-panel .panel-header { padding: 8px 10px; }
     #squad-tab-team, #squad-tab-skill { max-height: none; }
@@ -3382,12 +3433,13 @@ button.classic-skill-cell { cursor:pointer; }
 .logtab-dot-legend { background: #f0a020; box-shadow: 0 0 6px rgba(240,160,32,.95), 0 0 12px rgba(217,138,4,.6); }
 .logtab-dot-relic  { background: #4cc9f0; box-shadow: 0 0 6px rgba(76,201,240,.95), 0 0 12px rgba(56,189,248,.6); }
 
-/* 世界頻道輸入列（釘在面板底部，與日誌區同寬） */
+/* 世界頻道輸入列（釘在面板底部，與日誌區同寬）；.hidden 必須蓋過 display:flex */
 #world-input-row {
     display: flex; gap: 6px; align-items: center; padding: 7px 9px;
     border-top: 1px solid rgba(148,163,184,.22); background: rgba(15,23,42,.72);
     border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem; flex: 0 0 auto;
 }
+#world-input-row.hidden { display: none !important; }
 #world-input {
     flex: 1 1 auto; min-width: 0; font-size: .86rem; padding: 6px 10px; border-radius: 6px;
     border: 1px solid #475569; background: #0f172a; color: #e2e8f0; outline: none;
@@ -3445,7 +3497,7 @@ button.classic-skill-cell { cursor:pointer; }
 #world-log, #clan-log, #party-log { min-height: 0; }
 /* 🌐 世界頻道版面保護：叫賣釘選列在面板變矮時要能收縮（原本 flex:0 0 auto 會把輸入列擠出面板外），
    輸入列固定不縮，日誌區吸收剩餘空間。 */
-#syslog-panel #sys-log-pins { flex: 0 1 auto; min-height: 0; max-height: 40%; overflow-y: auto; }
+#combat-log-panel #sys-log-pins { flex: 0 1 auto; min-height: 0; max-height: 40%; overflow-y: auto; }
 #world-input-row { flex: 0 0 auto; }
 
 /* 🏴 v3.6.52 血盟外交狀態四色（宣戰列表·全 NPC 血盟）：

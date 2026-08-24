@@ -7,3 +7,5 @@ Thumbs.db
 .vscode/
 .idea/
 data/cloud/
+data/accounts.json
+data/char-names.json

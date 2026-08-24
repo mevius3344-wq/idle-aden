@@ -2280,7 +2280,10 @@ function _chatRenderLine(payload, isSelf) {
     return `${tag}<span class="wc-ask">${nameHtml}：${text}</span>`;
 }
 function _chatNotifyUnread(ch) {
-    if (ch === _chatActiveChannel || ch === 'world') return;
+    // 已在該分頁不亮點；世界頻道不亮點（防刷屏）；血盟／隊伍才提醒
+    if (typeof _unifiedLogTab !== 'undefined' && ch === _unifiedLogTab) return;
+    if (typeof _unifiedLogTab === 'undefined' && ch === _chatActiveChannel) return;
+    if (ch !== 'clan' && ch !== 'party') return;
     let dot = document.getElementById(ch === 'clan' ? 'chattab-dot-clan' : 'chattab-dot-party');
     if (dot) dot.classList.remove('hidden');
 }
@@ -2295,7 +2298,16 @@ function _chatDeliver(payload, fromRemote) {
         if (keys.length > 200) keys.slice(0, keys.length - 100).forEach(k => { delete _chatSeenIds[k]; });
     }
     _chatAppend(payload.ch, _chatRenderLine(payload, !fromRemote), fromRemote ? 'wc-remote' : 'wc-local');
-    if (fromRemote) _chatNotifyUnread(payload.ch);
+    if (fromRemote) {
+        _chatNotifyUnread(payload.ch);
+        // 📢 他方頭目擊殺廣播 → 本機跑馬燈同步
+        if (payload.ch === 'world' && payload.name === '系統' && typeof payload.text === 'string' && payload.text.indexOf('【頭目戰報】') === 0 && typeof pushBossMarquee === 'function') {
+            try {
+                let t = String(payload.text).replace(/^【頭目戰報】\s*/, '');
+                pushBossMarquee('<span class="boss-announce-tag">頭目戰報</span> ' + String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]), null);
+            } catch (e) {}
+        }
+    }
 }
 function _chatBroadcast(payload) {
     // 本機多分頁（BroadcastChannel / storage）
@@ -2312,21 +2324,16 @@ function _chatBroadcast(payload) {
 }
 function switchChatChannel(ch) {
     if (ch !== 'world' && ch !== 'clan' && ch !== 'party') ch = 'world';
-    _chatActiveChannel = ch;
-    ['world', 'clan', 'party'].forEach(function (id) {
-        let pane = _chatLogEl(id);
-        if (pane) pane.classList.toggle('hidden', id !== ch);
-        let btn = document.getElementById('chattab-btn-' + id);
-        if (btn) btn.classList.toggle('logtab-on', id === ch);
-    });
-    let pins = document.getElementById('sys-log-pins');
-    if (pins) pins.style.display = (ch === 'world') ? '' : 'none';
-    let input = document.getElementById('world-input');
-    if (input) input.placeholder = _CHAT_PLACEHOLDERS[ch] || _CHAT_PLACEHOLDERS.world;
-    let dot = document.getElementById(ch === 'clan' ? 'chattab-dot-clan' : (ch === 'party' ? 'chattab-dot-party' : ''));
-    if (dot) dot.classList.add('hidden');
-    let el = _chatLogEl(ch);
-    if (el && !(typeof _worldLogLocked !== 'undefined' && _worldLogLocked)) el.scrollTop = el.scrollHeight;
+    if (typeof switchUnifiedLogTab === 'function') switchUnifiedLogTab(ch);
+    else {
+        _chatActiveChannel = ch;
+        ['world', 'clan', 'party'].forEach(function (id) {
+            let pane = _chatLogEl(id);
+            if (pane) pane.classList.toggle('hidden', id !== ch);
+            let btn = document.getElementById('chattab-btn-' + id);
+            if (btn) btn.classList.toggle('logtab-on', id === ch);
+        });
+    }
 }
 function worldChannelAsk() {
     let input = document.getElementById('world-input');
@@ -3165,7 +3172,8 @@ function _wcAddGrudge(npc, opts) {
         if (typeof initWorldLogLock === 'function') initWorldLogLock();
         // 假玩家自動閒聊已關閉（僅保留真實玩家跨分頁發言）
         if (typeof syncNpcLanguageSetting === 'function') syncNpcLanguageSetting();
-        if (typeof switchChatChannel === 'function') switchChatChannel('world');
+        // 統一日誌預設留在「戰鬥日誌」；僅初始化聊天頻道狀態，不切換 UI
+        if (typeof _chatActiveChannel !== 'undefined') _chatActiveChannel = 'world';
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
     else bind();
