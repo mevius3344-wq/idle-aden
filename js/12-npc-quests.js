@@ -196,6 +196,15 @@ function saveWarehouse(w){
         if (ok && tombsChanged) _whTombsWrite(tombs);
     } catch(e){}
     try { if (typeof _lkInvalidateWhCache === 'function') _lkInvalidateWhCache(); } catch(e){}   // ⚡ v3.5.89 倉庫已變 → 讓 js/14 的「鎖定件索引」快取立即失效（否則存/取後提示數字最多慢 0.5 秒）
+    if (ok) {
+      try {
+        if (typeof cloudPushShared === 'function') {
+          let _classic = !!(player && player.classicMode);
+          let _name = _classic ? 'warehouse_classic' : 'warehouse';
+          cloudPushShared(_name, { items: items, gold: (w && w.gold) || 0 });
+        }
+      } catch (_cloudWh) {}
+    }
     return ok;
 }
 // ===== 🎴🗡️ 共用收集圖鑑（卡片 cardDex／裝備 equipDex）：同模式角色共用，獨立於存檔位的 localStorage 鍵（概念同共用倉庫）=====

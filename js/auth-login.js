@@ -3,6 +3,7 @@
 /**
  * 登入閘門：帳號／密碼皆為「天堂」。
  * 通過後才顯示主選單「開始遊戲」。
+ * 登入時佔用 IP 連線名額（同 IP 最多雙開）。
  */
 (function () {
   const ACC_PREFIX = "fb5_account_";
@@ -46,17 +47,6 @@
     return !!localStorage.getItem(ACC_PREFIX + account);
   }
 
-  function getPassword(account) {
-    try {
-      const raw = localStorage.getItem(ACC_PREFIX + account);
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      return data && typeof data.password === "string" ? data.password : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
   function currentSession() {
     try {
       return sessionStorage.getItem(SESSION_KEY) || "";
@@ -79,7 +69,7 @@
       el.classList.remove("hidden");
     });
     const welcome = $("auth-welcome");
-    if (welcome) welcome.textContent = "歡迎「" + account + "」進入放置天堂 - 日出之國";
+    if (welcome) welcome.textContent = "歡迎「" + account + "」進入經典天堂";
   }
 
   function showLoggedOut() {
@@ -108,6 +98,23 @@
     setStatus("帳號已就緒，請點登入。", "ok");
   }
 
+  function enterAfterClaim(account) {
+    setSession(account);
+    setStatus("驗證成功，正在同步雲端進度……", "ok");
+    var sync =
+      window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function"
+        ? window.cloudSyncOnLogin
+        : function () {
+            return Promise.resolve(false);
+          };
+    sync().finally(function () {
+      setStatus("驗證成功，正在進入……", "ok");
+      setTimeout(function () {
+        showLoggedIn(account);
+      }, 200);
+    });
+  }
+
   function loginAccount() {
     const account = readAccount();
     const password = readPassword();
@@ -120,19 +127,47 @@
       return;
     }
     ensureFixedAccount();
-    setSession(FIXED_ACCOUNT);
-    setStatus("驗證成功，正在進入……", "ok");
-    setTimeout(function () {
-      showLoggedIn(FIXED_ACCOUNT);
-    }, 600);
+    setStatus("驗證中……", "ok");
+
+    const claimer =
+      window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function"
+        ? window.IpSessionLimit.claim
+        : function () {
+            return Promise.resolve({ ok: true });
+          };
+
+    claimer().then(function (r) {
+      if (r && r.ok) {
+        enterAfterClaim(FIXED_ACCOUNT);
+        return;
+      }
+      const msg =
+        (r && r.message) ||
+        "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
+      setStatus(msg, "err");
+      try {
+        alert(msg);
+      } catch (e) {}
+    });
   }
 
   function logoutAccount() {
+    if (window.IpSessionLimit && typeof window.IpSessionLimit.release === "function") {
+      try {
+        window.IpSessionLimit.release();
+      } catch (e) {}
+    }
     setSession("");
     const pass = $("auth-password");
     if (pass) pass.value = "";
     showLoggedOut();
     setStatus("已登出。", "ok");
+  }
+
+  function onIpSessionLost() {
+    setSession("");
+    showLoggedOut();
+    setStatus("連線名額已失效（IP 雙開限制）。請重新登入。", "err");
   }
 
   function boot() {
@@ -157,8 +192,37 @@
     }
 
     const session = currentSession();
-    if (session === FIXED_ACCOUNT && isRegistered(session)) showLoggedIn(session);
-    else showLoggedOut();
+    if (session === FIXED_ACCOUNT && isRegistered(session)) {
+      // 重新整理後仍要重新佔位；失敗則退回登入畫面
+      const claimer =
+        window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function"
+          ? window.IpSessionLimit.claim
+          : function () {
+              return Promise.resolve({ ok: true });
+            };
+      claimer().then(function (r) {
+        if (r && r.ok) {
+          var sync =
+            window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function"
+              ? window.cloudSyncOnLogin
+              : function () {
+                  return Promise.resolve(false);
+                };
+          sync().finally(function () {
+            showLoggedIn(session);
+          });
+        } else {
+          setSession("");
+          showLoggedOut();
+          setStatus(
+            (r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。",
+            "err"
+          );
+        }
+      });
+    } else {
+      showLoggedOut();
+    }
   }
 
   if (document.readyState === "loading") {
@@ -172,5 +236,6 @@
     loginAccount: loginAccount,
     logoutAccount: logoutAccount,
     currentAccount: currentSession,
+    onIpSessionLost: onIpSessionLost,
   };
 })();

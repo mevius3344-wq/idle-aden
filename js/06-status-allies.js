@@ -1143,6 +1143,7 @@ function allyAttackOnce(ally, _arrowDelay) {   // 🏹 v3.2.14 _arrowDelay(選�
 }
 // 傭兵雙擊（鋼爪/雙刀）：依武器 comboRate% 追加一次完整一般攻擊，獨立判定命中（🔮 暗影5/5→額外攻擊×1.5）；fullDmg=false（爆擊精通沿用）保留舊倍率×0.5；不遞迴
 function allyComboAttack(ally, t, fullDmg) {
+    if (!weaponCombatProcsOn()) return;
     if (!t || t.curHp <= 0 || t._dead) return;
     // ⚠️ null-safe 取武器：ally.eq.wpn 預設為 null（buildAlly 只補 ally.eq = ally.eq || {}），而爆擊精通
     //    的呼叫點沒有 `wpn &&` 前置守衛 → 空手傭兵爆擊時原本會拋 TypeError。比照玩家 procCombo(js/03)。
@@ -1455,6 +1456,7 @@ function allyMageAct(ally) {
 }
 // 妖精協力：連射（弓）— 依記錄的發動機率追加 1~3 箭，每箭約 30% 傷害，隨機命中場上敵人
 function allyRapidfire(ally, forceProc, classicOk) {
+    if (!weaponCombatProcsOn()) return;
     if (ally.classicMode && !classicOk) return;   // 🎮 經典模式：一般連射停用；地精靈王的抗拒受擊連射例外
     let d = ally.d || {};
     let wpn = (ally.eq && ally.eq.wpn) ? DB.items[ally.eq.wpn.id] : null;
@@ -1834,6 +1836,7 @@ function _allyMagicStrikeHit(ally, t, wpnInst, wpn) {
 //   ⚠️ 傳入時跳過魔法娃娃 proc——娃娃是「角色每次攻擊」的效果，不隨武器數量倍增（與玩家端同一決定）。
 function allyWeaponProcs(ally, target, hitInfo, instOverride) {
     if (!instOverride) allyDollAttackProcs(ally, target);   // 🆕 v2.6.10 #3：魔法娃娃攻擊 proc（置於武器判定前→無武器也生效，比照玩家）
+    if (!weaponCombatProcsOn()) return;   // 關閉武器戰鬥特效：娃娃仍可觸發
     let wpnInst = instOverride || (ally.eq && ally.eq.wpn);
     if (!wpnInst) return;
     let wpn = DB.items[wpnInst.id];
@@ -2100,6 +2103,7 @@ function _allyStrikeWithIllu(ally, mob, opts) {
     finally { ally.d.extraDmg = b.ed; ally.d.extraHit = b.eh; ally.d.magicDmg = b.md; ally.d.meleeDmg = b.mel; }
 }
 function allyReactCounter(mob, blocked) {
+    if (!weaponCombatProcsOn()) return;
     if (!player.allies || !player.allies.length) return;
     player.allies.forEach(ally => {
         if (!ally || !ally.eq || !ally.eq.wpn) return;
@@ -2119,6 +2123,7 @@ function allyReactCounter(mob, blocked) {
 }
 // 居合：傭兵持武士刀且未裝「真盾牌」（臂甲可發動） → 玩家迴避或敵人未命中時 50%；必中、可自然重擊/爆擊
 function allyReactIai(mob) {
+    if (!weaponCombatProcsOn()) return;
     if (!player.allies || !player.allies.length) return;
     player.allies.forEach(ally => {
         if (!ally || !ally.eq || !ally.eq.wpn || (ally.eq.shield && !_isArmguard(ally.eq.shield))) return;

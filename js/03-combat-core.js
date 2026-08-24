@@ -181,8 +181,6 @@ function _dpsCreditDot(src, amt) {   // DoT 依施加者標記歸因：'player'/
 
 function gameLoop() {
     if (_ffResumeTimer !== null && _tickDebt >= TICK_MS) return;   // 快速續跑已排程時，忽略一般 100ms 計時器插隊
-    // 🛡️ 反盜用：非官方網域時橫幅若被移除則自動重掛（官方/本機為快取布林值判定，成本可忽略）
-    if (typeof _origEnforce === 'function') _origEnforce();
     let now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     if (_loopLast == null) {
         _loopLast = now;
@@ -2444,9 +2442,12 @@ function consumeArrow() {
     return DB.items[arrowId];
 }
 
+// 關閉全部武器戰鬥特效（共鳴／魔擊／切割／穿透／連擊／雙擊／反擊／居合／即死／吸血／出血等）。改 true 可恢復。
+function weaponCombatProcsOn() { return false; }
 // ===== 法杖共鳴：裝備指定魔法杖時，一般攻擊(不論命中與否)有 智力/60 機率免費施展光箭 =====
 const WAND_LIGHTARROW_IDS = ['wpn_oakwand', 'wpn_38', 'wpn_witchwand', 'wpn_manawand', 'wpn_crystalwand', 'wpn_baless', 'wpn_wand_rasta', 'wpn_red_crystalwand', 'wpn_laia_wand', 'wpn_icequeen_wand', 'wpn_demon_scythe', 'wpn_darkmage_wand', 'wpn_baphomet_wand', 'wpn_illu_wand', 'wpn_demon_wand_hidden', 'wpn_dark_crystalball', 'wpn_steel_manawand_blue', 'relic_amp_staff', 'relic_elder_thunder', 'relic_cerberus_wand', 'relic_evillizard_eye', 'relic_lightbeam_wand', 'relic_warlock_grimoire', 'relic_windking_roar', 'relic_rockmage_secret', 'wpn_onmyoji_fan', 'relic_sr_kyuubi_wand', 'relic_water_orb', 'relic_unsealed_baphomet_wand', 'wpn_angel_wand'];   // 😇 v3.7.74 天使魔杖亦共鳴   // 🏺 v3.7.20 解除封印的巴風特魔杖亦共鳴   // 🏺 v3.5.27 水靈的魔力珠亦共鳴（一般限定＝wandLightArrowProc 開頭 classicMode 早退）   // 🌅 日出之國：陰陽師的扇子（傳說）＋九尾妖狐的怒火（遺物）亦共鳴   // 🏺 遺物 安普長老的拐杖／長老的雷電能量／三頭犬魔杖／邪惡蜥蜴的眼瞳／光束強化魔杖／風精靈王的狂嘯／破岩法師的秘術亦共鳴 // 🔮 幻術士魔杖：共鳴（👹 隱藏的魔族魔杖亦共鳴；🏴‍☠️ 漆黑水晶球亦共鳴）   // 🏅 共鳴：含蕾雅魔杖／冰之女王魔杖／惡魔鐮刀／黑法師之杖／🔧巴風特魔杖（👑惡魔王魔杖已改為魔爆 eff:magicburst）
 function wandLightArrowProc(target) {
+    if (!weaponCombatProcsOn()) return;
     if (player.classicMode) return;   // 🎮 經典模式：停用共鳴
     let wpn = player.eq.wpn;
     if (!wpn || !WAND_LIGHTARROW_IDS.includes(wpn.id)) return;
@@ -2531,6 +2532,7 @@ function procMoonburst(t) {
 }
 // 月光爆裂 proc 判定：裝備熾炎天使弓時 8% 觸發；主目標已死則轉移到場上隨機存活怪（與共鳴相同）
 function moonburstProc(target) {
+    if (!weaponCombatProcsOn()) return;
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     if (!wpn || wpn.eff !== 'moonburst') return;
     if (Math.random() >= 0.08) return;
@@ -2609,6 +2611,7 @@ function relicAuraTick() {
 }
 // 魔擊 proc 判定：裝備力量魔法杖時，每次攻擊(命中與否) 力量/60 機率；主目標已死則轉移到場上隨機存活怪
 function magicStrikeProc(target) {
+    if (!weaponCombatProcsOn()) return;
     if (player.classicMode) return;   // 🎮 經典模式：停用魔擊
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     if (!wpn || wpn.eff !== 'magicstrike') return;
@@ -2623,6 +2626,7 @@ function magicStrikeProc(target) {
 }
 // ===== 連射：發動攻擊時依機率追加 1~3 箭；每箭各自接受命中判定(可未命中/重擊/爆擊)，傷害為該箭結算的 30%；每箭也各判定月光爆裂 =====
 function rapidfireProc(arrowData, forceProc, classicOk) {
+    if (!weaponCombatProcsOn()) return;
     if (player.classicMode && !classicOk) return;   // 🎮 經典模式：一般連射停用；地精靈王的抗拒受擊連射為指定例外
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     if (!wpn || !wpn.rapidfire) return;
@@ -2674,6 +2678,7 @@ function hurtRapidfireProc() {
 function _isArmguard(shRef) { return !!(shRef && DB.items[shRef.id] && DB.items[shRef.id].armguard); }
 // ===== 反擊（單手劍）：對攻擊者打一次「必定命中、必定非重擊、傷害 50%」的一般攻擊；只打攻擊者，不轉移 =====
 function procCounter(t) {
+    if (!weaponCombatProcsOn()) return;
     if (player.classicMode) return;   // 🎮 經典模式：停用反擊
     if (!t || t.curHp <= 0) return;
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
@@ -2694,6 +2699,7 @@ function procCounter(t) {
 }
 // ===== 居合（武士刀）：對攻擊者打一次「必定命中、可自然重擊/爆擊」的一般攻擊；只打攻擊者 =====
 function procIai(t) {
+    if (!weaponCombatProcsOn()) return;
     if (player.classicMode) return;   // 🎮 經典模式：停用居合
     if (!t || t.curHp <= 0) return;
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
@@ -2745,6 +2751,7 @@ function effHpCost(sk) {
 }
 // 🐉 龍鱗臂甲 額外攻擊：每攻擊週期追加 d.equipExtraAtk 次全傷害一般近戰攻擊（各自命中判定；不遞迴再觸發額外攻擊）
 function dragonExtraAttackProc(target) {
+    if (!weaponCombatProcsOn()) return;
     let n = (player.d && player.d.equipExtraAtk) || 0;
     if (n <= 0) return;
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
@@ -2767,6 +2774,7 @@ function dragonExtraAttackProc(target) {
     }
 }
 function procCombo(t, fullDmg) {
+    if (!weaponCombatProcsOn()) return;
     if (!t || t.curHp <= 0 || t._dead) return;
     let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     let dice = wpn ? (t.s === 'L' ? wpn.dmgL : wpn.dmgS) : 2;
@@ -2977,6 +2985,7 @@ function qiguPlayerAttack(target, wpn) {
 }
 // 奇古獸武器特效（隨強化提升機率）：共鳴=幻影衝擊(80~160無屬性固定)、寒冰=心靈破壞(玩家最大MP5%、不耗MP)
 function qiguWeaponProc(target, wpn) {
+    if (!weaponCombatProcsOn()) return;
     if (!wpn || !wpn.qiguProc || !target || target.curHp <= 0) return;
     let en = capWpnEn((player.eq.wpn && player.eq.wpn.en) || 0);
     if (Math.random() >= (1 + en) / 100) return;   // 1% + 每強化 +1%

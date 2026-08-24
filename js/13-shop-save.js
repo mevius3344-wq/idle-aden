@@ -878,6 +878,17 @@ function returnToCharacterSelect(){
     return true;
 }
 function renderLoadSelect(){
+    // 📁 開啟選角畫面：先同步雲端／桌面改過的 slot，摘要才會是最新
+    try {
+      if (typeof cloudReady === 'function' && cloudReady() && typeof cloudPullSlotIntoStorage === 'function') {
+        for (let _i = 1; _i <= 8; _i++) cloudPullSlotIntoStorage(_i);
+      }
+    } catch (_cloudSelE) {}
+    try {
+      if (typeof desktopPlayerReady === 'function' && desktopPlayerReady() && typeof desktopPullSlotIntoStorage === 'function') {
+        for (let _i = 1; _i <= 8; _i++) desktopPullSlotIntoStorage(_i);
+      }
+    } catch (_deskSelE) {}
     const grid = document.getElementById('load-slot-grid');
     if(!grid) return;
     let html = '';
@@ -993,6 +1004,8 @@ function loadDeleteSelected(){
     _lsRemove('lineage_idle_save_' + slot);
     _lsRemove('lineage_idle_save_' + slot + '_bak');
     if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return; }
+    try { if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot); } catch (_deskDelE) {}
+    try { if (typeof cloudDeleteSlot === 'function') cloudDeleteSlot(slot); } catch (_cloudDelE) {}
     try { if(typeof clanOnRoleDeleted === 'function') clanOnRoleDeleted(oldPlayer); } catch(e){ console.warn('clan delete cleanup', e); }
     renderLoadSelect();
     alert(`角色「${expected}」已刪除。現在可以在此欄位創建新角色。`);
@@ -1568,6 +1581,8 @@ function saveGame() {
     _mercMonotonicExpGuard();   // 🤝 v3.8.2 受僱中經驗只增不減：序列化前吸收磁碟較高的等級/經驗，防舊快照覆蓋待領帳本領取的經驗
     if(!_lzSet('lineage_idle_save_' + currentSlot, _saveWrap(saveStateJson()))) throw new Error('persistent storage write failed');   // 🔧 寫入成功才回報；並由 saveStateJson 排除戰鬥面向暫存參照
     if(typeof petRosterSave === 'function' && !petRosterSave()) throw new Error('pet roster write failed');
+    try { if (typeof desktopMirrorAfterSave === 'function') desktopMirrorAfterSave(currentSlot); } catch (_deskE) {}
+    try { if (typeof cloudMirrorAfterSave === 'function') cloudMirrorAfterSave(currentSlot); } catch (_cloudE) {}
     logSys(`遊戲進度已儲存。`);
     _saveFailureNotified = false;
     return true;
@@ -1650,6 +1665,9 @@ function loadGame() {
     // 🐾 v3.3.16 換角色前：先把上一角色未存的寵物進度 flush 進共用桶，再失效記憶體快取→新角色 petRoster() 從桶重載（防跨角色髒鏡像互洗裝備/出戰）。
     try { if (typeof _petRosterDirty !== 'undefined' && _petRosterDirty && player && player.cls && typeof petRosterSave === 'function') petRosterSave(); } catch (e) {}
     try { if (typeof _petRosterKey !== 'undefined') _petRosterKey = null; } catch (e) {}
+    // 📁 雲端／本機桌面：優先灌回 localStorage（共用伺服器進度）
+    try { if (typeof cloudPullBeforeLoad === 'function') cloudPullBeforeLoad(currentSlot); } catch (_cloudLoadE) {}
+    try { if (typeof desktopPullBeforeLoad === 'function') desktopPullBeforeLoad(currentSlot); } catch (_deskLoadE) {}
     let _u = _saveUnwrap(_lzGet('lineage_idle_save_' + currentSlot));   // 🛡️ 解存檔簽章（舊明文存檔 signed:false 照常載入）
     // 🛡️ 簽章不符＝被竄改：拒絕載入
     //    ⚠️ v3.5.94 文案必須跟著按鈕顯隱規則走：摘要 _summaryFromRaw 不驗章，簽章壞掉但 payload 仍是合法 JSON 的存檔

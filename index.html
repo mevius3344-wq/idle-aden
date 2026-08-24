@@ -11,7 +11,7 @@
          DESIGN_W/isMobileDevice/window.__mobileScaling 全專案零呼叫；唯一實際效果 viewport-fit=cover 直接併入上方 meta。
          （width=1180 手機縮放已於桌機專注決策時移除·本作 desktop-only） -->
 
-    <title>放置天堂 - 日出之國</title>
+    <title>經典天堂</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
     <link rel="stylesheet" href="css/style.css?v=v3.8.10-create-name">
@@ -31,7 +31,7 @@
 
         <!-- 帳號密碼：帳號／密碼皆為「天堂」 -->
         <div id="account-auth-panel" class="account-auth-panel" aria-label="帳號登入註冊">
-            <div class="account-auth-game-title">放置天堂 - 日出之國</div>
+            <div class="account-auth-game-title">經典天堂</div>
             <div class="account-auth-box">
                 <div class="account-auth-field">
                     <label for="auth-account">帳號：</label>
@@ -50,7 +50,7 @@
         </div>
 
         <div id="login-title-layer" class="text-center account-gated hidden">
-            <h1 class="text-4xl font-bold text-yellow-400 mb-2">放置天堂 - 日出之國</h1>
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2">經典天堂</h1>
             <p class="text-base text-slate-400">創造您的角色並開始冒險</p>
         </div>
 
@@ -63,7 +63,6 @@
         <div id="login-meta-layer" class="account-gated hidden">
             <!-- 🏷️ 版本號（由 js/14 window.onload 依 GAME_VERSION 填入；此處 v2.4.0 僅為 JS 失效時的後備文字） -->
             <div id="login-version" class="text-center text-sm text-slate-300 font-medium tracking-wide select-none">v2.4.0</div>
-            <div id="login-disclaimer" class="text-center text-xs text-slate-400 leading-relaxed mx-auto">本遊戲為非官方免費同人作品，絕無營利意圖；遊戲內圖片與音樂版權歸原權利方 NCSOFT 所有，其餘程式為獨立開發，嚴禁商業販售。</div>
         </div>
       </div>
 
@@ -587,22 +586,24 @@
     })();
     </script>
 
-    <script src="js/auth-login.js?v=v3.8.41-auth-tiantang"></script>
+    <script src="js/34-ip-session-limit.js?v=v3.8.44-ip-dual"></script>
+    <script src="js/35-cloud-save.js?v=v3.8.45-cloud-save"></script>
+    <script src="js/auth-login.js?v=v3.8.45-cloud-save"></script>
     <script src="js/anim-manifest.js?v=v3.8.12-necro-relics"></script>
-    <script src="js/00-data.js?v=v3.8.40-no-sherine"></script>
+    <script src="js/00-data.js?v=v3.8.42-classic-name"></script>
 <script src="js/01-drops-config.js?v=v3.8.40-no-sherine"></script>
 <script src="js/02-stats-recompute.js?v=v3.8.40-no-sherine"></script>
-    <script src="js/03-combat-core.js?v=v3.8.26-flywing-relics"></script>
-    <script src="js/04-combat-attack.js?v=v3.8.26-flywing-relics"></script>
+    <script src="js/03-combat-core.js?v=v3.8.43-no-wpn-procs"></script>
+    <script src="js/04-combat-attack.js?v=v3.8.43-no-wpn-procs"></script>
 <script src="js/05-kill-progression.js?v=v3.8.40-no-sherine"></script>
-    <script src="js/06-status-allies.js?v=v3.8.7-no-merc"></script>
+    <script src="js/06-status-allies.js?v=v3.8.43-no-wpn-procs"></script>
     <script src="js/07-skills-cast.js?v=v3.8.26-flywing-relics"></script>
 <script src="js/08-items-equip.js?v=v3.8.40-no-sherine"></script>
 <script src="js/09-vfx-render.js?v=v3.8.40-no-sherine"></script>
     <script src="js/10-ui-tabs.js?v=v3.8.40-no-sherine"></script>
 <script src="js/11-world-map.js?v=v3.8.40-no-sherine"></script>
-<script src="js/12-npc-quests.js?v=v3.8.40-no-sherine"></script>
-<script src="js/13-shop-save.js?v=v3.8.40-no-sherine"></script>
+<script src="js/12-npc-quests.js?v=v3.8.45-cloud-save"></script>
+<script src="js/13-shop-save.js?v=v3.8.45-cloud-save"></script>
 <script src="js/14-craft-pandora.js?v=v3.8.40-no-sherine"></script>
 <script src="js/15-cards.js?v=v3.7.66"></script>
 <script src="js/16-equip-book.js?v=v3.8.15-legacy-import-smooth"></script>
@@ -621,5 +622,6 @@
 <script src="js/30-siege-v2.js?v=v3.8.7-no-merc"></script>
 <script src="js/31-castle-guards.js?v=v3.8.23-sherine-set-rework"></script>
 <script src="js/32-threat.js?v=v3.8.23-sherine-set-rework"></script>
+<script src="js/33-desktop-player-files.js?v=v3.8.42-desktop-player"></script>
 </body>
 </html>
