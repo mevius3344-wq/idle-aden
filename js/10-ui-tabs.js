@@ -2255,147 +2255,120 @@ function _pvpTabMix(a, b, t) {
 function updatePvpButtonTone() {
     let btn = document.getElementById('btn-pvp');
     if (!btn) return;
-    let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player && player.alignmentValue) : Math.max(-32767, Math.min(32767, Math.round(Number(player && player.alignmentValue) || 0)));
-    let kind = (typeof pvpAlignmentKind === 'function') ? pvpAlignmentKind(align) : (align >= 1000 ? 'justice' : (align <= -1000 ? 'evil' : 'neutral'));
-    let bg = '#4b5563', border = '#6b7280', fg = '#f1f5f9';
-    if (kind === 'justice') {
-        let t = Math.max(0, Math.min(1, (align - 1000) / (32767 - 1000)));
-        bg = _pvpTabMix('#1e3a8a', '#3b82f6', t);
-        border = _pvpTabMix('#2563eb', '#93c5fd', t);
-        fg = '#eff6ff';
-    } else if (kind === 'evil') {
-        let t = Math.max(0, Math.min(1, (Math.abs(align) - 1000) / (32767 - 1000)));
-        bg = _pvpTabMix('#7f1d1d', '#ef4444', t);
-        border = _pvpTabMix('#b91c1c', '#fecaca', t);
-        fg = '#fff1f2';
-    }
-    let top = _pvpTabMix(bg, '#e2e8f0', 0.14);
-    let shine = _pvpTabMix(bg, '#f8fafc', 0.24);
-    let notch = _pvpTabMix(bg, '#020617', 0.26);
-    let lower = _pvpTabMix(bg, '#f8fafc', 0.10);
-    let bottom = _pvpTabMix(bg, '#020617', 0.34);
-    btn.style.background = (kind === 'neutral')
-        ? 'linear-gradient(135deg, #565d68 0%, #6b7280 26%, #3f4651 48%, #5a6270 72%, #313740 100%)'
-        : `linear-gradient(135deg, ${top} 0%, ${shine} 26%, ${notch} 48%, ${lower} 72%, ${bottom} 100%)`;
-    btn.style.color = fg;
-    btn.style.borderColor = border;
+    btn.style.background = 'linear-gradient(135deg, #4a2f0c 0%, #b3850e 28%, #3f2a0c 52%, #9a720c 76%, #2e2008 100%)';
+    btn.style.color = '#fde68a';
+    btn.style.borderColor = '#d4a017';
     btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.35)';
 }
-let _socialPanelMode = 'pvp';
-function setSocialPanelMode(mode) {
-    _socialPanelMode = mode === 'private' ? 'private' : 'pvp';
+let _leaderboardBoard = 'level';
+let _leaderboardLoading = false;
+let _leaderboardRows = null;
+let _leaderboardError = '';
+let _leaderboardUpdatedAt = 0;
+const LEADERBOARD_BOARD_LABELS = { level: '等級', gold: '金幣', pride: '傲慢之塔', rift: '時空裂痕' };
+function setLeaderboardBoard(board) {
+    if (!LEADERBOARD_BOARD_LABELS[board]) board = 'level';
+    _leaderboardBoard = board;
     renderPvpTab();
+    loadLeaderboard(true);
 }
-function _socialNpcRow(rec) {
-    if (!rec || !rec.n) return '';
-    let align = typeof pvpClampAlignment === 'function' ? pvpClampAlignment(rec.alignmentValue) : Number(rec.alignmentValue) || 0;
-    let name = typeof pvpNameHtml === 'function'
-        ? pvpNameHtml(rec.n, align, 'font-bold')
-        : `<span class="font-bold">${_pvpTabEsc(rec.n)}</span>`;
-    let arg = encodeURIComponent(rec.n).replace(/'/g, '%27');
-    let clan = rec.clanName ? `${rec.clanLeader ? '盟主・' : ''}${_pvpTabEsc(rec.clanName)}` : '無血盟';
-    return `<div class="bg-slate-900/80 border border-slate-700 rounded p-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-            <div class="truncate">${name}${rec.clanLeader ? '<span class="ml-2 text-xs text-amber-300">盟主</span>' : ''}</div>
-            <div class="text-xs text-slate-500 mt-1 truncate">${_pvpTabEsc(rec.avatar || '男戰士')}・${clan}</div>
-        </div>
-        <button class="btn shrink-0 px-3 py-2 text-sm font-bold bg-cyan-950 hover:bg-cyan-900 border-cyan-700 text-cyan-100" onclick="socialOpenPrivateByName('${arg}')">私訊</button>
+function _leaderboardNavHtml() {
+    return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        ${Object.keys(LEADERBOARD_BOARD_LABELS).map(id => {
+            let on = _leaderboardBoard === id;
+            return `<button class="btn py-2 text-sm font-bold ${on ? 'bg-amber-900 border-amber-500 text-amber-100' : 'bg-slate-900 border-slate-700 text-slate-400'}" onclick="setLeaderboardBoard('${id}')">${LEADERBOARD_BOARD_LABELS[id]}</button>`;
+        }).join('')}
     </div>`;
 }
-function _socialPrivatePanelHtml() {
-    let recent = typeof socialGetRecentContacts === 'function' ? socialGetRecentContacts() : [];
-    return `<div class="flex flex-col gap-3">
-        <div class="bg-slate-900/80 border border-slate-700 rounded p-3">
-            <div class="text-sm font-bold text-slate-200 mb-2">搜尋玩家 NPC</div>
-            <input id="social-npc-search" type="search" maxlength="24" autocomplete="off"
-                class="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
-                placeholder="輸入至少 2 個字" oninput="renderSocialNpcSearch(this.value)">
-            <div id="social-npc-search-results" class="flex flex-col gap-2 mt-3"></div>
+function _leaderboardRowHtml(row, selfName) {
+    let isSelf = !!(selfName && row.name && row.name === selfName);
+    let medal = row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : ('#' + row.rank);
+    return `<div class="bg-slate-900/80 border ${isSelf ? 'border-amber-500/80 ring-1 ring-amber-500/30' : 'border-slate-700'} rounded p-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 text-center shrink-0 text-lg font-bold text-amber-200">${medal}</div>
+            <div class="min-w-0">
+                <div class="truncate font-bold ${isSelf ? 'text-amber-200' : 'text-slate-100'}">${_pvpTabEsc(row.name)}${isSelf ? ' <span class="text-xs text-amber-300">（你）</span>' : ''}</div>
+                <div class="text-xs text-slate-500 mt-0.5 truncate">${_pvpTabEsc(row.clsName || row.cls || '')} · Lv.${Math.max(1, Number(row.lv) || 1)}</div>
+            </div>
         </div>
-        <div class="flex items-center justify-between">
-            <div class="font-bold text-cyan-200">最近私訊</div>
-            <div class="text-xs text-slate-500">${recent.length} / 20</div>
-        </div>
-        <div class="flex flex-col gap-2">
-            ${recent.map(_socialNpcRow).join('') || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前沒有私訊紀錄。</div>'}
+        <div class="text-right shrink-0">
+            <div class="text-amber-200 font-bold">${_pvpTabEsc(row.valueLabel || '')}</div>
         </div>
     </div>`;
 }
-function renderSocialNpcSearch(query) {
-    let box = document.getElementById('social-npc-search-results');
-    if (!box) return;
-    let clean = String(query || '').trim();
-    if (clean.replace(/\s+/g, '').length < 2) {
-        box.innerHTML = '';
-        return;
+function loadLeaderboard(force) {
+    if (_leaderboardLoading && !force) return;
+    if (!force && _leaderboardRows && Date.now() - _leaderboardUpdatedAt < 30000) return;
+    _leaderboardLoading = true;
+    _leaderboardError = '';
+    renderPvpTab();
+    try {
+        if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+            _leaderboardLoading = false;
+            _leaderboardRows = null;
+            _leaderboardError = '排行榜需要連線至伺服器遊玩。';
+            renderPvpTab();
+            return;
+        }
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/leaderboard?board=' + encodeURIComponent(_leaderboardBoard) + '&limit=50', true);
+        xhr.onload = function () {
+            _leaderboardLoading = false;
+            let data = null;
+            try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { data = null; }
+            if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                _leaderboardRows = data.rows || [];
+                _leaderboardUpdatedAt = Date.now();
+                _leaderboardError = '';
+            } else {
+                _leaderboardRows = null;
+                _leaderboardError = (data && data.message) || (data && data.error === 'offline' ? '排行榜需要線上伺服器。' : '無法載入排行榜，請稍後再試。');
+            }
+            renderPvpTab();
+        };
+        xhr.onerror = function () {
+            _leaderboardLoading = false;
+            _leaderboardRows = null;
+            _leaderboardError = '無法連線至排行榜伺服器。';
+            renderPvpTab();
+        };
+        xhr.send(null);
+    } catch (e) {
+        _leaderboardLoading = false;
+        _leaderboardRows = null;
+        _leaderboardError = '無法載入排行榜。';
+        renderPvpTab();
     }
-    let rows = typeof socialSearchNpcCandidates === 'function' ? socialSearchNpcCandidates(clean) : [];
-    box.innerHTML = rows.map(_socialNpcRow).join('') ||
-        '<div class="text-slate-500 text-sm border border-slate-800 rounded p-3 text-center">找不到符合的玩家 NPC。</div>';
 }
 function renderPvpTab() {
     let div = document.getElementById('tab-pvp');
     if (!div || !player || !player.cls) return;
-    if (typeof pvpEnsureState === 'function') pvpEnsureState();
     updatePvpButtonTone();
-    let socialNav = `<div class="grid grid-cols-2 gap-2 mb-3">
-        <button class="btn py-2 font-bold ${_socialPanelMode === 'pvp' ? 'bg-red-950 border-red-600 text-red-100' : 'bg-slate-900 border-slate-700 text-slate-400'}" onclick="setSocialPanelMode('pvp')">PVP</button>
-        <button class="btn py-2 font-bold ${_socialPanelMode === 'private' ? 'bg-cyan-950 border-cyan-600 text-cyan-100' : 'bg-slate-900 border-slate-700 text-slate-400'}" onclick="setSocialPanelMode('private')">私訊</button>
-    </div>`;
-    if (_socialPanelMode === 'private') {
-        div.innerHTML = socialNav + _socialPrivatePanelHtml();
+    let nav = _leaderboardNavHtml();
+    if (_leaderboardLoading) {
+        div.innerHTML = nav + '<div class="text-slate-400 text-sm bg-slate-900/60 border border-slate-800 rounded p-6 text-center">載入排行榜中…</div>';
         return;
     }
-    let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player.alignmentValue) : (Number(player.alignmentValue) || 0);
-    let color = (typeof pvpAlignmentColor === 'function') ? pvpAlignmentColor(align) : '#fff';
-    let label = (typeof pvpAlignmentLabel === 'function') ? pvpAlignmentLabel(align) : '中立';
-    let clanConflict = typeof npcClanEncounterProfile === 'function' ? npcClanEncounterProfile(player) : null;
-    let warForced = clanConflict ? clanConflict.forcePvp : (typeof npcClanWarActive === 'function' && npcClanWarActive(player));
-    if (warForced) player.pvpOn = true;
-    let pvpOn = !!player.pvpOn;
-    let pvpBoxCls = pvpOn ? 'bg-red-950/70 border-red-600' : 'bg-slate-900/80 border-slate-700';
-    let pvpTextCls = pvpOn ? 'text-red-300' : 'text-slate-100';
-    let pvpHintCls = pvpOn ? 'text-red-200' : 'text-slate-400';
-    let pvpHint = '野外隨機玩家 NPC 遭遇已關閉；性向值、復仇名單與決鬥競技場仍可使用。';
-    if (warForced) {
-        pvpHint = '血盟宣戰期間 PVP 旗標仍會強制開啟，但野外不再刷新玩家 NPC。';
+    if (_leaderboardError) {
+        div.innerHTML = nav + `<div class="text-amber-200 text-sm bg-slate-900/60 border border-amber-900/50 rounded p-4 text-center leading-relaxed">${_pvpTabEsc(_leaderboardError)}<br><button class="btn mt-3 px-4 py-2 text-sm font-bold bg-amber-900 border-amber-600 text-amber-100" onclick="loadLeaderboard(true)">重新載入</button></div>`;
+        return;
     }
-    let rows = (player.pvpRevengeList || []).map((r, i) => {
-        let a = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(r.alignmentValue) : (Number(r.alignmentValue) || 0);
-        let n = (typeof pvpNameHtml === 'function') ? pvpNameHtml(r.n, a, 'font-bold') : `<span class="font-bold">${_pvpTabEsc(r.n)}</span>`;
-        let chasing = player.trollPlayers && player.trollPlayers.some(t => t && t.n === r.n && (t.pvpRevenge || t.noExpire));
-        let disabled = chasing ? 'disabled' : '';   // 🐛 v3.5.74 稽核修#1：追殺中一併鎖定按鈕（防重按重複建立追殺）
-        let _nArg = encodeURIComponent(r.n).replace(/'/g, '%27');   // 🐛 v3.5.74 稽核修#2：onclick 改帶名字（名單於戰鬥中可能移除位移·index 會指錯人）
-        return `<div class="bg-slate-900/80 border border-slate-700 rounded p-3 flex items-center justify-between gap-3">
-            <div class="min-w-0">
-                <div class="truncate">${n}</div>
-                <div class="text-xs text-slate-500 mt-1">${_pvpTabEsc(r.avatar || '男戰士')}・死亡紀錄 ${Math.max(1, Number(r.deaths) || 1)}${chasing ? '・追殺中' : ''}</div>
-            </div>
-            <button class="btn shrink-0 px-3 py-2 text-sm font-bold ${disabled ? 'opacity-50' : 'bg-red-900 hover:bg-red-800 border-red-600 text-red-100'}" ${disabled} onclick="openPvpRevengeTauntMenu(decodeURIComponent('${_nArg}'),event)">${chasing ? '追殺中' : '嗆他'}</button>
-        </div>`;
-    }).join('');
-    div.innerHTML = socialNav + `
-        <div class="flex flex-col gap-3">
-            <div class="bg-slate-900/80 border border-slate-700 rounded p-3">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <div class="text-slate-400 text-xs">性向值</div>
-                        <div class="text-lg font-bold" style="color:${color};text-shadow:0 0 8px rgba(0,0,0,.75);">${label} ${align.toLocaleString()}</div>
-                    </div>
-                </div>
-            </div>
-            <div class="${pvpBoxCls} border rounded p-3">
-                <label class="flex items-center justify-between gap-3 cursor-pointer">
-                    <span class="font-bold ${pvpTextCls}">是否開啟 PVP</span>
-                    <input type="checkbox" class="w-5 h-5 accent-red-600" ${pvpOn ? 'checked' : ''} ${warForced ? 'disabled' : ''} onchange="setPvpMode(this.checked)">
-                </label>
-                <div class="text-xs ${pvpHintCls} mt-2">${pvpHint}</div>
-            </div>
-            <div class="flex items-center justify-between">
-                <div class="font-bold text-amber-200">復仇名單</div>
-                <div class="text-xs text-slate-500">${(player.pvpRevengeList || []).length} / 20</div>
-            </div>
-            ${rows || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前沒有復仇目標。</div>'}
+    if (!_leaderboardRows) {
+        div.innerHTML = nav + '<div class="text-slate-400 text-sm bg-slate-900/60 border border-slate-800 rounded p-6 text-center">準備載入排行榜…</div>';
+        loadLeaderboard(false);
+        return;
+    }
+    let selfName = (typeof normalizeCharNameId === 'function') ? normalizeCharNameId(player.name) : String(player.name || '').trim();
+    let updated = _leaderboardUpdatedAt ? new Date(_leaderboardUpdatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    let rows = (_leaderboardRows || []).map(row => _leaderboardRowHtml(row, selfName)).join('');
+    div.innerHTML = nav + `
+        <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="text-sm font-bold text-amber-200">${LEADERBOARD_BOARD_LABELS[_leaderboardBoard] || '排行榜'}</div>
+            <button class="btn px-3 py-1 text-xs font-bold bg-slate-800 border-slate-600 text-slate-200" onclick="loadLeaderboard(true)">刷新</button>
+        </div>
+        <div class="text-xs text-slate-500 mb-3">${updated ? ('更新時間 ' + updated + ' · 全服角色榜') : '全服角色榜'}</div>
+        <div class="flex flex-col gap-2">
+            ${rows || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前尚無上榜資料，創角後會自動納入。</div>'}
         </div>`;
 }
 function setPvpMode(on) {

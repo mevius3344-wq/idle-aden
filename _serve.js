@@ -438,6 +438,7 @@ async function handleCloudApi(req, res, u) {
         saveCharNames(map);
       }
       fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+      leaderboardCache.at = 0;
       return json(res, 200, { ok: true, account, slot, meta: cloudFileMeta(file) });
     }
     if (req.method === "DELETE") {
@@ -1017,6 +1018,190 @@ async function handleNamesApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown names api" });
 }
 
+// ===== 全服排行榜（掃描雲端存檔）=====
+const LEADERBOARD_CLASS_NAMES = {
+  royal: "王族",
+  knight: "騎士",
+  elf: "妖精",
+  mage: "法師",
+  dark: "黑暗妖精",
+  dragon: "龍騎士",
+  warrior: "戰士",
+  illusion: "幻術士",
+};
+const LEADERBOARD_BOARDS = new Set(["level", "gold", "pride", "rift"]);
+const LEADERBOARD_CACHE_MS = 60 * 1000;
+let leaderboardCache = { at: 0, entries: [] };
+
+function leaderboardClassName(cls) {
+  return LEADERBOARD_CLASS_NAMES[cls] || cls || "未知";
+}
+
+function leaderboardDisplayName(p) {
+  const n = normalizeCharName(p && p.name);
+  return n || leaderboardClassName(p && p.cls);
+}
+
+function leaderboardIdentity(p, account, slot) {
+  const enSeed = String((p && p.enSeed) || "");
+  if (enSeed) return "seed:" + enSeed;
+  const name = normalizeCharName(p && p.name);
+  if (name) return "name:" + charNameKey(name);
+  return "acct:" + accountKey(account) + ":" + slot;
+}
+
+function leaderboardFormatMs(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) || 0));
+  const sec = Math.floor(total / 1000);
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  if (min > 0) return min + " 分 " + rem + " 秒";
+  return rem + " 秒";
+}
+
+function collectLeaderboardEntries() {
+  const out = [];
+  if (!ENABLE_CLOUD_SAVE) return out;
+  try {
+    fs.mkdirSync(CLOUD_ROOT, { recursive: true });
+  } catch (e) {}
+  let accounts = [];
+  try {
+    accounts = fs
+      .readdirSync(CLOUD_ROOT, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch (e) {
+    return out;
+  }
+  for (const account of accounts) {
+    const dir = path.join(CLOUD_ROOT, account);
+    for (let slot = 1; slot <= 8; slot++) {
+      const file = path.join(dir, "slot-" + slot + ".json");
+      if (!fs.existsSync(file)) continue;
+      try {
+        const data = JSON.parse(fs.readFileSync(file, "utf8"));
+        const p = data && data.p;
+        if (!p || !p.cls) continue;
+        const prideBest = p.prideRank && p.prideRank.best ? p.prideRank.best : null;
+        const riftBest = p.riftRank && p.riftRank.best ? p.riftRank.best : null;
+        out.push({
+          id: leaderboardIdentity(p, account, slot),
+          name: leaderboardDisplayName(p),
+          cls: String(p.cls || ""),
+          clsName: leaderboardClassName(p.cls),
+          lv: Math.max(1, Math.floor(Number(p.lv) || 1)),
+          exp: Math.max(0, Math.floor(Number(p.exp) || 0)),
+          gold: Math.max(0, Math.floor(Number(p.gold) || 0)),
+          prideFloor: prideBest ? Math.max(0, Math.floor(Number(prideBest.floor) || 0)) : 0,
+          prideMs: prideBest ? Math.max(0, Math.floor(Number(prideBest.ms) || 0)) : 0,
+          riftMs: riftBest ? Math.max(0, Math.floor(Number(riftBest.ms) || 0)) : 0,
+        });
+      } catch (e) {}
+    }
+  }
+  return out;
+}
+
+function leaderboardDedupe(entries) {
+  const map = {};
+  for (const row of entries) {
+    const prev = map[row.id];
+    if (!prev) {
+      map[row.id] = row;
+      continue;
+    }
+    if (row.lv > prev.lv || (row.lv === prev.lv && row.exp > prev.exp)) map[row.id] = row;
+    else if (row.lv === prev.lv && row.exp === prev.exp) {
+      if (row.gold > prev.gold) map[row.id] = row;
+      else if (row.prideFloor > prev.prideFloor) map[row.id] = row;
+      else if (row.prideFloor === prev.prideFloor && row.prideMs > 0 && (prev.prideMs <= 0 || row.prideMs < prev.prideMs)) map[row.id] = row;
+      else if (row.riftMs > prev.riftMs) map[row.id] = row;
+    }
+  }
+  return Object.values(map);
+}
+
+function leaderboardSort(board, rows) {
+  const list = rows.slice();
+  if (board === "gold") {
+    list.sort((a, b) => b.gold - a.gold || b.lv - a.lv || a.name.localeCompare(b.name, "zh-Hant"));
+  } else if (board === "pride") {
+    list.sort(
+      (a, b) =>
+        b.prideFloor - a.prideFloor ||
+        (a.prideFloor > 0 && b.prideFloor > 0 ? a.prideMs - b.prideMs : 0) ||
+        b.lv - a.lv ||
+        a.name.localeCompare(b.name, "zh-Hant")
+    );
+  } else if (board === "rift") {
+    list.sort((a, b) => b.riftMs - a.riftMs || b.lv - a.lv || a.name.localeCompare(b.name, "zh-Hant"));
+  } else {
+    list.sort((a, b) => b.lv - a.lv || b.exp - a.exp || b.gold - a.gold || a.name.localeCompare(b.name, "zh-Hant"));
+  }
+  return list;
+}
+
+function leaderboardValueLabel(board, row) {
+  if (board === "gold") return row.gold.toLocaleString() + " 金幣";
+  if (board === "pride") {
+    if (!row.prideFloor) return "—";
+    return row.prideFloor + "F / " + leaderboardFormatMs(row.prideMs);
+  }
+  if (board === "rift") {
+    if (!row.riftMs) return "—";
+    return leaderboardFormatMs(row.riftMs);
+  }
+  return "Lv." + row.lv;
+}
+
+function getLeaderboardEntries() {
+  const now = Date.now();
+  if (!leaderboardCache.entries.length || now - leaderboardCache.at > LEADERBOARD_CACHE_MS) {
+    leaderboardCache = { at: now, entries: leaderboardDedupe(collectLeaderboardEntries()) };
+  }
+  return leaderboardCache.entries;
+}
+
+async function handleLeaderboardApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    return res.end();
+  }
+  if (u !== "/api/leaderboard" || req.method !== "GET") {
+    return json(res, 404, { ok: false, error: "unknown leaderboard api" });
+  }
+  const q = new URL(req.url || "/", "http://localhost");
+  const board = LEADERBOARD_BOARDS.has(q.searchParams.get("board") || "")
+    ? q.searchParams.get("board")
+    : "level";
+  const limit = Math.max(1, Math.min(100, parseInt(q.searchParams.get("limit"), 10) || 50));
+  if (!ENABLE_CLOUD_SAVE) {
+    return json(res, 503, { ok: false, error: "offline", message: "排行榜需要線上伺服器。" });
+  }
+  const sorted = leaderboardSort(board, getLeaderboardEntries()).slice(0, limit);
+  const rows = sorted.map((row, i) => ({
+    rank: i + 1,
+    name: row.name,
+    cls: row.cls,
+    clsName: row.clsName,
+    lv: row.lv,
+    value: board === "gold" ? row.gold : board === "pride" ? row.prideFloor : board === "rift" ? row.riftMs : row.lv,
+    valueLabel: leaderboardValueLabel(board, row),
+  }));
+  return json(res, 200, {
+    ok: true,
+    board,
+    updatedAt: leaderboardCache.at,
+    total: getLeaderboardEntries().length,
+    rows,
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   let u = decodeURIComponent((req.url || "/").split("?")[0]);
   try {
@@ -1042,6 +1227,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/player-data")) {
       await handlePlayerDataApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/leaderboard")) {
+      await handleLeaderboardApi(req, res, u);
       return;
     }
   } catch (e) {
