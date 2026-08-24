@@ -1408,6 +1408,7 @@ function startGameTimers() {
     _saveLoopId = setInterval(saveGame, 300000); // 每 5 分鐘自動存檔
     if (typeof initCombatLogLock === 'function') initCombatLogLock();   // 🔒 綁定戰鬥日誌捲動鎖定（含去重）
     if (typeof initSysLogLock === 'function') initSysLogLock();         // 🔒 綁定系統與物品日誌捲動鎖定（含去重）
+    if (typeof initUnifiedLogTab === 'function') initUnifiedLogTab();   // 🗂️ 統一日誌分頁版面（避免多 pane 擠壓）
     if (typeof applyCombatFilter === 'function') applyCombatFilter();   // ⚔️ 套用已儲存的戰鬥日誌來源過濾（按鈕點亮/點暗 + 隱藏對應訊息）
     if (typeof _initTabGuard === 'function') _initTabGuard();           // 🚀 綁定分頁面板點擊保護＋重繪節流（避免狩獵時 賣出/強化 按鈕卡頓、點擊失效）
 }
@@ -1878,6 +1879,7 @@ function toggleMobHp(){ _showMobHp = !_showMobHp; try { localStorage.setItem('li
 function logCombat(msg, type="player", src=null) {
     if(state.ff) return; // 補跑期間不洗版
     const el = document.getElementById('combat-log');
+    if (!el) return;
     let colorClass = "text-white";
     
     // 單純以顏色區分，移除前綴標籤
@@ -1953,6 +1955,16 @@ function logSys(msg, rare) {
 // 🗂️ 統一日誌視窗：戰鬥／系統／世界／血盟／隊伍 同一個面板分頁切換。
 let _logTab = 'combat';
 let _unifiedLogTab = 'combat';
+const _UNIFIED_LOG_PANES = [
+    { tab: 'combat', logId: 'combat-log', unlockId: 'combat-log-unlock' },
+    { tab: 'sys', logId: 'sys-log', unlockId: 'sys-log-unlock' },
+    { tab: 'world', logId: 'world-log', unlockId: 'world-log-unlock' },
+    { tab: 'clan', logId: 'clan-log', unlockId: 'world-log-unlock' },
+    { tab: 'party', logId: 'party-log', unlockId: 'world-log-unlock' }
+];
+function initUnifiedLogTab() {
+    switchUnifiedLogTab(typeof _unifiedLogTab !== 'undefined' ? _unifiedLogTab : 'combat');
+}
 function switchUnifiedLogTab(tab) {
     const valid = { combat:1, sys:1, world:1, clan:1, party:1 };
     if (!valid[tab]) tab = 'combat';
@@ -1967,13 +1979,9 @@ function switchUnifiedLogTab(tab) {
     let isSys = tab === 'sys';
     let isChat = (tab === 'world' || tab === 'clan' || tab === 'party');
 
-    let cl = document.getElementById('combat-log');
-    let sl = document.getElementById('sys-log');
-    if (cl) cl.classList.toggle('hidden', !isCombat);
-    if (sl) sl.classList.toggle('hidden', !isSys);
-    ['world', 'clan', 'party'].forEach(function (id) {
-        let pane = document.getElementById(id + '-log');
-        if (pane) pane.classList.toggle('hidden', tab !== id);
+    _UNIFIED_LOG_PANES.forEach(function (cfg) {
+        let pane = document.getElementById(cfg.logId);
+        if (pane) pane.classList.toggle('hidden', cfg.tab !== tab);
     });
 
     let bc = document.getElementById('logtab-btn-combat');
@@ -1987,6 +1995,8 @@ function switchUnifiedLogTab(tab) {
 
     let pills = document.getElementById('combat-filter-pills');
     if (pills) pills.classList.toggle('hidden', !isCombat);
+    let pandora = document.getElementById('syslog-pandora');
+    if (pandora) pandora.classList.toggle('hidden', !isSys);
     let inputRow = document.getElementById('world-input-row');
     if (inputRow) inputRow.classList.toggle('hidden', !isChat);
     let pins = document.getElementById('sys-log-pins');
@@ -2003,20 +2013,20 @@ function switchUnifiedLogTab(tab) {
     let cu = document.getElementById('combat-log-unlock');
     let su = document.getElementById('sys-log-unlock');
     let wu = document.getElementById('world-log-unlock');
-    if (cu && !isCombat) cu.classList.add('hidden');
-    if (su && !isSys) su.classList.add('hidden');
-    if (wu) {
-        if (!isChat) wu.classList.add('hidden');
-        wu.style.bottom = isChat ? '3.5rem' : '0.5rem';
-    }
+    if (cu) cu.classList.toggle('hidden', !isCombat || !(typeof _combatLogLocked !== 'undefined' && _combatLogLocked));
+    if (su) su.classList.toggle('hidden', !isSys || !(typeof _sysLogLocked !== 'undefined' && _sysLogLocked));
+    if (wu) wu.classList.toggle('hidden', !isChat || !(typeof _worldLogLocked !== 'undefined' && _worldLogLocked));
 
     if (isSys) {
         let d = document.getElementById('logtab-dot-sys');
         if (d) { d.classList.add('hidden'); d.classList.remove('logtab-dot-legend', 'logtab-dot-relic'); }
+        let sl = document.getElementById('sys-log');
         if (sl && typeof _sysLogLocked !== 'undefined' && !_sysLogLocked) sl.scrollTop = sl.scrollHeight;
         if (typeof initSysLogLock === 'function') initSysLogLock();
     } else if (isCombat) {
+        let cl = document.getElementById('combat-log');
         if (cl && typeof _combatLogLocked !== 'undefined' && !_combatLogLocked) cl.scrollTop = cl.scrollHeight;
+        if (typeof applyCombatFilter === 'function') applyCombatFilter();
     } else if (isChat) {
         let dot = document.getElementById(tab === 'clan' ? 'chattab-dot-clan' : (tab === 'party' ? 'chattab-dot-party' : ''));
         if (dot) dot.classList.add('hidden');
@@ -2027,6 +2037,11 @@ function switchUnifiedLogTab(tab) {
 }
 function switchLogTab(tab) {
     switchUnifiedLogTab(tab === 'sys' ? 'sys' : 'combat');
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('DOMContentLoaded', function () {
+        try { if (typeof initUnifiedLogTab === 'function') initUnifiedLogTab(); } catch (e) {}
+    });
 }
 
 // 🌐 聊天日誌：世界頻道（含叫賣系統訊息）／血盟／隊伍；玩家發言僅真實角色。

@@ -13,7 +13,17 @@
         if (a) return String(a);
       }
     } catch (e) {}
-    return 'guest';
+    return '';
+  }
+
+  function cloudLoggedIn() {
+    var a = String(currentAccount() || '').trim();
+    return !!(a && a.toLowerCase() !== 'guest');
+  }
+
+  /** 伺服器有雲端 API 且已登入帳號（非 guest 共用桶） */
+  function cloudCanSync() {
+    return cloudReady() && cloudLoggedIn();
   }
 
   function _httpOk() {
@@ -93,7 +103,7 @@
   }
 
   function cloudPushSlot(slot, dataObj) {
-    if (!cloudReady()) return;
+    if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return;
     try {
@@ -106,7 +116,7 @@
   }
 
   function cloudPullSlotIntoStorage(slot) {
-    if (!cloudReady()) return false;
+    if (!cloudCanSync()) return false;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     var r = _xhrJson('GET', _base() + '/slot/' + slot, null, true);
     if (!r || r.status === 404) return false;
@@ -122,7 +132,7 @@
   }
 
   function cloudDeleteSlot(slot) {
-    if (!cloudReady()) return;
+    if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     try {
       fetch(_base() + '/slot/' + slot, { method: 'DELETE' }).catch(function () {});
@@ -130,7 +140,7 @@
   }
 
   function cloudPushShared(name, dataObj) {
-    if (!cloudReady() || !name) return;
+    if (!cloudCanSync() || !name) return;
     try {
       fetch(_base() + '/shared/' + encodeURIComponent(name), {
         method: 'PUT',
@@ -141,7 +151,7 @@
   }
 
   function cloudPullSharedIntoStorage(name, storageKey) {
-    if (!cloudReady() || !name || !storageKey) return false;
+    if (!cloudCanSync() || !name || !storageKey) return false;
     var r = _xhrJson('GET', _base() + '/shared/' + encodeURIComponent(name), null, true);
     if (!r || r.status === 404) return false;
     if (!r.ok || !r.data || !r.data.ok) return false;
@@ -160,7 +170,7 @@
 
   function cloudMirrorAfterSave(slot) {
     if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
-    if (!cloudReady()) return;
+    if (!cloudCanSync()) return;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
     try {
       var raw = typeof _lzGet === 'function' ? _lzGet('lineage_idle_save_' + slot) : null;
@@ -201,7 +211,7 @@
   }
 
   function cloudPullBeforeLoad(slot) {
-    if (!cloudReady()) return false;
+    if (!cloudCanSync()) return false;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
     var pulled = cloudPullSlotIntoStorage(slot);
     try {
@@ -259,15 +269,35 @@
   }
 
   function cloudPullBundleSync() {
-    if (!cloudReady()) return false;
+    if (!cloudCanSync()) return false;
     var r = _xhrJson('GET', _base() + '/bundle', null, true);
     if (!r || !r.ok || !r.data || !r.data.ok) return false;
     return cloudApplyBundle(r.data);
   }
 
-  // 雲端尚空時，把本機既有存檔上傳當種子
+  /** 登入／登出時清本機快取，避免 A 帳號存檔被 B 帳號看見或誤上傳 */
+  function cloudClearLocalCache() {
+    try {
+      for (var i = 1; i <= 8; i++) {
+        if (typeof _lsRemove === 'function') {
+          _lsRemove('lineage_idle_save_' + i);
+          _lsRemove('lineage_idle_save_' + i + '_bak');
+        }
+      }
+      var wh = typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse';
+      var pet = typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster';
+      ['', '_classic'].forEach(function (suf) {
+        if (typeof _lsRemove === 'function') {
+          _lsRemove(wh + suf);
+          _lsRemove(pet + suf);
+        }
+      });
+    } catch (e) {}
+  }
+
+  // 雲端尚空時，把本機既有存檔上傳當種子（僅限同帳號手動遷移；登入流程不再呼叫）
   function cloudBootstrapFromLocal() {
-    if (!cloudReady()) return;
+    if (!cloudCanSync()) return;
     for (var i = 1; i <= 8; i++) {
       (function (slot) {
         try {
@@ -309,16 +339,17 @@
   }
 
   function cloudSyncOnLogin() {
-    if (!cloudReady()) return Promise.resolve(false);
+    if (!cloudCanSync()) return Promise.resolve(false);
     return fetch(_base() + '/bundle')
       .then(function (res) {
         return res.json().then(function (data) {
+          cloudClearLocalCache();
           var hasSlots = data && data.slots && Object.keys(data.slots).length > 0;
-          if (hasSlots) {
+          var hasShared = data && data.shared && Object.keys(data.shared).length > 0;
+          if (hasSlots || hasShared) {
             cloudApplyBundle(data);
             return true;
           }
-          cloudBootstrapFromLocal();
           return false;
         });
       })
@@ -327,26 +358,9 @@
       });
   }
 
-  try {
-    if (_httpOk()) {
-      setTimeout(function () {
-        try {
-          if (cloudReady()) {
-            // 進站先拉雲端（有資料就覆蓋本機快取），沒有則上傳本機種子
-            var r = _xhrJson('GET', _base() + '/bundle', null, true);
-            if (r && r.ok && r.data && r.data.ok) {
-              var has =
-                (r.data.slots && Object.keys(r.data.slots).length > 0) ||
-                (r.data.shared && Object.keys(r.data.shared).length > 0);
-              if (has) cloudApplyBundle(r.data);
-              else cloudBootstrapFromLocal();
-            }
-          }
-        } catch (e) {}
-      }, 500);
-    }
-  } catch (e) {}
-
+  // 雲端同步僅在登入後由 cloudSyncOnLogin 觸發；禁止未登入時拉取 guest 共用桶（會覆蓋他人／自己的本機存檔）
+  window.cloudLoggedIn = cloudLoggedIn;
+  window.cloudCanSync = cloudCanSync;
   window.cloudReady = cloudReady;
   window.cloudPushSlot = cloudPushSlot;
   window.cloudPullSlotIntoStorage = cloudPullSlotIntoStorage;
@@ -355,5 +369,6 @@
   window.cloudPullBeforeLoad = cloudPullBeforeLoad;
   window.cloudPullBundleSync = cloudPullBundleSync;
   window.cloudBootstrapFromLocal = cloudBootstrapFromLocal;
+  window.cloudClearLocalCache = cloudClearLocalCache;
   window.cloudSyncOnLogin = cloudSyncOnLogin;
 })();

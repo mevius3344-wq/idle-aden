@@ -348,6 +348,21 @@ function cloudAccountDir(account) {
   return dir;
 }
 
+function cloudAccountIsGuest(account) {
+  const a = safeAccount(account);
+  return !a || a === CLOUD_ACCOUNT_DEFAULT;
+}
+
+function cloudRejectGuest(res, account) {
+  if (!cloudAccountIsGuest(account)) return false;
+  json(res, 403, {
+    ok: false,
+    error: "login_required",
+    message: "請先登入帳號再使用雲端存檔，避免與其他玩家共用進度。",
+  });
+  return true;
+}
+
 function cloudFileMeta(file) {
   try {
     const st = fs.statSync(file);
@@ -387,6 +402,7 @@ async function handleCloudApi(req, res, u) {
   let m = u.match(/^\/api\/cloud\/(?:([^/]+)\/)?slot\/(\d+)$/);
   if (m) {
     const account = safeAccount(m[1] || CLOUD_ACCOUNT_DEFAULT);
+    if (cloudRejectGuest(res, account)) return;
     const slot = Math.max(1, Math.min(8, parseInt(m[2], 10) || 1));
     const file = path.join(cloudAccountDir(account), `slot-${slot}.json`);
     if (req.method === "GET") {
@@ -408,12 +424,8 @@ async function handleCloudApi(req, res, u) {
         const key = charNameKey(display);
         const row = map[key];
         const enSeed = String((data.p && data.p.enSeed) || "");
-        const sameOwner =
-          row &&
-          accountKey(row.account || "") === accountKey(account) &&
-          Number(row.slot) === slot &&
-          (!enSeed || !row.enSeed || String(row.enSeed) === enSeed);
-        if (row && !sameOwner) {
+        // 同帳號同存檔位可更新 enSeed（刪角重創、創角中斷後重試）
+        if (row && !charNameSameSlotOwner(row, account, slot)) {
           return json(res, 409, {
             ok: false,
             error: "name_taken",
@@ -470,6 +482,7 @@ async function handleCloudApi(req, res, u) {
   m = u.match(/^\/api\/cloud\/(?:([^/]+)\/)?shared\/([a-z0-9_-]+)$/i);
   if (m) {
     const account = safeAccount(m[1] || CLOUD_ACCOUNT_DEFAULT);
+    if (cloudRejectGuest(res, account)) return;
     const name = safeName(m[2]);
     if (!name) return json(res, 400, { ok: false, error: "bad name" });
     const file = path.join(cloudAccountDir(account), `${name}.json`);
@@ -500,6 +513,7 @@ async function handleCloudApi(req, res, u) {
   m = u.match(/^\/api\/cloud\/(?:([^/]+)\/)?bundle$/);
   if (m && req.method === "GET") {
     const account = safeAccount(m[1] || CLOUD_ACCOUNT_DEFAULT);
+    if (cloudRejectGuest(res, account)) return;
     const dir = cloudAccountDir(account);
     const slots = {};
     for (let i = 1; i <= 8; i++) {
@@ -754,6 +768,14 @@ function charNameKey(name) {
 }
 
 /** 查詢此帳號＋存檔位（＋可選 enSeed）已登錄的角色名稱；用於禁止改名 */
+function charNameSameSlotOwner(row, account, slot) {
+  return (
+    row &&
+    accountKey(row.account || "") === accountKey(account) &&
+    Number(row.slot) === slot
+  );
+}
+
 function findRegisteredCharNameForSlot(map, account, slot, enSeed) {
   const ak = accountKey(account);
   for (const k of Object.keys(map || {})) {
@@ -935,7 +957,14 @@ async function handleNamesApi(req, res, u) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
     const name = normalizeCharName(data.name);
-    const account = normalizeAccountId(data.account) || "guest";
+    const account = normalizeAccountId(data.account);
+    if (!account || account === CLOUD_ACCOUNT_DEFAULT) {
+      return json(res, 401, {
+        ok: false,
+        error: "login_required",
+        message: "請先登入帳號再創建角色。",
+      });
+    }
     const slot = Math.max(1, Math.min(8, parseInt(data.slot, 10) || 1));
     const enSeed = String(data.enSeed || "");
     const prevName = normalizeCharName(data.prevName || "");
@@ -944,13 +973,8 @@ async function handleNamesApi(req, res, u) {
     const map = loadCharNames();
     const key = charNameKey(name);
     const row = map[key];
-    const sameOwner =
-      row &&
-      accountKey(row.account || "") === accountKey(account) &&
-      Number(row.slot) === slot &&
-      (!enSeed || !row.enSeed || String(row.enSeed) === enSeed);
-
-    if (row && !sameOwner) {
+    // 同帳號同存檔位可更新 enSeed（刪角重創、創角中斷後重試）
+    if (row && !charNameSameSlotOwner(row, account, slot)) {
       return json(res, 409, {
         ok: false,
         error: "taken",
@@ -1037,17 +1061,55 @@ function leaderboardClassName(cls) {
   return LEADERBOARD_CLASS_NAMES[cls] || cls || "未知";
 }
 
+function leaderboardSeedHash(str) {
+  str = String(str);
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** 與客戶端存檔一致的角色唯一識別（enSeed 或名稱+職業衍生） */
+function leaderboardEnSeed(p) {
+  const direct = String((p && p.enSeed) || "").trim();
+  if (direct) return direct;
+  const name = normalizeCharName(p && p.name);
+  const cls = String((p && p.cls) || "");
+  if (name && cls) {
+    return "es" + leaderboardSeedHash(name + "|" + cls + "|lz").toString(36);
+  }
+  return "";
+}
+
 function leaderboardDisplayName(p) {
-  const n = normalizeCharName(p && p.name);
-  return n || leaderboardClassName(p && p.cls);
+  return normalizeCharName(p && p.name) || "";
 }
 
 function leaderboardIdentity(p, account, slot) {
-  const enSeed = String((p && p.enSeed) || "");
-  if (enSeed) return "seed:" + enSeed;
-  const name = normalizeCharName(p && p.name);
-  if (name) return "name:" + charNameKey(name);
+  // 角色名稱為全站唯一 ID；排行榜以名稱去重（避免刪角重創、guest/登入雲端各一份造成同名多筆）
+  const display = leaderboardDisplayName(p);
+  if (display) return "name:" + charNameKey(display);
+  const seed = leaderboardEnSeed(p);
+  if (seed) return "seed:" + seed;
   return "acct:" + accountKey(account) + ":" + slot;
+}
+
+function leaderboardMergeKeepBest(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  if (b.lv !== a.lv) return b.lv > a.lv ? b : a;
+  if (b.exp !== a.exp) return b.exp > a.exp ? b : a;
+  if (b.gold !== a.gold) return b.gold > a.gold ? b : a;
+  if (b.prideFloor !== a.prideFloor) return b.prideFloor > a.prideFloor ? b : a;
+  if (b.prideFloor > 0 && a.prideFloor > 0 && b.prideMs !== a.prideMs) {
+    return b.prideMs < a.prideMs ? b : a;
+  }
+  if (b.riftMs !== a.riftMs) return b.riftMs > a.riftMs ? b : a;
+  return a;
 }
 
 function leaderboardFormatMs(ms) {
@@ -1083,11 +1145,14 @@ function collectLeaderboardEntries() {
         const data = JSON.parse(fs.readFileSync(file, "utf8"));
         const p = data && data.p;
         if (!p || !p.cls) continue;
+        const display = leaderboardDisplayName(p);
+        if (!display) continue;   // 未命名角色不進榜（避免整排「騎士／法師」假名）
         const prideBest = p.prideRank && p.prideRank.best ? p.prideRank.best : null;
         const riftBest = p.riftRank && p.riftRank.best ? p.riftRank.best : null;
         out.push({
           id: leaderboardIdentity(p, account, slot),
-          name: leaderboardDisplayName(p),
+          name: display,
+          account: safeAccount(account),
           cls: String(p.cls || ""),
           clsName: leaderboardClassName(p.cls),
           lv: Math.max(1, Math.floor(Number(p.lv) || 1)),
@@ -1106,18 +1171,7 @@ function collectLeaderboardEntries() {
 function leaderboardDedupe(entries) {
   const map = {};
   for (const row of entries) {
-    const prev = map[row.id];
-    if (!prev) {
-      map[row.id] = row;
-      continue;
-    }
-    if (row.lv > prev.lv || (row.lv === prev.lv && row.exp > prev.exp)) map[row.id] = row;
-    else if (row.lv === prev.lv && row.exp === prev.exp) {
-      if (row.gold > prev.gold) map[row.id] = row;
-      else if (row.prideFloor > prev.prideFloor) map[row.id] = row;
-      else if (row.prideFloor === prev.prideFloor && row.prideMs > 0 && (prev.prideMs <= 0 || row.prideMs < prev.prideMs)) map[row.id] = row;
-      else if (row.riftMs > prev.riftMs) map[row.id] = row;
-    }
+    map[row.id] = leaderboardMergeKeepBest(map[row.id], row);
   }
   return Object.values(map);
 }

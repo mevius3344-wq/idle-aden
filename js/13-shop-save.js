@@ -446,7 +446,10 @@ function claimCharNameId(name, opts) {
     if (localHit) {
         return { ok: false, message: '此角色名稱已存在於存檔 ' + localHit.slot + '（' + localHit.name + '），請換一個名稱。' };
     }
-    const account = _authAccountForNames() || 'guest';
+    const account = _authAccountForNames();
+    if (!account) {
+        return { ok: false, message: '請先登入帳號再創建角色（線上模式不與其他玩家共用存檔）。' };
+    }
     const slot = Math.max(1, Math.min(8, parseInt(opts.slot != null ? opts.slot : currentSlot, 10) || 1));
     const enSeed = String(opts.enSeed || (typeof player !== 'undefined' && player && player.enSeed) || '');
     const prevName = normalizeCharNameId(opts.prevName || '');
@@ -1042,8 +1045,10 @@ function returnToCharacterSelect(){
 function renderLoadSelect(){
     // 📁 開啟選角畫面：先同步雲端／桌面改過的 slot，摘要才會是最新
     try {
-      if (typeof cloudReady === 'function' && cloudReady() && typeof cloudPullSlotIntoStorage === 'function') {
+      if (typeof cloudCanSync === 'function' && cloudCanSync() && typeof cloudPullSlotIntoStorage === 'function') {
         for (let _i = 1; _i <= 8; _i++) cloudPullSlotIntoStorage(_i);
+      } else if (typeof cloudReady === 'function' && cloudReady() && typeof cloudLoggedIn === 'function' && !cloudLoggedIn()) {
+        // 已連線但未登入：不拉 guest 桶，避免覆蓋本機存檔
       }
     } catch (_cloudSelE) {}
     try {
@@ -1140,32 +1145,40 @@ function loadExportSelected(){ /* 匯出進度已移除 */ }
 function loadDeleteSelected(){
     const slot = _loadSelectedSlot, sum = slotSummary(slot);
     if(!sum){ renderLoadSelect(); return; }
+    const r = deleteCharacterSlot(slot);
+    if(!r.ok) return;
+    renderLoadSelect();
+    alert(`角色「${r.name}」已刪除。現在可以在此欄位創建新角色。`);
+}
+function _deleteCharacterActiveSessionBlock(){
     const active = _roleOtherActiveSessions();
-    if(active.length){
-        const names = Array.from(new Set(active.map(s => s.name || ('存檔 ' + s.slot)))).join('、');
-        alert(`偵測到其他角色仍在遊戲中${names ? `（${names}）` : ''}。\n\n為避免角色、寵物與傭兵資料錯亂，請先關閉其他遊戲分頁，等待約 8 秒後再刪除。`);
-        return;
-    }
+    if(!active.length) return false;
+    const names = Array.from(new Set(active.map(s => s.name || ('存檔 ' + s.slot)))).join('、');
+    alert(`偵測到其他角色仍在遊戲中${names ? `（${names}）` : ''}。\n\n為避免角色、寵物與傭兵資料錯亂，請先關閉其他遊戲分頁，等待約 8 秒後再刪除。`);
+    return true;
+}
+function _confirmDeleteCharacter(slot, sum, oldPlayer){
+    if(_deleteCharacterActiveSessionBlock()) return { ok: false, reason: 'active' };
     const expected = sum.name || '未命名';
     const typed = prompt(`即將刪除存檔 ${slot}：${sum.cls} Lv.${sum.lv} ${expected}\n\n刪除後才能在此欄位創建新角色。\n請輸入角色名稱「${expected}」確認刪除：`, '');
-    if(typed === null) return;
-    if(typed.trim() !== expected){ alert('角色名稱不正確，已取消刪除。'); return; }
-    if(_roleOtherActiveSessions().length){ alert('刪除期間偵測到其他遊戲分頁，已取消刪除。請先關閉其他角色後再試。'); return; }
-    const oldPlayer = _roleReadSavePlayer(slot), fp = _roleFingerprint(oldPlayer);
-    // 👑 v3.6.01 血盟盟主刪角警告（用戶拍板）：盟主刪除＝clanOnRoleDeleted 會解散該模式血盟並清空同模式所有角色的貢獻，刪前必須講明
+    if(typed === null) return { ok: false, reason: 'cancelled' };
+    if(typed.trim() !== expected){ alert('角色名稱不正確，已取消刪除。'); return { ok: false, reason: 'name' }; }
+    if(_roleOtherActiveSessions().length){ alert('刪除期間偵測到其他遊戲分頁，已取消刪除。請先關閉其他角色後再試。'); return { ok: false, reason: 'active' }; }
+    oldPlayer = oldPlayer || _roleReadSavePlayer(slot);
     let _clanWarn = '';
     try { if(typeof clanIsLeaderRole === 'function' && clanIsLeaderRole(oldPlayer)) _clanWarn = '\n\n⚠ 此角色是血盟盟主：刪除後將解散該模式的血盟，並清空同模式所有角色的血盟貢獻（血盟等級經驗保留）！'; } catch(e){}
-    if(!confirm(`確定永久刪除「${expected}」嗎？\n角色存檔與角色專屬傭兵資料將刪除；共享倉庫、圖鑑與寵物名冊會保留。${_clanWarn}`)) return;
-    // 🛡️ 簽章不符／內容毀損的存檔位讀不出 player（fp 為空）→ 無法建立刪除保護。
-    //    但這種存檔任何分頁都載入不了，也就不可能被舊分頁寫回，故直接放行刪除；
-    //    否則玩家會落入「載不了也刪不掉、該欄位永久報廢」的死局。
-    if(fp && !_roleMarkDeleted(fp)){ alert('無法建立刪除保護，為避免舊分頁寫回角色，本次刪除已取消。'); return; }
+    if(!confirm(`確定永久刪除「${expected}」嗎？\n角色存檔與角色專屬傭兵資料將刪除；共享倉庫、圖鑑與寵物名冊會保留。${_clanWarn}`)) return { ok: false, reason: 'cancelled' };
+    return { ok: true, expected, oldPlayer };
+}
+function _executeDeleteCharacter(slot, oldPlayer, expected){
+    const fp = _roleFingerprint(oldPlayer);
+    if(fp && !_roleMarkDeleted(fp)){ alert('無法建立刪除保護，為避免舊分頁寫回角色，本次刪除已取消。'); return { ok: false, reason: 'guard' }; }
     try { if(typeof petReleaseSlotAssignments === 'function') petReleaseSlotAssignments(slot); } catch(e){ console.warn('pet delete cleanup', e); }
     try { if(typeof mercLedgerPurgeSlot === 'function') mercLedgerPurgeSlot(slot); } catch(e){ console.warn('merc delete cleanup', e); }
     try { if(typeof antharasForgetRoleClear === 'function') antharasForgetRoleClear(oldPlayer, slot); } catch(e){ console.warn('antharas clear cleanup', e); }
     _lsRemove('lineage_idle_save_' + slot);
     _lsRemove('lineage_idle_save_' + slot + '_bak');
-    if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return; }
+    if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return { ok: false, reason: 'storage' }; }
     try { if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot); } catch (_deskDelE) {}
     try { if (typeof cloudDeleteSlot === 'function') cloudDeleteSlot(slot); } catch (_cloudDelE) {}
     try {
@@ -1177,8 +1190,53 @@ function loadDeleteSelected(){
         }
     } catch (_nameRelE) {}
     try { if(typeof clanOnRoleDeleted === 'function') clanOnRoleDeleted(oldPlayer); } catch(e){ console.warn('clan delete cleanup', e); }
+    return { ok: true, name: expected, slot };
+}
+function deleteCharacterSlot(slot, opts){
+    opts = opts || {};
+    const sum = slotSummary(slot);
+    if(!sum) return { ok: false, reason: 'empty' };
+    const confirmed = _confirmDeleteCharacter(slot, sum, opts.oldPlayer);
+    if(!confirmed.ok) return confirmed;
+    return _executeDeleteCharacter(slot, confirmed.oldPlayer, confirmed.expected);
+}
+function deleteCurrentCharacter(){
+    if(typeof player === 'undefined' || !player || !player.cls) return;
+    const slot = currentSlot, sum = slotSummary(slot);
+    if(!sum){ alert('找不到角色存檔，請返回選角畫面再試。'); return; }
+    const wasRunning = !!(typeof state !== 'undefined' && state && state.running);
+    if(wasRunning){
+        if(typeof stopGameTimers === 'function') stopGameTimers();
+        state.running = false;
+    }
+    const r = deleteCharacterSlot(slot, { oldPlayer: player });
+    if(!r.ok){
+        if(wasRunning){
+            state.running = true;
+            if(typeof startGameTimers === 'function') startGameTimers();
+        }
+        return;
+    }
+    try { _roleSessionForget(); } catch(e) {}
+    try { if(typeof _vfxClearAll === 'function') _vfxClearAll(); } catch(e) {}
+    const game = document.getElementById('game-screen');
+    const creationScreen = document.getElementById('creation-screen');
+    const main = document.getElementById('main-menu');
+    const creation = document.getElementById('creation-panel');
+    const load = document.getElementById('load-select-panel');
+    if(game) game.classList.add('hidden');
+    if(creationScreen) creationScreen.classList.remove('hidden');
+    if(main) main.classList.add('hidden');
+    if(creation) creation.classList.add('hidden');
+    if(load) load.classList.remove('hidden');
+    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad');
+    _loadLastClickSlot = 0;
+    _loadLastClickAt = 0;
+    _loadPage = slot > 4 ? 1 : 0;
+    _loadSelectedSlot = slot;
     renderLoadSelect();
-    alert(`角色「${expected}」已刪除。現在可以在此欄位創建新角色。`);
+    try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
+    alert(`角色「${r.name}」已刪除。現在可以在此欄位創建新角色。`);
 }
 (function animateLoadSelectPreview(){
     function tick(now){
@@ -1431,6 +1489,14 @@ function startGame() {
         alert('請輸入角色名稱。');
         if(nameInput){ try { nameInput.focus(); } catch(e){} }
         return;
+    }
+    if (typeof _authAccountForNames === 'function' && !_authAccountForNames()) {
+        try {
+            if (location.protocol === 'http:' || location.protocol === 'https:') {
+                alert('請先登入帳號再創建角色，以免與其他玩家共用雲端存檔。');
+                return;
+            }
+        } catch (_loginChkE) {}
     }
     createName = normalizeCharNameId(createName);
     if(!createName){

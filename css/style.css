@@ -1031,7 +1031,16 @@
     .boss-marquee { height: 26px; }
     .boss-marquee-text { font-size: 12px; }
 }
-#log-row { flex: 0 0 340px; min-height: 0; }   /* 日誌列固定高度；其餘高度全給地圖/戰鬥面板 */
+/* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼 */
+#log-row { flex: 0 0 340px; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+#combat-log-panel { flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; display: flex; flex-direction: column; }
+#combat-log-panel > .panel-header { flex: 0 0 auto; }
+#unified-log-body { flex: 1 1 0; min-height: 0; }
+#combat-log-panel #world-input-row { flex: 0 0 auto; }
+.unified-log-pane { z-index: 1; }
+.unified-log-pane.hidden { display: none !important; }
+#combat-log-panel #combat-filter-pills.hidden { display: none !important; }
+#syslog-panel.hidden { display: none !important; flex: 0 0 0 !important; width: 0 !important; height: 0 !important; overflow: hidden; }
 /* ⚠️v2.6.37 狩獵區域改 1920/580 條狀後，戰鬥框變矮→地圖面板縮到內容(標題列+條狀框)、省下的高度由日誌列吸收長高。
    :has 掛在共同祖先 #col-center(其下 #map-view-panel 與 #log-row 為兄弟)；僅「狩獵中(battle-view 顯示且 area-fit)」套用→安全區(town-view·battle-view 隱藏)/攻城/裂痕(非 area-fit·仍 16:9 吃滿)維持原樣。 */
 #col-center:has(#battle-view.area-fit:not(.hidden)) #map-view-panel { flex: 0 0 auto; }
@@ -1039,9 +1048,6 @@
 /* 🏘️ v3.2.87 安全區(town-view 顯示·battle-view 隱藏)比照狩獵：地圖面板依內容(標題列+800×450地圖)自適、其餘高度全給日誌列→地圖下方不再被 flex:1 撐出深色空隙、日誌緊接地圖下方（修「安全區背景把日誌撐開」） */
 #col-center:has(#town-view:not(.hidden)) #map-view-panel { flex: 0 0 auto; }
 #col-center:has(#town-view:not(.hidden)) #log-row { flex: 1 1 0; }
-/* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼 */
-#combat-log-panel { flex: 1 1 0; min-width: 0; min-height: 0; width: 100%; }
-#syslog-panel.hidden { display: none !important; flex: 0 0 0 !important; width: 0 !important; height: 0 !important; overflow: hidden; }
 /* 戰鬥框填滿地圖面板（村莊 town-view 已 flex-1 自動吃滿）；area-fit 怪物 height:100% 隨之等比放大 */
 #battle-view { flex: 1 1 auto; min-height: 0; }
 #battle-view { position: relative; }   /* 🏷️ 供 #status-icon-bar 絕對定位錨定 */
@@ -2092,6 +2098,7 @@ button.classic-skill-cell { cursor:pointer; }
 
     #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 0 !important; }
     #combat-log-panel { flex: 0 0 280px !important; width: 100%; height: 280px !important; min-height: 280px; }
+    #unified-log-body { min-height: 0; }
     #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 7px 9px; font-size: 14px !important; }
     #combat-log, #sys-log, #world-log, #clan-log, #party-log { padding: 9px !important; font-size: 13px !important; }

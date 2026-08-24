@@ -138,6 +138,9 @@
 
   function enterGame(account) {
     setSession(account);
+    try {
+      window.__fb5AuthAccount = account;
+    } catch (e) {}
     setStatus("驗證成功，正在進入……", "ok");
     return syncCloud().finally(function () {
       showLoggedIn(account);
@@ -309,6 +312,11 @@
         window.IpSessionLimit.release();
       } catch (e) {}
     }
+    try {
+      if (window.cloudClearLocalCache && typeof window.cloudClearLocalCache === "function") {
+        window.cloudClearLocalCache();
+      }
+    } catch (e) {}
     setSession("");
     showLoggedOut();
     setStatus("已登出。", "ok");
@@ -349,6 +357,9 @@
       return;
     }
     if (session && isRegistered(session)) {
+      try {
+        window.__fb5AuthAccount = session;
+      } catch (e) {}
       claimIp().then(function (r) {
         if (r && r.ok) {
           syncCloud().finally(function () {
