@@ -1989,7 +1989,7 @@ const TOWN_NPC_POS_OVERRIDE = {
     town_pride: { _pride_entrance: [49, 58] },                          // 新增公會後仍維持原入口告示位置
     town_rift: { _rift_entrance: [48, 58] }                             // 新增公會後仍維持原入口告示位置
 };
-// 每個安全區提供「創公會」入口（舊傭兵公會站位沿用）。既有站點不動；缺少者於地圖初始化時補入。
+// 每個安全區提供「創立血盟」入口（舊傭兵公會站位沿用）。既有站點不動；缺少者於地圖初始化時補入。
 const ALLY_GUILD_TOWN_SPOTS = {
     town_silver_knight: [70, 72], town_windwood_castle: [31, 70], town_talking: [43, 52], town_elf: [75, 78],
     town_gludio: [72, 60], town_gludin: [70, 55], town_giran: [75, 68], town_heine: [56, 29], town_oren: [45, 55],
@@ -2000,13 +2000,15 @@ const ALLY_GUILD_TOWN_SPOTS = {
 };
 function _isClanGuildNpc(npc) {
     if (!npc) return false;
-    if (npc.n === '傭兵公會' || npc.n === '創公會') return true;
+    const n = String(npc.n || '');
+    if (n === '傭兵公會' || n === '創公會' || n === '創立血盟') return true;
+    if (npc.title === '協力') return true;   // 舊傭兵公會副標
     if (npc.type === 'clan' || npc.type === 'ally' || npc.type === 'ally_disabled') return true;
     return !!(npc.id && String(npc.id).indexOf('npc_ally_') === 0);
 }
 function normalizeClanGuildNpc(npc) {
     if (!_isClanGuildNpc(npc)) return npc;
-    npc.n = '創公會';
+    npc.n = '創立血盟';
     npc.title = '血盟';
     npc.type = 'clan';
     npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。';
@@ -2014,7 +2016,7 @@ function normalizeClanGuildNpc(npc) {
 }
 function ensureTownAllyGuilds() {
     if (!DB || !DB.towns) return;
-    // 先把全圖舊「傭兵公會／協力」改成「創公會〔血盟〕」（含村莊動態補點）
+    // 先把全圖舊「傭兵公會／協力」改成「創立血盟〔血盟〕」（含村莊動態補點）
     Object.keys(DB.towns).forEach(townId => {
         let town = DB.towns[townId];
         if (!town || !Array.isArray(town.npcs)) return;
@@ -2028,7 +2030,7 @@ function ensureTownAllyGuilds() {
         if (!existing) {
             town.npcs.push(normalizeClanGuildNpc({
                 id: id,
-                n: '創公會',
+                n: '創立血盟',
                 title: '血盟',
                 type: 'clan',
                 d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。'
@@ -2172,7 +2174,7 @@ function renderTownNPCMap(townId) {
     map.innerHTML = '';
     _townNpcSprites = [];
     try { map.style.backgroundImage = _townMapBg(townId); } catch (e) {}
-    try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會」改成創公會
+    try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會(協力)」改成創立血盟
     let td = DB.towns[townId];
     if (!td) return;
     // 與舊卡片清單相同的可見性過濾
@@ -2185,6 +2187,7 @@ function renderTownNPCMap(townId) {
         if (npc.classicOnly && !player.classicMode) return false;   // 🕊️ 經典限定 NPC（聖使阿卡塔）：一般模式不渲染
         return true;
     }).map(npc => {
+        normalizeClanGuildNpc(npc);
         if ((npc.id === 'npc_esti' || npc.id === 'npc_tros') && typeof clanNpcDisplayName === 'function') {
             return Object.assign({}, npc, { n:clanNpcDisplayName(), _sourceSpotIdx:(td.npcs || []).indexOf(npc) });
         }
