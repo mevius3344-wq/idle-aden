@@ -1,28 +1,299 @@
-* {
-  box-sizing: border-box;
+/* 復古像素 × 黑白暴走 × 月夜竹林客棧 */
+* { box-sizing: border-box; }
+
+body {
+  background-color: #1a1a1a;
+  color: #ffffff;
+  font-family: "Courier New", Courier, monospace, "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
   margin: 0;
-  padding: 0;
+  overflow: hidden;
 }
 
-html, body {
-  min-height: 100%;
-  font-family: "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-  background: #111;
-  color: #eee;
+/* 模擬月夜竹林客棧：深藍夜空 + 竹影剪影 + 客棧暖光 */
+.game-container {
+  width: min(800px, 96vw);
+  height: min(500px, 88vh);
+  border: 4px solid #ffffff;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(255, 250, 220, 0.55) 0 2%, transparent 8%),
+    radial-gradient(ellipse at 50% 100%, rgba(180, 90, 40, 0.35), transparent 55%),
+    linear-gradient(180deg, rgba(8, 12, 28, 0.55) 0%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(180deg, #0b1430 0%, #1a2848 40%, #2a2030 70%, #1a1210 100%);
 }
 
-#app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 48px 20px;
+.game-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 14px,
+      rgba(20, 40, 20, 0.55) 14px 16px,
+      transparent 16px 28px,
+      rgba(10, 30, 15, 0.4) 28px 30px
+    );
+  clip-path: polygon(0 0, 18% 0, 18% 100%, 0 100%);
+  z-index: 0;
 }
 
-h1 {
-  font-size: 1.6rem;
-  margin-bottom: 12px;
+.game-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 12px,
+      rgba(20, 40, 20, 0.5) 12px 14px,
+      transparent 14px 26px
+    );
+  clip-path: polygon(82% 0, 100% 0, 100% 100%, 82% 100%);
+  z-index: 0;
 }
 
-p {
+#authScene,
+.game-world {
+  position: relative;
+  z-index: 1;
+}
+
+.game-title {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 3px 3px #ff0000;
+  margin-bottom: 30px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+
+.login-box {
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid #ffffff;
+  padding: 25px;
+  width: min(320px, 90vw);
+  text-align: center;
+}
+
+.input-group {
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.input-group label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: #ccc;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 8px;
+  background: #222;
+  border: 1px solid #ffffff;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: #ff0000;
+  box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+}
+
+.btn-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.game-btn {
+  background: #000;
+  border: 2px solid #ffffff;
+  color: #fff;
+  padding: 10px 15px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.game-btn:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+.btn-login {
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+
+.btn-login:hover {
+  background: #ff4d4d;
+  color: #fff;
+}
+
+.status-text {
+  margin-top: 15px;
+  font-size: 13px;
+  color: #ffcc00;
+  min-height: 36px;
+  line-height: 1.4;
+}
+
+.game-world {
+  display: none;
+  width: 100%;
+  height: 100%;
+  background: rgba(45, 45, 45, 0.92);
+  padding: 20px;
+  flex-direction: column;
+}
+
+.world-header {
+  border-bottom: 2px solid #fff;
+  padding-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.world-header .loc {
+  font-size: 18px;
+  color: #ffcc00;
+  font-weight: bold;
+}
+
+.world-content {
+  flex: 1;
+  display: flex;
+  margin-top: 15px;
+  gap: 15px;
+  min-height: 0;
+}
+
+.panel-left,
+.panel-right {
+  border: 2px solid #fff;
+  padding: 15px;
+  background: #1e1e1e;
+}
+
+.panel-left {
+  flex: 1;
+  overflow: auto;
+}
+
+.panel-left h3,
+.panel-right h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.panel-left p {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.panel-left .faction {
+  color: #00ffcc;
+}
+
+.panel-left hr {
+  border: none;
+  border-top: 1px solid #444;
+  margin: 12px 0;
+}
+
+.panel-left .hint {
   color: #aaa;
-  line-height: 1.5;
+  font-size: 13px;
+}
+
+.panel-right {
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.portal-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+}
+
+.portal-blue {
+  border-color: #00a2ff;
+  color: #00a2ff;
+}
+
+.portal-blue:hover {
+  background: #00a2ff;
+  color: #000;
+}
+
+.portal-red {
+  border-color: #ff3333;
+  color: #ff3333;
+}
+
+.portal-red:hover {
+  background: #ff3333;
+  color: #fff;
+}
+
+.idle-log {
+  flex: 1;
+  overflow: auto;
+  border: 1px dashed #555;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #ccc;
+  background: #141414;
+  min-height: 80px;
+}
+
+.idle-log .line {
+  margin-bottom: 6px;
+}
+
+.idle-log .line.shao { color: #ffd700; }
+.idle-log .line.tang { color: #66ff99; }
+.idle-log .line.wudang { color: #7ec8ff; }
+.idle-log .line.xue { color: #ff6b6b; }
+
+@media (max-width: 640px) {
+  .world-content {
+    flex-direction: column;
+  }
+  .panel-right {
+    width: 100%;
+  }
+  .btn-group {
+    flex-direction: column;
+  }
 }

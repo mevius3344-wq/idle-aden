@@ -2,15 +2,58 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>新專案</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>【大融合計畫】復古武俠網頁版預覽</title>
+  <link rel="stylesheet" href="css/style.css?v=fusion1">
 </head>
 <body>
-  <main id="app">
-    <h1>空白專案</h1>
-    <p>遊戲已清空，可以開始架設新作品。</p>
-  </main>
-  <script src="js/app.js"></script>
+  <div class="game-container">
+    <!-- 登入與註冊場景 -->
+    <div id="authScene">
+      <div class="game-title">又一個暴走的天堂遺蹟</div>
+      <div class="login-box">
+        <div class="input-group">
+          <label for="username">江湖名號（帳號）：</label>
+          <input type="text" id="username" placeholder="輸入你的大名..." autocomplete="username">
+        </div>
+        <div class="input-group">
+          <label for="password">聯絡暗號（密碼）：</label>
+          <input type="password" id="password" placeholder="輸入暗號..." autocomplete="current-password">
+        </div>
+        <div class="btn-group">
+          <button type="button" class="game-btn" id="btn-register">初入武林 (註冊)</button>
+          <button type="button" class="game-btn btn-login" id="btn-login">踏入江湖 (登入)</button>
+        </div>
+        <div class="status-text" id="statusMessage">【六扇門提示】江湖險惡，請先登記戶籍或輸入正確暗號。</div>
+      </div>
+    </div>
+
+    <!-- 登入成功後的「實體村莊主控制台」預覽 -->
+    <div class="game-world" id="worldScene">
+      <div class="world-header">
+        <span class="loc">📍 當前位置：平安鎮（安全區）</span>
+        <button type="button" class="game-btn" id="btn-logout">退出江湖</button>
+      </div>
+      <div class="world-content">
+        <div class="panel-left">
+          <h3>👤 俠客屬性狀態</h3>
+          <p>角色流派：<span id="displayFaction" class="faction">江湖小蝦米</span></p>
+          <p>先天臂力：<span id="statStr">10</span>（影響近戰打擊力）</p>
+          <p>先天身法：<span id="statAgi">10</span>（影響移動速度）</p>
+          <p>先天悟性：<span id="statInt">10</span>（影響內力與掛機效率）</p>
+          <hr>
+          <p class="hint">💡 提示：在村莊內禁止拔刀。你可以找村中央的傳送大師前往各大門派拜師一轉！</p>
+        </div>
+        <div class="panel-right">
+          <h3>🌀 狩獵傳送門樞紐</h3>
+          <button type="button" class="game-btn portal-btn portal-blue" id="btn-blue-portal">🔵 東郊：文字掛機秘境</button>
+          <button type="button" class="game-btn portal-btn portal-red" id="btn-red-portal">🔴 西郊：移動手操地監</button>
+          <div class="idle-log" id="idleLog" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js?v=fusion1"></script>
 </body>
 </html>
