@@ -1,15 +1,12 @@
 {
-  "name": "new-game",
-  "version": "0.1.0",
+  "name": "idle-paradise",
+  "version": "3.8.41",
   "private": true,
-  "description": "空白遊戲專案",
-  "main": "server/index.js",
+  "description": "放置天堂 - 日出之國（靜態網頁版）",
+  "scripts": {
+    "start": "node _serve.js"
+  },
   "engines": {
     "node": ">=18"
-  },
-  "scripts": {
-    "start": "node server/index.js",
-    "dev": "node server/index.js"
-  },
-  "dependencies": {}
+  }
 }

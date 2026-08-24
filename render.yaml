@@ -1,9 +1,11 @@
 services:
   - type: web
-    name: new-game
+    name: idle-aden
     runtime: node
     plan: free
-    region: singapore
-    buildCommand: npm install
-    startCommand: node server/index.js
+    buildCommand: npm install --omit=dev
+    startCommand: node _serve.js
     healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

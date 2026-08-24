@@ -1,6 +1,8 @@
 node_modules/
-data/world.json
-server/AdenServer.exe
-server/AdenServer.pdb
 .DS_Store
+Thumbs.db
+*.log
 .env
+.env.*
+.vscode/
+.idea/
