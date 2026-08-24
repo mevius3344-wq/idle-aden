@@ -2161,6 +2161,7 @@ function _chatAccount() {
     return '';
 }
 function _chatOnlineSend(payload) {
+    if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return Promise.resolve(false);
     if (!_chatIsHttpOrigin()) return Promise.resolve(false);
     return fetch('/api/chat/send', {
         method: 'POST',
@@ -2214,6 +2215,7 @@ function _chatOnlinePollOnce() {
 }
 function _chatOnlineStartPolling() {
     if (_chatOnlinePolling || !_chatIsHttpOrigin()) return;
+    if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
     _chatOnlinePolling = true;
     (function loop() {
         if (!_chatOnlinePolling) return;
@@ -2401,6 +2403,7 @@ window.addEventListener('storage', function (ev) {
 (function _chatWatchGameScreen() {
     function poke() {
         try {
+            if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
             let game = document.getElementById('game-screen');
             if (game && !game.classList.contains('hidden') && typeof player !== 'undefined' && player && player.cls) {
                 _chatOnlineStartPolling();

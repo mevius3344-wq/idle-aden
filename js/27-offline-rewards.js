@@ -16,6 +16,71 @@
     const OFFLINE_MAX_SAVED_PROFILES = 5;
     const OFFLINE_RECENT_KILL_MS = 5 * 60 * 1000;
     const OFFLINE_HEARTBEAT_MS = 30 * 1000;
+    // 🌐 線上連線閒置上限：野怪區＋安全區，5 分鐘無任何操作自動離線（停止聊天／IP／雲端同步）
+    const ONLINE_IDLE_MAX_MS = 5 * 60 * 1000;
+    let _onlineLastInputAt = 0;
+    let _onlineForced = false;
+
+    function _onlineSyncForcedFlag() {
+        try {
+            window.__onlineIdleForced = !!_onlineForced;
+            window.__wildOnlineForced = !!_onlineForced;   // 相容 js/26、js/35
+        } catch (e) {}
+    }
+    _onlineSyncForcedFlag();
+
+    function _onlineBumpActivity() {
+        if (typeof state === 'undefined' || !state || !state.running) return;
+        if (typeof player === 'undefined' || !player || !player.cls) return;
+        _onlineLastInputAt = _offlineNow();
+        if (_onlineForced) _onlineTryResumeOnline();
+    }
+
+    function _onlineTryResumeOnline() {
+        if (!_onlineForced) return;
+        _onlineForced = false;
+        _onlineLastInputAt = _offlineNow();
+        _onlineSyncForcedFlag();
+        if (window.IpSessionLimit && typeof window.IpSessionLimit.claim === 'function') {
+            window.IpSessionLimit.claim().then(function (r) {
+                if (r && r.ok && typeof _chatOnlineStartPolling === 'function') _chatOnlineStartPolling();
+            }).catch(function () {});
+        } else if (typeof _chatOnlineStartPolling === 'function') {
+            _chatOnlineStartPolling();
+        }
+    }
+
+    function _onlineForceOffline() {
+        if (_onlineForced) return;
+        _onlineForced = true;
+        _onlineSyncForcedFlag();
+        if (typeof _chatOnlineStopPolling === 'function') _chatOnlineStopPolling();
+        if (window.IpSessionLimit && typeof window.IpSessionLimit.release === 'function') {
+            try { window.IpSessionLimit.release(); } catch (e) {}
+        }
+        _offlinePrepareSnapshot(_offlineNow(), true);
+        _offlineInternalSave = true;
+        try { if (typeof _offlineOriginalSaveGame === 'function') _offlineOriginalSaveGame(); } catch (e) {}
+        finally { _offlineInternalSave = false; }
+        if (typeof logSys === 'function') {
+            logSys('<span class="text-amber-300 font-bold">已 5 分鐘無任何操作，自動離線（停止占用伺服器連線）。遊戲仍可本地繼續；有任何操作可重新連線，關閉分頁後可離線掛機結算。</span>');
+        }
+    }
+
+    function _onlineIdleTick() {
+        if (_onlineForced) return;
+        if (typeof state === 'undefined' || !state || !state.running) return;
+        if (typeof player === 'undefined' || !player || !player.cls) return;
+        let now = _offlineNow();
+        if (!_onlineLastInputAt) _onlineLastInputAt = now;
+        if (now - _onlineLastInputAt >= ONLINE_IDLE_MAX_MS) _onlineForceOffline();
+    }
+
+    if (typeof document !== 'undefined' && document.addEventListener) {
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+            document.addEventListener(ev, _onlineBumpActivity, { capture: true, passive: true });
+        });
+    }
     const OFFLINE_MAX_KILLS_PER_MIN = 3000;
     const OFFLINE_MAX_EXP_PER_MIN = 1e12;
     const OFFLINE_MAX_GOLD_PER_MIN = 1e10;
@@ -1583,6 +1648,13 @@
         }
         if (survivalPlan.died) _offlineApplySettledDeath();
         if (options.showModal) _offlineShowSummary(result);
+        // ⏱️ 達 12 小時上限：超出部分已在 elapsed 截斷，結算後停止離線掛機資格
+        if (rawElapsed >= OFFLINE_MAX_MS) {
+            _offlineStopHunting(_offlineEnsureState(), now);
+            if (typeof logSys === 'function') {
+                logSys('<span class="text-amber-300 font-bold">離線掛機已達 12 小時上限：超出時間不再給予經驗與掉落，掛機已停止。請重新打怪後才可再次離線掛機。</span>');
+            }
+        }
         return true;
     }
 
@@ -1670,6 +1742,12 @@
 
             let bossLocked = source.bossUnlocked === false && profile && profile.bossRoom === true;
             if (mercBlocked || !source.eligible || bossLocked || !profile || profile.map !== source.map || elapsed < OFFLINE_MIN_MS || profile.killsPerMin <= 0) {
+                if (rawElapsed >= OFFLINE_MAX_MS) {
+                    _offlineStopHunting(saved, now);
+                    if (typeof logSys === 'function') {
+                        logSys('<span class="text-amber-300 font-bold">離線掛機已達 12 小時上限：超出時間不再給予經驗與掉落，掛機已停止。</span>');
+                    }
+                }
                 _offlineResetRuntime(typeof mapState !== 'undefined' && mapState ? mapState.current : '');
                 _offlinePrepareSnapshot(now);
                 return false;
@@ -1850,6 +1928,23 @@
         _offlineRememberProfile(st, Object.assign({}, previous, { survival: survival, updatedAt: now }));
     }
 
+    function _offlineStopHunting(st, now) {
+        st = st || _offlineEnsureState();
+        if (!st) return;
+        now = Math.max(0, Math.floor(_offlineFinite(now, _offlineNow())));
+        st.eligible = false;
+        st.awaySince = now;
+        st.map = '';
+        st.mapName = '';
+        _offlineWriteClaimAt(now);
+        _offlineWriteJson(_offlineStoreKey('checkpoint'), {
+            v: OFFLINE_VERSION,
+            lastActive: now,
+            snapshot: JSON.parse(JSON.stringify(st))
+        });
+        _offlineResetRuntime('');
+    }
+
     function _offlineLockAfterDeath() {
         let st = _offlineEnsureState();
         if (!st) return false;
@@ -1921,6 +2016,9 @@
                 _offlineLoading = false;
             }
             _offlineResetRuntime(typeof mapState !== 'undefined' && mapState ? mapState.current : '');
+            _onlineForced = false;
+            _onlineLastInputAt = _offlineNow();
+            _onlineSyncForcedFlag();
             setTimeout(function () { _offlineSettle('load'); }, 0);
             return result;
         };
@@ -1930,6 +2028,9 @@
     if (typeof _offlineOriginalStartGame === 'function') {
         window.startGame = function () {
             _offlineRoleDetached = false;
+            _onlineForced = false;
+            _onlineLastInputAt = _offlineNow();
+            _onlineSyncForcedFlag();
             return _offlineOriginalStartGame.apply(this, arguments);
         };
     }
@@ -2009,4 +2110,6 @@
         if (typeof state === 'undefined' || !state || !state.running || typeof player === 'undefined' || !player || !player.cls) return;
         _offlinePrepareSnapshot(_offlineNow());
     }, OFFLINE_HEARTBEAT_MS);
+
+    setInterval(_onlineIdleTick, 15000);
 })();

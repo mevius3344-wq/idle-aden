@@ -159,6 +159,7 @@
   }
 
   function cloudMirrorAfterSave(slot) {
+    if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
     if (!cloudReady()) return;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
     try {
