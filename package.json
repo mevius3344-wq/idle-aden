@@ -1,12 +1,13 @@
-{
+﻿{
   "name": "idle-paradise",
   "version": "3.8.41",
   "private": true,
-  "description": "放置天堂 - 日出之國（靜態網頁版）",
+  "description": "?曄蔭憭拙? - ?亙銋?嚗??雯??嚗?,
   "scripts": {
     "start": "node _serve.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   }
 }
+
