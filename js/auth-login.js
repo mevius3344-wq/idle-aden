@@ -207,7 +207,11 @@
   }
 
   function boot() {
+    // 強制空白：阻擋瀏覽器自動填入舊的「天堂」
     clearCredFields();
+    setTimeout(clearCredFields, 0);
+    setTimeout(clearCredFields, 200);
+    setTimeout(clearCredFields, 800);
 
     const btnReg = $("btn-auth-register");
     const btnLogin = $("btn-auth-login");
@@ -224,6 +228,12 @@
     }
 
     const session = currentSession();
+    // 舊版固定帳號「天堂」的 session 作廢，避免一進來就跳過登入框
+    if (session === "天堂") {
+      setSession("");
+      showLoggedOut();
+      return;
+    }
     if (session && isRegistered(session)) {
       claimIp().then(function (r) {
         if (r && r.ok) {
