@@ -298,7 +298,46 @@ function _mergeTradBuckets(){
         }
     }
 }
-if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _mergeTradBuckets(); } catch(e){} });
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _mergeTradBuckets(); } catch(e){} try { _mergeNormalIntoClassicBuckets(); } catch(e){} });
+// 🎮 一般模式已移除：一次性把一般桶（無後綴）併入經典桶（'_classic'），規則同 _mergeTradBuckets。
+function _mergeNormalIntoClassicBuckets(){
+    let src = '', dst = '_classic';
+    let _read = key => {
+        let raw; try { raw = _lsGet(key); } catch(e){ return { bad: true }; }
+        if (raw == null) return { miss: true };
+        try { let s = _lzGet(key); if (s == null || s === '') return { bad: true }; return { obj: JSON.parse(s) }; } catch(e){ return { bad: true }; }
+    };
+    let sw = _read(WH_KEY + src);
+    if (sw.obj) {
+        let dw = _read(WH_KEY + dst);
+        if (!dw.bad) {
+            let d = dw.obj || { items: [], gold: 0 };
+            let items = d.items || [];
+            let have = new Set(items.map(it => it && it.uid).filter(u => u != null));
+            (sw.obj.items || []).forEach(it => { if (it && !(it.uid != null && have.has(it.uid))) items.push(it); });
+            if (_lzSet(WH_KEY + dst, JSON.stringify({ items: items, gold: (d.gold || 0) + (sw.obj.gold || 0) }))) _lsRemove(WH_KEY + src);
+        }
+    }
+    for (let base of [CARDDEX_KEY, EQUIPDEX_KEY, MISCDEX_KEY, RELICDEX_KEY]) {
+        let sd = _read(base + src);
+        if (!sd.obj) continue;
+        let dd = _read(base + dst);
+        if (dd.bad) continue;
+        let out = dd.obj || {};
+        if (base === CARDDEX_KEY) {
+            let _mig = (typeof cardTierToScore === 'function') ? cardTierToScore : function(v){ return v || 0; };
+            let sOld = (sd.obj._v !== 2), dOld = (out._v !== 2);
+            let merged = { _v: 2 };
+            for (let k in out) { if (k === '_v') continue; merged[k] = dOld ? _mig(out[k]) : (out[k] || 0); }
+            for (let k in sd.obj) { if (k === '_v') continue; let v = sOld ? _mig(sd.obj[k]) : (sd.obj[k] || 0); if (v > (merged[k] || 0)) merged[k] = v; }
+            out = merged;
+        } else {
+            out = Object.assign({}, out);
+            for (let k in sd.obj) if (sd.obj[k]) out[k] = true;
+        }
+        if (_lzSet(base + dst, JSON.stringify(out))) _lsRemove(base + src);
+    }
+}
 // 讀檔／創角時呼叫：把共用桶併進 player.cardDex/equipDex（卡片取較高分·裝備取聯集·只增不減），並回寫共用桶（種子化＋遷移舊存檔 per-character 資料·不丟失）
 function loadSharedCollections(){
     if (!player) return;

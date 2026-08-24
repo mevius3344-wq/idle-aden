@@ -355,6 +355,27 @@ function _summaryFromRaw(s){
     } catch(e){ return null; }
 }
 function slotSummary(n){ return _summaryFromRaw(_lzGet('lineage_idle_save_' + n)); }
+// 🎮 一般模式已移除：離線把各存檔格 classicMode 改為 true（角色選擇畫面立即顯示「經典」）。
+function _migrateAllSavesToClassicMode(){
+    for (let n = 1; n <= 8; n++) {
+        let key = 'lineage_idle_save_' + n;
+        let raw; try { raw = _lzGet(key); } catch (e) { continue; }
+        if (raw == null || raw === '') continue;
+        try {
+            let un = (typeof _saveUnwrap === 'function') ? _saveUnwrap(raw) : { ok:true, payload:raw };
+            if (un && un.signed && !un.ok) continue;
+            let text = (un && un.payload != null) ? un.payload : raw;
+            let d = JSON.parse(text);
+            if (!d || !d.p || d.p.classicMode) continue;
+            d.p.classicMode = true;
+            d.p.traditionalMode = false;
+            let out = JSON.stringify(d);
+            if (typeof _saveWrap === 'function') out = _saveWrap(out);
+            _lzSet(key, out);
+        } catch (e) {}
+    }
+}
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _migrateAllSavesToClassicMode(); } catch (e) {} });
 
 // ===== 角色多開／刪除保護 =====
 // 每個正在遊戲中的分頁每 2 秒留下心跳。刪角時只要還有其他活躍分頁就拒絕，
@@ -632,6 +653,8 @@ function importSave(n){
             }
             d.p.enSeed = importSeed;
             d.p._roleEpoch = _roleEpoch();   // 匯入視為新的角色世代，已刪角色的舊分頁不能覆蓋這份匯入檔
+            d.p.classicMode = true;          // 🎮 一般模式已移除：匯入角色一律經典
+            d.p.traditionalMode = false;
             d.p.allies = [];   // 🤝 舊匯出檔也強制移除傭兵；來源角色未一併匯入時不可保留快照
             // 🔧 抽出倉庫資料（若匯入檔含 wh）；🐾 v3.2.75 也抽出寵物名冊（pets）；龍之鑽石同為共用資料。
             //    寫入存檔位時不保留這些匯出專用欄位（它們不進角色存檔）。
@@ -662,7 +685,7 @@ function importSave(n){
             if(whData !== undefined){
                 let _cnt = (whData.items && whData.items.length) || 0;
                 let _gold = whData.gold || 0;
-                if(confirm(`此匯入檔包含倉庫資料（物品 ${_cnt} 項、金幣 ${_gold.toLocaleString()}）。\n是否一併還原倉庫？\n⚠ 會覆蓋該角色所屬模式（${(d.p && d.p.classicMode) ? '經典' : '非經典'}）的共用倉庫。`)){
+                if(confirm(`此匯入檔包含倉庫資料（物品 ${_cnt} 項、金幣 ${_gold.toLocaleString()}）。\n是否一併還原倉庫？\n⚠ 會覆蓋經典模式的共用倉庫。`)){
                     restoreWh = true;
                     whMsg = '\n倉庫已一併還原。';
                 } else {
@@ -672,7 +695,7 @@ function importSave(n){
             // 🐾 v3.2.75 詢問是否一併還原共用寵物名冊（會覆蓋該模式現有名冊·同模式角色共用·比照倉庫）。桶存 _saveWrap 簽章格式。
             let petMsg = '', restorePets = false;
             if(petData !== undefined){
-                if(confirm(`此匯入檔包含寵物名冊（${petData.length} 隻，匯入後全部為未出戰）。\n是否一併還原寵物？\n⚠ 會覆蓋該角色所屬模式（${(d.p && d.p.classicMode) ? '經典' : '非經典'}）的共用寵物名冊。`)){
+                if(confirm(`此匯入檔包含寵物名冊（${petData.length} 隻，匯入後全部為未出戰）。\n是否一併還原寵物？\n⚠ 會覆蓋經典模式的共用寵物名冊。`)){
                     restorePets = true;
                     petMsg = '\n寵物名冊已一併還原，所有寵物均為未出戰。';
                 } else {
@@ -691,7 +714,7 @@ function importSave(n){
             }
             let clanMsg = '', restoreClan = false;
             if(clanState !== undefined){
-                if(confirm('此匯入檔包含血盟資料。\n是否一併還原血盟？\n⚠ 會覆蓋一般與經典模式的血盟、全模式共用經驗、角色貢獻與城堡狀態。')){
+                if(confirm('此匯入檔包含血盟資料。\n是否一併還原血盟？\n⚠ 會覆蓋血盟、經驗、角色貢獻與城堡狀態。')){
                     restoreClan = true;
                     clanMsg = '\n血盟資料已一併還原。';
                 } else {
@@ -701,7 +724,7 @@ function importSave(n){
             // 💾 角色／倉庫／寵物／龍之鑽石／血盟視為同一批匯入；失敗時回復匯入前資料。
             let roleKey = 'lineage_idle_save_' + n;
             let whRestoreKey = restoreWh ? whKey(d.p) : '';
-            let petRestoreKey = restorePets ? ((typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') + (typeof modeSuffix === 'function' ? modeSuffix(!!(d.p && d.p.classicMode), false) : '')) : '';
+            let petRestoreKey = restorePets ? ((typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') + '_classic') : '';
             let writes = [{ key: roleKey, value: _saveWrap(saveText) }];
             if(restoreWh){
                 writes.push({ key: whRestoreKey, value: JSON.stringify(whData) });
@@ -926,7 +949,7 @@ function updateLoadInfo(){
     set('load-info-name', empty ? '' : (sum.name || '未命名'));
     set('load-info-pledge', empty ? '' : ({ tros:'特羅斯', esti:'依詩蒂' }[sum.pledge] || sum.pledge || '-'));
     set('load-info-class', empty ? '' : sum.cls);
-    set('load-info-alignment', empty ? '' : (sum.classic ? '經典' : '一般'));
+    set('load-info-alignment', empty ? '' : '經典');
     set('load-info-hp', empty ? '' : `${Math.floor(sum.hp || 0)} / ${Math.floor(sum.mhp || 0)}`);
     set('load-info-mp', empty ? '' : `${Math.floor(sum.mp || 0)} / ${Math.floor(sum.mmp || 0)}`);
     set('load-info-ac', empty ? '' : (sum.ac === '' ? '-' : sum.ac));
@@ -1141,8 +1164,6 @@ function showCreation() {
     if(main) main.classList.add('hidden');
     if(load) load.classList.add('hidden');
     if(creation) creation.classList.remove('hidden');
-    const classicToggle = document.getElementById('create-classic-toggle');
-    if(classicToggle) classicToggle.checked = false;   // 刪角後同頁重創時不得沿用上一輪的經典模式勾選
     const nameInput = document.getElementById('create-name-input');
     if(nameInput){
         let hint = '';
@@ -1254,11 +1275,6 @@ function updateCreateUI() {
     document.getElementById('btn-start').disabled = left <= 0 ? false : true;
 }
 
-function onToggleClassic(el) {
-    if (!el.checked) return;   // 取消勾選不需確認
-    let ok = confirm('⚔ 經典模式（硬核挑戰）\n\n開啟後，此角色將「永久」套用下列規則，建立後無法關閉：\n\n‧ 死亡 → 損失該等級 5% 最大經驗（不會降等）\n‧ 無法進行職業精通\n\n確定要以「經典模式」創建此角色嗎？');
-    if (!ok) { el.checked = false; return; }
-}
 function startGame() {
     if(!curCreate.cls || !curCreate.rawCls) return;
     let nameInput = document.getElementById('create-name-input');
@@ -1307,7 +1323,7 @@ function startGame() {
     player.avatar = avatarMap[curCreate.rawCls] || '男騎士';
     player.cls = curCreate.cls;
     player.bloodPledge = null;   // 血盟改由同模式王族花費金幣創立，不再於創角時自動加入。
-    player.classicMode = !!(document.getElementById('create-classic-toggle') && document.getElementById('create-classic-toggle').checked);   // 🎮 經典模式：依創角開關決定（此角色永久生效）；🏛️v3.0.83 傳統模式已取消（traditionalMode 由 SAVE_DEFAULTS 恆 false）
+    player.classicMode = true;   // 🎮 一般模式已移除：所有角色固定經典模式
     player.name = createName;   // 創角必填名稱；進遊戲後仍可於狀態欄點擊改名
     player.enSeed = 'es' + uid() + uid();   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
     player._roleEpoch = _roleEpoch();        // 🛡️ 角色世代：刪除後舊分頁不得把同欄位的舊角色寫回
@@ -1845,11 +1861,16 @@ function loadGame() {
             (player.allies || []).forEach(a => { if (a) a.exp = _mig3(a.lv, a.exp); });
             player.expMigV = 3;
         }
-        // 🏛️ v3.0.83 傳統模式已取消：舊傳統角色一次性併入對應基礎模式（一般+傳統→一般、經典+傳統→經典）。
-        //   共用倉庫/圖鑑桶另由 js/12 _mergeTradBuckets 於頁面載入時合併（'_tradonly'→''、'_trad'→'_classic'）。
+        // 🏛️ v3.0.83 傳統模式已取消：舊傳統角色一次性併入經典（一般模式已移除）。
+        //   共用倉庫/圖鑑桶另由 js/12 _mergeTradBuckets／_mergeNormalIntoClassicBuckets 於頁面載入時合併。
         if (player.traditionalMode) {
             player.traditionalMode = false;
-            logSys(`<span class="text-amber-300 font-bold">🏛️ 傳統模式已取消：此角色已轉為${player.classicMode ? '「經典模式」' : '「一般模式」'}，裝備強化與施法卷軸恢復可用。</span>`);
+            logSys(`<span class="text-amber-300 font-bold">🏛️ 傳統模式已取消：此角色已轉為「經典模式」，裝備強化與施法卷軸恢復可用。</span>`);
+        }
+        // 🎮 一般模式已移除：舊一般角色一次性升級為經典（精通於下方 repairMasteryState 清除）。
+        if (!player.classicMode) {
+            player.classicMode = true;
+            logSys('<span class="text-amber-300 font-bold">⚔ 一般模式已移除：此角色已轉為「經典模式」（死亡扣經驗、無祝福／精通）。</span>');
         }
 
         // ⚔️ v3.0.75 武器強化上限 +20→+15：既有 >+15 武器一律實體降為 +15（數值＝能力·搭配 ENHANCE_CAP.wpn=15＋capWpnEn/enhanceWpnFinalMult 讀取夾擠）。

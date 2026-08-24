@@ -410,6 +410,22 @@ function _clanWriteState(st) {
         return false;
     }
 }
+// 🎮 一般模式已移除：一般血盟／NPC 世界併入經典（經典已有則保留經典），成員 mode 一律改 classic。
+function _clanMergeNormalIntoClassic() {
+    let st = _clanReadState();
+    if (!st) return;
+    let changed = false;
+    if (!st.modes.classic && st.modes.normal) { st.modes.classic = st.modes.normal; changed = true; }
+    if (st.modes.normal) { st.modes.normal = null; changed = true; }
+    if (!st.npcWorlds.classic && st.npcWorlds.normal) { st.npcWorlds.classic = st.npcWorlds.normal; changed = true; }
+    if (st.npcWorlds.normal) { st.npcWorlds.normal = null; changed = true; }
+    Object.keys(st.members || {}).forEach(id => {
+        let m = st.members[id];
+        if (m && m.mode !== 'classic') { m.mode = 'classic'; changed = true; }
+    });
+    if (changed) _clanWriteState(st);
+}
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _clanMergeNormalIntoClassic(); } catch (e) {} });
 
 function _clanStorageGet(key) {
     if (typeof _lsGet === 'function') return _lsGet(key);

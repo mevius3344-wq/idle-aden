@@ -14,8 +14,8 @@
     const BROADCAST_PIN_MAX = 2;   // 📌 v3.5.77 叫賣訊息常駐在「系統與物品日誌」頂端的最大條數（超出者排隊，前面的人被互動/離場後自動遞補）
     const BOARD_COOLDOWN_MS = 24 * 60 * 60 * 1000;
     const RELIC_SEARCH_COST = 100;
-    const WANDERER_CHANCE = 0.50;
-    const GOLD_WANDERER_CHANCE = 0.30;
+    const WANDERER_CHANCE = 0;       // 🎮 叫賣假玩家已關閉
+    const GOLD_WANDERER_CHANCE = 0;  // 🎮 金幣收購假玩家已關閉
     const WANDERER_CARD_CHANCE = 0.10;
 
     // 🚫 v3.5.53 出沒排除（用戶拍板）：攻城三城（限持城者進入·NPC 形同碰不到）＋炎魔謁見所＋席琳神殿；
@@ -840,6 +840,7 @@
     }
 
     function _announceWanderer(w) {
+        return;   // 🎮 叫賣假玩家喊話已關閉
         // ⚠️ 到期守衛放在這裡＝單一真相：tick 路徑（_normalizeState 已濾）與 storage 多開同步路徑共用。
         //    WANDERER_LIFE_MS(2h) 剛好是 BROADCAST_MS(5min) 的整數倍，cycle 邊界正好落在到期瞬間，
         //    去重必然放行 → 另一分頁寫入時會替「已到期但本頁還沒 tick 清掉」的叫賣者重播喊話。
@@ -927,61 +928,27 @@
     }
 
     function wanderingBuyerSystemTick() {
+        // 🎮 村莊隨機叫賣假玩家／聊天室喊話已關閉：清掉既有 wanderers，不再生成／廣播。
         if (typeof DB === 'undefined' || !DB.items || !DB.towns) return;
-        let now = Date.now();
-        let bucket = Math.floor(now / CHECK_MS);
         let before = _readState();
         let beforeSig = _activeSignature(before.wanderers);
         let result = _withStateLock(st => {
-            let changed = false;
-            let active = st.wanderers.filter(w => w && Number(w.expiresAt) > now);
-            if (active.length !== st.wanderers.length) {
-                st.wanderers = active;
-                changed = true;
-            }
-            if (st.lastCheckBucket !== bucket) {
-                st.lastCheckBucket = bucket;
-                changed = true;
-                [
-                    { currency: 'diamond', chance: WANDERER_CHANCE },
-                    { currency: 'gold', chance: GOLD_WANDERER_CHANCE }
-                ].forEach(kind => {
-                    let occupiedTowns = new Set(st.wanderers
-                        .filter(w => _wandererCurrency(w) === kind.currency)
-                        .map(w => w.townId));
-                    let availableTowns = _eligibleTowns().filter(id => !occupiedTowns.has(id));
-                    if (availableTowns.length && _rand(st, 'wander-roll|' + kind.currency + '|' + bucket) < kind.chance) {
-                        let townId = _pick(st, availableTowns, 'wander-town|' + kind.currency + '|' + bucket);
-                        let made = _makeWanderer(st, now, townId, kind.currency);
-                        if (made) st.wanderers.push(made);
-                    }
-                });
-            }
-            return changed ? {} : { commit: false, unchanged: true };
+            if (!Array.isArray(st.wanderers) || !st.wanderers.length) return { commit: false, unchanged: true };
+            st.wanderers = [];
+            return {};
         });
         let latest = result.state || _readState();
         let sig = _activeSignature(latest.wanderers);
         if (sig !== beforeSig || sig !== _lastMapSignature) _refreshTownMapIfNeeded(sig);
-        renderWanderBroadcastPins(latest);   // 📌 v3.5.77 先更新釘選列（新到場/離場遞補），_announceWanderer 才知道誰已釘選不必重播
-        latest.wanderers
-            .filter(w => _wandererPresent(w, now))
-            .forEach(_announceWanderer);
+        renderWanderBroadcastPins(latest);
     }
 
     function getWanderingBuyersForTown(townId) {
-        let st = _readState();
-        let list = _findWanderersForTown(st, townId);
-        return list.map((w, index) => Object.assign({
-            _wanderer: true,
-            _wandererIndex: index,
-            _wandererCount: list.length,
-            n: w.name,
-            title: _buyerTitle(w)
-        }, w));
+        return [];   // 🎮 村莊隨機叫賣假玩家已關閉
     }
 
     function getWanderingBuyerForTown(townId) {
-        return getWanderingBuyersForTown(townId)[0] || null;
+        return null;
     }
 
     function wanderingBuyerSpriteData(w) {
@@ -1970,17 +1937,13 @@
     window.pandoraAdjustSharedDiamonds = pandoraAdjustSharedDiamonds;
     window.pandoraRestoreSharedDiamonds = pandoraRestoreSharedDiamonds;
 
-    setTimeout(wanderingBuyerSystemTick, 1500);
-    setInterval(wanderingBuyerSystemTick, 30000);
+    setTimeout(wanderingBuyerSystemTick, 500);   // 清掉既有叫賣假玩家
     setInterval(pandoraRelicBindBoardCountdowns, 1000);
-    setInterval(_pinExpiryWatch, 1000);   // 📌 v3.5.77 釘選中的叫賣者一到期就換下一位（只比對兩個數字·到期那一刻才真的重畫）
     try {
         window.addEventListener('storage', e => {
             if (e && e.key === STORE_KEY) {
-                let st = _readState();
-                _refreshTownMapIfNeeded(_activeSignature(st.wanderers));
-                renderWanderBroadcastPins(st);   // 📌 v3.5.77 多開同步：另一個分頁互動/成交後，本頁釘選列一起遞補
-                st.wanderers.forEach(_announceWanderer);
+                // 🎮 叫賣假玩家已關閉：只清空本機殘影，不再廣播喊話
+                wanderingBuyerSystemTick();
             }
         });
     } catch (e) {}

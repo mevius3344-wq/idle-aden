@@ -1576,14 +1576,16 @@ button.classic-skill-cell { cursor:pointer; }
 }
 #creation-name-control {
     left:61.6%;
-    top:72.55%;
+    top:75.35%;
     width:26.3%;
 }
 #btn-start.creation-start-button {
     left:67.95%;
+    top:81.2%;
 }
 #creation-back-button {
     left:67.95%;
+    top:87.0%;
 }
 
 /* ===== 開始遊戲角色選擇畫面 ===== */
@@ -2240,8 +2242,8 @@ button.classic-skill-cell { cursor:pointer; }
         top: 0;
         transform: none;
         width: 100%;
-        height: 1120px;
-        min-height: 1120px;
+        height: 1240px;
+        min-height: 1240px;
         max-height: none;
         aspect-ratio: auto;
         flex: 0 0 auto;
@@ -2303,6 +2305,7 @@ button.classic-skill-cell { cursor:pointer; }
         gap: 7px;
         width: 100px;
         height: 34px;
+        z-index: 9;
     }
     .creation-stat-control::before { right: calc(100% + 6px) !important; left: auto !important; font-size: 15px; text-align: right !important; }
     .creation-stat-control.stat-str,
@@ -2319,35 +2322,28 @@ button.classic-skill-cell { cursor:pointer; }
     .creation-stat-control.stat-int { top: 948px; }
     .creation-stat-value { min-width: 30px; font-size: 14px; }
     .creation-stat-btn { width: 28px; height: 28px; font-size: 14px; }
-    #classic-mode-control {
-        left: 16px;
-        top: 1011px;
-        width: 116px;
-        height: 48px;
-        justify-content: flex-start;
-        font-size: 13px;
-    }
-    #classic-mode-control input { width: 18px; height: 18px; }
+    /* 名稱放在配點列下方，避免蓋住體質／智力與開始遊戲 */
     #creation-name-control {
         left: 16px;
-        top: 948px;
+        top: 1004px;
         width: calc(100% - 32px);
+        z-index: 8;
     }
     #creation-name-control input {
-        font-size: 15px;
-        padding: 8px 10px;
+        font-size: 16px;
+        padding: 10px 12px;
     }
     #btn-start.creation-start-button {
-        left: 142px;
-        top: 1008px;
-        width: calc(100% - 158px);
+        left: 16px;
+        top: 1090px;
+        width: calc(100% - 32px);
         height: 48px;
         font-size: 15px;
     }
     #creation-back-button {
-        left: 142px;
-        top: 1064px;
-        width: calc(100% - 158px);
+        left: 16px;
+        top: 1150px;
+        width: calc(100% - 32px);
         height: 42px;
         font-size: 14px;
     }

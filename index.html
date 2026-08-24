@@ -14,7 +14,7 @@
     <title>經典天堂</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.8.10-create-name">
+    <link rel="stylesheet" href="css/style.css?v=v3.8.52-create-name-mobile">
     <link rel="stylesheet" href="css/floating-ui.css?v=v3.5.100-audit-tail">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -142,10 +142,6 @@
                 <span>角色名稱</span>
                 <input id="create-name-input" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="請輸入角色名稱">
             </label>
-            <label id="classic-mode-control" title="開啟後此角色永久套用經典規則，無法事後關閉">
-                <input type="checkbox" id="create-classic-toggle" onchange="onToggleClassic(this)">
-                <span>經典模式</span>
-            </label>
             <button onclick="backToMenu()" id="creation-back-button" type="button">返回</button>
             <button onclick="startGame()" id="btn-start" class="creation-start-button" type="button" disabled>開始遊戲</button>
         </div>
@@ -194,7 +190,7 @@
         <div id="col-left" class="w-[340px] flex flex-col gap-4">
             <!-- 新增了 id="status-panel"，並加入去底色與加深背景的樣式確保文字可讀 -->
             <div id="status-panel" class="panel bg-cover bg-top bg-no-repeat" style="background-blend-mode: multiply; background-color: rgba(30, 41, 59, 0.85);">
-                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="classic-badge" class="hidden font-bold ml-1" style="color:#fbbf24;text-shadow:0 0 5px rgba(251,191,36,0.7);font-size:0.85rem;line-height:1;" title="經典模式（硬核）：死亡損失該等級 5% 最大經驗（不降等）、無祝福/精通；掉落率、經驗與金幣獲得與一般模式相同">⚔經典</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.6.36" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold cursor-pointer hover:bg-slate-700/50 rounded px-2 inline-block min-w-[4.5rem] text-right" title="點擊此處修改名稱" onclick="startEditName()"></span></div>
+                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="classic-badge" class="hidden font-bold ml-1" style="color:#fbbf24;text-shadow:0 0 5px rgba(251,191,36,0.7);font-size:0.85rem;line-height:1;" title="經典模式（硬核）：死亡損失該等級 5% 最大經驗（不降等）、無祝福/精通">⚔經典</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.6.36" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold cursor-pointer hover:bg-slate-700/50 rounded px-2 inline-block min-w-[4.5rem] text-right" title="點擊此處修改名稱" onclick="startEditName()"></span></div>
                 <div class="status-compact-body text-base">
                     <div class="status-level-row text-slate-400">
                         <span>等級</span><span class="text-white font-bold text-xl" id="st-lv">1</span>
@@ -316,13 +312,13 @@
                     </div>
                     <span id="syslog-pandora" class="text-sm font-normal truncate text-right min-w-0"></span>
                 </div>
-                <!-- 📌 NPC 叫賣釘選列：僅世界頻道顯示 -->
+                <!-- 📌 叫賣釘選列（假玩家喊話已關閉，保留容器以免其他腳本報錯） -->
                 <div id="sys-log-pins"></div>
                 <div id="world-log" class="chat-log-pane flex-1 p-4 overflow-y-auto log-bg shadow-inner text-base" data-chat-ch="world"></div>
                 <div id="clan-log" class="chat-log-pane hidden flex-1 p-4 overflow-y-auto log-bg shadow-inner text-base" data-chat-ch="clan"></div>
                 <div id="party-log" class="chat-log-pane hidden flex-1 p-4 overflow-y-auto log-bg shadow-inner text-base" data-chat-ch="party"></div>
                 <div id="world-input-row">
-                    <input id="world-input" type="text" maxlength="60" autocomplete="off" placeholder="在世界頻道發言（僅真實玩家可見）">
+                    <input id="world-input" type="text" maxlength="60" autocomplete="off" placeholder="在世界頻道發言（線上玩家即時可見）">
                     <button id="world-send" onclick="worldChannelAsk()" type="button">發言</button>
                 </div>
                 <button id="world-log-unlock" onclick="worldLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-14 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
@@ -420,10 +416,6 @@
                     <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 flex flex-col gap-2">
                         <div class="flex items-center gap-2 mb-2">
                             <button type="button" class="btn w-24 py-1 text-sm font-bold bg-slate-700 hover:bg-slate-600 border-slate-500 text-slate-100" onclick="returnToCharacterSelect()">回選角</button>
-                            <label id="npc-language-setting" class="btn min-w-32 py-1 px-3 text-sm font-bold bg-slate-700 hover:bg-slate-600 border-slate-500 text-cyan-100 cursor-pointer flex items-center justify-center gap-2" title="本機 NPC AI 對話">
-                                <input type="checkbox" id="set-npc-language-on" class="w-4 h-4" onchange="setNpcLanguageEnabled(this.checked)">
-                                <span>NPC AI 對話</span>
-                            </label>
                         </div>
                         <div class="flex items-center justify-between gap-3">
                             <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-sfx-on" class="w-4 h-4" onchange="try{setSfxOn(this.checked)}catch(e){}"><span class="text-sm text-amber-200 font-bold">🔊 戰鬥音效</span></label>
@@ -591,7 +583,7 @@
     <script src="js/auth-login.js?v=v3.8.49-blank-force"></script>
     <script src="js/anim-manifest.js?v=v3.8.12-necro-relics"></script>
     <script src="js/00-data.js?v=v3.8.42-classic-name"></script>
-<script src="js/01-drops-config.js?v=v3.8.40-no-sherine"></script>
+<script src="js/01-drops-config.js?v=v3.8.50-classic-only"></script>
 <script src="js/02-stats-recompute.js?v=v3.8.40-no-sherine"></script>
     <script src="js/03-combat-core.js?v=v3.8.43-no-wpn-procs"></script>
     <script src="js/04-combat-attack.js?v=v3.8.43-no-wpn-procs"></script>
@@ -602,8 +594,8 @@
 <script src="js/09-vfx-render.js?v=v3.8.40-no-sherine"></script>
     <script src="js/10-ui-tabs.js?v=v3.8.40-no-sherine"></script>
 <script src="js/11-world-map.js?v=v3.8.40-no-sherine"></script>
-<script src="js/12-npc-quests.js?v=v3.8.45-cloud-save"></script>
-<script src="js/13-shop-save.js?v=v3.8.45-cloud-save"></script>
+<script src="js/12-npc-quests.js?v=v3.8.50-classic-only"></script>
+<script src="js/13-shop-save.js?v=v3.8.50-classic-only"></script>
 <script src="js/14-craft-pandora.js?v=v3.8.40-no-sherine"></script>
 <script src="js/15-cards.js?v=v3.7.66"></script>
 <script src="js/16-equip-book.js?v=v3.8.15-legacy-import-smooth"></script>
@@ -613,10 +605,10 @@
 <script src="js/20-warehouse-window.js?v=v3.5.100-audit-tail"></script>
 <script src="js/21-relic-book.js?v=v3.8.15-legacy-import-smooth"></script>
     <script src="js/23-summons.js?v=v3.8.23-sherine-set-rework"></script>
-    <script src="js/22-pets.js?v=v3.8.23-sherine-set-rework"></script>
-    <script src="js/24-pandora-relic-market.js?v=v3.7.70"></script>
-    <script src="js/25-clan-system.js?v=v3.8.7-social-private"></script>
-    <script src="js/26-world-channel.js?v=v3.8.40-no-sherine"></script>
+    <script src="js/22-pets.js?v=v3.8.50-classic-only"></script>
+    <script src="js/24-pandora-relic-market.js?v=v3.8.51-no-wanderers"></script>
+    <script src="js/25-clan-system.js?v=v3.8.50-classic-only"></script>
+    <script src="js/26-world-channel.js?v=v3.8.53-online-chat"></script>
 <script src="js/28-pvp-arena.js?v=v3.7.89-stage33-host-sign"></script>
 <script src="js/29-siege-v2-data.js?v=v3.7.63-siege-v2"></script>
 <script src="js/30-siege-v2.js?v=v3.8.7-no-merc"></script>

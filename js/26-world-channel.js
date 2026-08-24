@@ -943,13 +943,13 @@ const WC_TOPICS = [
         key: 'death', kw: ['死掉', '死亡', '死了', '噴經驗', '掉經驗', '扣經驗', '陣亡', '復活', '買回經驗', '贖回', '聖使', '阿卡塔', '一直死', '攻城死亡', '攻城區死亡', '噴裝備', '噴道具', '紅人掉裝'],
         gen: function () {
             return [
-                '一般模式死亡不會噴經驗；經典模式才會扣，被怪打死就回村重整旗鼓。',
-                '經典模式死掉的經驗可以去亞丁找聖使阿卡塔花金幣買回一半，紀錄筆數有限，別拖太久。',
+                '死亡會扣該等級最大經驗的 5%（不降等）；被怪打死就回村重整旗鼓。',
+                '死掉的經驗可以去亞丁找聖使阿卡塔花金幣買回一半，紀錄筆數有限，別拖太久。',
                 '一直死就是等級或裝備跟不上：退一張圖練、把自動喝水的門檻調高，比原地送頭有效。',
-                '攻城區不管是邪惡玩家還是敵人死亡，都不會噴裝備；經典模式在攻城區死亡也不扣經驗。',
+                '攻城區不管是邪惡玩家還是敵人死亡，都不會噴裝備；攻城區死亡也不扣經驗。',
                 '紅名低於很深的邪惡值才有死亡掉物品風險，攻城區不吃這條。',
                 '邪惡狀態噴掉的裝備別放棄：亞丁的聖使阿卡塔會記錄最近遺失的幾件，花龍之鑽石就能指定贖回其中一件，強化值跟詞綴都照原樣回來。',   // 🕊️ v3.6.86 裝備贖回
-                '阿卡塔的裝備贖回一般模式也能用，不用經典；只有「死亡經驗買回」那段才是經典限定。'
+                '阿卡塔的裝備贖回與「死亡經驗買回」都可使用；經驗買回有筆數上限。'
             ];
         }
     },
@@ -2130,17 +2130,105 @@ function _wcTriggerMassTaunt() {
 }
 
 // ================= 💬 真實玩家頻道發言（世界／血盟／隊伍）=================
-// 不再呼叫假玩家 NPC 回覆；多分頁開啟的真實角色透過 BroadcastChannel 互通。
+// 線上：世界／血盟經 /api/chat 即時互通；隊伍仍用本機 BroadcastChannel（同分頁多開）。
 let _chatActiveChannel = 'world';   // world | clan | party
 let _chatAskCooldownUntil = 0;
 const _CHAT_PLACEHOLDERS = {
-    world: '在世界頻道發言（僅真實玩家可見）',
-    clan: '在血盟頻道發言（同血盟、同分頁角色）',
-    party: '在隊伍頻道發言（目前線上的其他角色）'
+    world: '在世界頻道發言（線上玩家即時可見）',
+    clan: '在血盟頻道發言（同血盟線上玩家）',
+    party: '在隊伍頻道發言（本機其他分頁角色）'
 };
 const _CHAT_LOG_IDS = { world: 'world-log', clan: 'clan-log', party: 'party-log' };
 let _chatBc = null;
 try { if (typeof BroadcastChannel !== 'undefined') _chatBc = new BroadcastChannel('fb5_real_chat_v1'); } catch (e) { _chatBc = null; }
+let _chatOnlineOk = null;          // null unknown, true/false
+let _chatOnlineSince = 0;
+let _chatOnlinePolling = false;
+let _chatOnlineAbort = null;
+
+function _chatIsHttpOrigin() {
+    try {
+        let p = String(location.protocol || '');
+        return p === 'http:' || p === 'https:';
+    } catch (e) { return false; }
+}
+function _chatAccount() {
+    try {
+        if (typeof window !== 'undefined' && window.__fb5AuthAccount) return String(window.__fb5AuthAccount || '').trim();
+        if (typeof GameAccountAuth !== 'undefined' && GameAccountAuth && typeof GameAccountAuth.currentAccount === 'function')
+            return String(GameAccountAuth.currentAccount() || '').trim();
+    } catch (e) {}
+    return '';
+}
+function _chatOnlineSend(payload) {
+    if (!_chatIsHttpOrigin()) return Promise.resolve(false);
+    return fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: payload.id,
+            ch: payload.ch,
+            text: payload.text,
+            name: payload.name,
+            alignment: payload.alignment,
+            classic: payload.classic,
+            clanKey: payload.clanKey || '',
+            slot: payload.slot,
+            sessionId: payload.sessionId || '',
+            fp: payload.fp || '',
+            account: _chatAccount()
+        })
+    }).then(function (res) {
+        return res.json().then(function (data) {
+            if (res.ok && data && data.ok) { _chatOnlineOk = true; return true; }
+            if (data && data.message) _chatAppend(payload.ch || 'world', '<span class="wc-sys">' + String(data.message).replace(/[<>&]/g, '') + '</span>');
+            return false;
+        });
+    }).catch(function () { _chatOnlineOk = false; return false; });
+}
+function _chatOnlineApplyBatch(messages) {
+    if (!Array.isArray(messages) || !messages.length) return;
+    messages.forEach(function (m) {
+        if (!m) return;
+        if (m.seq && m.seq > _chatOnlineSince) _chatOnlineSince = m.seq;
+        _chatDeliver(m, true);
+    });
+}
+function _chatOnlinePollOnce() {
+    if (!_chatIsHttpOrigin()) return Promise.resolve();
+    let wait = _chatOnlineSince > 0 ? 18000 : 0;
+    let url = '/api/chat/poll?since=' + encodeURIComponent(String(_chatOnlineSince)) + '&wait=' + wait;
+    let ctrl = null;
+    try { ctrl = new AbortController(); _chatOnlineAbort = ctrl; } catch (e) { ctrl = null; }
+    return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            _chatOnlineOk = !!(data && data.ok);
+            if (data && data.ok) _chatOnlineApplyBatch(data.messages || []);
+            if (data && data.seq && data.seq > _chatOnlineSince) _chatOnlineSince = data.seq;
+        })
+        .catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            _chatOnlineOk = false;
+        });
+}
+function _chatOnlineStartPolling() {
+    if (_chatOnlinePolling || !_chatIsHttpOrigin()) return;
+    _chatOnlinePolling = true;
+    (function loop() {
+        if (!_chatOnlinePolling) return;
+        _chatOnlinePollOnce().then(function () {
+            if (!_chatOnlinePolling) return;
+            // 短暫間隔避免緊密重連；長輪詢本身已阻塞至多 ~18 秒
+            setTimeout(loop, _chatOnlineOk === false ? 4000 : 200);
+        });
+    })();
+}
+function _chatOnlineStopPolling() {
+    _chatOnlinePolling = false;
+    try { if (_chatOnlineAbort) _chatOnlineAbort.abort(); } catch (e) {}
+    _chatOnlineAbort = null;
+}
 
 function _chatLogEl(ch) {
     return document.getElementById(_CHAT_LOG_IDS[ch] || _CHAT_LOG_IDS.world);
@@ -2210,12 +2298,17 @@ function _chatDeliver(payload, fromRemote) {
     if (fromRemote) _chatNotifyUnread(payload.ch);
 }
 function _chatBroadcast(payload) {
+    // 本機多分頁（BroadcastChannel / storage）
     try {
-        if (_chatBc) { _chatBc.postMessage(payload); return; }
+        if (_chatBc) _chatBc.postMessage(payload);
     } catch (e) {}
     try {
         localStorage.setItem('fb5_real_chat_ping_v1', JSON.stringify({ t: Date.now(), payload: payload }));
     } catch (e) {}
+    // 線上：世界／血盟走伺服器；隊伍僅本機
+    if (payload && (payload.ch === 'world' || payload.ch === 'clan')) {
+        _chatOnlineSend(payload);
+    }
 }
 function switchChatChannel(ch) {
     if (ch !== 'world' && ch !== 'clan' && ch !== 'party') ch = 'world';
@@ -2262,7 +2355,7 @@ function worldChannelAsk() {
         let classic = !!player.classicMode;
         let online = peers.filter(s => s && !!s.classic === classic);
         if (!online.length) {
-            _chatAppend('party', '<span class="wc-sys">目前沒有其他線上角色。請用另一個存檔位開分頁進入遊戲，即可組成隊伍頻道。</span>');
+            _chatAppend('party', '<span class="wc-sys">目前沒有其他本機分頁角色。線上玩家請改用世界／血盟頻道。</span>');
         }
     }
 
@@ -2282,6 +2375,7 @@ function worldChannelAsk() {
     };
     _chatDeliver(payload, false);
     _chatBroadcast(payload);
+    _chatOnlineStartPolling();
 }
 
 if (_chatBc) {
@@ -2296,6 +2390,26 @@ window.addEventListener('storage', function (ev) {
         if (wrap && wrap.payload) _chatDeliver(wrap.payload, true);
     } catch (e) {}
 });
+// 進遊戲後自動開始線上輪詢（讀檔／創角都會進 game-screen）
+(function _chatWatchGameScreen() {
+    function poke() {
+        try {
+            let game = document.getElementById('game-screen');
+            if (game && !game.classList.contains('hidden') && typeof player !== 'undefined' && player && player.cls) {
+                _chatOnlineStartPolling();
+            }
+        } catch (e) {}
+    }
+    if (typeof MutationObserver !== 'undefined') {
+        try {
+            let game = document.getElementById('game-screen');
+            if (game) new MutationObserver(poke).observe(game, { attributes: true, attributeFilter: ['class'] });
+        } catch (e) {}
+    }
+    setInterval(poke, 8000);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', poke);
+    else poke();
+})();
 
 // ================= 👆 NPC 名字點擊：嘲諷／感謝（舊訊息相容；不再產生新假玩家答話）=================
 function worldChannelNpcMenu(id, ev) {

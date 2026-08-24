@@ -815,7 +815,7 @@ function invMergeBack(e) {
 const SAVE_VERSION = 2;   // v1 = 未標版本的舊存檔
 const SAVE_DEFAULTS = {
     name: null, bonus: 0, panaceaUsed: 0, bloodPledge: null, lootSeq: 0,
-    magicShieldCd: 0, reviveScrollCd: 0, lastMapByCat: {}, lastBattleMap: null, tracking: null, sherineWorld: false, sherineMad: false, classicMode: false, traditionalMode: false,
+    magicShieldCd: 0, reviveScrollCd: 0, lastMapByCat: {}, lastBattleMap: null, tracking: null, sherineWorld: false, sherineMad: false, classicMode: true, traditionalMode: false,
     masteryQuest: null, mastery: null, masteryChangeCnt: 0,
     prideBeatJenis: false, demonTempleOpen: false, flameAffinity: 0, trialStage: 0, prideRank: { best: null, last: null, isNew: false }, prideRankSherine: { best: null, last: null, isNew: false },
     riftRank: { best: null, last: null, isNew: false }, riftRankSherine: { best: null, last: null, isNew: false }, riftRewardMs: null,

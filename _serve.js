@@ -65,9 +65,7 @@ function ensureDesktopDir() {
         "",
         "檔案說明：",
         "  slot-1.json ~ slot-8.json  → 各存檔位角色",
-        "  warehouse.json             → 一般模式共用倉庫",
         "  warehouse_classic.json     → 經典模式共用倉庫",
-        "  pets.json                  → 一般模式寵物名冊",
         "  pets_classic.json          → 經典模式寵物名冊",
         "",
         "修改流程：",
@@ -470,6 +468,178 @@ async function handleCloudApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown cloud api" });
 }
 
+// ===== 💬 Online realtime chat (world / clan). In-memory ring; lost on restart. =====
+const CHAT_MAX = 250;
+const CHAT_RATE_MS = 1000;
+const CHAT_TEXT_MAX = 60;
+const CHAT_WAIT_MAX_MS = 20000;
+/** @type {Array<object>} */
+const chatMessages = [];
+let chatSeq = 0;
+/** @type {Map<string, number>} ip -> last send ms */
+const chatRateByIp = new Map();
+/** @type {Array<{since:number, resolve:Function, timer:any}>} */
+const chatWaiters = [];
+
+function chatSanitizeText(raw) {
+  return String(raw || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, CHAT_TEXT_MAX);
+}
+
+function chatMessagesSince(since) {
+  const s = Math.max(0, Number(since) || 0);
+  return chatMessages.filter((m) => m && m.seq > s);
+}
+
+function chatNotifyWaiters() {
+  if (!chatWaiters.length) return;
+  const pending = chatWaiters.splice(0);
+  pending.forEach((w) => {
+    try {
+      clearTimeout(w.timer);
+    } catch (e) {}
+    try {
+      w.resolve(chatMessagesSince(w.since));
+    } catch (e) {}
+  });
+}
+
+function chatPush(msg) {
+  chatSeq += 1;
+  msg.seq = chatSeq;
+  chatMessages.push(msg);
+  while (chatMessages.length > CHAT_MAX) chatMessages.shift();
+  chatNotifyWaiters();
+  return msg;
+}
+
+function chatCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+async function handleChatApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    chatCors(res);
+    res.writeHead(204);
+    return res.end();
+  }
+
+  if (u === "/api/chat/status" && req.method === "GET") {
+    return json(res, 200, {
+      ok: true,
+      online: true,
+      seq: chatSeq,
+      count: chatMessages.length,
+      rateMs: CHAT_RATE_MS,
+    });
+  }
+
+  if (u === "/api/chat/send" && req.method === "POST") {
+    const ip = clientIp(req);
+    const now = Date.now();
+    const last = chatRateByIp.get(ip) || 0;
+    if (now - last < CHAT_RATE_MS) {
+      return json(res, 429, { ok: false, error: "rate", message: "發言過快，請稍候。" });
+    }
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const text = chatSanitizeText(data.text);
+    if (!text) return json(res, 400, { ok: false, error: "empty" });
+    let ch = String(data.ch || "world");
+    if (ch !== "world" && ch !== "clan" && ch !== "party") ch = "world";
+    const name = String(data.name || "未命名")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 16) || "未命名";
+    const sessionId = String(data.sessionId || "").slice(0, 96);
+    const id = String(data.id || "").slice(0, 64) || ("c" + now.toString(36));
+    const msg = chatPush({
+      v: 1,
+      id: id,
+      ch: ch,
+      text: text,
+      name: name,
+      alignment: Number(data.alignment) || 0,
+      classic: data.classic !== false,
+      clanKey: String(data.clanKey || "").slice(0, 80),
+      slot: Number(data.slot) || 0,
+      sessionId: sessionId,
+      fp: String(data.fp || "").slice(0, 120),
+      account: String(data.account || "")
+        .replace(/[<>&"']/g, "")
+        .trim()
+        .slice(0, 24),
+      at: now,
+    });
+    chatRateByIp.set(ip, now);
+    return json(res, 200, { ok: true, seq: msg.seq, id: msg.id });
+  }
+
+  if (u === "/api/chat/poll" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
+    let waitMs = Number(url.searchParams.get("wait"));
+    if (!Number.isFinite(waitMs) || waitMs < 0) waitMs = 0;
+    waitMs = Math.min(CHAT_WAIT_MAX_MS, waitMs);
+    const ready = chatMessagesSince(since);
+    // First connect (since=0): return recent history immediately.
+    if (since === 0) {
+      const hist = chatMessages.slice(-80);
+      return json(res, 200, { ok: true, messages: hist, seq: chatSeq });
+    }
+    if (ready.length || waitMs <= 0) {
+      return json(res, 200, { ok: true, messages: ready, seq: chatSeq });
+    }
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = (msgs) => {
+        if (done) return;
+        done = true;
+        try {
+          clearTimeout(waiter.timer);
+        } catch (e) {}
+        const idx = chatWaiters.indexOf(waiter);
+        if (idx >= 0) chatWaiters.splice(idx, 1);
+        try {
+          json(res, 200, { ok: true, messages: msgs || [], seq: chatSeq });
+        } catch (e) {}
+        resolve();
+      };
+      const waiter = {
+        since: since,
+        resolve: finish,
+        timer: null,
+      };
+      waiter.timer = setTimeout(() => {
+        finish(chatMessagesSince(since));
+      }, waitMs);
+      chatWaiters.push(waiter);
+      req.on("close", () => {
+        if (done) return;
+        done = true;
+        try {
+          clearTimeout(waiter.timer);
+        } catch (e) {}
+        const idx = chatWaiters.indexOf(waiter);
+        if (idx >= 0) chatWaiters.splice(idx, 1);
+        resolve();
+      });
+    });
+    return;
+  }
+
+  return json(res, 404, { ok: false, error: "unknown chat api" });
+}
+
 const server = http.createServer(async (req, res) => {
   let u = decodeURIComponent((req.url || "/").split("?")[0]);
   try {
@@ -479,6 +649,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/cloud")) {
       await handleCloudApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/chat")) {
+      await handleChatApi(req, res, u);
       return;
     }
     if (u.startsWith("/api/player-data")) {
@@ -527,6 +701,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(
     "CLOUD_SAVE " + (ENABLE_CLOUD_SAVE ? CLOUD_ROOT : "off")
   );
+  console.log("CHAT online ring=" + CHAT_MAX);
   if (ENABLE_DESKTOP_SAVES) {
     try {
       const dir = ensureDesktopDir();

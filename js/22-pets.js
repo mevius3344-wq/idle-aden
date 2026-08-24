@@ -220,6 +220,25 @@ let _petReleasedUids = {};      // 本分頁放生過的 uid（合併時防其�
 //    共用桶已持有的條目永遠不得因上限被丟棄（那正是 v3.5.87 修掉的資料遺失 bug）。
 let _petPendingAddUids = {};
 function _petBucketKey() { return PET_ROSTER_KEY + (typeof modeSuffix === 'function' ? modeSuffix(!!(player && player.classicMode), false) : ''); }
+// 🎮 一般模式已移除：把一般寵物桶併入經典桶（uid 去重），成功後刪一般桶。
+function _mergePetRosterNormalIntoClassic() {
+    try {
+        let src = _petRosterRead(PET_ROSTER_KEY);
+        if (!src || !src.length) return;
+        let dst = _petRosterRead(PET_ROSTER_KEY + '_classic');
+        if (dst === null) return;
+        let list = (dst || []).slice();
+        let have = new Set(list.map(p => p && p.uid).filter(u => u != null));
+        src.forEach(p => { if (p && !(p.uid != null && have.has(p.uid))) { list.push(p); if (p.uid != null) have.add(p.uid); } });
+        let old = _lzGet(PET_ROSTER_KEY + '_classic'); if (old != null) _lzSet(PET_ROSTER_KEY + '_classic_bak', old);
+        let payload = JSON.stringify(list.map(typeof _petPersist === 'function' ? _petPersist : (x => x)));
+        if (_lzSet(PET_ROSTER_KEY + '_classic', _saveWrap(payload))) {
+            try { _lsRemove(PET_ROSTER_KEY); } catch (e) {}
+            _petRosterKey = null;
+        }
+    } catch (e) { console.warn('pet roster classic merge', e); }
+}
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _mergePetRosterNormalIntoClassic(); } catch (e) {} });
 // 🕐 共用桶欄位版本戳（裝備 eqV／出戰 outV）：時間戳加入分頁亂數與本地單調遞增，
 //    避免兩個角色同時掛網、同一毫秒存檔時產生相同版本戳而各自保留不同出戰歸屬。
 let _petStampLast = 0;
