@@ -2356,13 +2356,9 @@ function renderPvpTab() {
     let pvpBoxCls = pvpOn ? 'bg-red-950/70 border-red-600' : 'bg-slate-900/80 border-slate-700';
     let pvpTextCls = pvpOn ? 'text-red-300' : 'text-slate-100';
     let pvpHintCls = pvpOn ? 'text-red-200' : 'text-slate-400';
-    let pvpHint = '開啟後，野外戰鬥有 1% 機率遭遇玩家 NPC。';
-    if (clanConflict && clanConflict.hasMutual) {
-        pvpHint = '雙方互宣：同模式角色強制開啟 PVP，野外遭遇率為 3%，其中 80% 為互宣血盟。';
-    } else if (clanConflict && clanConflict.hasPlayerOnly) {
-        pvpHint = '玩家單方面宣戰：同模式角色強制開啟 PVP，野外遭遇率維持 1%，其中 50% 為宣戰血盟。';
-    } else if (clanConflict && clanConflict.hasNpcOnly) {
-        pvpHint = 'NPC單方面宣戰：即使關閉 PVP，野外仍有 1% 機率遭遇該敵盟。';
+    let pvpHint = '野外隨機玩家 NPC 遭遇已關閉；性向值、復仇名單與決鬥競技場仍可使用。';
+    if (warForced) {
+        pvpHint = '血盟宣戰期間 PVP 旗標仍會強制開啟，但野外不再刷新玩家 NPC。';
     }
     let rows = (player.pvpRevengeList || []).map((r, i) => {
         let a = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(r.alignmentValue) : (Number(r.alignmentValue) || 0);

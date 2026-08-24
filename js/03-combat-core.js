@@ -1990,8 +1990,9 @@ function spawnMob(idx) {
     let normalPool = pool.filter(id => DB.mobs[id] && !DB.mobs[id].boss);
     let mobId;
     let siegeArea = isSiegeArea(mapState.current);
-    let npcClanBattle = !_antharasDungeon && typeof npcClanGroupBattleActive === 'function' && npcClanGroupBattleActive();
-    let wcMassTauntBattle = !_antharasDungeon && typeof wcMassTauntGroupBattleActive === 'function' && wcMassTauntGroupBattleActive();
+    // 🗑️ v3.8.63 野外 PVP 玩家 NPC 已移除（隨機遭遇／記仇追殺／血盟團戰／世界頻道集體嗆聲戰）；攻城區敵盟玩家仍保留。
+    let npcClanBattle = false;
+    let wcMassTauntBattle = false;
     let allowMultiBoss = backSlotsActive() && !siegeArea;   // 🆕 一般5格地圖可同時出現多隻頭目；攻城雖改為5格，仍維持單一城門／守護塔
     // 🏛️ 長老之室 BOSS 節流：場上最多同時 2 隻長老 BOSS；已有 1 隻時須該 BOSS 存活滿 3 分鐘才可能出現第 2 隻
     let _elderRoom = mapState.current === 'elder_room';
@@ -2030,50 +2031,6 @@ function spawnMob(idx) {
             _siegePvp.siegeLevel = Math.max(1, player.lv + Math.floor(Math.random() * 21) - 10);
             mobId = trollPickClassMob(_siegePvp.avatar);   // 😤 v3.6.20 70%/30% 模板抽選
             mapState._trollSpawn = _siegePvp;
-        }
-        // PVP／NPC 血盟宣戰：依宣戰方向決定野外遭遇率與敵盟占比。
-        if (typeof pvpEnsureState === 'function') pvpEnsureState();
-        let _clanEncounter = typeof npcClanEncounterProfile === 'function'
-            ? npcClanEncounterProfile(player)
-            : null;
-        let _wildPvpChance = _clanEncounter && _clanEncounter.active
-            ? _clanEncounter.chance
-            : PVP_WILD_CHANCE;
-        let _wildPvpAllowed = !!player.pvpOn || !!(_clanEncounter && _clanEncounter.npcInitiated);
-        if (_wildPvpAllowed && typeof MAP_CATEGORIES !== 'undefined' && MAP_CATEGORIES.wild
-            && MAP_CATEGORIES.wild.some(m => m.v === mapState.current)
-            && !PURE_BOSS_MAPS.includes(mapState.current) && !isSiegeArea(mapState.current)
-            && Math.random() < _wildPvpChance) {
-            let _onF = mapState.mobs.filter(m => m).map(m => m.n);
-            let _clanOpts = _clanEncounter && _clanEncounter.active ? {
-                warEncounter:true,
-                encounterClanIds:_clanEncounter.clanIds,
-                enemyClanChance:_clanEncounter.enemyClanChance
-            } : null;
-            let _pvp = pvpCreateRandomOpponent(_onF, _clanOpts);
-            if (_pvp && !_onF.includes(_pvp.n)) {
-                mobId = trollPickClassMob(_pvp.avatar);   // 😤 v3.6.20 70%/30% 模板抽選
-                mapState._trollSpawn = _pvp;
-            }
-        }
-        // 😤 v3.5.59 白目玩家：被記仇(player.trollPlayers·js/24 嗆聲觸發)→野外(非BOSS房/非攻城)重生 5% 機率遭遇；同名不同時出現；逾期(2小時)自動移除
-        if (!_antharasDungeon && player.trollPlayers && player.trollPlayers.length) {
-            let _now = Date.now();
-            let _tl = player.trollPlayers.filter(t => t && (t.noExpire || t.pvpRevenge || t.until > _now));
-            if (_tl.length !== player.trollPlayers.length) {
-                let _keep = new Set(_tl.map(t => t && t.n));
-                let _expiredNames = player.trollPlayers.filter(t => t && t.n && !_keep.has(t.n)).map(t => t.n);
-                player.trollPlayers = _tl;
-                _expiredNames.forEach(n => { if (typeof pvpReleaseAlignLock === 'function') pvpReleaseAlignLock(n); });
-            }
-            if (_tl.length && !PURE_BOSS_MAPS.includes(mapState.current) && !isSiegeArea(mapState.current) && Math.random() < ((typeof window !== 'undefined' && window.__FB5_TEST_BUILD) ? 1 : 0.05)) {   // 🧪 TEST版：野外重生必定遭遇（正式版 5%）
-                let _onF = mapState.mobs.filter(m => m).map(m => m.n);
-                let _cand = _tl.filter(t => !_onF.includes(t.n));
-                if (_cand.length) {
-                    let _t = _cand[Math.floor(Math.random() * _cand.length)]; mobId = trollPickClassMob(_t.avatar); mapState._trollSpawn = _t;   // 😤 v3.6.20 70%/30% 模板抽選
-                    if (typeof pvpLockAlignment === 'function') _t.alignmentValue = pvpLockAlignment(_t.n, _t.alignmentValue, _t.clanId);
-                }
-            }
         }
     }
     
