@@ -2,12 +2,11 @@
   "name": "idle-paradise",
   "version": "3.8.41",
   "private": true,
-  "description": "?曄蔭憭拙? - ?亙銋?嚗??雯??嚗?,
+  "description": "Idle Paradise static web game",
   "scripts": {
-    "start": "node _serve.js"
+    "start": "node server/index.js"
   },
   "engines": {
     "node": "20.x"
   }
 }
-
