@@ -267,35 +267,8 @@
         st.seq = Math.max(0, Math.floor(Number(st.seq) || 0));
         st.lastCheckBucket = Number.isFinite(Number(st.lastCheckBucket)) ? Math.floor(Number(st.lastCheckBucket)) : -1;
         st.diamonds = Math.max(0, Math.floor(Number(st.diamonds) || 0));
-        // v1 僅能保存全遊戲一名玩家 NPC；v2 改為每個符合條件的安全區各自最多一名；
-        // v3 同一安全區可各有一位龍鑽／金幣收購 NPC。
-        let oldWanderer = st.wanderer && typeof st.wanderer === 'object' ? st.wanderer : null;
-        let wanderers = Array.isArray(st.wanderers) ? st.wanderers.slice() : [];
-        if (oldWanderer) wanderers.push(oldWanderer);
-        let seenTownCurrency = new Set();
-        let seenId = new Set();
-        st.wanderers = wanderers.filter(w => {
-            if (!w || typeof w !== 'object' || !w.id || !w.townId) return false;
-            let currency = w.currency === 'gold' ? 'gold' : 'diamond';
-            let townCurrencyKey = currency + '|' + w.townId;
-            if (seenTownCurrency.has(townCurrencyKey) || seenId.has(w.id)) return false;
-            seenTownCurrency.add(townCurrencyKey);
-            seenId.add(w.id);
-            let spawnedAt = Math.max(0, Math.floor(Number(w.spawnedAt) || 0));
-            let expiresAt = Math.max(0, Math.floor(Number(w.expiresAt) || 0));
-            if (spawnedAt) w.expiresAt = Math.min(expiresAt || (spawnedAt + WANDERER_LIFE_MS), spawnedAt + WANDERER_LIFE_MS);
-            w.currency = currency;   // 舊存檔未記錄幣別者一律視為原本的龍鑽收購。
-            if (currency === 'gold') w.price = Math.max(1, Math.floor(Number(w.price) || 1));
-            else w.reward = Math.max(1, Math.floor(Number(w.reward) || 1));
-            w.alignmentValue = _normalizeAlignmentValue(w.alignmentValue);
-            w.dismissed = !!w.dismissed;
-            w.dismissedAt = w.dismissed ? Math.max(0, Math.floor(Number(w.dismissedAt) || 0)) : 0;
-            w.broadcastStopped = !!w.broadcastStopped || w.dismissed;
-            w.quietAt = Math.max(0, Math.floor(Number(w.quietAt) || 0));
-            w.playerBlocked = !!w.playerBlocked;
-            w.playerBlockedAt = w.playerBlocked ? Math.max(0, Math.floor(Number(w.playerBlockedAt) || 0)) : 0;
-            return true;
-        });
+        // 🗑️ v3.8.64 叫賣玩家 NPC 已永久移除：共用狀態不再保留 wanderers。
+        st.wanderers = [];
         delete st.wanderer;
         if (!Array.isArray(st.boards)) st.boards = [];
         st.boards = [0, 1, 2].map(i => {
@@ -901,19 +874,10 @@
     // 重畫釘選列：最多 BROADCAST_PIN_MAX 條常駐在日誌頂端；空的時候 CSS :empty 會自動收起整條。
     // 簽章 early-return＝每 30 秒的 tick 不會無謂重建 DOM（重建會弄掉滑鼠停留/選單狀態）。
     function renderWanderBroadcastPins(st) {
-        let list = _pinnedWanderers(st);
+        _pinnedIdSet = new Set();
+        _pinExpiryDue = 0;
         let el = (typeof document !== 'undefined') ? document.getElementById('sys-log-pins') : null;
-        // ⚠️ 沒有釘選列的頁面（例如舊版 HTML）：快取要清空，否則「被當成已釘選→免廣播」而釘選列又不存在＝這兩位徹底消失
-        _pinnedIdSet = el ? new Set(list.map(w => w.id)) : new Set();
-        _pinExpiryDue = el && list.length ? Math.min.apply(null, list.map(w => Number(w.expiresAt) || 0)) : 0;
-        if (!el) return;
-        let sig = list.map(w => [w.id, _wandererCurrency(w), w.itemId, w.en, w.price, w.townId].join('|')).join('||');
-        if (el._pinSig === sig) return;
-        el._pinSig = sig;
-        el.innerHTML = list.map(w =>
-            `<div class="wander-pin"><span class="wander-pin-tag">${_esc(_buyerTitle(w))}</span>` +
-            `<span class="wander-pin-body">${_broadcastLineHTML(w)}</span></div>`
-        ).join('');
+        if (el) { el._pinSig = ''; el.innerHTML = ''; }
     }
 
     function _refreshTownMapIfNeeded(signature) {
@@ -1343,6 +1307,7 @@
     }
 
     function openWanderingBuyerDialog(wandererId) {
+        return;   // 🗑️ v3.8.64 叫賣玩家 NPC 已移除
         let st = _readState();
         let w = wandererId ? _findWanderer(st, wandererId) : _currentTownWanderer(st);
         if (!_wandererPresent(w)) {
@@ -1937,7 +1902,8 @@
     window.pandoraAdjustSharedDiamonds = pandoraAdjustSharedDiamonds;
     window.pandoraRestoreSharedDiamonds = pandoraRestoreSharedDiamonds;
 
-    setTimeout(wanderingBuyerSystemTick, 500);   // 清掉既有叫賣假玩家
+    setTimeout(wanderingBuyerSystemTick, 0);   // 立即清掉既有叫賣假玩家
+    setTimeout(wanderingBuyerSystemTick, 500);
     setInterval(pandoraRelicBindBoardCountdowns, 1000);
     try {
         window.addEventListener('storage', e => {

@@ -2193,16 +2193,7 @@ function renderTownNPCMap(townId) {
     // 🗼🌀 v3.2.89 傲慢之塔／時空裂痕：入口告示改成地圖上的可點 NPC（_spr 專屬圖·_float 專屬點擊→浮動視窗）
     if (townId === 'town_pride') vis.push({ id: '_pride_entrance', n: '傲慢之塔', title: '入口', _spr: '1148', _float: 'pride' });
     if (townId === 'town_rift') vis.push({ id: '_rift_entrance', n: '時空裂痕', title: '入口', _spr: '1149', _float: 'rift' });
-    // 🏴 潘朵拉玩家 NPC：每個安全區可各有一位龍鑽／金幣收購者，並沿用玩家職業站立動畫。
-    try {
-        if (typeof getWanderingBuyersForTown === 'function') {
-            let wanderers = getWanderingBuyersForTown(townId);
-            if (Array.isArray(wanderers)) vis.push.apply(vis, wanderers);
-        } else if (typeof getWanderingBuyerForTown === 'function') {
-            let wandering = getWanderingBuyerForTown(townId);
-            if (wandering) vis.push(wandering);
-        }
-    } catch (e) {}
+    // 🗑️ v3.8.64 叫賣玩家 NPC 已移除（不再注入 getWanderingBuyersForTown）
     if (!vis.length) return;
     // ⚠️ 站位要以「NPC 在未過濾 td.npcs 中的原始索引」對位，不能用過濾後的順序。
     //    否則像威頓村的 npc_han（classicHide、位於索引 1 非末尾）在經典模式被濾掉時，
@@ -2217,49 +2208,12 @@ function renderTownNPCMap(townId) {
     let _spotN = vis.reduce((m, npc) => Math.max(m, (npc._spotIdx || 0) + 1), 0);
     let pos = _townNpcLayout(_spotN, townId);
     let ovr = TOWN_NPC_POS_OVERRIDE[townId] || {};
-    let buyerPositions = _townWanderingBuyerPositions(vis, townId, pos, ovr);
     let used = new Set();
     // 🔒 v3.2.99 先把所有「專屬/固定/角色」sprite 佔位，避免池分配的 NPC 搶走稍後才出現的固定 NPC 的圖
     //   （例：肯特城堡 奧貝勒固定 1049，若 伊賽馬利 先抽到 1049 就會撞臉；先預留固定圖 → 池分配自動避開）
     vis.forEach(npc => { let fk = npc._spr || NPC_SPR_FIXED[npc.id] || NPC_SPR_ROLE[npc.type]; if (fk) used.add(fk); });
     vis.forEach((npc, i) => {
-        let p = (npc._wanderer && buyerPositions[npc.id]) || _townNpcMapPoint(npc, i, pos, ovr);
-        // 玩家 NPC 使用 classanim 的無武器 idle（三方向隨機·由 wanderingBuyerSpriteData 依 id 決定），本體與影子各自同步播放。
-        if (npc._wanderer && typeof wanderingBuyerSpriteData === 'function') {
-            let spr = wanderingBuyerSpriteData(npc);
-            let body0 = spr.frames && spr.frames[0] ? spr.frames[0].src : '';
-            let shadow0 = spr.shadows && spr.shadows[0] ? spr.shadows[0].src : '';
-            let el = document.createElement('div');
-            el.className = 'town-npc wandering-player';
-            el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
-            let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(npc.alignmentValue) : Math.max(-32767, Math.min(32767, Math.round(Number(npc.alignmentValue) || 0)));
-            let nameHtml = (typeof pvpNameHtml === 'function') ? pvpNameHtml(npc.n, align, 'tn-name') : '<span class="tn-name">' + npc.n + '</span>';
-            let crownHtml = _townCastleCrownHtml(npc);
-            if (crownHtml) el.classList.add('has-castle-crown');
-            el.innerHTML =
-                '<div class="tn-label">' + nameHtml + '<span class="tn-title">[' + (npc.title || '玩家收購') + ']</span></div>' +
-                crownHtml +
-                '<img class="tn-shadow" src="' + shadow0 + '" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +
-                '<img class="tn-body" src="' + body0 + '" alt="">';
-            el.onclick = () => openWanderingBuyerDialog(npc.id);
-            map.appendChild(el);
-            let bodyImg = el.querySelector('.tn-body');
-            let shadowImg = el.querySelector('.tn-shadow');
-            let crownImg = el.querySelector('.tn-castle-crown');
-            if (crownImg) bodyImg.addEventListener('load', () => _townCastleCrownAlign(crownImg, bodyImg));
-            if (crownImg) setTimeout(() => _townCastleCrownAlign(crownImg, bodyImg), 0);
-            bodyImg.addEventListener('load', _scheduleTownLabelResolve, { once: true });
-            _townNpcSprites.push({
-                img: bodyImg,
-                crown: crownImg,
-                wimg: shadowImg,
-                wframes: spr.shadows || null,
-                frames: spr.frames || [],
-                phase: (i * 3) % 8,
-                last: -1
-            });
-            return;
-        }
+        let p = _townNpcMapPoint(npc, i, pos, ovr);
         let key = npc._spr || _npcSpriteKey(npc, used); used.add(key);
         let cat = NPC_SPR[key] || NPC_SPR['1256'];
         let el = document.createElement('div');
