@@ -2132,7 +2132,41 @@ button.classic-skill-cell { cursor:pointer; }
 
     #col-right > .tab-bar { position: sticky; top: 46px; z-index: 65; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4px !important; padding: 4px !important; }
     #col-right > .tab-bar .btn { min-height: 34px; padding: 4px 2px !important; font-size: 12px !important; }
-    #tab-content-panel { flex: 0 0 auto !important; height: min(48dvh, 380px); min-height: 240px; }
+    /* 手機：類別內容預設收合，點分頁才展開，避免一進來就拉長捲動 */
+    #tab-content-panel {
+        display: none !important;
+        flex: 0 0 auto !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+    }
+    #col-right.mobile-tab-open #tab-content-panel {
+        display: flex !important;
+        height: min(48dvh, 380px) !important;
+        min-height: 200px !important;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #765036;
+        overflow: hidden !important;
+    }
+    .mobile-tab-collapse-btn {
+        display: none;
+        width: 100%;
+        min-height: 32px;
+        margin: 0;
+        padding: 4px 8px;
+        border: 1px solid #765036;
+        border-radius: 3px;
+        background: linear-gradient(180deg, #3a302c, #1f1b1d);
+        color: #e8dcc8;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    #col-right.mobile-tab-open .mobile-tab-collapse-btn { display: block !important; }
     #tab-stats { padding: 8px !important; gap: 8px !important; font-size: 13px !important; }
     #tab-stats > .grid { gap: 5px 8px !important; }
 
@@ -3669,6 +3703,8 @@ button.classic-skill-cell { cursor:pointer; }
 }
 .account-auth-status.ok { color: #00ff66; }
 .account-auth-status.err { color: #ff4d4d; }
+/* 手機收合鈕：桌面永遠隱藏（僅窄螢幕 media 內才可能顯示） */
+.mobile-tab-collapse-btn { display: none !important; }
 #st-class.st-class-unnamed {
     color: #94a3b8 !important;
     font-size: 0.95rem;

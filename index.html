@@ -14,7 +14,7 @@
     <title>經典天堂</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.8.76-mobile-compact">
+    <link rel="stylesheet" href="css/style.css?v=v3.8.77-mobile-tab-toggle">
     <link rel="stylesheet" href="css/floating-ui.css?v=v3.5.100-audit-tail">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -346,6 +346,7 @@
                 <button id="btn-clan" class="btn text-base py-2 font-bold px-0" onclick="switchTab('clan', this)">血盟</button>
                 <button id="btn-automation" class="btn text-base py-2 font-bold px-0" style="background: linear-gradient(135deg, #0c4a5e 0%, #0e7490 28%, #0a3d4d 52%, #11657e 76%, #093440 100%); color: #a5f3fc; border-color: #0891b2;" onclick="switchTab('automation', this)" title="設定（獲得物品時自動排列背包·每10秒最多一次·與自動販賣同一開關）">設定</button>
             </div>
+            <button type="button" id="btn-mobile-tab-collapse" class="mobile-tab-collapse-btn" onclick="collapseMobileTabPanel()" aria-label="收合選單內容">收合選單 ▴</button>
 
             <div id="tab-content-panel" class="panel flex-1 flex flex-col overflow-hidden relative">
                 <!-- 能力：400×825 經典資訊欄底圖；配點框只在回憶蠟燭流程顯示 -->
@@ -596,7 +597,7 @@
     <script src="js/07-skills-cast.js?v=v3.8.26-flywing-relics"></script>
 <script src="js/08-items-equip.js?v=v3.8.73-gold-fix"></script>
 <script src="js/09-vfx-render.js?v=v3.8.40-no-sherine"></script>
-    <script src="js/10-ui-tabs.js?v=v3.8.73-gold-fix"></script>
+    <script src="js/10-ui-tabs.js?v=v3.8.77-mobile-tab-toggle"></script>
 <script src="js/11-world-map.js?v=v3.8.66-clan-create-npc"></script>
 <script src="js/12-npc-quests.js?v=v3.8.50-classic-only"></script>
 <script src="js/13-shop-save.js?v=v3.8.71-account-isolation"></script>

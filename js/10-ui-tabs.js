@@ -2542,7 +2542,34 @@ function pvpRevenge(i, choiceIndex) {
     updateUI();
     renderPvpTab();
 }
+function isMobileCompactUi() {
+    try {
+        return window.matchMedia('(max-width: 768px), (max-height: 520px) and (pointer: coarse)').matches;
+    } catch (e) {
+        return false;
+    }
+}
+function setMobileTabPanelOpen(open) {
+    let col = document.getElementById('col-right');
+    if (!col) return;
+    if (!isMobileCompactUi()) {
+        col.classList.remove('mobile-tab-open');
+        return;
+    }
+    col.classList.toggle('mobile-tab-open', !!open);
+}
+function collapseMobileTabPanel() {
+    setMobileTabPanelOpen(false);
+}
 function switchTab(t, btn) {
+    // 📱 手機：同一分頁再點一次＝收合內容，避免下方內容區一直佔高
+    if (isMobileCompactUi() && btn && btn.classList.contains('active')) {
+        let col = document.getElementById('col-right');
+        if (col && col.classList.contains('mobile-tab-open')) {
+            setMobileTabPanelOpen(false);
+            return;
+        }
+    }
     Array.from(btn.parentElement.children).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     // 👇 更新陣列名單
@@ -2553,6 +2580,7 @@ function switchTab(t, btn) {
     if(t === 'pvp' && typeof renderPvpTab === 'function') renderPvpTab();
     if(t === 'clan' && typeof renderClanTab === 'function') renderClanTab();
     if(t === 'automation' && typeof syncNpcLanguageSetting === 'function') syncNpcLanguageSetting();
+    if (isMobileCompactUi()) setMobileTabPanelOpen(true);
 }
 
 // ===== 🤝 協力傭兵隊伍面板（Phase 1：顯示血/魔/經驗條＋每傭兵攻擊技能/治癒魔法設定）=====
