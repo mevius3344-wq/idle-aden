@@ -21,6 +21,10 @@
     var _rtPartyOnlineCache = [];
     var _rtPartyOnlineAt = 0;
     var _rtPartyOnlineFetch = null;
+    var _rtPartyListCache = [];
+    var _rtPartyListAt = 0;
+    var _rtPartyListFetch = null;
+    var _rtPartyApplications = [];
     var _rtPartyInviteDraft = '';
     var _rtPartySearchTimer = null;
 
@@ -216,6 +220,22 @@
                 rtPartyLog((rtPartyEsc(ev.name) || '隊員') + ' 成為新隊長。');
             } else if (ev.type === 'decline') {
                 rtPartyLog((rtPartyEsc(ev.name) || '對方') + ' 拒絕了組隊邀請。');
+            } else if (ev.type === 'apply') {
+                if (rtPartyIsLeader()) {
+                    rtPartyLog((rtPartyEsc(ev.name) || '玩家') + ' 申請加入隊伍。');
+                    rtPartyPollOnce();
+                }
+            } else if (ev.type === 'apply_accept') {
+                if (ev.toKey === rtPartyMyKey() || !ev.toKey) {
+                    rtPartyLog('申請已通過，已加入隊伍。');
+                    rtPartyStart();
+                    rtPartyPollOnce();
+                }
+            } else if (ev.type === 'apply_reject') {
+                if (ev.toKey === rtPartyMyKey() || !ev.toKey) {
+                    rtPartyLog('隊長拒絕了你的組隊申請。');
+                    rtPartyFetchList(true);
+                }
             } else if (ev.type === 'share') {
                 rtPartyApplyShare(ev);
             }
@@ -228,6 +248,7 @@
         _rtParty = data.party || null;
         _rtPartyKey = rtPartyMyKey();
         _rtPartyInvites = Array.isArray(data.invites) ? data.invites : [];
+        _rtPartyApplications = Array.isArray(data.applications) ? data.applications : [];
         rtPartyHandleEvents(data.events || []);
         rtPartyRender();
         rtPartyRenderInvites();
@@ -253,7 +274,7 @@
         return rtPartyPost('create').then(function (data) {
             if (data && data.ok) {
                 _rtParty = data.party || null;
-                rtPartyLog(data.already ? '你已在隊伍中。' : '已建立隊伍。邀請線上玩家加入吧。');
+                rtPartyLog(data.already ? '你已在隊伍中。' : '已創建隊伍。可邀請玩家或等待他人申請加入。');
                 rtPartyRender();
                 rtPartyStart();
             } else if (data && data.message) {
@@ -297,7 +318,43 @@
             try { input.focus(); } catch (e) {}
         }
         if (rtPartyIsLeader()) rtPartyInvite();
-        else rtPartyLog('請先建立隊伍再邀請。');
+        else rtPartyLog('請先創建隊伍再邀請。');
+    }
+
+    function rtPartyApply(partyId) {
+        partyId = String(partyId || '').trim();
+        if (!partyId) return;
+        return rtPartyPost('apply', { partyId: partyId }).then(function (data) {
+            if (data && data.ok) {
+                rtPartyLog(rtPartyEsc(data.message || '已申請加入。'));
+                rtPartyFetchList(true);
+            } else if (data && data.message) {
+                rtPartyLog(rtPartyEsc(data.message));
+            } else {
+                rtPartyLog('申請失敗。');
+            }
+            return data;
+        });
+    }
+
+    function rtPartyReviewApply(applyId, accept) {
+        applyId = String(applyId || '').trim();
+        if (!applyId) return;
+        return rtPartyPost('review', { applyId: applyId, accept: !!accept }).then(function (data) {
+            if (data && data.ok && data.accepted) {
+                _rtParty = data.party || _rtParty;
+                rtPartyLog('已接受組隊申請。');
+                rtPartyRender(true);
+            } else if (data && data.ok && !data.accepted) {
+                rtPartyLog('已拒絕組隊申請。');
+                _rtPartyApplications = (_rtPartyApplications || []).filter(function (x) {
+                    return x && x.id !== applyId;
+                });
+                rtPartyRender(true);
+            } else if (data && data.message) {
+                rtPartyLog(rtPartyEsc(data.message));
+            }
+        });
     }
 
     function rtPartyStableSig() {
@@ -326,8 +383,43 @@
             i: (_rtPartyInvites || []).map(function (x) { return x && x.id; }),
             k: rtPartyMyKey(),
             o: (_rtPartyOnlineCache || []).map(function (x) { return x && (x.name + (x.inParty ? '1' : '0')); }),
+            l: (_rtPartyListCache || []).map(function (x) {
+                return x && (x.id + ':' + (x.memberCount || 0) + ':' + (x.applied ? '1' : '0'));
+            }),
+            r: (_rtPartyApplications || []).map(function (x) { return x && x.id; }),
             d: _rtPartyInviteDraft
         });
+    }
+
+    function rtPartyFetchList(force) {
+        if (!rtPartyIsHttp()) return Promise.resolve([]);
+        var id = rtPartyIdentity();
+        if (!id) return Promise.resolve([]);
+        var now = Date.now();
+        if (!force && _rtPartyListAt && now - _rtPartyListAt < 4000) {
+            return Promise.resolve(_rtPartyListCache);
+        }
+        if (_rtPartyListFetch) return _rtPartyListFetch;
+        var url = '/api/party/list?account=' + encodeURIComponent(id.account)
+            + '&slot=' + encodeURIComponent(String(id.slot))
+            + '&name=' + encodeURIComponent(id.name);
+        _rtPartyListFetch = fetch(url)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                _rtPartyListFetch = null;
+                if (data && data.ok && Array.isArray(data.parties)) {
+                    _rtPartyListCache = data.parties;
+                    _rtPartyListAt = Date.now();
+                    rtPartyRender();
+                    return _rtPartyListCache;
+                }
+                return _rtPartyListCache;
+            })
+            .catch(function () {
+                _rtPartyListFetch = null;
+                return _rtPartyListCache;
+            });
+        return _rtPartyListFetch;
     }
 
     function rtPartyFetchOnline(force) {
@@ -371,6 +463,57 @@
             _rtPartySearchTimer = null;
             rtPartyFetchOnline(true);
         }, 250);
+    }
+
+    function rtPartyListHtml() {
+        var list = _rtPartyListCache || [];
+        if (!list.length) {
+            return '<div class="rt-party-online empty">目前沒有可加入的隊伍；你也可以創建隊伍等人申請。</div>';
+        }
+        return '<div class="rt-party-online rt-party-open-list">'
+            + list.slice(0, 20).map(function (p) {
+                if (!p || !p.id) return '';
+                var pid = encodeURIComponent(p.id);
+                var act = '';
+                if (p.applied) {
+                    act = '<span class="rt-party-off">已申請</span>';
+                } else if (p.open) {
+                    act = '<button type="button" class="rt-party-btn rt-party-btn-mini rt-party-btn-main" data-pid="' + pid + '" onclick="rtPartyApply(decodeURIComponent(this.getAttribute(\'data-pid\')))">申請加入</button>';
+                } else {
+                    act = '<span class="rt-party-off">已滿</span>';
+                }
+                return '<div class="rt-party-online-row">'
+                    + '<div class="rt-party-online-info">'
+                    + '<span class="rt-party-name">隊長 ' + rtPartyEsc(p.leaderName || '—') + '</span>'
+                    + '<span class="rt-party-meta">Lv.' + (p.leaderLv || 1) + ' ' + rtPartyEsc(rtPartyClsLabel(p.leaderCls))
+                    + ' · ' + rtPartyEsc(p.mapName || '—')
+                    + ' · ' + (p.memberCount || 0) + '/' + (p.max || 8) + ' 人'
+                    + (p.onlineCount ? ' · 線上 ' + p.onlineCount : '') + '</span>'
+                    + '</div>' + act + '</div>';
+            }).join('')
+            + '</div>';
+    }
+
+    function rtPartyApplicationsHtml() {
+        var list = _rtPartyApplications || [];
+        if (!list.length) return '';
+        return '<div class="rt-party-section">'
+            + '<div class="rt-party-section-title">待審申請</div>'
+            + '<div class="rt-party-online">'
+            + list.map(function (a) {
+                if (!a || !a.id) return '';
+                var aid = encodeURIComponent(a.id);
+                return '<div class="rt-party-online-row">'
+                    + '<div class="rt-party-online-info">'
+                    + '<span class="rt-party-name">' + rtPartyEsc(a.name || '玩家') + '</span>'
+                    + '<span class="rt-party-meta">Lv.' + (a.lv || 1) + ' ' + rtPartyEsc(rtPartyClsLabel(a.cls)) + '</span>'
+                    + '</div>'
+                    + '<div class="rt-party-actions" style="margin:0;flex-wrap:nowrap;">'
+                    + '<button type="button" class="rt-party-btn rt-party-btn-mini rt-party-btn-main" data-aid="' + aid + '" onclick="rtPartyReviewApply(decodeURIComponent(this.getAttribute(\'data-aid\')), true)">接受</button>'
+                    + '<button type="button" class="rt-party-btn rt-party-btn-mini" data-aid="' + aid + '" onclick="rtPartyReviewApply(decodeURIComponent(this.getAttribute(\'data-aid\')), false)">拒絕</button>'
+                    + '</div></div>';
+            }).join('')
+            + '</div></div>';
     }
 
     function rtPartyOnlineListHtml(leader) {
@@ -572,18 +715,18 @@
         var leader = false;
         if (!_rtParty) {
             html += '<div class="rt-party-actions">'
-                + '<button type="button" class="rt-party-btn rt-party-btn-main" onclick="rtPartyCreate()">建立隊伍</button>'
+                + '<button type="button" class="rt-party-btn rt-party-btn-main" onclick="rtPartyCreate()">創建隊伍</button>'
                 + '</div>';
-            html += '<div class="rt-party-hint">建立後可搜尋／輸入線上角色名稱邀請；同地圖可分享經驗／金幣。</div>';
-            html += '<div class="rt-party-invite-row">'
-                + '<input id="rt-party-invite-name" type="text" maxlength="16" placeholder="搜尋線上玩家名稱" autocomplete="off" value="' + rtPartyEsc(_rtPartyInviteDraft) + '"'
-                + ' oninput="rtPartyOnInviteInput()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();rtPartyLog(\'請先建立隊伍再邀請。\');}">'
+            html += '<div class="rt-party-hint">創建後可邀請玩家；或從下方列表申請加入他人隊伍。同地圖可分享經驗／金幣。</div>';
+            html += '<div class="rt-party-section">'
+                + '<div class="rt-party-section-title">目前隊伍</div>'
+                + rtPartyListHtml()
                 + '</div>';
-            html += rtPartyOnlineListHtml(false);
-            rtPartyFetchOnline(false);
+            rtPartyFetchList(false);
         } else {
             var me = rtPartyMyKey();
             leader = rtPartyIsLeader();
+            html += rtPartyApplicationsHtml();
             html += '<div class="rt-party-roster">';
             (_rtParty.members || []).forEach(function (m) {
                 if (!m) return;
@@ -727,6 +870,8 @@
     // expose
     window.rtPartyCreate = rtPartyCreate;
     window.rtPartyInvite = rtPartyInvite;
+    window.rtPartyApply = rtPartyApply;
+    window.rtPartyReviewApply = rtPartyReviewApply;
     window.rtPartyPickInvite = rtPartyPickInvite;
     window.rtPartyOnInviteInput = rtPartyOnInviteInput;
     window.rtPartyRespond = rtPartyRespond;

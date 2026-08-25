@@ -1931,39 +1931,39 @@ const TOWN_NPC_SPOTS = {
     //   ⚠️[50,58] 是叫賣玩家固定點（TOWN_WANDERING_BUYER_SPOTS.town_gludin 同座標），NPC 一律避開。
     town_gludin: [[38, 58], [23, 46], [33, 81], [70, 55], [48, 36]],
     // 威頓村莊(火山村)：馬沙=大宅階梯前｜漢=村中央｜客盧亞=左上屋簷攤棚｜宙斯之熔岩高崙=左下鍛造爐(自家熔爐)｜魔法娃娃商人=右下屋前｜艾斯倫=右側貨箱堆旁｜多魯嘉貝爾=下方村口(副本入口)｜米米=左中攤位｜萊利的輔佐官=右上宅邸前（🐉 v3.7.57·573×323 扁平圖·橫向間距≥10%≈57px）
-    town_witon: [[70, 37], [48, 52], [27, 40], [13, 72], [66, 79], [77, 48], [38, 84], [24, 57], [88, 30]],
+    town_witon: [[70, 37], [48, 52], [27, 40], [13, 72], [66, 79], [38, 84], [24, 57], [88, 30]],
     // 希培利亞(天空神殿)：倉管=左上殿門階梯｜史菲爾=上方大殿門前｜巴特爾=右側步道橋頭｜希蓮恩=中央圓形圖紋
-    town_hyperia: [[15, 32], [48, 24], [68, 56], [48, 55]],
+    town_hyperia: [[15, 32], [68, 56], [48, 55]],
     // 象牙塔：帕羅=左階梯平台｜塔拉斯=上廳地磚(v3.3.32勿站上層平台)｜塔斯=星紋左側｜巴耶斯=右書牆前｜碧恩=右上水晶祭壇階下(賦屬)｜迪嘉勒廷=大階梯底｜迪泰特=中央星紋｜神秘的魔法師=閱讀角書桌右側地磚(v3.3.32勿站桌區)
-    town_ivory_tower: [[20, 60], [35, 31], [38, 55], [78, 50], [76, 28], [62, 32], [52, 58], [89, 76]],
+    town_ivory_tower: [[20, 60], [35, 31], [38, 55], [78, 50], [76, 28], [62, 32], [52, 58]],
     // 🌑 長老會議廳(環形議場·v3.3.33)：真‧冥皇丹特斯=上方大門前階台(骸骨王座坐像)｜亞提利歐=中央星紋右側石板
     town_elder_council: [[50, 38], [63, 60]],
     // 席琳神殿(圓形劇場遺跡)：席琳=劇場圓台中央(祈禱)｜伊奧=十字路星紋｜菈克希絲=左上拱門前；避開四處水池
     town_sherine: [[67, 48], [42, 64], [16, 33]],
     // 沉默洞穴(黑妖地城)：史克瓦提=左圓頂殿門廊｜雷亞斯=右上樓閣門前｜賽帝亞=大階梯底｜庫普=廣場左｜可羅蘭斯=左下禮拜堂前｜倫得=中央星紋｜康=右下高台走道｜布魯迪卡=廣場右；避開水晶簇/吊橋
-    town_silent: [[19, 44], [72, 37], [36, 35], [40, 58], [35, 80], [52, 50], [78, 68], [63, 60]],
+    town_silent: [[19, 44], [72, 37], [40, 58], [35, 80], [52, 50], [78, 68], [63, 60]],
     // 貝希摩斯(熔岩要塞)：倉管=左閘門房｜森帕爾=大階梯底｜皮爾=右走道方尖碑旁｜普洛凱爾=中央紋章
-    town_behemoth: [[28, 44], [55, 32], [66, 62], [44, 56]],
+    town_behemoth: [[28, 44], [66, 62], [44, 56]],
     // 炎魔謁見所：炎魔之影=中央紋章｜小惡魔=左下台階｜炎魔鐵匠=左壁爐火(鍛造)｜輔佐官=紅毯王座階下；避開岩漿
-    town_flame_audience: [[48, 60], [24, 80], [18, 42], [70, 32]],
+    town_flame_audience: [[48, 60], [24, 80], [18, 42]],
     // 海賊島村莊：波尼=沙灘小屋遮陽棚攤位前｜庫得=左高腳倉庫棧橋樓梯下(木桶堆)｜希米哲=右側水井邊
-    town_pirate_village: [[50, 28], [28, 40], [73, 36]],
+    town_pirate_village: [[50, 28], [28, 40]],
     // 傲慢之塔1樓：雜貨商人=左召喚法陣邊｜巴姆特=右階梯底｜入口告示=中央菱形法陣
-    town_pride: [[24, 62], [72, 48], [49, 58]],
+    town_pride: [[24, 62], [72, 48]],
     // 時空裂痕入口：入口告示=中央圓形石紋
     town_rift: [[48, 58], [30, 50], [66, 46]],
     // 🏰 v3.3.9 三攻城城堡（用戶新補背景圖·依圖避開牆壁/水池/柱子/王座/側房家具）
     // 🏰 三座城堡：每格對應原始 NPC 索引，最後一格預留叫賣玩家。避免 vis 過濾後或叫賣玩家加入時，_townNpcLayout 回繞到前排造成重疊。
     //   各點均落在大廳的石地或地毯，避開牆面、柱子、欄杆、桌椅與水池；實際同時顯示的 NPC 最短間距約 8% 以上。
     //   肯特：盟主索引 6/7 由下方 override 共用王座前位置；奧貝勒與叫賣玩家另有獨立安全點。
-    town_kent_castle: [[42, 37], [65, 36], [43, 52], [66, 54], [48, 67], [61, 61], [50, 35], [50, 35], [54, 47], [72, 64]],
+    town_kent_castle: [[42, 37], [65, 36], [66, 54], [48, 67], [61, 61], [50, 35], [50, 35], [54, 47], [72, 64]],
     //   風木：盟主索引 3/4 共用祭壇前位置；其餘人員分站左右石地與下方地毯，避開兩側軍械架和下方會議桌。
-    town_windwood_castle: [[37, 43], [61, 43], [40, 57], [48, 35], [48, 35], [60, 59], [48, 72]],
+    town_windwood_castle: [[37, 43], [61, 43], [48, 35], [48, 35], [60, 59], [48, 72]],
     //   海音（🏰 v3.6.02 依用戶截圖重排：原 5 點擠 x58-70/y42-66 全落在中央斜拱廊牆頂 → 散開到四方開闊地）：
     //   須凡=南側廣場展示桌旁｜哈金=拱廊西南側廣場（[80,56]實測落在拱門洞正中·柱間夾人→移出）｜創公會=東南大廣場｜
     //   海音神官隊長=禮拜堂長椅前（神官↔禮拜堂）｜盟主=王座水池平台右側石地（階梯上方·避池避渠）｜
     //   帝倫=左側迴廊（水渠以西·避開雙立柱）｜末格叫賣=大廣場星紋旁。⚠️中央斜拱廊牆基線≈y=0.7(x−52)+38（x52→72）·牆面再往上約 10%，此帶全禁站。
-    town_heine_castle: [[52, 84], [76, 62], [68, 72], [66, 34], [42, 22], [42, 22], [27, 48], [66, 54]]
+    town_heine_castle: [[52, 84], [76, 62], [66, 34], [42, 22], [42, 22], [27, 48], [66, 54]]
 };
 // 🏴 叫賣玩家只會在這些安全區出現。獨立保留站位，避免在原始 NPC 格位用盡後回繞並貼近人物或落到場景物件上。
 const TOWN_WANDERING_BUYER_SPOTS = {
@@ -1989,14 +1989,15 @@ const TOWN_NPC_POS_OVERRIDE = {
     town_pride: { _pride_entrance: [49, 58] },                          // 新增公會後仍維持原入口告示位置
     town_rift: { _rift_entrance: [48, 58] }                             // 新增公會後仍維持原入口告示位置
 };
-// 每個安全區提供「創立血盟」入口（舊傭兵公會站位沿用）。既有站點不動；缺少者於地圖初始化時補入。
+// 主村保留一個「創立血盟」入口（舊傭兵公會站位沿用）；線上血盟創立／搜尋加入以右側分頁為主，其餘安全區不再放置。
+const CLAN_GUILD_TOWN_IDS = new Set([
+    'town_silver_knight', 'town_talking', 'town_elf', 'town_gludin',
+    'town_heine', 'town_oren', 'town_giran', 'town_aden'
+]);
 const ALLY_GUILD_TOWN_SPOTS = {
-    town_silver_knight: [70, 72], town_windwood_castle: [31, 70], town_talking: [43, 52], town_elf: [75, 78],
-    town_gludio: [72, 60], town_gludin: [70, 55], town_giran: [75, 68], town_heine: [56, 29], town_oren: [45, 55],
-    town_aden: [48, 84], town_elder_council: [74, 70], town_kent_castle: [43, 52], town_heine_castle: [68, 72],
-    town_pride: [31, 75], town_rift: [66, 46], town_ivory_tower: [68, 84], town_witon: [64, 58],
-    town_sherine: [28, 72], town_silent: [64, 74], town_hyperia: [73, 65], town_behemoth: [75, 52],
-    town_flame_audience: [65, 74], town_pirate_village: [28, 70]
+    town_silver_knight: [70, 72], town_talking: [43, 52], town_elf: [75, 78],
+    town_gludin: [70, 55], town_giran: [75, 68], town_heine: [56, 29], town_oren: [45, 55],
+    town_aden: [48, 84]
 };
 function _isClanGuildNpc(npc) {
     if (!npc) return false;
@@ -2011,20 +2012,24 @@ function normalizeClanGuildNpc(npc) {
     npc.n = '創立血盟';
     npc.title = '血盟';
     npc.type = 'clan';
-    npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。';
+    npc.d = '在此創立血盟。王族可花費 30,000 金幣創立；其他職業可至右側血盟分頁搜尋加入。';
     return npc;
 }
 function ensureTownAllyGuilds() {
     if (!DB || !DB.towns) return;
-    // 先把全圖舊「傭兵公會／協力」改成「創立血盟〔血盟〕」（含村莊動態補點）
     Object.keys(DB.towns).forEach(townId => {
         let town = DB.towns[townId];
         if (!town || !Array.isArray(town.npcs)) return;
         town.npcs.forEach(normalizeClanGuildNpc);
-    });
-    Object.keys(ALLY_GUILD_TOWN_SPOTS).forEach(townId => {
-        let town = DB.towns[townId];
-        if (!town || !Array.isArray(town.npcs)) return;
+        let clanNpcs = town.npcs.filter(_isClanGuildNpc);
+        if (!CLAN_GUILD_TOWN_IDS.has(townId)) {
+            if (clanNpcs.length) town.npcs = town.npcs.filter(npc => !_isClanGuildNpc(npc));
+            return;
+        }
+        if (clanNpcs.length > 1) {
+            let keepId = clanNpcs[0].id;
+            town.npcs = town.npcs.filter(npc => !_isClanGuildNpc(npc) || npc.id === keepId);
+        }
         let existing = town.npcs.find(_isClanGuildNpc);
         let id = existing ? existing.id : ('npc_ally_' + townId.replace(/^town_/, ''));
         if (!existing) {
@@ -2033,13 +2038,16 @@ function ensureTownAllyGuilds() {
                 n: '創立血盟',
                 title: '血盟',
                 type: 'clan',
-                d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。'
+                d: '在此創立血盟。王族可花費 30,000 金幣創立；其他職業可至右側血盟分頁搜尋加入。'
             }));
         } else {
             normalizeClanGuildNpc(existing);
         }
-        let overrides = TOWN_NPC_POS_OVERRIDE[townId] || (TOWN_NPC_POS_OVERRIDE[townId] = {});
-        if (!overrides[id]) overrides[id] = ALLY_GUILD_TOWN_SPOTS[townId];
+        let spot = ALLY_GUILD_TOWN_SPOTS[townId];
+        if (spot) {
+            let overrides = TOWN_NPC_POS_OVERRIDE[townId] || (TOWN_NPC_POS_OVERRIDE[townId] = {});
+            if (!overrides[id]) overrides[id] = spot;
+        }
     });
 }
 ensureTownAllyGuilds();
@@ -2066,7 +2074,7 @@ function _townNpcLayout(n, townId) {
         for (let j = 0; j < m; j++, idx++) {
             let x = 50 + (j - (m - 1) / 2) * colStep + ((idx * 37) % 5 - 2) * 0.35;
             let y = y0 + ((idx * 29) % 3 - 1) * 0.3;
-            out.push({ x: Math.max(8, Math.min(92, x)), y: Math.max(22, Math.min(90, y)) });
+            out.push({ x: Math.max(8, Math.min(92, x)), y: Math.max(28, Math.min(90, y)) });
         }
     }
     return out;
@@ -2085,6 +2093,16 @@ function _townPointDistance(a, b) {
 /** 村莊 NPC 最小腳點間距（16:9 等化座標）；過近會難點選與名牌重疊 */
 const TOWN_NPC_MIN_GAP = 15;
 
+function _townNpcCoarsePointer() {
+    try { return window.matchMedia('(max-width: 768px), (max-height: 520px) and (pointer: coarse)').matches; } catch (e) { return false; }
+}
+
+function _townNpcTouchFocus(el, map) {
+    if (!el || !map) return;
+    map.querySelectorAll('.town-npc.tn-touch-active').forEach(n => n.classList.remove('tn-touch-active'));
+    el.classList.add('tn-touch-active');
+}
+
 /** 把過近的站位互相推開，並略為自中心擴散 */
 function _townSeparateNpcPoints(points, minGap) {
     if (!points || points.length < 2) return;
@@ -2094,7 +2112,7 @@ function _townSeparateNpcPoints(points, minGap) {
     cx /= points.length; cy /= points.length;
     points.forEach(p => {
         p.x = Math.max(8, Math.min(92, cx + (p.x - cx) * 1.12));
-        p.y = Math.max(24, Math.min(90, cy + (p.y - cy) * 1.12));
+        p.y = Math.max(28, Math.min(90, cy + (p.y - cy) * 1.12));
     });
     for (let iter = 0; iter < 48; iter++) {
         let moved = false;
@@ -2109,9 +2127,9 @@ function _townSeparateNpcPoints(points, minGap) {
                 let len = Math.hypot(dx, dy) || 1;
                 let ux = dx / len, uy = dy / len;
                 a.x = Math.max(8, Math.min(92, a.x - (ux * push) / (16 / 9)));
-                a.y = Math.max(24, Math.min(90, a.y - uy * push));
+                a.y = Math.max(28, Math.min(90, a.y - uy * push));
                 b.x = Math.max(8, Math.min(92, b.x + (ux * push) / (16 / 9)));
-                b.y = Math.max(24, Math.min(90, b.y + uy * push));
+                b.y = Math.max(28, Math.min(90, b.y + uy * push));
                 moved = true;
             }
         }
@@ -2245,6 +2263,7 @@ function renderTownNPCMap(townId) {
             npc._spotIdx = (_oi >= 0) ? _oi : (_base + (_extra++));
         });
     }
+    let _mobileTown = _townNpcCoarsePointer();
     let _spotN = vis.reduce((m, npc) => Math.max(m, (npc._spotIdx || 0) + 1), 0);
     let pos = _townNpcLayout(_spotN, townId);
     let ovr = TOWN_NPC_POS_OVERRIDE[townId] || {};
@@ -2257,7 +2276,13 @@ function renderTownNPCMap(townId) {
         let p = _townNpcMapPoint(npc, i, pos, ovr);
         return { npc: npc, p: { x: p.x, y: p.y } };
     });
-    _townSeparateNpcPoints(placements.map(x => x.p), TOWN_NPC_MIN_GAP);
+    _townSeparateNpcPoints(placements.map(x => x.p), _mobileTown ? 12 : TOWN_NPC_MIN_GAP);
+    if (_mobileTown) {
+        placements.forEach(place => {
+            place.p.y = Math.max(32, Math.min(88, place.p.y));
+            place.p.x = Math.max(6, Math.min(94, place.p.x));
+        });
+    }
     placements.forEach((place, i) => {
         let npc = place.npc;
         let p = place.p;
@@ -2277,6 +2302,9 @@ function renderTownNPCMap(townId) {
         if (npc._float === 'pride') el.onclick = () => openTownFloatWindow('傲慢之塔', '排名挑戰', renderPrideEntrance);
         else if (npc._float === 'rift') el.onclick = () => openTownFloatWindow('時空裂痕', '進入', renderRiftEntrance);
         else el.onclick = () => interactNPC(npc.id, townId);
+        if (_mobileTown) {
+            el.addEventListener('touchstart', function () { _townNpcTouchFocus(el, map); }, { passive: true });
+        }
         map.appendChild(el);
         let bodyImg = el.querySelector('.tn-body');
         let crownImg = el.querySelector('.tn-castle-crown');
@@ -2286,9 +2314,10 @@ function renderTownNPCMap(townId) {
         let wImg = cat.w ? el.querySelector('.tn-weapon') : null;   // 🔥 火焰疊層與本體同步推進
         _townNpcSprites.push({ img: bodyImg, crown: crownImg, wimg: wImg, wframes: (cat.w ? _npcWeaponFrames(key) : null), frames: _npcFrames(key), phase: (i * 3) % 8, last: -1 });
     });
-    // 🏷️ v3.2.92 名牌常駐開關：跟隨戰鬥日誌「狀態」鈕(_showMobStatus)·開→所有 NPC 名字常駐頭頂；關→僅 hover
-    map.classList.toggle('show-labels', (typeof _showMobStatus === 'undefined') ? true : !!_showMobStatus);
+    // 🏷️ v3.2.92 名牌常駐開關：跟隨戰鬥日誌「狀態」鈕(_showMobStatus)·開→所有 NPC 名字常駐頭頂；關→僅 hover（觸控裝置一律常駐）
+    map.classList.toggle('show-labels', _mobileTown || ((typeof _showMobStatus === 'undefined') ? true : !!_showMobStatus));
     _scheduleTownLabelResolve();
+    if (_mobileTown) setTimeout(function () { try { _resolveTownLabelOverlap(); } catch (e) {} }, 180);
 }
 
 // 🗼🌀 v3.2.89 開啟城鎮浮動視窗並注入任意內容（傲慢之塔／時空裂痕入口共用·與 interactNPC 同一個 #town-interaction-container 浮動視窗）
