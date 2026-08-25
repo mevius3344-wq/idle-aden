@@ -3,6 +3,8 @@ services:
     name: idle-aden
     runtime: node
     plan: free
+    branch: main
+    autoDeployTrigger: commit
     buildCommand: npm install --omit=dev
     startCommand: node _serve.js
     healthCheckPath: /
