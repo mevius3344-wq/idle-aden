@@ -700,7 +700,7 @@
         .attr-glow-ea4 { filter: drop-shadow(0 0 7px rgba(143,99,48,1)) drop-shadow(0 0 14px rgba(143,99,48,0.55)); }
         @keyframes attrGlowEarth { 0%,100% { filter: drop-shadow(0 0 5px rgba(143,99,48,0.8)); } 50% { filter: drop-shadow(0 0 10px rgba(169,123,68,1)) drop-shadow(0 0 20px rgba(143,99,48,0.7)); } }
         .attr-glow-ea5 { animation: attrGlowEarth 2s infinite ease-in-out; }
-        .log-entry { margin-bottom: 6px; line-height: 1.5; font-size: 1.05rem; }
+        .log-entry { margin-bottom: 6px; line-height: 1.5; font-size: 1.05rem; overflow-wrap: anywhere; word-break: break-word; }
         /* 🎯 三大戰鬥訊息分類：左色條＋淡底，一眼分辨「玩家一般攻擊(藍)／玩家技能(紫)／敵人傷害(紅)」；文字色仍保留爆擊/重擊等資訊 */
         .log-cat-attack { border-left: 3px solid #687486; padding-left: 8px; background: rgba(104,116,134,0.07); border-radius: 0 3px 3px 0; }   /* 玩家一般攻擊：灰藍 */
         .log-cat-skill  { border-left: 3px solid #776b80; padding-left: 8px; background: rgba(119,107,128,0.08); border-radius: 0 3px 3px 0; }   /* 玩家技能：灰紫 */
@@ -1035,13 +1035,13 @@
 }
 /* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼
    分頁一律 absolute 疊在 #unified-log-body 內，同一時間只顯示一個，避免互相擠壓／遮蔽。 */
-#log-row { flex: 0 0 340px; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+#log-row { flex: 0 0 380px; min-height: 280px; width: 100%; display: flex; flex-direction: column; }
 #combat-log-panel { flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 #combat-log-panel > .panel-header { flex: 0 0 auto; }
 #unified-log-body {
   position: relative;
   flex: 1 1 0;
-  min-height: 120px;
+  min-height: 160px;
   overflow: hidden;
   isolation: isolate;
 }
@@ -1051,6 +1051,11 @@
   inset: 0 !important;
   z-index: 1;
   box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-overflow-scrolling: touch;
 }
 .unified-log-pane:not(.hidden) { z-index: 2; }
 .unified-log-pane.hidden,
@@ -1091,13 +1096,21 @@
 #tab-automation.hidden { display: none; }
 
 /* ===== 🎨 v3.0.40 1.8 風格物品清單（裝備／武器／防具／道具·移植自參考版 idle-lineage-class-main-test） ===== */
-.classic-inventory-tab { padding:0 !important; overflow:hidden !important; min-height:0; background:#0b0d12; }
-.classic-inventory-tab:not(.hidden) { display:flex !important; flex-direction:column; align-items:center; }
+/* 道具欄完整呈現：外框依分頁剩餘高度等比縮放，避免被 overflow 裁掉底部格位 */
+.classic-inventory-tab { padding:0 !important; overflow:hidden !important; min-height:0; height:100%; background:#0b0d12; }
+.classic-inventory-tab:not(.hidden) { display:flex !important; flex-direction:column; align-items:center; justify-content:flex-start; }
 .classic-list-toolbar { flex:0 0 auto; margin:0 !important; padding:6px 8px !important; top:0 !important; background:#111827 !important; border-bottom:1px solid #6b5426; z-index:20; }
 .classic-list-toolbar { width:100%; }
-.classic-inventory-shell { position:relative; flex:0 0 auto; width:100%; max-width:100%; aspect-ratio:193/282; overflow:hidden; background:url('../assets/ui/武器防具道具欄位.png') center/100% 100% no-repeat; }
-.classic-inventory-viewport { position:absolute; z-index:2; left:13.99%; top:10.64%; width:72.02%; height:70.21%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:16.666667%; align-content:start; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; background:#07080a; scrollbar-width:none; overscroll-behavior:contain; }
-.classic-inventory-viewport::-webkit-scrollbar { width:0; height:0; }
+.classic-inventory-shell {
+    position:relative; flex:1 1 0; min-height:0; min-width:0;
+    align-self:center; max-width:100%; max-height:100%;
+    width:auto; height:100%;
+    aspect-ratio:193/282; overflow:hidden;
+    background:url('../assets/ui/武器防具道具欄位.png') center/100% 100% no-repeat;
+}
+.classic-inventory-viewport { position:absolute; z-index:2; left:13.99%; top:10.64%; width:72.02%; height:70.21%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:16.666667%; align-content:start; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; background:#07080a; scrollbar-width:thin; scrollbar-color:#6b5a3e transparent; overscroll-behavior:contain; }
+.classic-inventory-viewport::-webkit-scrollbar { width:6px; height:0; }
+.classic-inventory-viewport::-webkit-scrollbar-thumb { background:#6b5a3e; border-radius:3px; }
 .classic-inventory-viewport > .list-item { position:relative; box-sizing:border-box; display:flex !important; align-items:center; justify-content:center; width:100%; height:100%; min-width:0; min-height:0; margin:0 !important; padding:2px !important; border:1px solid #454b47 !important; border-radius:0 !important; background:#090a0d !important; box-shadow:inset 0 0 6px #000 !important; overflow:hidden; }
 .classic-inventory-viewport > .list-item:hover { border-color:#b8c4bd !important; filter:brightness(1.18); }
 .classic-inventory-viewport > .classic-grid-empty { box-sizing:border-box; width:100%; height:100%; min-width:0; min-height:0; border:1px solid #3d423f; background:#08090b; box-shadow:inset 0 0 6px #000; pointer-events:none; }
@@ -2228,11 +2241,32 @@ button.classic-skill-cell { cursor:pointer; }
     #battle-view .mob-name { font-size: 10px; line-height: 1.1; }
     #town-npc-map { width: 100%; height: 100%; }
 
-    #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 0 !important; }
-    #combat-log-panel { flex: 0 0 196px !important; width: 100%; height: 196px !important; min-height: 196px; }
-    #unified-log-body { min-height: 100px; }
+    #log-row {
+        flex: 0 0 auto !important;
+        min-height: min(46dvh, 420px) !important;
+        height: auto !important;
+        flex-direction: column;
+        gap: 0 !important;
+    }
+    #combat-log-panel {
+        flex: 1 1 auto !important;
+        width: 100%;
+        height: auto !important;
+        min-height: min(42dvh, 380px) !important;
+        max-height: none !important;
+    }
+    #unified-log-body {
+        flex: 1 1 auto !important;
+        min-height: min(30dvh, 280px) !important;
+    }
     #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 4px 7px; font-size: 12px !important; }
+    #combat-log-panel > .panel-header {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
     #combat-log, #sys-log, #world-log, #clan-log, #party-log { padding: 6px !important; font-size: 12px !important; }
     #combat-log-panel .cf-pill { min-height: 26px; padding: 2px 6px; }
     #combat-log-panel .logtab-btn { font-size: .68rem; padding: 2px 6px; }
@@ -2255,12 +2289,20 @@ button.classic-skill-cell { cursor:pointer; }
     }
     #col-right.mobile-tab-open #tab-content-panel {
         display: flex !important;
-        height: min(48dvh, 380px) !important;
-        min-height: 200px !important;
+        height: min(68dvh, 560px) !important;
+        min-height: 260px !important;
         margin: 0;
         padding: 0;
         border: 1px solid #765036;
         overflow: hidden !important;
+    }
+    #col-right.mobile-tab-open #tab-content-panel > .classic-inventory-tab,
+    #col-right.mobile-tab-open #tab-items.classic-inventory-tab,
+    #col-right.mobile-tab-open #tab-weapons.classic-inventory-tab,
+    #col-right.mobile-tab-open #tab-armors.classic-inventory-tab,
+    #col-right.mobile-tab-open #tab-equip.classic-inventory-tab {
+        height: 100% !important;
+        max-height: 100% !important;
     }
     .mobile-tab-collapse-btn {
         display: none;
@@ -3687,6 +3729,24 @@ button.classic-skill-cell { cursor:pointer; }
 .rt-party-invite-row input {
     flex: 1; min-width: 0; background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
     border-radius: 4px; padding: 5px 8px; font-size: 12px; outline: none;
+    user-select: text; -webkit-user-select: text;
+}
+.rt-party-online {
+    margin-top: 6px; max-height: 160px; overflow: auto;
+    border: 1px solid #334155; border-radius: 6px; background: rgba(15,23,42,.4);
+}
+.rt-party-online.empty {
+    padding: 8px 10px; color: #94a3b8; font-size: 12px; border-style: dashed;
+}
+.rt-party-online-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 8px; border-bottom: 1px solid #1e293b;
+}
+.rt-party-online-row:last-child { border-bottom: none; }
+.rt-party-online-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rt-party-btn-mini { font-size: 11px; padding: 2px 8px; flex-shrink: 0; }
+#tab-clan input, #tab-clan textarea {
+    user-select: text; -webkit-user-select: text;
 }
 .rt-party-roster { display: flex; flex-direction: column; gap: 6px; }
 .rt-party-row {

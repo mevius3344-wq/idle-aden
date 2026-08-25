@@ -225,6 +225,8 @@ function recomputeStats() {
         d.ac -= Math.floor(p.lv / 8);          // 每提升8 AC-1
         d.mr += Math.floor(p.lv / 8);          // 每提升8 MR+1
         d.er += Math.floor(p.lv / 10);         // 每提升10 ER+1
+        d.extraMp += Math.floor(p.lv / 4);     // 法師：每提升4 額外魔法點數(SP)+1（原版方向·補上失落的職業成長）
+        d.magicDmg += Math.floor(p.lv / 10);   // 法師：每提升10 魔法傷害+1
     }
 
     // 力量（近距離）

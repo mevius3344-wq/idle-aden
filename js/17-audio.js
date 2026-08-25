@@ -28,12 +28,15 @@ const CREATION_FRAME_SFX = {
     m_warrior: { frame: 1992, sound: 6779 }, f_warrior: { frame: 1908, sound: 6787 }
 };
 Object.keys(CREATION_FRAME_SFX).forEach(function (key) {
-    SFX_DEFS['creation_' + key] = { file: '' + CREATION_FRAME_SFX[key].sound, vol: 0.65, throttle: 0 };
+    // 創角音僅在創角畫面需要時懶載；勿於進站一次預載 16 檔（解碼會卡主執行緒）
+    SFX_DEFS['creation_' + key] = { file: '' + CREATION_FRAME_SFX[key].sound, vol: 0.65, throttle: 0, preload: false };
 });
 var _sfxCfg = { on: true, vol: 50 };          // 預設開啟、音量 50%
 var _sfxPool = {}, _sfxIdx = {}, _sfxLast = {}, _sfxInited = false;
-var SFX_POOL_N = 4;
+var _sfxLoading = {};
+var SFX_POOL_N = 2;   // 可重疊即可；4 份同檔解碼會明顯拖慢開局
 var _creationSfxActiveKey = null;
+var _sfxUrl = {};     // poolKey → 已確認可用的 URL（供懶擴充音池）
 
 function _sfxLoadCfg() {
     try {
@@ -43,31 +46,56 @@ function _sfxLoadCfg() {
 }
 function _sfxSaveCfg() { try { if (typeof _lsSet === 'function') _lsSet('fb5_sfx', JSON.stringify(_sfxCfg)); } catch (e) {} }
 
-// 載入單一音效：素材庫以 ogg 為主，依序試 ogg→mp3→wav；第一個能播者→建立 N 個元素的播放池；全部失敗→該事件保持靜音
+// 載入單一音效：素材庫以 ogg 為主，依序試 ogg→mp3→wav；先放 1 個元素，需要重疊時再補齊音池
 function _sfxTryLoad(key, def) {
+    if (_sfxPool[key] !== undefined || _sfxLoading[key]) return;
+    _sfxLoading[key] = true;
     var exts = ['ogg', 'mp3', 'wav'], i = 0;
+    function failAll() { _sfxPool[key] = null; delete _sfxLoading[key]; }
     function tryNext() {
-        if (i >= exts.length) { _sfxPool[key] = null; return; }
+        if (i >= exts.length) { failAll(); return; }
         var url = 'assets/sfx/' + def.file + '.' + exts[i++];
         var probe = new Audio();
         probe.preload = 'auto';
         probe.addEventListener('canplaythrough', function () {
-            if (_sfxPool[key]) return;
-            var arr = [probe];
-            for (var j = 1; j < SFX_POOL_N; j++) { var a = new Audio(url); a.preload = 'auto'; arr.push(a); }
-            _sfxPool[key] = arr; _sfxIdx[key] = 0;
+            if (_sfxPool[key]) { delete _sfxLoading[key]; return; }
+            _sfxUrl[key] = url;
+            _sfxPool[key] = [probe];
+            _sfxIdx[key] = 0;
+            delete _sfxLoading[key];
         }, { once: true });
-        probe.addEventListener('error', function () { tryNext(); }, { once: true });   // 缺檔／格式不支援 → 換下一個副檔名
+        probe.addEventListener('error', function () { tryNext(); }, { once: true });
         probe.src = url;
-        try { probe.load(); } catch (e) {}
+        try { probe.load(); } catch (e) { tryNext(); }
     }
     tryNext();
+}
+
+/** 音池不足且需要重疊播放時再補元素（避免開局一次解碼 N 份） */
+function _sfxExpandPool(key) {
+    var arr = _sfxPool[key];
+    var url = _sfxUrl[key];
+    if (!arr || !url || arr.length >= SFX_POOL_N) return;
+    try {
+        var a = new Audio(url);
+        a.preload = 'auto';
+        arr.push(a);
+    } catch (e) {}
 }
 
 function _sfxInit() {
     if (_sfxInited) return; _sfxInited = true;
     _sfxLoadCfg();
-    Object.keys(SFX_DEFS).forEach(function (k) { var def = SFX_DEFS[k]; if (def.preload !== false) _sfxTryLoad(k, def); });
+    // 錯開預載，避免 DOMContentLoaded 瞬間同時解碼多檔造成開局卡頓
+    var keys = Object.keys(SFX_DEFS).filter(function (k) { return SFX_DEFS[k].preload !== false; });
+    var i = 0;
+    function loadNext() {
+        if (i >= keys.length) return;
+        var k = keys[i++];
+        try { _sfxTryLoad(k, SFX_DEFS[k]); } catch (e) {}
+        if (i < keys.length) setTimeout(loadNext, 120);
+    }
+    if (keys.length) setTimeout(loadNext, 0);
     _sfxSyncUI();
 }
 // 將 UI 控制項（設定面板的開關 + 音量滑桿）初值同步為目前偏好
@@ -136,15 +164,30 @@ function playSfx(key) {
             }
         }
     }
+    // 懶載（創角音／未預載項）：首次需要時才解碼，避免開局卡頓
+    if (poolKey === key && _sfxPool[key] === undefined && !_sfxLoading[key]) {
+        _sfxTryLoad(key, def);
+        return;
+    }
     var arr = _sfxPool[poolKey]; if (!arr || !arr.length) return;   // 變體與通用皆無 → 靜音
     var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     if (def.throttle && _sfxLast[key] && (now - _sfxLast[key]) < def.throttle) return;   // 節流用 base key（同角色一次只一種變體）
     _sfxLast[key] = now;
     try {
         var idx = _sfxIdx[poolKey] || 0;
-        var a = arr[idx % arr.length]; _sfxIdx[poolKey] = idx + 1;   // round-robin → 可重疊播放
+        var a = arr[idx % arr.length];
+        if (!a.paused && a.currentTime > 0.04) {
+            _sfxExpandPool(poolKey);
+            arr = _sfxPool[poolKey];
+            idx = idx + 1;
+            a = arr[idx % arr.length];
+        }
+        _sfxIdx[poolKey] = idx + 1;
         a.volume = Math.max(0, Math.min(1, (def.vol || 0.5) * (_sfxCfg.vol / 100)));   // 每音效基準 × 全域音量
-        try { a.currentTime = 0; } catch (e) {}
+        try {
+            if (a.paused && a.currentTime > 0.02) a.currentTime = 0;
+            else if (!a.paused) a.currentTime = 0;
+        } catch (e) {}
         var p = a.play();
         if (p && p.catch) p.catch(function () {});   // autoplay 尚未解鎖（無互動）→忽略；首次互動後即正常
     } catch (e) {}
@@ -440,9 +483,21 @@ function _sfxPlayPool(poolKey, vol) {   // 直接播放指定 pool key（不查 
     if (typeof catchupActive === 'function' && catchupActive()) return false;
     var arr = _sfxPool[poolKey]; if (!arr || !arr.length) return false;
     try {
-        var idx = _sfxIdx[poolKey] || 0; var a = arr[idx % arr.length]; _sfxIdx[poolKey] = idx + 1;
+        var idx = _sfxIdx[poolKey] || 0;
+        var a = arr[idx % arr.length];
+        // 上一份還在播 → 先擴音池再換下一份，避免 currentTime=0 打斷＋主執行緒卡頓
+        if (!a.paused && a.currentTime > 0.04) {
+            _sfxExpandPool(poolKey);
+            arr = _sfxPool[poolKey];
+            idx = idx + 1;
+            a = arr[idx % arr.length];
+        }
+        _sfxIdx[poolKey] = idx + 1;
         a.volume = Math.max(0, Math.min(1, (vol || 0.5) * (_sfxCfg.vol / 100)));
-        try { a.currentTime = 0; } catch (e) {}
+        try {
+            if (a.paused && a.currentTime > 0.02) a.currentTime = 0;
+            else if (!a.paused) a.currentTime = 0;
+        } catch (e) {}
         var p = a.play(); if (p && p.catch) p.catch(function () {});
         return true;
     } catch (e) { return false; }
@@ -592,7 +647,7 @@ var HUNT_BGM = { 'tikal_area': 'music122', 'tikal_deep': 'music123', 'tikal_alta
     'cursed_dark_elf_sanctuary': 'music153', 'collapsed_elder_council_hall': 'music162',   // 🌑 v3.4.0 黑暗妖精聖地雙 BOSS 房（黑暗妖精聖地.md：music 153／162；一般聖地未指定→維持通用 battle）
     'sunrise_castle': 'music161', 'sunrise_east': 'music167', 'sunrise_west': 'music167', 'sunrise_north': 'music167',   // 🌅 v3.4.98 日出之國：城墎=music161·東/西/北之地=music167
     'antharas_nest_1': 'music128', 'antharas_nest_2': 'music130', 'antharas_nest_3': 'music130', 'antharas_lair': 'music133' };   // 🐉 v3.7.57 侵蝕的安塔瑞斯巢穴：入口128·通道/深處130·棲息地133（規格書指定）
-Object.keys(HUNT_BGM).forEach(function (id) { BGM_TRACKS[HUNT_BGM[id]] = HUNT_BGM[id]; });   // 註冊曲目 scene=檔名，_bgmInit 會預解析 URL
+Object.keys(HUNT_BGM).forEach(function (id) { BGM_TRACKS[HUNT_BGM[id]] = HUNT_BGM[id]; });   // 註冊曲目 scene=檔名；URL 於切場景時惰性解析
 var _bgmUrl = {}, _bgmEls = [null, null], _bgmActive = -1, _bgmScene = null, _bgmFadeTimer = null, _bgmInited = false;
 
 function _bgmLoadCfg() {
@@ -604,17 +659,25 @@ function _bgmLoadCfg() {
 function _bgmSaveCfg() { try { if (typeof _lsSet === 'function') _lsSet('fb5_bgm', JSON.stringify(_bgmCfg)); } catch (e) {} }
 function _bgmTargetVol() { return Math.max(0, Math.min(1, _bgmCfg.vol / 100)); }
 
-// 預解析各場景的實際 URL（依序試 mp3→ogg→wav）；缺檔→_bgmUrl[scene]=null
+// 預解析場景實際 URL（依序試 mp3→ogg→wav）；缺檔→_bgmUrl[scene]=null。改為按需呼叫，勿一次解析全部曲目。
+var _bgmResolving = {};
 function _bgmResolve(scene, file) {
+    if (_bgmUrl[scene] !== undefined || _bgmResolving[scene]) return;
+    _bgmResolving[scene] = true;
     var exts = ['mp3', 'ogg', 'wav'], i = 0;
     (function tryNext() {
-        if (i >= exts.length) { _bgmUrl[scene] = null; return; }
+        if (i >= exts.length) { _bgmUrl[scene] = null; delete _bgmResolving[scene]; return; }
         var url = 'assets/bgm/' + file + '.' + exts[i++];
         var probe = new Audio(); probe.preload = 'metadata';
-        probe.addEventListener('canplay', function () { _bgmUrl[scene] = url; }, { once: true });
+        probe.addEventListener('canplay', function () { _bgmUrl[scene] = url; delete _bgmResolving[scene]; }, { once: true });
         probe.addEventListener('error', function () { tryNext(); }, { once: true });
-        probe.src = url; try { probe.load(); } catch (e) {}
+        probe.src = url; try { probe.load(); } catch (e) { tryNext(); }
     })();
+}
+function _bgmEnsure(scene) {
+    if (!scene || !BGM_TRACKS[scene]) return;
+    if (_bgmUrl[scene] !== undefined) return;
+    _bgmResolve(scene, BGM_TRACKS[scene]);
 }
 
 function _bgmIsCreateScreen() {   // 創角面板可見（#creation-panel 未 hidden）＝玩家正在創角
@@ -656,6 +719,7 @@ function _bgmCrossfade(oldEl, newEl) {
 function _bgmSwitch(scene) {
     if (!_bgmCfg.on) return;
     if (scene === _bgmScene) return;
+    _bgmEnsure(scene);
     var url = _bgmUrl[scene];
     if (!url) return;   // 該場景無音檔（或尚未解析完）→不更新場景、保持目前曲目，下次輪詢再試
     _bgmScene = scene;
@@ -684,7 +748,9 @@ function _bgmSyncUI() {
 function _bgmInit() {
     if (_bgmInited) return; _bgmInited = true;
     _bgmLoadCfg();
-    Object.keys(BGM_TRACKS).forEach(function (s) { _bgmResolve(s, BGM_TRACKS[s]); });
+    // 只先解析標題／創角曲；其餘城鎮／戰鬥曲在切場景時才載（避免開局一次探測 30+ 檔卡頓）
+    _bgmEnsure('title');
+    _bgmEnsure('create');
     _bgmSyncUI();
     setInterval(_bgmTick, 1000);   // 自我輪詢場景（每秒；只在場景改變時切換）
     var kick = function () { _bgmScene = null; _bgmTick(); };   // 首次互動立即啟動（autoplay 解鎖）
@@ -693,7 +759,25 @@ function _bgmInit() {
 }
 
 if (typeof document !== 'undefined') {
-    var _audioInit = function () { _sfxInit(); _bgmInit(); };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _audioInit);
-    else _audioInit();
+    // 延後到閒置／首次點擊再灌音效，避免進站就解碼造成遊戲延遲
+    var _audioBooted = false;
+    var _audioInit = function () {
+        if (_audioBooted) return;
+        _audioBooted = true;
+        _sfxInit();
+        _bgmInit();
+    };
+    var _audioWarmUi = function () {
+        try { _sfxLoadCfg(); _sfxSyncUI(); } catch (e) {}
+        try { _bgmLoadCfg(); _bgmSyncUI(); } catch (e2) {}
+    };
+    var _scheduleAudio = function () {
+        _audioWarmUi();
+        document.addEventListener('pointerdown', _audioInit, { once: true });
+        document.addEventListener('keydown', _audioInit, { once: true });
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(function () { _audioInit(); }, { timeout: 3000 });
+        else setTimeout(_audioInit, 1200);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _scheduleAudio);
+    else _scheduleAudio();
 }

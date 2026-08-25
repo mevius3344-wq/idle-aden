@@ -142,7 +142,9 @@ function _clanDefaultState() {
 }
 
 function clanModeKey(p) {
-    return p && p.classicMode ? 'classic' : 'normal';
+    // 一般模式血盟已併入經典（見 _clanMergeNormalIntoClassic）；一律讀寫 classic，
+    // 否則一般角查 modes.normal（已被清成 null）會永遠「尚未加入血盟」。
+    return 'classic';
 }
 
 function clanRoleId(p) {
@@ -1607,10 +1609,12 @@ function clanSyncCurrentPlayer() {
     player.bloodPledge = info.faction;
     player.clanName = info.name;
     let id = clanRoleId(player);
-    if (!id || (st.members[id] && st.members[id].mode === mode)) return true;
+    if (!id) return true;
+    if (st.members[id] && st.members[id].mode === mode) return true;
     _clanWithLock(live => {
         if (!live.modes[mode]) return { commit:false, error:'血盟已不存在。' };
         if (!live.members[id]) live.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+        else live.members[id].mode = mode; // 舊 normal 成員併入 classic
         return {};
     });
     return true;
@@ -2010,12 +2014,14 @@ function renderClanTab() {
             <div class="flex flex-col gap-4 p-2">
                 <div class="border-b border-slate-600 pb-3">
                     <div class="text-amber-200 font-bold text-lg">你尚未加入血盟</div>
-                    <div class="text-sm text-slate-400 mt-1">此模式需由王族角色創立血盟。</div>
+                    <div class="text-sm text-slate-400 mt-1">${player.cls === 'royal'
+                        ? '請輸入血盟名稱創立；同帳號其他角色會自動加入。'
+                        : '請用同帳號的王族角色創立血盟；創立後本角色會自動加入。'}</div>
                 </div>
                 ${player.cls === 'royal' ? `
                 <div class="flex flex-col gap-2">
                     <label class="text-sm text-slate-300" for="clan-name-input">血盟名稱</label>
-                    <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字">
+                    <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字" style="user-select:text;-webkit-user-select:text">
                     <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanCreateFromInput()">創立血盟（30,000 金幣）</button>
                 </div>` : ''}
             </div>`;

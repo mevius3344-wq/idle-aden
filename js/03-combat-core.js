@@ -36,6 +36,12 @@ function magicDamageCoef(dStats, attrDefense, spellTier) {
     let base = Math.max(0, 1 - attr + 3 * sp / 32);
     return base * (spellTier == null ? 1 : magicTierMult(spellTier));
 }
+// 法師職業傷害魔法倍率（妖精／其他職業學同一法術不吃）；noBonus 供魔女5/5 冰雪暴等明確排除處使用。
+function mageSpellDmgMult(who, noBonus) {
+    if (noBonus) return 1;
+    who = who || (typeof player !== 'undefined' ? player : null);
+    return (who && who.cls === 'mage') ? 1.15 : 1;
+}
 // 魔法傷害 stat 視為骰值以外的固定魔法傷害，每次施法只加入一次。
 function magicBaseDamage(rolled, dStats, flatBase, includeStat) {
     let stat = includeStat === false ? 0 : Math.max(0, Number(dStats && dStats.magicDmg) || 0);
@@ -2445,7 +2451,7 @@ function procLightArrow(t) {
     let isCrit = Math.random() * 100 < player.d.magicCrit;
     let _procWpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     let spCoef = weaponMagicDamageCoef(player.d, _procWpn, t, sk.ele || 'none');
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(player);
     let magicCritMult = isCrit ? (1 + player.d.magicCritDmg / 100) : 1.0;
     let baseMagicDmg = roll(sk.dmgDice[0], sk.dmgDice[1]);
     let core = magicBaseDamage(baseMagicDmg, player.d, sk.dmgBase || 0, true) * spCoef * magicCritMult;
@@ -2869,7 +2875,7 @@ function witchIceLance() {
     let isCrit = Math.random()*100 < player.d.magicCrit;
     let _procWpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
     let spCoef = weaponMagicDamageCoef(player.d, _procWpn, t, 'water');
-    let mageMult = 1.0;   // 武器特效階級已由 weaponMagicDamageCoef 統一套用。
+    let mageMult = mageSpellDmgMult(player);   // 法師職業倍率；武器特效階級已由 weaponMagicDamageCoef 統一套用。
     let critMult = isCrit ? (1 + player.d.magicCritDmg/100) : 1;
     let core = magicBaseDamage(roll(sk.dmgDice[0], sk.dmgDice[1]), player.d, sk.dmgBase || 0, true) * spCoef * critMult;
     let dmg = Math.max(1, Math.floor(core * mrFactor));

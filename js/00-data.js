@@ -2821,7 +2821,7 @@ const DB = {
 
         // 五階魔法 (Lv 20)
         "sk_mummy_curse": { n: "木乃伊的詛咒", type: "atk", tier: 5, reqM: 20, reqE: 40, mp: 35, dmgType: "magic", status: { kind: "stone", pbase: 100, dur: 6 } },
-        "sk_charm": { n: "迷魅術", type: "manual", tier: 5, reqM: 20, reqE: 40, mp: 30, mEff: "charm" },
+        "sk_charm": { n: "迷魅術", type: "manual", tier: 5, reqM: 20, reqE: 40, mp: 30, mEff: "charm", d: "魅惑非頭目魔物成為僕人。僕人繼承原怪傷害骰、傷害加成與命中；魅力提高迷魅成功率，並再加強僕人命中與傷害。召喚精通：對等級不高於自己的目標幾乎必成，且僕人更強。" },
         "sk_thunder": { n: "極道落雷", type: "atk", tier: 5, reqM: 20, reqE: 40, mp: 25, dmgType: "magic", ele: "wind", dmgDice: [5, 8], dmgBase: 40 },
         "sk_heal2": { n: "高級治癒術", type: "heal", justiceHeal: true, tier: 5, reqM: 20, reqE: 40, mp: 20, valDice: [2, 30], healDice: [1, 100], healBase: 100, classicHeal: { baseDice: 10, sides: 8 }, msg: "你感覺舒服了一點。" },
         "sk_holy_light": { n: "聖潔之光", type: "heal", tier: 5, reqM: 20, reqE: 40, mp: 10, msg: "神聖光芒驅散了詛咒。" },

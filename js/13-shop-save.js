@@ -1749,7 +1749,27 @@ function saveStateJson() {
     if (_sv2 && _sv2.length) player.summonsV2 = [];
     let _gv2 = player.guardsV2;   // 🏰 城堡護衛實體同召喚：戰鬥暫存不入檔（名冊在血盟共用狀態·讀檔後 castleGuardSync 依名冊重建）
     if (_gv2 && _gv2.length) player.guardsV2 = [];
-    try { return JSON.stringify({ v: SAVE_VERSION, p: player, ms: mapState, ticks: state.ticks }); }
+    try {
+        // ☁️ 雲端合併標記：帳號歸屬＋寫檔時間，避免舊雲端／他帳殘留覆蓋洗白
+        try {
+            let _acc = '';
+            if (typeof window !== 'undefined' && window.__fb5AuthAccount) _acc = String(window.__fb5AuthAccount);
+            else if (typeof window !== 'undefined' && window.GameAccountAuth && typeof window.GameAccountAuth.currentAccount === 'function') {
+                _acc = String(window.GameAccountAuth.currentAccount() || '');
+            }
+            _acc = String(_acc || '').trim();
+            if (_acc && _acc.toLowerCase() !== 'guest') player.cloudOwner = _acc;
+            player.savedAt = Date.now();
+        } catch (_tagE) {}
+        return JSON.stringify({
+            v: SAVE_VERSION,
+            p: player,
+            ms: mapState,
+            ticks: state.ticks,
+            savedAt: player.savedAt || Date.now(),
+            cloudOwner: player.cloudOwner || null
+        });
+    }
     finally { if (_sv2 && _sv2.length) player.summonsV2 = _sv2; if (_gv2 && _gv2.length) player.guardsV2 = _gv2; }
 }
 // 🤝 v3.8.2 受僱中角色「經驗只增不減」防護（用戶指定）：擔任傭兵的角色被鎖在安全區、無法自行掛機打怪，

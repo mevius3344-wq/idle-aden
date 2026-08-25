@@ -402,7 +402,7 @@ function stormBuffTick(sk, noMageBonus) {
     if (!sk) return;
     let targets = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
     if (!targets.length) return;
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(player, noMageBonus);
     let dice = sk.dmgDice || [1, 10];
     let canFreeze = (sk.freezeHitOff !== undefined);
     let glow = STORM_ELE_GLOW[sk.ele] || STORM_ELE_GLOW.none;
@@ -740,7 +740,7 @@ function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp)
     let spCoef = (sourceItem && sourceItem.type === 'wpn')
         ? weaponMagicDamageCoef(player.d, sourceItem, t, sk.ele || 'none')
         : magicDamageCoef(player.d, magicAttrDefense(t, sk.ele || 'none'), sk.tier);
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(player);
     let critMult = isCrit ? (1 + player.d.magicCritDmg / 100) : 1.0;
     let dmgArray = sk.multiDmg || (sk.dmgDice ? [[sk.dmgDice[0], sk.dmgDice[1]]] : []);
     let total = 0;

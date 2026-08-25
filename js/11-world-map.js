@@ -2082,6 +2082,43 @@ function _townPointDistance(a, b) {
     return Math.hypot((a.x - b.x) * (16 / 9), a.y - b.y);
 }
 
+/** 村莊 NPC 最小腳點間距（16:9 等化座標）；過近會難點選與名牌重疊 */
+const TOWN_NPC_MIN_GAP = 15;
+
+/** 把過近的站位互相推開，並略為自中心擴散 */
+function _townSeparateNpcPoints(points, minGap) {
+    if (!points || points.length < 2) return;
+    let gap = Math.max(10, Number(minGap) || TOWN_NPC_MIN_GAP);
+    let cx = 0, cy = 0;
+    points.forEach(p => { cx += p.x; cy += p.y; });
+    cx /= points.length; cy /= points.length;
+    points.forEach(p => {
+        p.x = Math.max(8, Math.min(92, cx + (p.x - cx) * 1.12));
+        p.y = Math.max(24, Math.min(90, cy + (p.y - cy) * 1.12));
+    });
+    for (let iter = 0; iter < 48; iter++) {
+        let moved = false;
+        for (let i = 0; i < points.length; i++) {
+            for (let j = i + 1; j < points.length; j++) {
+                let a = points[i], b = points[j];
+                let d = _townPointDistance(a, b);
+                if (!(d < gap) || d < 0.05) continue;
+                let push = (gap - d) * 0.55;
+                let dx = (b.x - a.x) * (16 / 9);
+                let dy = b.y - a.y;
+                let len = Math.hypot(dx, dy) || 1;
+                let ux = dx / len, uy = dy / len;
+                a.x = Math.max(8, Math.min(92, a.x - (ux * push) / (16 / 9)));
+                a.y = Math.max(24, Math.min(90, a.y - uy * push));
+                b.x = Math.max(8, Math.min(92, b.x + (ux * push) / (16 / 9)));
+                b.y = Math.max(24, Math.min(90, b.y + uy * push));
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+}
+
 function _townWanderingBuyerPositions(vis, townId, pos, overrides) {
     let base = TOWN_WANDERING_BUYER_SPOTS[townId];
     if (!base) return {};
@@ -2215,8 +2252,15 @@ function renderTownNPCMap(townId) {
     // 🔒 v3.2.99 先把所有「專屬/固定/角色」sprite 佔位，避免池分配的 NPC 搶走稍後才出現的固定 NPC 的圖
     //   （例：肯特城堡 奧貝勒固定 1049，若 伊賽馬利 先抽到 1049 就會撞臉；先預留固定圖 → 池分配自動避開）
     vis.forEach(npc => { let fk = npc._spr || NPC_SPR_FIXED[npc.id] || NPC_SPR_ROLE[npc.type]; if (fk) used.add(fk); });
-    vis.forEach((npc, i) => {
+    // 先算站位再推開，避免村莊 NPC 擠成一團難點選
+    let placements = vis.map((npc, i) => {
         let p = _townNpcMapPoint(npc, i, pos, ovr);
+        return { npc: npc, p: { x: p.x, y: p.y } };
+    });
+    _townSeparateNpcPoints(placements.map(x => x.p), TOWN_NPC_MIN_GAP);
+    placements.forEach((place, i) => {
+        let npc = place.npc;
+        let p = place.p;
         let key = npc._spr || _npcSpriteKey(npc, used); used.add(key);
         let cat = NPC_SPR[key] || NPC_SPR['1256'];
         let el = document.createElement('div');

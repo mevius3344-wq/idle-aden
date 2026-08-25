@@ -1,5 +1,6 @@
 // 雲端共用存檔：寫入伺服器 data/cloud/<帳號>/，載入優先讀雲端。
 // 依目前登入帳號分桶（localStorage 作快取）。
+// ⚠️ 合併原則：同槽位永不「舊蓋新／貧蓋富」；登入不同帳號不把他人本機進度灌進自己的雲端。
 (function () {
   'use strict';
 
@@ -102,6 +103,86 @@
     return null;
   }
 
+  function _ownerOf(data) {
+    if (!data) return '';
+    var o = (data.p && data.p.cloudOwner) || data.cloudOwner || '';
+    return String(o || '').trim();
+  }
+
+  function _localBelongsToCurrent(data) {
+    if (!data || !data.p) return false;
+    var owner = _ownerOf(data);
+    var acc = String(currentAccount() || '').trim();
+    if (!owner) return true; // 舊檔無標記：視為本機可合併（登出清快取後通常不會殘留他帳）
+    return !!(acc && owner.toLowerCase() === acc.toLowerCase());
+  }
+
+  /** 進度分數：等級／經驗／金幣／背包量；同進度再比 savedAt */
+  function cloudSaveProgressScore(data) {
+    var p = data && data.p;
+    if (!p || !p.cls) return -1;
+    var lv = Math.max(1, Math.floor(Number(p.lv) || 1));
+    var exp = Math.max(0, Math.floor(Number(p.exp) || 0));
+    var gold = Math.max(0, Math.floor(Number(p.gold) || 0));
+    var invN = 0;
+    if (Array.isArray(p.inv)) {
+      for (var i = 0; i < p.inv.length; i++) {
+        var it = p.inv[i];
+        invN += Math.max(1, Math.floor(Number(it && it.cnt) || 1));
+      }
+    }
+    return lv * 1e12 + exp * 1e3 + Math.min(gold, 1e11) + invN;
+  }
+
+  function cloudSaveTime(data) {
+    if (!data) return 0;
+    var t = Number((data.p && data.p.savedAt) || data.savedAt || 0);
+    return Number.isFinite(t) && t > 0 ? Math.floor(t) : 0;
+  }
+
+  function cloudSaveEnSeed(data) {
+    return String((data && data.p && data.p.enSeed) || '');
+  }
+
+  /** a 是否應取代 b（富／新勝貧／舊） */
+  function cloudSaveBeats(a, b) {
+    if (!a || !a.p) return false;
+    if (!b || !b.p) return true;
+    var sa = cloudSaveProgressScore(a);
+    var sb = cloudSaveProgressScore(b);
+    if (sa !== sb) return sa > sb;
+    return cloudSaveTime(a) >= cloudSaveTime(b);
+  }
+
+  function _writeSlotLocal(slot, dataObj) {
+    if (!dataObj || !dataObj.p || typeof _lzSet !== 'function') return false;
+    try {
+      var payload = JSON.stringify(dataObj);
+      var wrapped = typeof _saveWrap === 'function' ? _saveWrap(payload) : payload;
+      return !!_lzSet('lineage_idle_save_' + slot, wrapped);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _readSlotLocal(slot) {
+    if (typeof _lzGet !== 'function') return null;
+    try {
+      return _parseLzPayload(_lzGet('lineage_idle_save_' + slot));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _removeSlotLocal(slot) {
+    try {
+      if (typeof _lsRemove === 'function') {
+        _lsRemove('lineage_idle_save_' + slot);
+        _lsRemove('lineage_idle_save_' + slot + '_bak');
+      }
+    } catch (e) {}
+  }
+
   function cloudPushSlot(slot, dataObj) {
     if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
@@ -115,20 +196,46 @@
     } catch (e) {}
   }
 
+  function cloudPushSlotSync(slot, dataObj) {
+    if (!cloudCanSync()) return false;
+    slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
+    if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return false;
+    var r = _xhrJson('PUT', _base() + '/slot/' + slot, JSON.stringify(dataObj), true);
+    return !!(r && r.ok);
+  }
+
+  /**
+   * 將雲端槽位灌入本機：僅當雲端進度較佳／較新時覆寫；本機較佳則反推上雲。
+   * 他帳殘留本機檔不會被雲端舊檔洗掉後再上傳到目前帳號。
+   */
   function cloudPullSlotIntoStorage(slot) {
     if (!cloudCanSync()) return false;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     var r = _xhrJson('GET', _base() + '/slot/' + slot, null, true);
-    if (!r || r.status === 404) return false;
-    if (!r.ok || !r.data || !r.data.ok || !r.data.data || !r.data.data.p) return false;
-    try {
-      var payload = JSON.stringify(r.data.data);
-      var wrapped = typeof _saveWrap === 'function' ? _saveWrap(payload) : payload;
-      if (typeof _lzSet !== 'function') return false;
-      return !!_lzSet('lineage_idle_save_' + slot, wrapped);
-    } catch (e) {
+    var cloudData = r && r.ok && r.data && r.data.ok && r.data.data && r.data.data.p ? r.data.data : null;
+    if (r && r.status === 404) cloudData = null;
+    if (!cloudData && !(r && r.ok) && r && r.status !== 404) return false;
+
+    var localData = _readSlotLocal(slot);
+    if (localData && !_localBelongsToCurrent(localData)) {
+      // 他帳殘留：有雲端就改用雲端，否則清掉避免顯示錯角
+      if (cloudData) return _writeSlotLocal(slot, cloudData);
+      _removeSlotLocal(slot);
+      return !!cloudData;
+    }
+
+    if (!cloudData) {
+      if (localData && localData.p) cloudPushSlotSync(slot, localData);
       return false;
     }
+    if (!localData || !localData.p) return _writeSlotLocal(slot, cloudData);
+
+    if (cloudSaveBeats(cloudData, localData)) {
+      return _writeSlotLocal(slot, cloudData);
+    }
+    // 本機較佳／較新 → 保留本機並回填雲端（修「舊雲端覆蓋洗白」）
+    cloudPushSlotSync(slot, localData);
+    return false;
   }
 
   function cloudDeleteSlot(slot) {
@@ -150,22 +257,65 @@
     } catch (e) {}
   }
 
+  function _sharedWealth(obj) {
+    if (!obj || typeof obj !== 'object') return -1;
+    var gold = Math.max(0, Math.floor(Number(obj.gold) || 0));
+    var items = Array.isArray(obj.items) ? obj.items : Array.isArray(obj) ? obj : [];
+    var n = 0;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      n += Math.max(1, Math.floor(Number(it && it.cnt) || 1));
+    }
+    return gold * 1000 + n;
+  }
+
+  function _writeSharedLocal(name, storageKey, obj) {
+    if (typeof _lzSet !== 'function') return false;
+    try {
+      var payload = JSON.stringify(obj == null ? {} : obj);
+      if (name.indexOf('pets') === 0 && typeof _saveWrap === 'function') payload = _saveWrap(payload);
+      return !!_lzSet(storageKey, payload);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _mergeSharedPreferRicher(name, storageKey, cloudObj) {
+    if (cloudObj == null) return false;
+    var localRaw = typeof _lzGet === 'function' ? _lzGet(storageKey) : null;
+    var localObj = null;
+    if (localRaw != null && localRaw !== '') {
+      try {
+        localObj =
+          name.indexOf('pets') === 0 ? _parseLzPayload(localRaw) || JSON.parse(localRaw) : JSON.parse(localRaw);
+      } catch (e0) {
+        localObj = null;
+      }
+    }
+    if (localObj != null) {
+      if (name.indexOf('warehouse') === 0) {
+        if (_sharedWealth(localObj) > _sharedWealth(cloudObj)) {
+          cloudPushShared(name, localObj);
+          return false;
+        }
+      } else if (name.indexOf('pets') === 0) {
+        var lc = Array.isArray(localObj) ? localObj.length : 0;
+        var cc = Array.isArray(cloudObj) ? cloudObj.length : 0;
+        if (lc > cc) {
+          cloudPushShared(name, localObj);
+          return false;
+        }
+      }
+    }
+    return _writeSharedLocal(name, storageKey, cloudObj);
+  }
+
   function cloudPullSharedIntoStorage(name, storageKey) {
     if (!cloudCanSync() || !name || !storageKey) return false;
     var r = _xhrJson('GET', _base() + '/shared/' + encodeURIComponent(name), null, true);
     if (!r || r.status === 404) return false;
     if (!r.ok || !r.data || !r.data.ok) return false;
-    try {
-      var payload = JSON.stringify(r.data.data);
-      // pets 桶可能有 SIG wrap；倉庫是純 JSON
-      if (name.indexOf('pets') === 0 && typeof _saveWrap === 'function') {
-        payload = _saveWrap(payload);
-      }
-      if (typeof _lzSet !== 'function') return false;
-      return !!_lzSet(storageKey, payload);
-    } catch (e) {
-      return false;
-    }
+    return _mergeSharedPreferRicher(name, storageKey, r.data.data);
   }
 
   function cloudMirrorAfterSave(slot) {
@@ -243,9 +393,18 @@
         Object.keys(bundle.slots).forEach(function (k) {
           var data = bundle.slots[k];
           if (!data || !data.p) return;
-          var payload = JSON.stringify(data);
-          var wrapped = typeof _saveWrap === 'function' ? _saveWrap(payload) : payload;
-          if (typeof _lzSet === 'function' && _lzSet('lineage_idle_save_' + k, wrapped)) any = true;
+          var slot = Math.max(1, Math.min(8, parseInt(k, 10) || 0));
+          if (!slot) return;
+          var localData = _readSlotLocal(slot);
+          if (localData && !_localBelongsToCurrent(localData)) {
+            if (_writeSlotLocal(slot, data)) any = true;
+            return;
+          }
+          if (!localData || !localData.p || cloudSaveBeats(data, localData)) {
+            if (_writeSlotLocal(slot, data)) any = true;
+          } else {
+            cloudPushSlotSync(slot, localData);
+          }
         });
       }
       if (bundle.shared) {
@@ -259,9 +418,7 @@
         };
         Object.keys(map).forEach(function (name) {
           if (!bundle.shared[name]) return;
-          var payload = JSON.stringify(bundle.shared[name]);
-          if (name.indexOf('pets') === 0 && typeof _saveWrap === 'function') payload = _saveWrap(payload);
-          if (typeof _lzSet === 'function' && _lzSet(map[name], payload)) any = true;
+          if (_mergeSharedPreferRicher(name, map[name], bundle.shared[name])) any = true;
         });
       }
     } catch (e) {}
@@ -305,15 +462,15 @@
     return false;
   }
 
-  /** 同步把本機角色／倉庫／寵物上傳雲端（登出前、雲端空時種子用） */
+  /** 只上傳「屬於目前帳號」的本機槽位（避免登入空帳號時把他人進度種子化進雲端） */
   function cloudFlushLocalToCloud() {
     if (!cloudCanSync() || typeof _lzGet !== 'function') return false;
     var any = false;
     for (var i = 1; i <= 8; i++) {
       try {
-        var raw = _lzGet('lineage_idle_save_' + i);
-        var data = _parseLzPayload(raw);
+        var data = _readSlotLocal(i);
         if (!data || !data.p) continue;
+        if (!_localBelongsToCurrent(data)) continue;
         var r = _xhrJson('PUT', _base() + '/slot/' + i, JSON.stringify(data), true);
         if (r && r.ok) any = true;
       } catch (e) {}
@@ -330,14 +487,19 @@
         if (raw == null || raw === '') return;
         var obj =
           name.indexOf('pets') === 0 ? _parseLzPayload(raw) || JSON.parse(raw) : JSON.parse(raw);
-        var r2 = _xhrJson('PUT', _base() + '/shared/' + encodeURIComponent(name), JSON.stringify(obj == null ? {} : obj), true);
+        var r2 = _xhrJson(
+          'PUT',
+          _base() + '/shared/' + encodeURIComponent(name),
+          JSON.stringify(obj == null ? {} : obj),
+          true
+        );
         if (r2 && r2.ok) any = true;
       } catch (e2) {}
     });
     return any;
   }
 
-  // 雲端尚空時，把本機既有存檔上傳當種子（僅補 404；不覆蓋雲端既有）
+  // 雲端尚空時，把本機既有存檔上傳當種子（僅補 404；不覆蓋雲端既有；且僅本帳）
   function cloudBootstrapFromLocal() {
     if (!cloudCanSync()) return;
     for (var i = 1; i <= 8; i++) {
@@ -346,9 +508,8 @@
           fetch(_base() + '/slot/' + slot)
             .then(function (res) {
               if (res.status === 404 && typeof _lzGet === 'function') {
-                var raw = _lzGet('lineage_idle_save_' + slot);
-                var data = _parseLzPayload(raw);
-                if (data && data.p) cloudPushSlot(slot, data);
+                var data = _readSlotLocal(slot);
+                if (data && data.p && _localBelongsToCurrent(data)) cloudPushSlot(slot, data);
               }
             })
             .catch(function () {});
@@ -382,19 +543,33 @@
 
   /**
    * 登入／重整同步雲端。
-   * ⚠️ 絕不可在雲端為空／失敗時先清本機（Render 暫存碟重佈署會清空雲端 → 舊邏輯會把本機一併洗白）。
+   * ⚠️ 絕不可先清本機再灌雲端（舊雲端／部分槽位會把本機較新進度洗白）。
+   * 改為逐槽合併：雲端較佳→寫本機；本機較佳→保留並回填雲端；他帳殘留→丟棄或改用本帳雲端。
    */
   function cloudSyncOnLogin() {
     if (!cloudCanSync()) return Promise.resolve(false);
     return fetch(_base() + '/bundle')
       .then(function (res) {
         return res.json().then(function (data) {
+          // 先清「不屬於本帳」的本機槽，避免串帳顯示／誤傳
+          for (var i = 1; i <= 8; i++) {
+            var loc = _readSlotLocal(i);
+            if (loc && loc.p && !_localBelongsToCurrent(loc)) _removeSlotLocal(i);
+          }
+
           if (_bundleHasPlayableSlots(data)) {
-            cloudClearLocalCache();
             cloudApplyBundle(data);
+            // 本機有、雲端沒有的本帳槽 → 補上傳
+            for (var s = 1; s <= 8; s++) {
+              var local = _readSlotLocal(s);
+              var cloud = data.slots && data.slots[s];
+              if (local && local.p && _localBelongsToCurrent(local) && !(cloud && cloud.p)) {
+                cloudPushSlotSync(s, local);
+              }
+            }
             return true;
           }
-          // 雲端無角色：保留本機，並把本機回填雲端（修復部署洗雲端後的空洞）
+          // 雲端無角色：保留本帳本機並回填（修部署洗雲端後的空洞）
           try {
             cloudFlushLocalToCloud();
           } catch (e) {
@@ -411,7 +586,6 @@
       });
   }
 
-  // 雲端同步僅在登入後由 cloudSyncOnLogin 觸發；禁止未登入時拉取 guest 共用桶（會覆蓋他人／自己的本機存檔）
   window.cloudLoggedIn = cloudLoggedIn;
   window.cloudCanSync = cloudCanSync;
   window.cloudReady = cloudReady;
@@ -425,4 +599,6 @@
   window.cloudFlushLocalToCloud = cloudFlushLocalToCloud;
   window.cloudClearLocalCache = cloudClearLocalCache;
   window.cloudSyncOnLogin = cloudSyncOnLogin;
+  window.cloudSaveProgressScore = cloudSaveProgressScore;
+  window.cloudSaveBeats = cloudSaveBeats;
 })();

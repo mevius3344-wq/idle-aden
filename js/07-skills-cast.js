@@ -1,5 +1,6 @@
 function isMageSummonMastered(sm, owner) {
-    return !!(sm && owner && owner.mastery === 'm_summon' && (sm.skId === 'sk_zombie' || sm.skId === 'sk_summon'));
+    // 召喚精通：造屍／召喚／迷魅僕人一併強化
+    return !!(sm && owner && owner.mastery === 'm_summon' && (sm.skId === 'sk_zombie' || sm.skId === 'sk_summon' || sm.skId === 'sk_charm'));
 }
 function summonAttackCount(sm, owner) {
     owner = owner || player;
@@ -32,8 +33,8 @@ function summonHitValue(sm, owner, target, gearHit) {
     let cha = (owner.d && owner.d.cha) || 0;
     let growth = Math.floor((owner.lv || 1) * 0.75 + cha * 0.35);
     let masteryHit = isMageSummonMastered(sm, owner) ? 5 : 0;
-    let raw = (owner.lv || 1) + (sm.hitLvOff || 0) + growth + masteryHit - target.lv + mobEffAC(target)
-        + (gearHit || 0);   // 🚫 v3.2.19 召喚控制戒指不再附加效果（原 命中+5 移除·戒指只決定能否挑選召喚物）
+    let raw = (owner.lv || 1) + (sm.hitLvOff || 0) + (sm.hitBonus || 0) + growth + masteryHit - target.lv + mobEffAC(target)
+        + (gearHit || 0);   // 🚫 v3.2.19 召喚控制戒指不再附加效果（原 命中+5 移除·戒指只決定能否挑選召喚物）；迷魅繼承原怪 hit→hitBonus
     return stretchHitValue(raw);
 }
 
@@ -69,12 +70,15 @@ function summonAttack(sm, owner) {
     let _teamAtk = (typeof teamIlluAura === 'function') ? teamIlluAura(sm, true) : null;   // 👑 灼熱武器／幻覺攻擊光環：舊式迷魅與抽象召喚也取得全隊一般攻擊加成
     let idx = mapState.mobs.findIndex(m => m && m.uid === t.uid);
 
-    // === 迷魅術：被迷魅怪物（單次攻擊，額外獲得 =魅力 的命中與傷害）===
+    // === 迷魅術：被迷魅怪物（繼承原怪骰傷＋傷害加成＋命中；魅力提供命中／傷害；召喚精通強化）===
     if(sm.skId === 'sk_charm') {
-        let hv = Math.max(1, Math.min(20, owner.lv + sm.hitBonus + cha - t.lv + mobEffAC(t) + _sgb.hit + (_teamAtk ? _teamAtk.eh : 0)));   // 🏺 喚獸師鞭＋👑灼熱武器／幻覺光環命中（🚫 召喚控制戒指命中+5 已移除）
+        let hv = summonHitValue(sm, owner, t, _sgb.hit + (_teamAtk ? _teamAtk.eh : 0));
         let r = roll(1, 20);
         if(!((r === 20) || (r !== 1 && hv >= r))) { if (typeof vfxMiss === 'function') vfxMiss(t); logCombat(`${sm.n} 的攻擊未命中。`, 'miss'); return; }
-        let dmg = Math.max(1, roll(sm.dmgDice[0], sm.dmgDice[1]) + cha + _sgb.dmg + (_teamAtk ? _teamAtk.ed : 0) - (t.dr || 0));
+        let hardSkin = Math.floor(mobHardSkin(t) * (1 - (sm.hardSkinPen || 0)));
+        let chaFlat = Math.floor(cha / 2);   // 魅力提供半額固定傷害（命中已由 growth／hitLvOff 吃魅力）
+        let raw = (roll(sm.dmgDice[0], sm.dmgDice[1]) + (sm.db || 0) + chaFlat + _sgb.dmg + (_teamAtk ? _teamAtk.ed : 0)) * summonDamageMult(sm, owner, false);
+        let dmg = Math.max(1, Math.floor(raw) - (t.dr || 0) - hardSkin);
         dmg += traumaPhysicalBonus(t);
         markBossPhysicalHit(t);
         t.justHit = 'normal'; t.curHp -= dmg; mobWake(t);
@@ -291,17 +295,21 @@ function manualCast(skId) {
         if(!t) { logSys('沒有目標。'); return; }
         if(t.boss) { logSys('無法魅惑 BOSS。'); return; }
         player.mp -= cost; cost = 0;
-        // 🏅 召喚精通：對等級比自己低的非 BOSS 怪物，迷魅必定成功；否則一般迷魅成功率最高 60%（cap=12）
-        if(!t.noCharm && ((hasMastery('m_summon') && !t.boss && (t.lv || 1) < player.lv) || abnormalMagicHit(t, 12))) {   // 🔧 不可迷魅(noCharm)標籤：帶此旗標的非頭目怪物迷魅必定失敗（覆蓋召喚精通的必定成功）
+        // 🏅 召喚精通：對等級 ≤ 自己的非 BOSS 必定成功；否則一般迷魅最高 60%（cap=12），魅力另加命中補正
+        let _charmHitOff = Math.floor(((player.d && player.d.cha) || 0) / 5);
+        if(!t.noCharm && ((hasMastery('m_summon') && !t.boss && (t.lv || 1) <= player.lv) || abnormalMagicHit(t, 12, _charmHitOff))) {
             let idx = mapState.mobs.findIndex(m => m && m.uid === t.uid);
             player.buffs['sk_charm'] = 3600;
             player.charmed = {
                 skId:'sk_charm', n:'迷魅：' + t.n, dmgDice: t.dmg && t.dmg[1] ? t.dmg : [1,4],
+                db: Math.max(0, Math.floor(Number(t.db) || 0)),
                 interval: Math.max(10, Math.floor((t.atkSpd || 2) * 10)), ele:'none', kind:'melee',
-                hitBonus:(t.hit||0), proc:null, cd:10, endTick: state.ticks + 36000
+                hitBonus:(t.hit||0), hitLvOff: Math.floor(((player.d && player.d.cha) || 0) / 4),
+                hardSkinPen: hasMastery('m_summon') ? 0.35 : 0.15,
+                proc:null, cd:10, endTick: state.ticks + 36000
             };
             logCombat(`<span class="${getMobColor(t.lv)}">${t.n}</span> 成為你的僕人。`, 'magic');
-            if(typeof playSpellFx === 'function') { try { playSpellFx(sk.n, t); } catch(e){} }   // 🔮 迷魅術特效疊在目標身上（於移除前·否則卡片消失無法錨定）
+            if(typeof playSpellFx === 'function') { try { playSpellFx(sk.n, t); } catch(e){} }
             if(idx !== -1) { mapState.mobs[idx] = null; renderMobs(); }
         } else logCombat('迷魅術失敗了。', 'miss');
     } else if(sk.mEff === 'barrier') {
@@ -323,15 +331,19 @@ let _costItemWarnAt = -9999;   // 🌀 costItem 施法材料不足提示節流�
 function relicCharmOnHit(t) {
     let p = player;
     if (!p || !p.d || !p.d.charmOnHit || p.charmed || !t || t.curHp <= 0 || t._dead || t.boss || t.noCharm) return false;
-    if (!((hasMastery('m_summon') && (t.lv || 1) < p.lv) || abnormalMagicHit(t, 12))) return false;
+    let _charmHitOff = Math.floor((p.d.cha || 0) / 5);
+    if (!((hasMastery('m_summon') && (t.lv || 1) <= p.lv) || abnormalMagicHit(t, 12, _charmHitOff))) return false;
     let idx = mapState.mobs.findIndex(m => m && m.uid === t.uid);
     if (idx === -1) return false;
     p.buffs = p.buffs || {};
     p.buffs.sk_charm = 3600;
     p.charmed = {
         skId:'sk_charm', n:'迷魅：' + t.n, dmgDice: t.dmg && t.dmg[1] ? t.dmg : [1,4],
+        db: Math.max(0, Math.floor(Number(t.db) || 0)),
         interval: Math.max(10, Math.floor((t.atkSpd || 2) * 10)), ele:'none', kind:'melee',
-        hitBonus:(t.hit||0), proc:null, cd:10, endTick: state.ticks + 36000
+        hitBonus:(t.hit||0), hitLvOff: Math.floor((p.d.cha || 0) / 4),
+        hardSkinPen: hasMastery('m_summon') ? 0.35 : 0.15,
+        proc:null, cd:10, endTick: state.ticks + 36000
     };
     logCombat(`<span class="font-bold" style="color:#f0abfc;text-shadow:0 0 6px #d946ef;">【魅惑術】</span><span class="${getMobColor(t.lv)}">${t.n}</span> 成為你的僕人。`, 'magic');
     if (typeof playSpellFx === 'function') { try { playSpellFx('迷魅術', t); } catch (e) {} }
@@ -819,7 +831,7 @@ function castSkillInner(skId) {
     
     // SP／屬性防禦係數後乘上 ×(1+法術階級/10)；屬性防禦依每個目標分別計入。
     let spCoef = magicDamageCoef(player.d, magicAttrDefense(t, sk.ele || 'none'), sk.tier);
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(player);
     
     let magicCritMult = isCrit ? (1 + player.d.magicCritDmg / 100) : 1.0;
 
@@ -835,7 +847,7 @@ function castSkillInner(skId) {
                     d = Math.max(1, d) + fixed;
                     d = Math.max(1, Math.floor(d * elementCounterMult(sk.ele, t.e)));   // ⚔️ 屬性剋制：魔法剋怪 ×1.4、被剋 ×0.6（無屬性→×1）
                     if (idx === 0) d = Math.max(1, Math.floor(d * consumeWetMult(t, sk.ele)));   // 🏺 海洋水晶球：潮濕目標受風屬性魔法傷害 ×2 並解除（只在首段骰結算·避免多段各×2）
-                    d = Math.floor(d * mageDmgMult);   // 保留流程相容性；目前不再追加舊法師專屬倍率
+                    d = Math.floor(d * mageDmgMult);   // 法師職業傷害魔法 ×1.15（其他職業學同一法術不套）
                     d = Math.max(1, Math.floor(d * rlFuryMult()));   // 🔮 紅獅5/5(×1.1)＋😡狂怒5/5：攻擊技能最終傷害
                     // 🔧 魔導精通同屬性傷害×2 已移除(2026-07 用戶要求)
                     d = Math.max(1, Math.floor(d * fragileMult(t) * illuLvMult(player)));    // 🔮 脆弱（白鳥5）；🔮 幻術士等級加成 ×(1+等級/50)（幻想/混亂）

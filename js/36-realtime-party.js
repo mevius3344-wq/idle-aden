@@ -18,6 +18,11 @@
     var _rtPartyUiSig = '';
     var _rtPartySeenShare = Object.create(null);
     var _rtPartyAccShare = { exp: 0, gold: 0, t: 0 };
+    var _rtPartyOnlineCache = [];
+    var _rtPartyOnlineAt = 0;
+    var _rtPartyOnlineFetch = null;
+    var _rtPartyInviteDraft = '';
+    var _rtPartySearchTimer = null;
 
     function rtPartyEsc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -262,21 +267,179 @@
 
     function rtPartyInvite() {
         var input = document.getElementById('rt-party-invite-name');
-        var name = input ? String(input.value || '').trim() : '';
+        var name = input ? String(input.value || '').trim() : String(_rtPartyInviteDraft || '').trim();
         if (!name) {
             rtPartyLog('請輸入要邀請的角色名稱。');
             return;
         }
+        _rtPartyInviteDraft = name;
         return rtPartyPost('invite', { targetName: name }).then(function (data) {
             if (data && data.ok) {
                 rtPartyLog('已邀請「' + rtPartyEsc(data.targetName || name) + '」。');
+                _rtPartyInviteDraft = '';
                 if (input) input.value = '';
+                rtPartyFetchOnline(true);
             } else if (data && data.message) {
                 rtPartyLog(rtPartyEsc(data.message));
             } else {
                 rtPartyLog('邀請失敗。');
             }
         });
+    }
+
+    function rtPartyPickInvite(name) {
+        name = String(name || '').trim();
+        if (!name) return;
+        _rtPartyInviteDraft = name;
+        var input = document.getElementById('rt-party-invite-name');
+        if (input) {
+            input.value = name;
+            try { input.focus(); } catch (e) {}
+        }
+        if (rtPartyIsLeader()) rtPartyInvite();
+        else rtPartyLog('請先建立隊伍再邀請。');
+    }
+
+    function rtPartyStableSig() {
+        var partyBits = null;
+        if (_rtParty) {
+            partyBits = {
+                id: _rtParty.id,
+                leader: _rtParty.leaderKey,
+                members: (_rtParty.members || []).map(function (m) {
+                    if (!m) return null;
+                    return {
+                        k: m.key,
+                        n: m.name,
+                        lv: m.lv,
+                        cls: m.cls,
+                        map: m.mapId,
+                        on: !!m.online,
+                        lead: !!m.leader
+                    };
+                })
+            };
+        }
+        return JSON.stringify({
+            a: rtPartyAccount(),
+            p: partyBits,
+            i: (_rtPartyInvites || []).map(function (x) { return x && x.id; }),
+            k: rtPartyMyKey(),
+            o: (_rtPartyOnlineCache || []).map(function (x) { return x && (x.name + (x.inParty ? '1' : '0')); }),
+            d: _rtPartyInviteDraft
+        });
+    }
+
+    function rtPartyFetchOnline(force) {
+        if (!rtPartyIsHttp()) return Promise.resolve([]);
+        var id = rtPartyIdentity();
+        if (!id) return Promise.resolve([]);
+        var now = Date.now();
+        if (!force && _rtPartyOnlineAt && now - _rtPartyOnlineAt < 4000) {
+            return Promise.resolve(_rtPartyOnlineCache);
+        }
+        if (_rtPartyOnlineFetch) return _rtPartyOnlineFetch;
+        var q = String(_rtPartyInviteDraft || '').trim();
+        var url = '/api/party/online?account=' + encodeURIComponent(id.account)
+            + '&slot=' + encodeURIComponent(String(id.slot))
+            + '&name=' + encodeURIComponent(id.name)
+            + (q ? '&q=' + encodeURIComponent(q) : '');
+        _rtPartyOnlineFetch = fetch(url)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                _rtPartyOnlineFetch = null;
+                if (data && data.ok && Array.isArray(data.players)) {
+                    _rtPartyOnlineCache = data.players;
+                    _rtPartyOnlineAt = Date.now();
+                    rtPartyRender();
+                    return _rtPartyOnlineCache;
+                }
+                return _rtPartyOnlineCache;
+            })
+            .catch(function () {
+                _rtPartyOnlineFetch = null;
+                return _rtPartyOnlineCache;
+            });
+        return _rtPartyOnlineFetch;
+    }
+
+    function rtPartyOnInviteInput() {
+        var input = document.getElementById('rt-party-invite-name');
+        _rtPartyInviteDraft = input ? String(input.value || '') : '';
+        if (_rtPartySearchTimer) clearTimeout(_rtPartySearchTimer);
+        _rtPartySearchTimer = setTimeout(function () {
+            _rtPartySearchTimer = null;
+            rtPartyFetchOnline(true);
+        }, 250);
+    }
+
+    function rtPartyOnlineListHtml(leader) {
+        var list = _rtPartyOnlineCache || [];
+        if (!list.length) {
+            return '<div class="rt-party-online empty">目前沒有其他線上玩家' + (_rtPartyInviteDraft ? '符合搜尋' : '') + '。</div>';
+        }
+        return '<div class="rt-party-online">'
+            + list.slice(0, 12).map(function (p) {
+                if (!p) return '';
+                var busy = p.inParty ? ' <span class="rt-party-off">組隊中</span>' : '';
+                var act = leader
+                    ? '<button type="button" class="rt-party-btn rt-party-btn-mini" data-name="' + encodeURIComponent(p.name) + '" onclick="rtPartyPickInvite(decodeURIComponent(this.getAttribute(\'data-name\')))">邀請</button>'
+                    : '';
+                return '<div class="rt-party-online-row">'
+                    + '<div class="rt-party-online-info">'
+                    + '<span class="rt-party-name">' + rtPartyEsc(p.name) + busy + '</span>'
+                    + '<span class="rt-party-meta">Lv.' + (p.lv || 1) + ' ' + rtPartyEsc(rtPartyClsLabel(p.cls)) + ' · ' + rtPartyEsc(p.mapName || '—') + '</span>'
+                    + '</div>' + act + '</div>';
+            }).join('')
+            + '</div>';
+    }
+
+    function rtPartyPreserveInviteFocus(body) {
+        var prev = document.getElementById('rt-party-invite-name');
+        var keepVal = _rtPartyInviteDraft;
+        var keepFocus = false;
+        var selStart = 0;
+        var selEnd = 0;
+        if (prev && document.activeElement === prev) {
+            keepFocus = true;
+            keepVal = String(prev.value || '');
+            _rtPartyInviteDraft = keepVal;
+            try {
+                selStart = prev.selectionStart || 0;
+                selEnd = prev.selectionEnd || 0;
+            } catch (e) {}
+        } else if (prev) {
+            keepVal = String(prev.value || keepVal || '');
+            _rtPartyInviteDraft = keepVal;
+        }
+        return function restore() {
+            var next = body ? body.querySelector('#rt-party-invite-name') : document.getElementById('rt-party-invite-name');
+            if (!next) return;
+            next.value = keepVal || '';
+            if (keepFocus) {
+                try {
+                    next.focus();
+                    if (typeof next.setSelectionRange === 'function') next.setSelectionRange(selStart, selEnd);
+                } catch (e2) {}
+            }
+        };
+    }
+
+    function rtPartyPatchHpBars() {
+        try {
+            if (!_rtParty || !Array.isArray(_rtParty.members)) return;
+            var rows = document.querySelectorAll('.rt-party-row[data-key]');
+            for (var i = 0; i < rows.length; i++) {
+                var el = rows[i];
+                var key = el.getAttribute('data-key') || '';
+                var mem = (_rtParty.members || []).find(function (x) { return x && x.key === key; });
+                if (!mem) continue;
+                var mapEl = el.querySelector('.rt-party-map');
+                if (!mapEl) continue;
+                var pct = mem.mhp > 0 ? Math.max(0, Math.min(100, Math.round((mem.hp || 0) / mem.mhp * 100))) : 0;
+                mapEl.textContent = (mem.mapName || mem.mapId || '—') + ' · HP ' + pct + '%';
+            }
+        } catch (e) {}
     }
 
     function rtPartyRespond(inviteId, accept) {
@@ -392,13 +555,12 @@
         }
 
         var account = rtPartyAccount();
-        var sig = JSON.stringify({
-            a: account,
-            p: _rtParty,
-            i: (_rtPartyInvites || []).map(function (x) { return x && x.id; }),
-            k: rtPartyMyKey()
-        });
-        if (!force && sig === _rtPartyUiSig) return;
+        var sig = rtPartyStableSig();
+        if (!force && sig === _rtPartyUiSig) {
+            rtPartyPatchHpBars();
+            return;
+        }
+        var restoreInvite = rtPartyPreserveInviteFocus(body);
         _rtPartyUiSig = sig;
 
         if (!account) {
@@ -407,14 +569,21 @@
         }
 
         var html = '';
+        var leader = false;
         if (!_rtParty) {
             html += '<div class="rt-party-actions">'
                 + '<button type="button" class="rt-party-btn rt-party-btn-main" onclick="rtPartyCreate()">建立隊伍</button>'
                 + '</div>';
-            html += '<div class="rt-party-hint">建立後輸入線上角色名稱邀請；同地圖可分享經驗／金幣，並使用隊伍頻道。</div>';
+            html += '<div class="rt-party-hint">建立後可搜尋／輸入線上角色名稱邀請；同地圖可分享經驗／金幣。</div>';
+            html += '<div class="rt-party-invite-row">'
+                + '<input id="rt-party-invite-name" type="text" maxlength="16" placeholder="搜尋線上玩家名稱" autocomplete="off" value="' + rtPartyEsc(_rtPartyInviteDraft) + '"'
+                + ' oninput="rtPartyOnInviteInput()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();rtPartyLog(\'請先建立隊伍再邀請。\');}">'
+                + '</div>';
+            html += rtPartyOnlineListHtml(false);
+            rtPartyFetchOnline(false);
         } else {
             var me = rtPartyMyKey();
-            var leader = rtPartyIsLeader();
+            leader = rtPartyIsLeader();
             html += '<div class="rt-party-roster">';
             (_rtParty.members || []).forEach(function (m) {
                 if (!m) return;
@@ -422,7 +591,7 @@
                 var tag = m.leader ? '<span class="rt-party-tag leader">隊長</span>' : '<span class="rt-party-tag">隊員</span>';
                 var online = m.online ? '' : ' <span class="rt-party-off">離線</span>';
                 var hpPct = m.mhp > 0 ? Math.max(0, Math.min(100, Math.round((m.hp || 0) / m.mhp * 100))) : 0;
-                html += '<div class="rt-party-row' + (isMe ? ' me' : '') + '">'
+                html += '<div class="rt-party-row' + (isMe ? ' me' : '') + '" data-key="' + rtPartyEsc(m.key) + '">'
                     + '<div class="rt-party-row-top">'
                     + '<span class="rt-party-name">' + tag + ' ' + rtPartyEsc(m.name) + online + '</span>'
                     + '<span class="rt-party-meta">Lv.' + (m.lv || 1) + ' ' + rtPartyEsc(rtPartyClsLabel(m.cls)) + '</span>'
@@ -437,9 +606,12 @@
 
             if (leader) {
                 html += '<div class="rt-party-invite-row">'
-                    + '<input id="rt-party-invite-name" type="text" maxlength="16" placeholder="輸入角色名稱邀請" autocomplete="off">'
+                    + '<input id="rt-party-invite-name" type="text" maxlength="16" placeholder="輸入或搜尋角色名稱" autocomplete="off" value="' + rtPartyEsc(_rtPartyInviteDraft) + '"'
+                    + ' oninput="rtPartyOnInviteInput()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();rtPartyInvite();}">'
                     + '<button type="button" class="rt-party-btn" onclick="rtPartyInvite()">邀請</button>'
                     + '</div>';
+                html += rtPartyOnlineListHtml(true);
+                rtPartyFetchOnline(false);
             }
             html += '<div class="rt-party-actions">';
             if (!leader) {
@@ -453,6 +625,7 @@
             html += '<div class="rt-party-hint">同地圖隊員可分享擊殺經驗／金幣；隊伍頻道可即時通話。</div>';
         }
         body.innerHTML = html;
+        restoreInvite();
     }
 
     function rtPartyRenderInvites() {
@@ -554,6 +727,8 @@
     // expose
     window.rtPartyCreate = rtPartyCreate;
     window.rtPartyInvite = rtPartyInvite;
+    window.rtPartyPickInvite = rtPartyPickInvite;
+    window.rtPartyOnInviteInput = rtPartyOnInviteInput;
     window.rtPartyRespond = rtPartyRespond;
     window.rtPartyLeave = rtPartyLeave;
     window.rtPartyDisband = rtPartyDisband;

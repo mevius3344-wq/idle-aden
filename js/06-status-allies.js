@@ -950,6 +950,7 @@ function allyAttackOnce(ally, _arrowDelay) {   // 🏹 v3.2.14 _arrowDelay(選�
         let critMult = isCrit ? (1 + (d.magicCritDmg||0)/100) : 1;
         let base = magicBaseDamage(roll(_light.dmgDice[0], _light.dmgDice[1]), d, _light.dmgBase || 0, true) * spCoef * critMult;
         let dmg = Math.max(1, Math.floor(base * mrFactor));
+        dmg = Math.max(1, Math.floor(dmg * mageSpellDmgMult(ally)));
         dmg = Math.max(1, Math.floor(dmg * fragileMult(t)));   // 🔮 脆弱（白鳥5）
         dmg = Math.max(1, Math.floor(dmg * wpnEnFinalMult(ally.eq && ally.eq.wpn)));   // 🔧 武器強化 +11~+20：最終傷害倍率（傭兵法師光箭普攻·與玩家普攻一致）
         dmg = Math.max(1, Math.floor(dmg * allyRlFuryMult(ally)));   // 🔴😡 v2.6.18 紅獅5×狂怒5造傷（法師光箭普攻·原全無·鏡像玩家 procLightArrow）
@@ -1239,8 +1240,7 @@ function allyCastMagic(ally, sk) {
     let d = ally.d || {};
     let targets = (sk.target === 'all') ? mapState.mobs.filter(m => m && m.curHp > 0) : [getTarget()].filter(m => m && m.curHp > 0);
     if (!targets.length) return;
-    let mageMult = 1.0;
-    let texts = [], _burstDmg = 0;   // 🔧 神官魔杖·魔爆：累計本次魔法總傷害
+    let mageMult = mageSpellDmgMult(ally);
     targets.forEach(t => {
         let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
         let mrFactor = mrMult(effMr);
@@ -1601,7 +1601,7 @@ function allyProcLightArrow(ally, t) {
     let isCrit = Math.random()*100 < (d.magicCrit||0);
     let _resoWpn = ally.eq && ally.eq.wpn && DB.items[ally.eq.wpn.id];
     let spCoef = weaponMagicDamageCoef(d, _resoWpn, t, sk.ele || 'none');
-    let mageMult = 1.0;   // 武器特效階級已由 weaponMagicDamageCoef 統一套用。
+    let mageMult = mageSpellDmgMult(ally);   // 法師職業倍率；武器特效階級已由 weaponMagicDamageCoef 統一套用。
     let critMult = isCrit ? (1 + (d.magicCritDmg||0)/100) : 1;
     let core = magicBaseDamage(roll(sk.dmgDice[0], sk.dmgDice[1]), d, sk.dmgBase || 0, true) * spCoef * critMult;
     let dmg = Math.max(1, Math.floor(core * mrFactor));
@@ -1630,7 +1630,7 @@ function allyWitchIceLance(ally) {
     let isCrit = Math.random() * 100 < (d.magicCrit || 0);
     let _procWpn = ally.eq && ally.eq.wpn && DB.items[ally.eq.wpn.id];
     let spCoef = weaponMagicDamageCoef(d, _procWpn, t, 'water');
-    let mageMult = 1.0;   // 武器特效階級已由 weaponMagicDamageCoef 統一套用。
+    let mageMult = mageSpellDmgMult(ally);   // 法師職業倍率；武器特效階級已由 weaponMagicDamageCoef 統一套用。
     let critMult = isCrit ? (1 + (d.magicCritDmg || 0) / 100) : 1;
     let core = magicBaseDamage(roll(sk.dmgDice[0], sk.dmgDice[1]), d, sk.dmgBase || 0, true) * spCoef * critMult;
     let dmg = Math.max(1, Math.floor(core * mrFactor));
@@ -1736,7 +1736,7 @@ function allyProcFreeMagicSkill(ally, t, skId, en, areaHit, sourceItem, illusion
     let spCoef = (sourceItem && sourceItem.type === 'wpn')
         ? weaponMagicDamageCoef(d, sourceItem, t, sk.ele || 'none')
         : magicDamageCoef(d, magicAttrDefense(t, sk.ele || 'none'), sk.tier);
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(ally);
     let critMult = isCrit ? (1 + (d.magicCritDmg || 0) / 100) : 1.0;
     let dmgArray = sk.multiDmg || (sk.dmgDice ? [[sk.dmgDice[0], sk.dmgDice[1]]] : []);
     let total = 0;
@@ -2453,7 +2453,7 @@ function allyStormTick(ally, sk, noMageBonus) {
     let targets = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
     if (!targets.length) return;
     let d = ally.d || {};
-    let mageDmgMult = 1.0;
+    let mageDmgMult = mageSpellDmgMult(ally, noMageBonus);
     let dice = sk.dmgDice || [1, 10];
     let canFreeze = (sk.freezeHitOff !== undefined);
     let glow = STORM_ELE_GLOW[sk.ele] || STORM_ELE_GLOW.none;

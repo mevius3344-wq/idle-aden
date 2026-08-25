@@ -372,6 +372,34 @@ function cloudFileMeta(file) {
   }
 }
 
+/** 雲端存檔進度分數：擋「較舊／較貧」PUT 覆蓋洗白 */
+function cloudSaveProgressScore(data) {
+  const p = data && data.p;
+  if (!p || !p.cls) return -1;
+  const lv = Math.max(1, Math.floor(Number(p.lv) || 1));
+  const exp = Math.max(0, Math.floor(Number(p.exp) || 0));
+  const gold = Math.max(0, Math.floor(Number(p.gold) || 0));
+  let invN = 0;
+  if (Array.isArray(p.inv)) {
+    for (const it of p.inv) invN += Math.max(1, Math.floor(Number(it && it.cnt) || 1));
+  }
+  return lv * 1e12 + exp * 1e3 + Math.min(gold, 1e11) + invN;
+}
+
+function cloudSaveTime(data) {
+  const t = Number((data && data.p && data.p.savedAt) || (data && data.savedAt) || 0);
+  return Number.isFinite(t) && t > 0 ? Math.floor(t) : 0;
+}
+
+function cloudSaveBeats(a, b) {
+  if (!a || !a.p) return false;
+  if (!b || !b.p) return true;
+  const sa = cloudSaveProgressScore(a);
+  const sb = cloudSaveProgressScore(b);
+  if (sa !== sb) return sa > sb;
+  return cloudSaveTime(a) >= cloudSaveTime(b);
+}
+
 async function handleCloudApi(req, res, u) {
   if (!ENABLE_CLOUD_SAVE) {
     return json(res, 404, { ok: false, error: "cloud save disabled" });
@@ -416,6 +444,22 @@ async function handleCloudApi(req, res, u) {
       const data = JSON.parse(body);
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
+      }
+      // 同角色(enSeed)拒絕用較貧／較舊進度覆蓋雲端（防多開／舊分頁洗白）
+      if (fs.existsSync(file)) {
+        try {
+          const existing = JSON.parse(fs.readFileSync(file, "utf8"));
+          const exSeed = String((existing && existing.p && existing.p.enSeed) || "");
+          const inSeed = String((data.p && data.p.enSeed) || "");
+          if (exSeed && inSeed && exSeed === inSeed && !cloudSaveBeats(data, existing)) {
+            return json(res, 409, {
+              ok: false,
+              error: "stale_save",
+              message: "伺服器存檔較新或進度較高，已拒絕較舊上傳，避免覆蓋洗白。",
+              meta: cloudFileMeta(file),
+            });
+          }
+        } catch (e) {}
       }
       // 雲端存檔時同步鎖定角色名稱（全站唯一）；若被他人佔用或試圖改名則拒絕寫入
       const display = normalizeCharName(data.p && data.p.name);
@@ -971,6 +1015,40 @@ async function handlePartyApi(req, res, u) {
     });
   }
 
+  // 線上玩家名單（組隊搜尋／邀請）
+  if (u === "/api/party/online" && req.method === "GET") {
+    partyCleanupStale(Date.now());
+    const url = new URL(req.url || "/", "http://localhost");
+    const q = String(url.searchParams.get("q") || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 24);
+    const selfAccount = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    const selfSlot = Math.max(0, Math.min(8, Number(url.searchParams.get("slot")) || 0));
+    const selfName = partySanitizeName(url.searchParams.get("name"));
+    const selfKey = partyMemberKey(selfAccount, selfSlot, selfName);
+    const list = [];
+    for (const pre of partyPresence.values()) {
+      if (!pre || !pre.name) continue;
+      if (selfKey && pre.key === selfKey) continue;
+      if (q && String(pre.name).toLowerCase().indexOf(q) < 0) continue;
+      list.push({
+        name: pre.name,
+        lv: pre.lv || 1,
+        cls: pre.cls || "",
+        mapName: pre.mapName || pre.mapId || "",
+        classic: !!pre.classic,
+        inParty: !!partyFindByMemberKey(pre.key),
+      });
+      if (list.length >= 40) break;
+    }
+    list.sort((a, b) => String(a.name).localeCompare(String(b.name), "zh-Hant"));
+    return json(res, 200, { ok: true, players: list });
+  }
+
   if (u === "/api/party/heartbeat" && req.method === "POST") {
     const body = await readBody(req);
     let data = {};
@@ -1044,14 +1122,18 @@ async function handlePartyApi(req, res, u) {
     const targetName = partySanitizeName(data.targetName);
     if (!targetName) return json(res, 400, { ok: false, error: "empty", message: "請輸入對方角色名稱。" });
     partyCleanupStale(Date.now());
+    const wantClassic = data.classic !== false;
     let target = null;
+    let fallback = null;
     for (const pre of partyPresence.values()) {
-      if (!pre) continue;
-      if (pre.name === targetName && pre.classic === (data.classic !== false)) {
+      if (!pre || pre.name !== targetName) continue;
+      if (pre.classic === wantClassic) {
         target = pre;
         break;
       }
+      if (!fallback) fallback = pre; // 經典／一般旗標不一致時仍允許同名邀請
     }
+    if (!target) target = fallback;
     if (!target) {
       return json(res, 404, { ok: false, error: "offline", message: "找不到線上的「" + targetName + "」。對方需登入並進入遊戲。" });
     }
