@@ -285,6 +285,10 @@
                 _rtParty = data.party || null;
                 rtPartyLog('已加入隊伍。');
                 rtPartyStart();
+                try {
+                    var btn = document.getElementById('btn-party');
+                    if (btn && typeof switchTab === 'function') switchTab('party', btn);
+                } catch (e) {}
             } else if (data && data.ok && !data.accepted) {
                 rtPartyLog('已拒絕組隊邀請。');
             } else if (data && data.message) {
@@ -373,20 +377,19 @@
         return cls || '';
     }
 
-    function rtPartyRender() {
-        var panel = document.getElementById('rt-party-panel');
+    function rtPartyRender(force) {
         var body = document.getElementById('rt-party-body');
-        if (!panel || !body) return;
+        if (!body) return;
         var inGame = false;
         try {
             var game = document.getElementById('game-screen');
             inGame = !!(game && !game.classList.contains('hidden') && typeof player !== 'undefined' && player && player.cls);
         } catch (e) {}
         if (!inGame) {
-            panel.style.display = 'none';
+            body.innerHTML = '<div class="rt-party-hint">進入遊戲後可與其他玩家即時組隊。</div>';
+            _rtPartyUiSig = '';
             return;
         }
-        panel.style.display = '';
 
         var account = rtPartyAccount();
         var sig = JSON.stringify({
@@ -395,7 +398,7 @@
             i: (_rtPartyInvites || []).map(function (x) { return x && x.id; }),
             k: rtPartyMyKey()
         });
-        if (sig === _rtPartyUiSig) return;
+        if (!force && sig === _rtPartyUiSig) return;
         _rtPartyUiSig = sig;
 
         if (!account) {
@@ -454,8 +457,13 @@
 
     function rtPartyRenderInvites() {
         var box = document.getElementById('rt-party-invite-toast');
+        var dot = document.getElementById('btn-party-dot');
         if (!box) return;
         var list = _rtPartyInvites || [];
+        if (dot) {
+            if (list.length) dot.classList.remove('hidden');
+            else dot.classList.add('hidden');
+        }
         if (!list.length) {
             box.classList.add('hidden');
             box.innerHTML = '';
@@ -558,6 +566,7 @@
     window.rtPartyMemberCount = rtPartyMemberCount;
     window.rtPartyGet = function () { return _rtParty; };
     window.rtPartyStart = rtPartyStart;
+    window.rtPartyRender = rtPartyRender;
 
     (function watch() {
         function poke() {

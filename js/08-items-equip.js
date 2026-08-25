@@ -1354,12 +1354,10 @@ function renderStatusEffects() {
     // 🐾 v3.2.17 誘捕狀態（新夥伴系統·7 種）；舊「夥伴：項圈」與 taming 顯示已隨項圈系統移除
     if(typeof PET_LURES!=='undefined')Object.keys(PET_LURES).forEach(k=>{if((player.buffs[k]||0)>0)buffs.push(`<span class="text-pink-300 font-bold">${PET_LURES[k].n}</span>`);});
 
-    // 席琳套裝徽章已移除
-    if (false && player._sherineSetCnt) {
-        for (let _g in player._sherineSetCnt) {
-            let _n = Math.min(5, player._sherineSetCnt[_g]);
-            if (_n >= 2) buffs.push(`<span class="c-sherine font-bold">${_g} ${_n}/5</span>`);
-        }
+    // 🎁 新手啟程加成：掉寶／金幣／卡片 ×3（實時計時，與限時裝備同窗）
+    if (typeof newbieBoostActive === 'function' && newbieBoostActive()) {
+        let remain = (typeof newbieBoostRemainLabel === 'function') ? newbieBoostRemainLabel() : '';
+        buffs.push(`<span class="text-amber-300 font-bold" title="掉寶／金幣／卡片 ×3">啟程×3${remain ? '（' + remain + '）' : ''}</span>`);
     }
 
     // 魔法技能增益：凡是 player.buffs 中對應到 DB.skills 的鍵且 >0，皆顯示（僅中文名稱，依類別上色）

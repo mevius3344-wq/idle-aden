@@ -214,7 +214,8 @@ function acquireCard(name, tier, count) {
     if (typeof _cardBookOpen !== 'undefined' && _cardBookOpen && typeof renderCardBook === 'function') renderCardBook();
 }
 function _cardDropRoll(name, tier, rate, pool) {
-    let finalRate = (typeof partyDropRate === 'function') ? partyDropRate(rate) : rate;
+    let boost = (typeof newbieBoostMult === 'function') ? newbieBoostMult() : 1;   // 🎁 新手啟程：卡片掉率 ×3（48h）
+    let finalRate = ((typeof partyDropRate === 'function') ? partyDropRate(rate) : rate) * boost;
     if (Math.random() >= finalRate) return;
     if (pool && pool.length) name = pool[Math.floor(Math.random() * pool.length)];   // 🦊 變身鏈最終階：擲中後從整鏈隨機選一張（每階獨立選）
     acquireCard(name, tier, 1);   // 🎴 未開通→自動登錄(完成退溢出)；已開通→實體卡進背包

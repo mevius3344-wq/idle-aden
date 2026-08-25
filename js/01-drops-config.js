@@ -946,16 +946,38 @@ function claimNewbieEmbarkPack(opts) {
     }
     player.newbiePackClaimed = true;
     player.newbiePackExpireAt = expireAt;
+    player.newbieBoostExpireAt = expireAt;   // 🎁 48h：掉寶／金幣／卡片 ×3
     try {
         if (typeof calcStats === 'function') calcStats();
         if (typeof updateUI === 'function') updateUI();
         if (typeof renderTabs === 'function') renderTabs(true);
+        if (typeof renderStatusEffects === 'function') renderStatusEffects();
     } catch (e2) {}
     if (!opts.silent && typeof logSys === 'function') {
         let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
-        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 48 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span> 與 <span class="text-sky-300 font-bold">+8 裝備套組</span>。時效結束後裝備會自動消失。');
+        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 48 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。時效結束後裝備與加成會一併結束。');
     }
     return { ok: true, granted: granted, expireAt: expireAt };
+}
+
+/** 新手啟程加成結束時間（優先專用欄位；舊存檔沿用禮包時效） */
+function newbieBoostExpireAt() {
+    if (!player) return 0;
+    let a = Math.floor(Number(player.newbieBoostExpireAt) || 0);
+    if (a > 0) return a;
+    return Math.floor(Number(player.newbiePackExpireAt) || 0);
+}
+function newbieBoostActive(now) {
+    return newbieBoostExpireAt() > (now == null ? Date.now() : now);
+}
+/** 掉寶／金幣／卡片倍率：啟程加成期間 ×3 */
+function newbieBoostMult() {
+    return newbieBoostActive() ? 3 : 1;
+}
+function newbieBoostRemainLabel(now) {
+    let left = Math.max(0, newbieBoostExpireAt() - (now == null ? Date.now() : now));
+    if (left <= 0) return '';
+    return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
 }
 
 // ===== 🔧 架構#6：存檔版本與集中式預設值 =====
@@ -969,7 +991,7 @@ const SAVE_DEFAULTS = {
     masteryQuest: null, mastery: null, masteryChangeCnt: 0,
     prideBeatJenis: false, demonTempleOpen: false, flameAffinity: 0, trialStage: 0, prideRank: { best: null, last: null, isNew: false }, prideRankSherine: { best: null, last: null, isNew: false },
     riftRank: { best: null, last: null, isNew: false }, riftRankSherine: { best: null, last: null, isNew: false }, riftRewardMs: null,
-    newbiePackClaimed: false, newbiePackExpireAt: null,
+    newbiePackClaimed: false, newbiePackExpireAt: null, newbieBoostExpireAt: null,
     elfEle: null, poly: null, summon: null, charmed: null, hots: {},   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制實際用的是 hots(複數 dict)，改在此初始化與 js/05/js/13 重設點一致
     manualCd: {}, cardDex: {}, cardDexV: 0, equipDex: {}, miscDex: {},
     alloc:   { str:0, dex:0, con:0, int:0, wis:0, cha:0 },

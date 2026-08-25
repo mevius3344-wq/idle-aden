@@ -314,6 +314,8 @@
         #game-screen #btn-autosell { background:linear-gradient(180deg,#5a3827,#38251f 54%,#211817 100%) !important; border-color:#91604a !important; color:#e4c2ae !important; }
         #game-screen button[onclick="exportSave()"] { background:linear-gradient(180deg,#44394e,#2d2735 54%,#1b181f 100%) !important; border-color:#75667d !important; color:#d7d0df !important; }
         #game-screen #btn-clan { background:linear-gradient(180deg,#51343b,#35262b 54%,#21191c 100%) !important; border-color:#8b626b !important; color:#ead5d9 !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.35) !important; }
+        #game-screen #btn-party { background:linear-gradient(180deg,#1f3d36,#17302b 54%,#122420 100%) !important; border-color:#3d7a6a !important; color:#c6f0e4 !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.35) !important; position: relative; }
+        #game-screen #btn-party .logtab-dot { position: absolute; top: 4px; right: 6px; }
         #game-screen #btn-automation, #game-screen button[style*="#0c4a5e"] { background:linear-gradient(180deg,#354749,#263335 54%,#181f20 100%) !important; border-color:#6d7d7d !important; color:#cbd8d8 !important; }
         #game-screen button[style*="#4c1d95"] { background:linear-gradient(180deg,#49384b,#302633 54%,#1d191f 100%) !important; border-color:#806681 !important; color:#ded3df !important; }
         .list-item { padding: 0.75rem; border-bottom: 1px solid #4b3a31; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; width: 100%;}
@@ -2281,19 +2283,20 @@ button.classic-skill-cell { cursor:pointer; }
     #town-interaction-container:not(.hidden) { width: calc(100vw - 10px); height: calc(100dvh - 10px); max-width: none; max-height: none; border-width: 2px; }
     #town-interaction-container:not(.hidden) > div:first-child { margin-bottom: 6px !important; padding: 8px !important; }
 
-    /* 帳號登入框：手機縮小 */
+    /* 帳號登入框：手機縮小（沿用古典金飾風格） */
     .account-auth-panel {
         top: 42%;
-        width: min(300px, 88%);
+        width: min(318px, 90%);
         gap: 10px;
     }
-    .account-auth-game-title { font-size: clamp(1rem, 5.2vw, 1.35rem); letter-spacing: 0.12em; }
-    .account-auth-box { padding: 14px 12px 10px; }
-    .account-auth-field { margin-bottom: 8px; }
-    .account-auth-field label { margin-bottom: 3px; font-size: 12px; }
-    .account-auth-field input { padding: 7px 8px; font-size: 13px; }
-    .account-auth-remember { margin: 0 0 6px; font-size: 12px; gap: 6px; }
-    .account-game-btn { padding: 8px 6px; font-size: 12px; }
+    .account-auth-game-title { font-size: clamp(1.2rem, 5.4vw, 1.55rem); letter-spacing: 0.16em; }
+    .account-auth-tagline { font-size: 11px; letter-spacing: 0.18em; margin-top: 4px; }
+    .account-auth-box { padding: 16px 14px 12px; }
+    .account-auth-field { margin-bottom: 9px; }
+    .account-auth-field label { margin-bottom: 3px; font-size: 11px; }
+    .account-auth-field input { padding: 9px 10px; font-size: 14px; min-height: 40px; }
+    .account-auth-remember { margin: 0 0 8px; font-size: 12px; gap: 6px; }
+    .account-game-btn { padding: 10px 6px; font-size: 13px; min-height: 42px; }
     .account-auth-status { margin: 8px 0 0; font-size: 11px; min-height: 2.2em; }
 }
 
@@ -3663,13 +3666,13 @@ button.classic-skill-cell { cursor:pointer; }
 .wc-ch-party { color: #6ee7b7; }
 .wc-player-name { font-weight: 700; font-style: normal; }
 
-/* 🤝 即時組隊面板 */
-#rt-party-panel .panel-header { padding: 6px 8px; font-size: 0.95rem; }
-#rt-party-body { font-size: 12px; line-height: 1.35; color: #cbd5e1; }
-.rt-party-hint { color: #94a3b8; font-size: 11px; line-height: 1.4; }
+/* 🤝 即時組隊（右側「組隊」分頁） */
+#tab-party { color: #d8e6e1; }
+#rt-party-body { font-size: 13px; line-height: 1.4; color: #cbd5e1; }
+.rt-party-hint { color: #94a3b8; font-size: 12px; line-height: 1.45; }
 .rt-party-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rt-party-btn {
-    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 4px; cursor: pointer;
     border: 1px solid #475569; background: #334155; color: #e2e8f0;
 }
 .rt-party-btn:hover { background: #475569; }
@@ -3677,17 +3680,17 @@ button.classic-skill-cell { cursor:pointer; }
 .rt-party-btn-main:hover { background: #047857; }
 .rt-party-btn-danger { border-color: #b91c1c; background: #7f1d1d; color: #fecaca; }
 .rt-party-btn-kick {
-    margin-top: 4px; font-size: 10px; padding: 2px 8px;
+    margin-top: 4px; font-size: 11px; padding: 2px 8px;
     border-color: #7f1d1d; background: rgba(127,29,29,.35); color: #fca5a5;
 }
 .rt-party-invite-row { display: flex; gap: 6px; align-items: center; }
 .rt-party-invite-row input {
     flex: 1; min-width: 0; background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
-    border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none;
+    border-radius: 4px; padding: 5px 8px; font-size: 12px; outline: none;
 }
 .rt-party-roster { display: flex; flex-direction: column; gap: 6px; }
 .rt-party-row {
-    background: rgba(15,23,42,.55); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px;
+    background: rgba(15,23,42,.55); border: 1px solid #334155; border-radius: 6px; padding: 7px 9px;
 }
 .rt-party-row.me { border-color: #0f766e; background: rgba(13,148,136,.12); }
 .rt-party-row-top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
@@ -3710,7 +3713,6 @@ button.classic-skill-cell { cursor:pointer; }
     padding: 10px 12px; color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,.45);
 }
 @media (max-width: 768px) {
-    #rt-party-panel { order: -9; }
     .rt-party-invite-toast { right: 8px; left: 8px; max-width: none; bottom: 72px; }
 }
 
@@ -3745,124 +3747,194 @@ button.classic-skill-cell { cursor:pointer; }
 #tab-clan .clan-dip-enemy,  .clan-dip-enemy  { color: #fca5a5; }                                  /* 對方宣戰：淺紅 */
 #tab-clan .clan-dip-mutual, .clan-dip-mutual { color: #dc2626; text-shadow: 0 0 6px rgba(220,38,38,.55); }   /* 互相宣戰：深紅＋微光 */
 
-/* ===== 帳號密碼：大融合黑白暴走登入面板 ===== */
+/* ===== 帳號登入：古典金飾面板（貼合登入美術） ===== */
 .account-auth-panel {
   position: absolute;
   z-index: 20;
   left: 50%;
   top: 46%;
   transform: translate(-50%, -50%);
-  width: min(360px, 86%);
+  width: min(372px, 88%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   pointer-events: auto;
-  font-family: "Courier New", Courier, monospace, "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  font-family: Georgia, "Palatino Linotype", "Book Antiqua", "Microsoft JhengHei", "Noto Serif TC", serif;
+  animation: accountAuthIn 0.55s ease-out both;
+}
+.account-auth-panel.hidden { display: none !important; }
+@keyframes accountAuthIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+.account-auth-brand {
+  text-align: center;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.85));
 }
 .account-auth-game-title {
   margin: 0;
-  font-size: clamp(1.15rem, 2.8vw, 1.7rem);
+  font-size: clamp(1.45rem, 3.2vw, 2.05rem);
   font-weight: 800;
-  color: #ffffff;
-  text-shadow: 3px 3px #ff0000;
-  letter-spacing: 0.18em;
-  text-align: center;
-  line-height: 1.35;
+  letter-spacing: 0.22em;
+  line-height: 1.2;
+  color: #f5d46c;
+  text-shadow:
+    0 1px 0 #5a3d0e,
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(231, 180, 70, 0.35);
+}
+.account-auth-tagline {
+  margin: 6px 0 0;
+  font-size: clamp(11px, 1.1vw, 13px);
+  letter-spacing: 0.28em;
+  color: #d8c8a2;
+  text-shadow: 0 1px 3px #000;
+  opacity: 0.92;
 }
 .account-auth-box {
+  position: relative;
   width: 100%;
   box-sizing: border-box;
   padding: 22px 20px 16px;
-  background: rgba(0, 0, 0, 0.88);
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  border: 1px solid rgba(198, 156, 74, 0.78);
+  background:
+    linear-gradient(180deg, rgba(36, 28, 16, 0.94) 0%, rgba(12, 9, 5, 0.96) 55%, rgba(8, 6, 3, 0.98) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 232, 167, 0.08) inset,
+    0 18px 40px rgba(0, 0, 0, 0.72),
+    0 0 28px rgba(180, 130, 40, 0.12);
+  backdrop-filter: blur(2px);
   text-align: center;
+  overflow: hidden;
+}
+.account-auth-box::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(247, 218, 140, 0.55), transparent);
+  pointer-events: none;
+}
+.account-auth-box-ornament {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(241, 199, 92, 0.35), transparent);
+  pointer-events: none;
 }
 .account-auth-field {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   text-align: left;
 }
 .account-auth-field label {
   display: block;
   margin-bottom: 5px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  color: #cccccc;
+  letter-spacing: 0.12em;
+  color: #e7d7b5;
+  text-shadow: 0 1px 2px #000;
 }
 .account-auth-field input {
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 10px;
-  border: 1px solid #ffffff;
-  background: #222222;
-  color: #ffffff;
+  padding: 10px 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(168, 132, 68, 0.55);
+  background: rgba(8, 7, 5, 0.88);
+  color: #f7efd8;
   font-size: 14px;
-  font-family: inherit;
+  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
   outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.account-auth-field input::placeholder {
+  color: rgba(196, 178, 138, 0.45);
 }
 .account-auth-field input:focus {
-  border-color: #ff0000;
-  box-shadow: 0 0 6px rgba(255, 0, 0, 0.5);
+  border-color: rgba(241, 199, 92, 0.95);
+  background: rgba(18, 14, 8, 0.95);
+  box-shadow: 0 0 0 1px rgba(241, 199, 92, 0.25), 0 0 14px rgba(216, 160, 55, 0.22);
 }
 .account-auth-remember {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  margin: 2px 0 10px;
-  color: #cccccc;
-  font-size: 13px;
+  margin: 2px 0 12px;
+  color: #d2c3a0;
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   cursor: pointer;
   user-select: none;
 }
 .account-auth-remember input {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   margin: 0;
-  accent-color: #ff0000;
+  accent-color: #c9a227;
   cursor: pointer;
 }
 .account-auth-btns {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .account-game-btn {
   flex: 1 1 0;
-  background: #000000;
-  border: 2px solid #ffffff;
-  color: #ffffff;
   padding: 10px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(198, 156, 74, 0.82);
+  background: linear-gradient(180deg, rgba(42, 32, 16, 0.98), rgba(12, 8, 4, 0.98));
+  color: #f7e79d;
   font-size: 13px;
   font-weight: 800;
   font-family: inherit;
+  letter-spacing: 0.14em;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px #000, 0 0 7px rgba(231, 194, 91, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 167, 0.14), inset 0 -10px 14px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 .account-game-btn:hover {
-  background: #ffffff;
-  color: #000000;
+  color: #fff1ba;
+  border-color: rgba(241, 199, 92, 0.95);
+  background: linear-gradient(180deg, rgba(58, 44, 20, 0.98), rgba(18, 12, 6, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 167, 0.22), 0 0 16px rgba(216, 179, 80, 0.28);
+  transform: translateY(-1px);
+}
+.account-game-btn:active {
+  transform: translateY(0);
 }
 .account-game-btn.account-btn-login {
-  border-color: #ff4d4d;
-  color: #ff4d4d;
+  border-color: rgba(232, 176, 72, 0.95);
+  color: #ffe9a8;
+  background: linear-gradient(180deg, rgba(92, 62, 18, 0.98), rgba(36, 22, 6, 0.98));
 }
 .account-game-btn.account-btn-login:hover {
-  background: #ff4d4d;
-  color: #ffffff;
+  color: #fff8d6;
+  border-color: #f3c86a;
+  background: linear-gradient(180deg, rgba(118, 78, 22, 0.98), rgba(48, 30, 8, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 167, 0.28), 0 0 18px rgba(232, 176, 72, 0.38);
 }
 .account-auth-status {
-  margin: 14px 0 0;
-  min-height: 2.6em;
+  margin: 12px 0 0;
+  min-height: 2.4em;
   font-size: 12px;
   line-height: 1.45;
-  color: #ffcc00;
+  color: #d8c48a;
+  text-shadow: 0 1px 2px #000;
 }
-.account-auth-status.ok { color: #00ff66; }
-.account-auth-status.err { color: #ff4d4d; }
+.account-auth-status.ok { color: #9ddea8; }
+.account-auth-status.err { color: #f0a090; }
 /* 手機收合鈕：桌面永遠隱藏（僅窄螢幕 media 內才可能顯示） */
 .mobile-tab-collapse-btn { display: none !important; }
 #st-class.st-class-unnamed {

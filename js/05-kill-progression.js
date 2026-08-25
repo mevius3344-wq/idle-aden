@@ -411,6 +411,7 @@ function killMob(idx) {
             g = Math.max(1, Math.floor(g * (0.9 + Math.random() * 0.2)));   // 💰 最終金額額外浮動 −10%～+10%
             // ⚠️v3.0.82 經典模式金幣÷2 已移除（一般＝經典；歷次：×1/10 → ×1/3 → ×1/2 → ×1）
             g = Math.floor(g * (1 + dollFieldVal('goldBonus') / 100) * partyRewardMult());   // 🪆 娃娃加成後再乘有效隊伍人數（最高 ×8）
+            if (typeof newbieBoostMult === 'function') g = Math.floor(g * newbieBoostMult());   // 🎁 新手啟程：金幣 ×3（48h）
             g = Math.max(1, Math.floor(Number(g) || 0));
             if (typeof addPlayerGold === 'function') addPlayerGold(g);
             else player.gold = (Number(player.gold) || 0) + g;
@@ -513,6 +514,7 @@ function killMob(idx) {
     // === 怪物專屬掉落（依「怪物掉落資料.md」）：每樣物品各自獨立判定一次 ===
     let dropList = _kbNoReward ? [] : (MOB_DROPS[mob.n] || []);   // 🔧 魔獸軍王之室：除頭目外不掉落物品
     let _dropBase = (mob._grace ? 10 : (mob._sherine ? (mob._sherineMad ? 5 : 3) : 1));   // 🔮 席琳的世界 ×3（瘋狂×5）／恩賜怪 ×10
+    if (typeof newbieBoostMult === 'function') _dropBase *= newbieBoostMult();   // 🎁 新手啟程：掉寶 ×3（48h）
     let _dropMult = _dropBase * classicDropMult() * partyRewardMult();   // 席琳／恩賜／模式倍率後再乘有效隊伍人數（最高 ×8）
     dropList.forEach(entry => {
         let itemId = entry[0];

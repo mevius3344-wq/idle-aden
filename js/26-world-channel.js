@@ -2368,7 +2368,7 @@ function worldChannelAsk() {
             let classic = !!player.classicMode;
             let online = peers.filter(s => s && !!s.classic === classic);
             if (!online.length) {
-                _chatAppend('party', '<span class="wc-sys">尚未加入即時組隊。請於左側「即時組隊」建立或接受邀請。</span>');
+                _chatAppend('party', '<span class="wc-sys">尚未加入即時組隊。請於右側「組隊」分頁建立或接受邀請。</span>');
                 return;
             }
         }
