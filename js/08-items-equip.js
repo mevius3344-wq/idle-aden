@@ -1492,13 +1492,6 @@ function _updateUIImpl() {
     document.getElementById('bar-hp').style.width = `${Math.max(0, (player.hp/player.mhp)*100)}%`;
     document.getElementById('txt-mp').innerText = `${Math.floor(player.mp)}/${Math.floor(player.mmp)}`;
     document.getElementById('bar-mp').style.width = `${Math.max(0, (player.mp/player.mmp)*100)}%`;
-    // 📱 手機置頂常駐 HP/MP 細條：同步主血條數值（桌機隱藏，更新無副作用）
-    { let _mh = document.getElementById('mv-hp-fill'); if (_mh) {
-        _mh.style.width = `${Math.max(0, (player.hp/player.mhp)*100)}%`;
-        document.getElementById('mv-hp-txt').innerText = `${Math.floor(player.hp)}/${Math.floor(player.mhp)}`;
-        document.getElementById('mv-mp-fill').style.width = `${Math.max(0, (player.mp/player.mmp)*100)}%`;
-        document.getElementById('mv-mp-txt').innerText = `${Math.floor(player.mp)}/${Math.floor(player.mmp)}`;
-    } }
     // 🏰 v3.7.96 城堡護衛 v2：改為隊伍面板實體 HP 卡（renderGuardTeamHTML·js/31）；舊「主狀態欄承擔傷害護衛條」已移除。
     let nxtE = getExpReq(player.lv);
     let pct = player.lv >= 100 ? 100 : (nxtE > 0 && isFinite(nxtE) ? (player.exp / nxtE) * 100 : 0);

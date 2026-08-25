@@ -961,7 +961,7 @@
         @keyframes vfxLvFlash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
         @keyframes vfxBossFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
 
-        #mobile-vitals { display: none !important; }   /* 🖥️ 桌面預設隱藏；手機斷點於檔案後段啟用 */
+        #mobile-vitals { display: none !important; }   /* 已移除手機置頂細條；狀態改由 #status-panel 置頂 */
 
         /* 🖥️ 桌面高解析度清晰度：略增文字與圖示銳利度（1920/2560/3840 通用，效果輕微、不改版面） */
         html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
@@ -2054,32 +2054,65 @@ button.classic-skill-cell { cursor:pointer; }
     }
     #game-screen.hidden { display: none !important; }
 
-    #mobile-vitals {
+    /* 狀態欄（職業／等級／AC／MR／金幣／血條）置頂，取代舊 mobile-vitals */
+    #col-left {
+        order: -10;
+        width: 100% !important;
+        min-width: 0;
+        flex: 0 0 auto;
+        gap: 4px !important;
+    }
+    #col-center { order: 1; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 5px !important; }
+    #col-right { order: 3; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 5px !important; min-height: 0; }
+
+    #status-panel {
         position: sticky;
         top: 0;
         z-index: 70;
-        order: -10;
-        display: flex !important;
-        align-items: center;
-        gap: 6px;
-        width: 100%;
-        min-height: 40px;
-        padding: 4px 6px;
-        border: 1px solid #8d6846;
-        border-radius: 4px;
-        background: linear-gradient(180deg, rgba(48,47,57,.98), rgba(28,27,34,.98));
-        box-shadow: 0 4px 12px rgba(0,0,0,.72);
+        margin: 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,.55);
+        background-color: rgba(30, 41, 59, 0.96) !important;
     }
-    #mobile-vitals .mv-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; flex: 1 1 auto; min-width: 0; }
-    #mobile-vitals .mv-row { display: flex; align-items: center; gap: 3px; min-width: 0; }
-    #mobile-vitals .mv-label { width: 18px; flex: 0 0 18px; font-size: 10px; font-weight: 800; }
-    #mobile-vitals .mv-bar { position: relative; height: 16px; flex: 1 1 auto; min-width: 0; overflow: hidden; border: 1px solid #5f5148; border-radius: 2px; background: #15151b; }
-    #mobile-vitals .mv-bar > div { height: 100%; }
-    #mobile-vitals .mv-bar > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 800; text-shadow: 0 1px 2px #000; }
-    #col-center, #col-left, #col-right { width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 5px !important; }
-    #col-center { order: 1; }
-    #col-left { order: 2; }
-    #col-right { order: 3; min-height: 0; }
+    #status-panel .panel-header {
+        padding: 4px 8px !important;
+        font-size: 13px !important;
+        min-height: 0;
+    }
+    #status-panel .status-compact-body {
+        padding: 4px 8px 6px !important;
+        gap: 4px !important;
+    }
+    #status-panel .status-level-row,
+    #status-panel .status-defense-row,
+    #status-panel .status-gold-row {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px 8px;
+        align-items: center;
+    }
+    #status-panel .status-level-row { grid-column: 1 / -1; display: flex !important; }
+    #status-panel .status-defense-row {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        flex-direction: unset;
+        gap: 4px 10px;
+    }
+    #status-panel .status-gold-row { display: flex !important; }
+    #status-panel #st-lv,
+    #status-panel #st-ac,
+    #status-panel #st-mr,
+    #status-panel #st-gold {
+        font-size: 0.92rem !important;
+        line-height: 1.2 !important;
+    }
+    #status-panel .status-vitals-row {
+        margin-top: 1px;
+    }
+    #status-panel .status-exp-bar {
+        height: 8px;
+        width: 100%;
+    }
+    #squad-panel .panel-header { padding: 5px 8px; }
 
     #map-view-panel { flex: 0 0 auto !important; min-height: 0; }
     #map-view-panel > .panel-header {
@@ -2098,7 +2131,7 @@ button.classic-skill-cell { cursor:pointer; }
     #map-view-panel > .panel-header #map-select { flex: 1 1 calc(62% - 2px); }
     #map-view-panel > .panel-header #pride-floor-indicator { flex: 1 0 100%; padding: 2px 4px !important; text-align: center; font-size: 11px !important; }
 
-    /* 狩獵／城鎮框：縮高度，減少整頁捲動長度 */
+    /* 狩獵／城鎮框：狀態置頂後可加大戰鬥畫面 */
     #battle-view.area-fit:not(.hidden),
     #battle-view:not(.area-fit):not(.hidden),
     #town-view:not(.hidden) {
@@ -2106,14 +2139,14 @@ button.classic-skill-cell { cursor:pointer; }
         max-width: 100%;
         aspect-ratio: 16 / 9;
         height: auto;
-        max-height: min(38vw, 168px);
+        max-height: min(52vw, 240px);
         min-height: 0;
     }
     #battle-view { padding: 4px !important; }
     #battle-view.area-fit:has(.boss-slot) { padding: 0 !important; }
     #battle-view.area-fit #mob-list,
     #battle-view.area-fit #mob-list:has(.boss-slot),
-    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(72px, 28vw, 118px); gap: 2px !important; }
+    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(96px, 36vw, 160px); gap: 2px !important; }
     #battle-view.area-fit .mob-target { padding: 2px; min-width: 0; }
     #battle-view .mob-name { font-size: 10px; line-height: 1.1; }
     #town-npc-map { width: 100%; height: 100%; }
@@ -2130,7 +2163,7 @@ button.classic-skill-cell { cursor:pointer; }
     #status-panel .panel-header, #squad-panel .panel-header { padding: 5px 8px; }
     #squad-tab-team, #squad-tab-skill { max-height: none; }
 
-    #col-right > .tab-bar { position: sticky; top: 46px; z-index: 65; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4px !important; padding: 4px !important; }
+    #col-right > .tab-bar { position: sticky; top: 0; z-index: 65; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4px !important; padding: 4px !important; }
     #col-right > .tab-bar .btn { min-height: 34px; padding: 4px 2px !important; font-size: 12px !important; }
     /* 手機：類別內容預設收合，點分頁才展開，避免一進來就拉長捲動 */
     #tab-content-panel {
