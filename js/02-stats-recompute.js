@@ -739,6 +739,7 @@ d.mr += (baseMr + bonusMr);
     for (let _lk in p.eq) { let _li = p.eq[_lk]; if (_li) { let _ld = DB.items[_li.id]; if (_ld && _ld.allLures) { p._allLures = true; break; } } }
 
     // ===== 🔧 負重系統：上限=(floor((3力+2體)/5)+1)×50；腰帶/負重強化提供額外上限；依%套用攻速懲罰 =====
+    // ⚖️ 負重機制減少 50%：裝備實際計入重量 ×0.5（道具說明上的表定重量不變）
     {
         let _wbase = (Math.floor((3 * d.str + 2 * d.con) / 5) + 1) * 50;
         let _cap = 0, _cur = 0;
@@ -754,6 +755,7 @@ d.mr += (baseMr + bonusMr);
         if (d._equipWeightBonus) _cap += d._equipWeightBonus;   // 🗡️ 裝備收集冊：單手/雙手鈍器/臂甲/腰帶部位全收集 → 負重上限加成
         if (d._miscWeightBonus) _cap += d._miscWeightBonus;   // 🧰 道具收集冊：藥水/卷軸類全收集 → 負重上限加成
         if (_shN('狂怒') >= 2) _cap += 500;   // 😡 狂怒 2/5：負重上限 +500
+        _cur = Math.floor(_cur * 0.5);
         let _limit = _wbase + _cap;
         let _pct = _limit > 0 ? Math.floor(_cur / _limit * 100) : 999;
         let _tier = _pct <= 49 ? 0 : (_pct <= 81 ? 1 : (_pct <= 99 ? 2 : 3));
