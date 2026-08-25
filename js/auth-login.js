@@ -383,11 +383,17 @@
         window.IpSessionLimit.release();
       } catch (e) {}
     }
+    // 先把本機存檔刷上雲端，再清快取（避免雲端空／部署後登出把角色洗掉）
+    try {
+      if (window.cloudFlushLocalToCloud && typeof window.cloudFlushLocalToCloud === "function") {
+        window.cloudFlushLocalToCloud();
+      }
+    } catch (e) {}
     try {
       if (window.cloudClearLocalCache && typeof window.cloudClearLocalCache === "function") {
         window.cloudClearLocalCache();
       }
-    } catch (e) {}
+    } catch (e2) {}
     setSession("");
     showLoggedOut();
     setStatus("已登出。", "ok");

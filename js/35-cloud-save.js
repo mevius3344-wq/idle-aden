@@ -295,7 +295,49 @@
     } catch (e) {}
   }
 
-  // 雲端尚空時，把本機既有存檔上傳當種子（僅限同帳號手動遷移；登入流程不再呼叫）
+  function _bundleHasPlayableSlots(bundle) {
+    if (!bundle || !bundle.slots) return false;
+    var keys = Object.keys(bundle.slots);
+    for (var i = 0; i < keys.length; i++) {
+      var data = bundle.slots[keys[i]];
+      if (data && typeof data === 'object' && data.p) return true;
+    }
+    return false;
+  }
+
+  /** 同步把本機角色／倉庫／寵物上傳雲端（登出前、雲端空時種子用） */
+  function cloudFlushLocalToCloud() {
+    if (!cloudCanSync() || typeof _lzGet !== 'function') return false;
+    var any = false;
+    for (var i = 1; i <= 8; i++) {
+      try {
+        var raw = _lzGet('lineage_idle_save_' + i);
+        var data = _parseLzPayload(raw);
+        if (!data || !data.p) continue;
+        var r = _xhrJson('PUT', _base() + '/slot/' + i, JSON.stringify(data), true);
+        if (r && r.ok) any = true;
+      } catch (e) {}
+    }
+    ['warehouse', 'warehouse_classic', 'pets', 'pets_classic'].forEach(function (name) {
+      try {
+        var key =
+          name.indexOf('warehouse') === 0
+            ? (typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse') +
+              (name.indexOf('classic') >= 0 ? '_classic' : '')
+            : (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') +
+              (name.indexOf('classic') >= 0 ? '_classic' : '');
+        var raw = _lzGet(key);
+        if (raw == null || raw === '') return;
+        var obj =
+          name.indexOf('pets') === 0 ? _parseLzPayload(raw) || JSON.parse(raw) : JSON.parse(raw);
+        var r2 = _xhrJson('PUT', _base() + '/shared/' + encodeURIComponent(name), JSON.stringify(obj == null ? {} : obj), true);
+        if (r2 && r2.ok) any = true;
+      } catch (e2) {}
+    });
+    return any;
+  }
+
+  // 雲端尚空時，把本機既有存檔上傳當種子（僅補 404；不覆蓋雲端既有）
   function cloudBootstrapFromLocal() {
     if (!cloudCanSync()) return;
     for (var i = 1; i <= 8; i++) {
@@ -338,22 +380,33 @@
     });
   }
 
+  /**
+   * 登入／重整同步雲端。
+   * ⚠️ 絕不可在雲端為空／失敗時先清本機（Render 暫存碟重佈署會清空雲端 → 舊邏輯會把本機一併洗白）。
+   */
   function cloudSyncOnLogin() {
     if (!cloudCanSync()) return Promise.resolve(false);
     return fetch(_base() + '/bundle')
       .then(function (res) {
         return res.json().then(function (data) {
-          cloudClearLocalCache();
-          var hasSlots = data && data.slots && Object.keys(data.slots).length > 0;
-          var hasShared = data && data.shared && Object.keys(data.shared).length > 0;
-          if (hasSlots || hasShared) {
+          if (_bundleHasPlayableSlots(data)) {
+            cloudClearLocalCache();
             cloudApplyBundle(data);
             return true;
+          }
+          // 雲端無角色：保留本機，並把本機回填雲端（修復部署洗雲端後的空洞）
+          try {
+            cloudFlushLocalToCloud();
+          } catch (e) {
+            try {
+              cloudBootstrapFromLocal();
+            } catch (e2) {}
           }
           return false;
         });
       })
       .catch(function () {
+        // 網路失敗：絕對不清本機
         return false;
       });
   }
@@ -369,6 +422,7 @@
   window.cloudPullBeforeLoad = cloudPullBeforeLoad;
   window.cloudPullBundleSync = cloudPullBundleSync;
   window.cloudBootstrapFromLocal = cloudBootstrapFromLocal;
+  window.cloudFlushLocalToCloud = cloudFlushLocalToCloud;
   window.cloudClearLocalCache = cloudClearLocalCache;
   window.cloudSyncOnLogin = cloudSyncOnLogin;
 })();
