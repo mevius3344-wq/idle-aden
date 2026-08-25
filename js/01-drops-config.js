@@ -980,6 +980,22 @@ function newbieBoostRemainLabel(now) {
     return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
 }
 
+// ===== 全服經驗活動（固定截止時間·所有客戶端同窗）=====
+// 2026-08-25 15:45（UTC+8）起 ×5，48 小時後回復 ×1
+const SERVER_EXP_EVENT_MULT = 5;
+const SERVER_EXP_EVENT_EXPIRE_AT = Date.parse('2026-08-27T15:45:00+08:00');
+function serverExpEventActive(now) {
+    return (now == null ? Date.now() : now) < SERVER_EXP_EVENT_EXPIRE_AT;
+}
+function serverExpEventMult(now) {
+    return serverExpEventActive(now) ? SERVER_EXP_EVENT_MULT : 1;
+}
+function serverExpEventRemainLabel(now) {
+    let left = Math.max(0, SERVER_EXP_EVENT_EXPIRE_AT - (now == null ? Date.now() : now));
+    if (left <= 0) return '';
+    return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
+}
+
 // ===== 🔧 架構#6：存檔版本與集中式預設值 =====
 // 存檔寫入 v 欄位（SAVE_VERSION）；loadGame 在跑完「轉換型」舊檔遷移後呼叫 applySaveDefaults()
 // 統一補齊缺漏欄位（含巢狀物件的個別 key），不覆蓋既有值。

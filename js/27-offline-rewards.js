@@ -541,6 +541,7 @@
         let base = Math.max(0, Number(mob && mob.exp) || 0);
         let bonus = typeof partyExpBonusPct === 'function' ? Number(partyExpBonusPct()) || 0 : 0;
         let ally = Math.floor(base * (1 + bonus / 100));
+        if (typeof serverExpEventMult === 'function') ally = Math.floor(ally * serverExpEventMult());
         let doll = typeof dollFieldVal === 'function' ? Number(dollFieldVal('expBonus')) || 0 : 0;
         return {
             pet: Math.max(0, Math.floor(ally * (1 + doll / 100))),

@@ -1354,6 +1354,12 @@ function renderStatusEffects() {
     // 🐾 v3.2.17 誘捕狀態（新夥伴系統·7 種）；舊「夥伴：項圈」與 taming 顯示已隨項圈系統移除
     if(typeof PET_LURES!=='undefined')Object.keys(PET_LURES).forEach(k=>{if((player.buffs[k]||0)>0)buffs.push(`<span class="text-pink-300 font-bold">${PET_LURES[k].n}</span>`);});
 
+    // 🎉 全服經驗活動
+    if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
+        let remain = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
+        let mult = (typeof serverExpEventMult === 'function') ? serverExpEventMult() : 5;
+        buffs.push(`<span class="text-yellow-300 font-bold" title="全服打怪經驗 ×${mult}">經驗×${mult}${remain ? '（' + remain + '）' : ''}</span>`);
+    }
     // 🎁 新手啟程加成：掉寶／金幣／卡片 ×3（實時計時，與限時裝備同窗）
     if (typeof newbieBoostActive === 'function' && newbieBoostActive()) {
         let remain = (typeof newbieBoostRemainLabel === 'function') ? newbieBoostRemainLabel() : '';

@@ -1669,6 +1669,10 @@ function startGame() {
     applySherineTheme();
     startGameTimers();
     logSys(`===== 歡迎來到天堂放置冒險 =====`);
+    if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
+        let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
+        logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);
+    }
     if (typeof applyGlobalAutoSellSettings === 'function') applyGlobalAutoSellSettings();   // 🔧 v2.6.91 功能5：新角色套用全域自動販賣設定（若已啟用共用）
     saveGame();   // 🔧 創角完成立即存檔：先前要等 5 分鐘自動存檔，期間關閉頁面角色會直接消失
 }
@@ -2234,6 +2238,10 @@ function loadGame() {
         // 計時器統一由 startGameTimers() 註冊（內含去重），含每 5 分鐘自動存檔。
         startGameTimers();
         logSys(`===== 歡迎回來 =====`);
+        if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
+            let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
+            logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);
+        }
         if (_masteryRepair && _masteryRepair.reset) {
             if (_masteryRepair.reason === 'class-mismatch') {
                 logSys('<span class="text-amber-300 font-bold">已修復舊版刪角殘留的跨職業精通資料；此角色可重新向威頓村的漢接取精通任務。</span>');
