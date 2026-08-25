@@ -1641,7 +1641,7 @@ function startGame() {
     updateClassPotionRows();
     renderSkillSelects();
     
-    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 3 小時）
+    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 48 小時）
     try {
         if (typeof claimNewbieEmbarkPack === 'function') {
             claimNewbieEmbarkPack({ equip: true, silent: false });

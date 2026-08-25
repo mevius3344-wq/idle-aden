@@ -348,7 +348,10 @@ player.inv.forEach(i => {
         const _dblAct = (d.type === 'wpn' || d.type === 'arm' || d.type === 'acc') ? 'equip'
             : ((i.id !== 'candle' && (d.type === 'pot' || d.type === 'skillbk' || d.type === 'scroll' || (d.type === 'misc' && d.eff && !d.noUse))) ? 'use' : null);
         if (_dblAct) {
-            el.onclick = () => { clearTimeout(window._invClickTimer); window._invClickTimer = setTimeout(() => openModal(i, false), 230); };
+            // 📱 觸控裝置略過雙擊延遲：單擊立刻開詳情，避免「閃一下／等很久才看得到」
+            let _openDelay = 230;
+            try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) _openDelay = 0; } catch (e) {}
+            el.onclick = () => { clearTimeout(window._invClickTimer); window._invClickTimer = setTimeout(() => openModal(i, false), _openDelay); };
             el.ondblclick = (ev) => {
                 clearTimeout(window._invClickTimer);
                 ev.preventDefault(); ev.stopPropagation();

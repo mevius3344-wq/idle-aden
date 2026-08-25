@@ -814,8 +814,8 @@ function invMergeBack(e) {
     return true;
 }
 
-// ===== 🎁 新手啟程禮包：職業專武 +12、套裝 +8，實時計時 3 小時後消失 =====
-const NEWBIE_EMBARK_MS = 3 * 60 * 60 * 1000;
+// ===== 🎁 新手啟程禮包：職業專武 +12、套裝 +8，實時計時 48 小時後消失 =====
+const NEWBIE_EMBARK_MS = 48 * 60 * 60 * 1000;
 const NEWBIE_EMBARK_PACK_ID = 'item_newbie_embark';
 const NEWBIE_EMBARK_WEAPONS = {
     royal: 'wpn_golden_scepter',
@@ -953,7 +953,7 @@ function claimNewbieEmbarkPack(opts) {
     } catch (e2) {}
     if (!opts.silent && typeof logSys === 'function') {
         let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
-        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 3 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span> 與 <span class="text-sky-300 font-bold">+8 裝備套組</span>。時效結束後裝備會自動消失。');
+        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 48 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span> 與 <span class="text-sky-300 font-bold">+8 裝備套組</span>。時效結束後裝備會自動消失。');
     }
     return { ok: true, granted: granted, expireAt: expireAt };
 }

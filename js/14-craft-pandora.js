@@ -1831,7 +1831,97 @@ window.onload = () => {
     // ⚠️ 先定義者勝：多件物品可能共用同一張圖（例：沙哈之箭借用 箭.png），後者若覆蓋 key 會讓前者的 hover tooltip 顯示成後者。
     function buildMap(){ ICON2ID = {}; for(let id in DB.items){ let d = DB.items[id]; if(d){ let k = getIconUrl(d); if(!(k in ICON2ID)) ICON2ID[k] = id; } } }
     function getTip(){ if(!tipEl){ tipEl = document.createElement('div'); tipEl.className = 'game-tooltip'; document.body.appendChild(tipEl); } return tipEl; }
-    function hideTip(){ if(tipEl){ tipEl.style.display = 'none'; tipEl._id = null; } }   // ⚠️ 一併清單例快取鍵：鍵只含 uid，物品「原地」變動（強化 +N／碧恩屬性賦予）後 uid 不變 → 不清就會一直顯示改動前的舊內容
+    let _tipHideTimer = null;
+    let _tipPinnedUntil = 0;
+    function hideTip(force){
+        if (!force && Date.now() < _tipPinnedUntil) return;
+        if (_tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+        _tipPinnedUntil = 0;
+        if(tipEl){ tipEl.style.display = 'none'; tipEl._id = null; }
+    }
+    function pinTip(ms){
+        _tipPinnedUntil = Date.now() + Math.max(1000, Number(ms) || 10000);
+        if (_tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+    }
+    function scheduleHideTip(delay){
+        if (Date.now() < _tipPinnedUntil) return;
+        if (_tipHideTimer) clearTimeout(_tipHideTimer);
+        _tipHideTimer = setTimeout(function(){ _tipHideTimer = null; hideTip(true); }, delay == null ? 180 : delay);
+    }
+    function tipHostOk(host){
+        if (!host) return false;
+        let ic = document.getElementById('interaction-content');
+        let eb = document.getElementById('equip-book');
+        return !!(
+            (ic && ic.contains(host)) ||
+            (eb && !eb.classList.contains('hidden') && eb.contains(host)) ||
+            host.hasAttribute('data-tip-skill') ||
+            host.hasAttribute('data-tip-id') ||
+            host.hasAttribute('data-tip-uid')
+        );
+    }
+    function placeTipAt(clientX, clientY){
+        let el = getTip();
+        el.style.display = 'block';
+        let pad = 16, w = el.offsetWidth, h = el.offsetHeight;
+        let x = clientX + pad, y = clientY + pad;
+        if(x + w > window.innerWidth - 6) x = clientX - pad - w;
+        if(y + h > window.innerHeight - 6) y = clientY - pad - h;
+        el.style.left = Math.max(4, x) + 'px';
+        el.style.top = Math.max(4, y) + 'px';
+    }
+    function fillTipFromHost(host){
+        if (!tipHostOk(host)) return false;
+        let el = getTip();
+        let tSkill = host.getAttribute('data-tip-skill');
+        let tUid = host.getAttribute('data-tip-uid');
+        let tId = host.getAttribute('data-tip-id');
+        let tCraft = host.getAttribute('data-tip-craft');
+        if(tSkill){
+            if(el._id !== 'SK:'+tSkill){ let h = buildSkillTipHTML(tSkill); if(!h){ hideTip(true); return false; } el.innerHTML = h; el._id = 'SK:'+tSkill; }
+            return true;
+        }
+        if(tUid){
+            let tSrc = host.getAttribute('data-tip-src') || 'inv';
+            let key = 'I:' + tSrc + ':' + tUid;
+            if(el._id !== key){
+                let it = findTipItem(tSrc, tUid);
+                if(!it){ hideTip(true); return false; }
+                el.innerHTML = `<div class="font-bold text-base ${getItemColor(it)}" style="margin-bottom:4px;">${getItemFullName(it)}</div>`
+                    + `<div class="text-slate-300" style="font-size:12px;line-height:1.5;">${buildItemDescHTML(it)}</div>`;
+                el._id = key;
+            }
+            return true;
+        }
+        if(tId){
+            if(tCraft){
+                let key = 'CRAFT:' + tId;
+                if(el._id !== key){
+                    let d = DB.items[tId]; if(!d){ hideTip(true); return false; }
+                    let it = { id:tId, uid:'craft-tip', cnt:1, en:0, bless:false, anc:false, attr:false, seteff:false };
+                    el.innerHTML = `<div class="font-bold text-base ${getItemColor(it)}" style="margin-bottom:4px;">${getItemFullName(it)}</div>`
+                        + `<div class="text-slate-300" style="font-size:12px;line-height:1.5;">${buildItemDescHTML(it)}</div>`;
+                    el._id = key;
+                }
+                return true;
+            }
+            if(el._id !== ('BID:'+tId)){ let h = buildItemTipHTML(tId, true); if(!h){ hideTip(true); return false; } el.innerHTML = h; el._id = 'BID:'+tId; }
+            return true;
+        }
+        if(!ICON2ID) buildMap();
+        let img = host.querySelector('img');
+        let src = img ? img.getAttribute('src') : null;
+        let id = src ? ICON2ID[src] : null;
+        if(!id){ hideTip(true); return false; }
+        if(el._id !== id){ el.innerHTML = buildItemTipHTML(id); el._id = id; }
+        return true;
+    }
+    function isCoarsePointer(){
+        try {
+            if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+        } catch (e) {}
+        return ('ontouchstart' in window);
+    }
     // ===== 技能 tooltip（技能頁：游標移到技能上顯示能力）=====
     const SK_TYPE = { atk:'攻擊', heal:'治癒', buff:'增益', manual:'手動', convert:'轉換', summon:'召喚' };
     const SK_ELE = { fire:'火', water:'水', earth:'地', wind:'風', none:'無' };
@@ -2032,62 +2122,44 @@ window.onload = () => {
         } catch(e){ return null; }
     }
     document.addEventListener('mousemove', function(e){
+        // 觸控裝置改走 click/pointerup 釘住顯示，避免 hover 一閃即滅
+        if (isCoarsePointer()) return;
+        if (Date.now() < _tipPinnedUntil) return;
         let host = e.target && e.target.closest ? e.target.closest('.tip-host') : null;
-        let ic = document.getElementById('interaction-content');
-        let eb = document.getElementById('equip-book');
-        // 技能頁 host（data-tip-skill）與收集冊 host（data-tip-id）不限於 NPC 互動面板；其餘 host 仍限定於 interaction-content
-        let ok = host && ((ic && ic.contains(host)) || (eb && !eb.classList.contains('hidden') && eb.contains(host)) || host.hasAttribute('data-tip-skill') || host.hasAttribute('data-tip-id') || host.hasAttribute('data-tip-uid'));   // 🖱️ data-tip-uid（背包/裝備欄實例物品）不限面板，任何處 hover 即顯示完整資訊 tooltip
-        if(!ok){ hideTip(); return; }
-        let el = getTip();
-        let tSkill = host.getAttribute('data-tip-skill');
-        let tUid = host.getAttribute('data-tip-uid');
-        let tId = host.getAttribute('data-tip-id');
-        let tCraft = host.getAttribute('data-tip-craft');
-        if(tSkill){
-            // 技能頁：依技能 ID 顯示能力
-            if(el._id !== 'SK:'+tSkill){ let h = buildSkillTipHTML(tSkill); if(!h){ hideTip(); return; } el.innerHTML = h; el._id = 'SK:'+tSkill; }
-        } else if(tUid){
-            // 實例物品（倉庫/背包清單）：顯示完整資訊（含 +N、詞綴、套裝效果）
-            let tSrc = host.getAttribute('data-tip-src') || 'inv';
-            let key = 'I:' + tSrc + ':' + tUid;
-            if(el._id !== key){
-                let it = findTipItem(tSrc, tUid);
-                if(!it){ hideTip(); return; }
-                el.innerHTML = `<div class="font-bold text-base ${getItemColor(it)}" style="margin-bottom:4px;">${getItemFullName(it)}</div>`
-                    + `<div class="text-slate-300" style="font-size:12px;line-height:1.5;">${buildItemDescHTML(it)}</div>`;
-                el._id = key;
-            }
-        } else if(tId){
-            if(tCraft){
-                // ⚒️ 製作成品：直接綁定 result ID，不再以 icon 反查（共用圖片不會抓錯物品）；沿用背包／裝備欄完整 tooltip，含寵物裝備能力。
-                let key = 'CRAFT:' + tId;
-                if(el._id !== key){
-                    let d = DB.items[tId]; if(!d){ hideTip(); return; }
-                    let it = { id:tId, uid:'craft-tip', cnt:1, en:0, bless:false, anc:false, attr:false, seteff:false };
-                    el.innerHTML = `<div class="font-bold text-base ${getItemColor(it)}" style="margin-bottom:4px;">${getItemFullName(it)}</div>`
-                        + `<div class="text-slate-300" style="font-size:12px;line-height:1.5;">${buildItemDescHTML(it)}</div>`;
-                    el._id = key;
-                }
-            } else {
-                // 🗡️ 收集冊：依基底物品 ID 顯示資訊（已收集裝備）
-                if(el._id !== ('BID:'+tId)){ let h = buildItemTipHTML(tId, true); if(!h){ hideTip(); return; } el.innerHTML = h; el._id = 'BID:'+tId; }   // 🗡️ 收集冊隱藏售價
-            }
-        } else {
-            // 商店/製作圖示：依 icon → 基底物品 ID 顯示
-            if(!ICON2ID) buildMap();
-            let img = host.querySelector('img');
-            let src = img ? img.getAttribute('src') : null;
-            let id = src ? ICON2ID[src] : null;
-            if(!id){ hideTip(); return; }
-            if(el._id !== id){ el.innerHTML = buildItemTipHTML(id); el._id = id; }
-        }
-        el.style.display = 'block';
-        let pad = 16, w = el.offsetWidth, h = el.offsetHeight;
-        let x = e.clientX + pad, y = e.clientY + pad;
-        if(x + w > window.innerWidth - 6) x = e.clientX - pad - w;
-        if(y + h > window.innerHeight - 6) y = e.clientY - pad - h;
-        el.style.left = Math.max(4, x) + 'px';
-        el.style.top = Math.max(4, y) + 'px';
+        if (!tipHostOk(host)) { scheduleHideTip(160); return; }
+        if (!fillTipFromHost(host)) return;
+        if (_tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+        placeTipAt(e.clientX, e.clientY);
     });
-    document.addEventListener('mousedown', hideTip);
+    // 點擊／觸控 tip-host：釘住說明（技能／物品），避免「顯示過快看不清」
+    document.addEventListener('pointerup', function(e){
+        let host = e.target && e.target.closest ? e.target.closest('.tip-host') : null;
+        if (!host || !tipHostOk(host)) {
+            // 點在說明框外才關；點說明框本身維持
+            if (tipEl && tipEl.style.display !== 'none' && !(e.target && tipEl.contains(e.target))) {
+                if (e.pointerType === 'touch' || e.pointerType === 'pen' || isCoarsePointer()) hideTip(true);
+            }
+            return;
+        }
+        let isTouch = (e.pointerType === 'touch' || e.pointerType === 'pen' || isCoarsePointer());
+        let isSkill = host.hasAttribute('data-tip-skill');
+        let src = host.getAttribute('data-tip-src');
+        // 背包／裝備欄會開 Modal（z-50），說明框 z-80 會蓋住→改交給 Modal，不釘 tip
+        if ((src === 'inv' || src === 'eq') && !isSkill) {
+            hideTip(true);
+            return;
+        }
+        // 桌面滑鼠：物品仍可靠 hover；技能點擊也釘住方便閱讀
+        if (!isTouch && !isSkill) return;
+        if (!fillTipFromHost(host)) return;
+        let cx = e.clientX, cy = e.clientY;
+        if (!Number.isFinite(cx) || !Number.isFinite(cy) || (cx === 0 && cy === 0)) {
+            let r = host.getBoundingClientRect();
+            cx = r.left + r.width / 2;
+            cy = r.top + r.height / 2;
+        }
+        placeTipAt(cx, cy);
+        pinTip(12000);
+    }, true);
+    // 不再在 mousedown 立刻關閉（點擊瞬間會把說明關掉，手機幾乎看不到）
 })();
