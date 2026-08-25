@@ -447,6 +447,7 @@ function whOneClickDeposit(){
     let deposited = 0, full = false;
     for(let it of player.inv.slice()){          // 用副本走訪，過程會改動 player.inv
         if(WH_NO_STORE.includes(it.id)) continue;   // 不可存入
+        if(typeof isRentalItem === 'function' && isRentalItem(it)) continue; // 限時裝備
         if(it.lock) continue;                        // 鎖定物品保護，不自動存入
         if(!whSigs.has(whSig(it))) continue;         // 倉庫沒有完全相同的 → 跳過
         let idx = player.inv.findIndex(i => i.uid === it.uid);
@@ -482,6 +483,7 @@ function whDeposit(uidv, qty){
     if(idx < 0) return;
     let it = player.inv[idx];
     if(WH_NO_STORE.includes(it.id)){ logSys(`<span class="text-red-400">此物品無法存入倉庫。</span>`); return; }
+    if(typeof isRentalItem === 'function' && isRentalItem(it)){ logSys(`<span class="text-red-400">限時裝備無法存入倉庫。</span>`); return; }
     if(it.lock){ logSys(`<span class="text-red-400">鎖定物品需先解鎖才能存入倉庫。</span>`); return; }
     // 🔧 複數物品可選數量：改讀面板「數量」輸入框（取代 prompt）；輸入空或 0 ＝整疊全部
     let total = it.cnt || 1;

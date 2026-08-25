@@ -776,7 +776,13 @@ const BUFF_NAMES = {   // buff 鍵 → 顯示名稱（DB.skills 查不到時使�
 // 遠古變體 true→'A'（其餘 'eternal'/'immortal'/'primordial' 原值）、屬性詞綴 attr。
 // 使用處：gainItem 堆疊、卸裝/換裝退回背包合併、倉庫一鍵存入(whSig)/堆疊(_whStackFind)、
 // 載入合併(consolidateInventory)、分頁重繪記憶簽章(renderTabs)。勿再各自手寫比對條件。
-function itemSig(it) { let _ams = Math.max(1, Math.min(3, Math.floor(Number(it.attrMagicStar) || 1))); return it.id + '|' + (it.en || 0) + '|' + (it.bless === true ? 'B' : (it.bless ? 'C' : 0)) + '|' + (it.anc === true ? 'A' : (it.anc || 0)) + '|' + (it.attr || '') + '|' + (it.seteff || '') + (it.attrMagic ? '|' + it.attrMagic + (_ams > 1 ? '@' + _ams : '') : ''); }   // 來源、uid、鎖定與廢品旗標不入鍵；同能力物品不論來源皆可疊加。
+function itemSig(it) {
+    let _ams = Math.max(1, Math.min(3, Math.floor(Number(it.attrMagicStar) || 1)));
+    let base = it.id + '|' + (it.en || 0) + '|' + (it.bless === true ? 'B' : (it.bless ? 'C' : 0)) + '|' + (it.anc === true ? 'A' : (it.anc || 0)) + '|' + (it.attr || '') + '|' + (it.seteff || '') + (it.attrMagic ? '|' + it.attrMagic + (_ams > 1 ? '@' + _ams : '') : '');
+    // 限時租借裝備：到期時間入簽章，避免與永久同強化值裝備誤併堆
+    if (it && it.expireAt) base += '|X' + Math.floor(Number(it.expireAt) || 0);
+    return base;
+}
 function sameItemSig(a, b) { return itemSig(a) === itemSig(b); }
 // 🔒 v3.6.92 「退回背包」的堆疊合併單一真相（卸裝/換裝/箭矢同步/副手同步/舊檔遷移共 6 處呼叫）：
 //    ① 併入同簽章堆疊——含鎖定疊（現行不變量＝同簽章永遠只有一格；舊制刻意跳過鎖定疊會多開一格）。
@@ -808,6 +814,150 @@ function invMergeBack(e) {
     return true;
 }
 
+// ===== 🎁 新手啟程禮包：職業專武 +12、套裝 +8，實時計時 3 小時後消失 =====
+const NEWBIE_EMBARK_MS = 3 * 60 * 60 * 1000;
+const NEWBIE_EMBARK_PACK_ID = 'item_newbie_embark';
+const NEWBIE_EMBARK_WEAPONS = {
+    royal: 'wpn_golden_scepter',
+    knight: 'wpn_blackflame_sword',
+    elf: 'wpn_redflame_bow',
+    mage: 'wpn_crystalwand',
+    dark: 'wpn_death_finger',
+    illusion: 'wpn_qigu_sapphire',
+    warrior: 'wpn_master_axe',
+    dragon: 'wpn_chain_annihilator',
+};
+const NEWBIE_EMBARK_ARMOR = [
+    { id: 'arm_49', en: 8 },   // 皮頭盔
+    { id: 'arm_66', en: 8 },   // 銀釘皮甲
+    { id: 'arm_87', en: 8 },   // 保護者斗篷
+    { id: 'arm_93', en: 8 },   // 皮長靴
+    { id: 'arm_100', en: 8 },  // 鋼鐵手套
+    { id: 'arm_103', en: 8 },  // 小盾牌（雙手武器會跳過）
+];
+function isRentalItem(it) {
+    return !!(it && Number(it.expireAt) > 0);
+}
+function rentalRemainMs(it, now) {
+    if (!isRentalItem(it)) return 0;
+    return Math.max(0, Math.floor(Number(it.expireAt) || 0) - (now == null ? Date.now() : now));
+}
+function formatRentalRemain(ms) {
+    ms = Math.max(0, Math.floor(Number(ms) || 0));
+    let sec = Math.floor(ms / 1000);
+    let h = Math.floor(sec / 3600);
+    let m = Math.floor((sec % 3600) / 60);
+    let s = sec % 60;
+    if (h > 0) return h + '小時' + m + '分';
+    if (m > 0) return m + '分' + s + '秒';
+    return s + '秒';
+}
+function grantRentalItem(id, en, expireAt, opts) {
+    if (!id || !DB.items[id]) return null;
+    opts = opts || {};
+    let d = DB.items[id];
+    if (d.w2h || d.isBow) {
+        // 雙手／弓：不發盾
+    }
+    let it = {
+        id: id,
+        uid: typeof uid === 'function' ? uid() : ('r' + Date.now() + Math.random()),
+        cnt: 1,
+        en: Math.max(0, Math.floor(Number(en) || 0)),
+        bless: false,
+        anc: false,
+        attr: false,
+        seteff: false,
+        lock: true,
+        junk: false,
+        expireAt: Math.floor(Number(expireAt) || 0),
+        rental: true,
+        noSell: true,
+    };
+    if (!Array.isArray(player.inv)) player.inv = [];
+    player.inv.push(it);
+    if (typeof registerEquipObtained === 'function') try { registerEquipObtained(id); } catch (e) {}
+    if (opts.equip && typeof equipItem === 'function') {
+        try { equipItem(it); } catch (e2) {}
+    }
+    return it;
+}
+function purgeExpiredRentalGear(silent) {
+    if (!player || typeof player !== 'object') return 0;
+    let now = Date.now();
+    let names = [];
+    let changed = false;
+    if (player.eq) {
+        Object.keys(player.eq).forEach(function (slot) {
+            let it = player.eq[slot];
+            if (!isRentalItem(it)) return;
+            if (rentalRemainMs(it, now) > 0) return;
+            names.push((DB.items[it.id] && DB.items[it.id].n) || it.id);
+            player.eq[slot] = null;
+            changed = true;
+        });
+    }
+    if (Array.isArray(player.inv)) {
+        let keep = [];
+        player.inv.forEach(function (it) {
+            if (!isRentalItem(it) || rentalRemainMs(it, now) > 0) {
+                keep.push(it);
+                return;
+            }
+            names.push((DB.items[it.id] && DB.items[it.id].n) || it.id);
+            changed = true;
+        });
+        if (changed) player.inv = keep;
+    }
+    if (!changed) return 0;
+    try {
+        if (typeof syncShahaArrow === 'function') syncShahaArrow();
+        if (typeof syncDualWield === 'function') syncDualWield();
+        if (typeof calcStats === 'function') calcStats();
+        if (typeof updateUI === 'function') updateUI();
+        if (typeof renderTabs === 'function') renderTabs(true);
+    } catch (e) {}
+    if (!silent && typeof logSys === 'function' && names.length) {
+        let uniq = [];
+        names.forEach(function (n) { if (uniq.indexOf(n) < 0) uniq.push(n); });
+        logSys('<span class="text-amber-300 font-bold">限時裝備時效已到，以下物品消散：</span> ' + uniq.join('、'));
+    }
+    return names.length;
+}
+function claimNewbieEmbarkPack(opts) {
+    opts = opts || {};
+    if (!player || !player.cls) return { ok: false, reason: 'noplayer' };
+    if (player.newbiePackClaimed) return { ok: false, reason: 'claimed' };
+    let wpnId = NEWBIE_EMBARK_WEAPONS[player.cls];
+    if (!wpnId || !DB.items[wpnId]) return { ok: false, reason: 'nowpn' };
+    let expireAt = Date.now() + NEWBIE_EMBARK_MS;
+    let granted = [];
+    let wpnDef = DB.items[wpnId];
+    let skipShield = !!(wpnDef && (wpnDef.w2h || wpnDef.isBow));
+    let wpn = grantRentalItem(wpnId, 12, expireAt, { equip: !!opts.equip });
+    if (wpn) granted.push(wpn);
+    NEWBIE_EMBARK_ARMOR.forEach(function (row) {
+        if (skipShield && row.id === 'arm_103') return;
+        let arm = grantRentalItem(row.id, row.en, expireAt, { equip: !!opts.equip });
+        if (arm) granted.push(arm);
+    });
+    if (player.cls === 'elf') {
+        try { if (typeof gainItem === 'function') gainItem('wpn_5', 3000, true, true); } catch (e) {}
+    }
+    player.newbiePackClaimed = true;
+    player.newbiePackExpireAt = expireAt;
+    try {
+        if (typeof calcStats === 'function') calcStats();
+        if (typeof updateUI === 'function') updateUI();
+        if (typeof renderTabs === 'function') renderTabs(true);
+    } catch (e2) {}
+    if (!opts.silent && typeof logSys === 'function') {
+        let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
+        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 3 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span> 與 <span class="text-sky-300 font-bold">+8 裝備套組</span>。時效結束後裝備會自動消失。');
+    }
+    return { ok: true, granted: granted, expireAt: expireAt };
+}
+
 // ===== 🔧 架構#6：存檔版本與集中式預設值 =====
 // 存檔寫入 v 欄位（SAVE_VERSION）；loadGame 在跑完「轉換型」舊檔遷移後呼叫 applySaveDefaults()
 // 統一補齊缺漏欄位（含巢狀物件的個別 key），不覆蓋既有值。
@@ -819,6 +969,7 @@ const SAVE_DEFAULTS = {
     masteryQuest: null, mastery: null, masteryChangeCnt: 0,
     prideBeatJenis: false, demonTempleOpen: false, flameAffinity: 0, trialStage: 0, prideRank: { best: null, last: null, isNew: false }, prideRankSherine: { best: null, last: null, isNew: false },
     riftRank: { best: null, last: null, isNew: false }, riftRankSherine: { best: null, last: null, isNew: false }, riftRewardMs: null,
+    newbiePackClaimed: false, newbiePackExpireAt: null,
     elfEle: null, poly: null, summon: null, charmed: null, hots: {},   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制實際用的是 hots(複數 dict)，改在此初始化與 js/05/js/13 重設點一致
     manualCd: {}, cardDex: {}, cardDexV: 0, equipDex: {}, miscDex: {},
     alloc:   { str:0, dex:0, con:0, int:0, wis:0, cha:0 },

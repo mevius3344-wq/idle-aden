@@ -1174,6 +1174,7 @@ const DB = {
         "item_ancientkey": { n: "古代鑰匙", p: 1, c: "text-blue-300", d: "試煉所需的材料。", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
         "item_nightvision": { n: "夜之視野", p: 1, c: "text-blue-300", d: "凝視黑暗也不失方向的祕術之眼，試煉所需的材料。", gachaWeight: 0 },
         "candle": { n: "回憶蠟燭", type: "misc", req: "all", p: 100000, c: "text-red-500", d: "點擊使用：六大屬性回到 Lv1，於資訊面板以 +／- 重新分配能力點數，按「確認」才生效（按「取消」則不消耗蠟燭）。同時退還已使用的萬能藥；若重置後魅力不足，超出上限的出戰寵物會自動返回保管。", eff: "reset", gachaWeight: 0 },
+        "item_newbie_embark": { n: "新手啟程禮包", type: "misc", req: "all", p: 0, c: "text-amber-300", eff: "newbie_pack", noSell: true, noJunk: true, gachaWeight: 0, d: "贈予初入冒險世界的旅人。開啟後依職業獲得限時 3 小時的 +12 專武與 +8 裝備套組；時效結束後裝備自動消失。每個角色僅能領取一次。" },
         "panacea_str": { n: "萬能藥(STR)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "傳說中能重塑筋骨的靈藥。", eff: "panacea", batchUse: true, pstat: "str", gachaWeight: 5 },
         "panacea_dex": { n: "萬能藥(DEX)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "飲下後身手如風的靈藥。", eff: "panacea", batchUse: true, pstat: "dex", gachaWeight: 5 },
         "panacea_con": { n: "萬能藥(CON)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "淬鍊體魄、固本培元的靈藥。", eff: "panacea", batchUse: true, pstat: "con", gachaWeight: 5 },

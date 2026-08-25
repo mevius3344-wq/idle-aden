@@ -448,7 +448,15 @@ function getItemFullName(item) {
     let cnt = item.cnt > 1 ? ` (${item.cnt})` : "";
     let setPrefix = '';   // 席琳套裝名冠詞已移除
     // let setPrefix = item.seteff ? item.seteff.slice(0, 2) : "";
-    return `${segs}<span class="${getItemColor(item)}">${en}${setPrefix}${d.n}${cnt}</span>`;
+    let rentalTag = '';
+    if (typeof isRentalItem === 'function' && isRentalItem(item)) {
+        let remain = typeof rentalRemainMs === 'function' ? rentalRemainMs(item) : 0;
+        let txt = typeof formatRentalRemain === 'function' ? formatRentalRemain(remain) : '';
+        rentalTag = remain > 0
+            ? ` <span class="text-amber-300 text-sm font-bold">〔限時 ${txt}〕</span>`
+            : ` <span class="text-red-400 text-sm font-bold">〔已到期〕</span>`;
+    }
+    return `${segs}<span class="${getItemColor(item)}">${en}${setPrefix}${d.n}${cnt}</span>${rentalTag}`;
 }
 
 // 🌅 遺物 鐮鼬的藥壺 potionBonus：掃玩家全裝備欄加總「治癒藥水恢復量 +%」（魔法娃娃的 potionBonus 另走 dollFieldVal·此處掃一般裝備/遺物）
@@ -525,6 +533,23 @@ function useItem(u, silent = false) {
         if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
         return;
     }
+    // 🎁 新手啟程禮包：開啟後發放限時 3 小時 +12 專武與 +8 裝備
+    if (d.eff === 'newbie_pack') {
+        if (silent) return;
+        if (typeof claimNewbieEmbarkPack !== 'function') return;
+        let r = claimNewbieEmbarkPack({ equip: true });
+        if (!r || !r.ok) {
+            if (r && r.reason === 'claimed') logSys('<span class="text-amber-300">此角色已領取過新手啟程禮包。</span>');
+            else logSys('<span class="text-red-400">無法開啟新手啟程禮包。</span>');
+            return;
+        }
+        item.cnt--;
+        if (item.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== item.uid);
+        if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
+        saveGame();
+        return;
+    }
+
     // 🎴 卡片：登錄圖鑑（已收錄則改賣出）
     //   🗑️ v3.5.87 移除 cardbook/equipbook 分派：兩本收集冊實體已無取得管道且 DB 定義移除（ensureCardBook/ensureEquipBook 讀檔即濾除·purgeOrphanItems 兜底），分派永不可達；收集冊由「收藏」面板開啟
     if (d.eff === 'card') { if (silent) return; if (typeof useCardItem === 'function') useCardItem(item); return; }
@@ -1137,6 +1162,10 @@ function doEnhance(targetUid, isEq = true) {
 
     let d = DB.items[target.id];
     if (isRelic(d) || (d && d.noEnhance)) { logSys(`<span class="c-relic">${getItemFullName(target)} 無法強化。</span>`); activeScroll = null; if (typeof closeModal === 'function') closeModal(); return; }   // 🏺 遺物/古老系列/娃娃：無法強化（防呆·enumeration 已濾除·此為直點路徑保險）
+    if (typeof isRentalItem === 'function' && isRentalItem(target)) {
+        logSys(`<span class="text-amber-300">${getItemFullName(target)} 為限時裝備，無法強化。</span>`);
+        activeScroll = null; if (typeof closeModal === 'function') closeModal(); return;
+    }
     let _cap = enhanceCap(d);   // 🔧 強化上限：武器+15 / 防具+15 / 飾品+5
     if ((Number(target.en) || 0) >= _cap) {   // 已達上限：不消耗卷軸，提示後返回
         logSys(`<span class="text-amber-300">${getItemFullName(target)} 已達強化上限（+${_cap}），無法再強化。</span>`);

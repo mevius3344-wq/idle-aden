@@ -578,6 +578,10 @@ function tick() {
         pvpPostKillWhisperTick();   // PVP：擊敗玩家後的一小時限時密語
     }
     if (state.ticks % 100 === 0) { try { refreshPandoraMarket(false); } catch (e) {} }   // 🔧 潘朵拉黑市：每 10 秒檢查是否到 10 分鐘換商品（含稀有公告）
+    // 🎁 限時裝備：每 5 秒檢查到期（新手啟程禮包等）
+    if (state.ticks % 50 === 0) {
+        try { if (typeof purgeExpiredRentalGear === 'function') purgeExpiredRentalGear(false); } catch (e) {}
+    }
     // 💰 擊殺金幣累積回報：每 30 秒刷一次到系統日誌（補上已移除的 flushAwaySummary）
     if (state.ticks % 300 === 0) {
         let _gAcc = Math.floor(Number(state._goldGainAcc) || 0);

@@ -1641,6 +1641,13 @@ function startGame() {
     updateClassPotionRows();
     renderSkillSelects();
     
+    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 3 小時）
+    try {
+        if (typeof claimNewbieEmbarkPack === 'function') {
+            claimNewbieEmbarkPack({ equip: true, silent: false });
+        }
+    } catch (e) {}
+
     // 👇 正確的新版起點邏輯
     let startMap = 'town_silver_knight';
     if (player.cls === 'mage') startMap = 'town_talking';
@@ -2112,6 +2119,7 @@ function loadGame() {
         // 🔧 架構#6：集中式預設值合併（放在所有「轉換型」遷移之後，作為缺漏欄位的統一保底）。
         // 日後新增欄位只需登錄於 SAVE_DEFAULTS；上方逐項 if(undefined) 為歷史遷移，不必再增列。
         applySaveDefaults(player);
+        try { if (typeof purgeExpiredRentalGear === 'function') purgeExpiredRentalGear(true); } catch (_rentE) {}
         if (typeof repairMasteryState === 'function') _masteryRepair = repairMasteryState(player);
         if (!player.siege || typeof player.siege !== 'object') player.siege = {};
         if (player.ismaelAccUsed && !(player.siege.accCdUntil > 0)) player.siege.accCdUntil = Date.now() + 24 * 3600 * 1000;

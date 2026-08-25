@@ -1340,7 +1340,17 @@ function openModal(item, isEq, slot) {
 
     // 只要是放在背包裡的物品，都顯示販賣價格
     if (!isEq) {
-         desc += `<br><span class="text-yellow-400 mt-2 block">販賣價格: ${sellPrice} 金幣</span>`;
+         if (typeof isRentalItem === 'function' && isRentalItem(item)) {
+             let remain = typeof rentalRemainMs === 'function' ? rentalRemainMs(item) : 0;
+             let txt = typeof formatRentalRemain === 'function' ? formatRentalRemain(remain) : '';
+             desc += `<br><span class="text-amber-300 mt-2 block font-bold">限時裝備：剩餘 ${txt}（到期自動消失・不可販售／強化／存倉）</span>`;
+         } else {
+             desc += `<br><span class="text-yellow-400 mt-2 block">販賣價格: ${sellPrice} 金幣</span>`;
+         }
+    } else if (typeof isRentalItem === 'function' && isRentalItem(item)) {
+         let remainEq = typeof rentalRemainMs === 'function' ? rentalRemainMs(item) : 0;
+         let txtEq = typeof formatRentalRemain === 'function' ? formatRentalRemain(remainEq) : '';
+         desc += `<br><span class="text-amber-300 mt-2 block font-bold">限時裝備：剩餘 ${txtEq}</span>`;
     }
     
     document.getElementById('modal-item-desc').innerHTML = desc;
@@ -1374,7 +1384,7 @@ function openModal(item, isEq, slot) {
     }
 
     // 👇 修改：為武器、防具、飾品加入專屬的「強化」按鈕 (加入 !d.isArrow 防呆，箭矢不顯示強化按鈕)
-    if (((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc') && !isMaxEnhanced(item) && !d.noEnhance) {   // 🔧 已達淬鍊（強化上限）：隱藏強化按鈕；🏛️ 無法強化的裝備（古老系列）不顯示強化鈕
+    if (((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc') && !isMaxEnhanced(item) && !d.noEnhance && !(typeof isRentalItem === 'function' && isRentalItem(item))) {   // 🔧 已達淬鍊（強化上限）：隱藏強化按鈕；🏛️ 無法強化的裝備（古老系列）不顯示強化鈕；🎁 限時裝備不可強化
         act += `<button class="col-span-2 w-full btn border-purple-700 bg-purple-900 hover:bg-purple-800 text-purple-200 py-3 text-lg font-bold mt-2" onclick="showEnhanceOptions('${item.uid}', ${isEq})">強化</button>`;
     }
 
@@ -1516,6 +1526,10 @@ function executeAutoSafeEnhance(targetUid, isEq, scrollId, goal) {
     }
 
     if (!target) return;
+    if (typeof isRentalItem === 'function' && isRentalItem(target)) {
+        logSys(`<span class="text-amber-300">${getItemFullName(target)} 為限時裝備，無法強化。</span>`);
+        return;
+    }
     target.en = Number(target.en) || 0;   // 🔧 舊存檔 en 可能為 undefined：統一正規化為有效數字
 
     let d = DB.items[target.id];
@@ -1835,8 +1849,10 @@ function runQuickJunk(type) {
 
 // 計算物品賣價（含詞綴疊乘）：與物品面板顯示價一致
 function getSellPrice(item) {
+    if (typeof isRentalItem === 'function' && isRentalItem(item)) return 0;
     let d = DB.items[item.id];
     if (!d) return 0;
+    if (d.noSell) return 0;
     let base = Math.max(0, Number(d.p) || 0);
     let price = Math.floor(base * 0.3);   // 賣價為定價的 30%（經典模式與一般模式相同）
     if (base > 0 && price < 1) price = 1;   // 低價物品至少賣 1 金，避免 floor 後變 0
@@ -1979,7 +1995,7 @@ function autoSellJunk(manual) {   // manual=true → 玩家按「一鍵賣出」
     let toSell = player.inv.filter(i => {
         let d = DB.items[i.id];
         if (i.junk && !i.junkSince) i.junkSince = _now;
-        return i.junk && !i.lock && d && !d.noSell && (manual || (_now - i.junkSince >= _delayMs));
+        return i.junk && !i.lock && d && !d.noSell && !(typeof isRentalItem === 'function' && isRentalItem(i)) && (manual || (_now - i.junkSince >= _delayMs));
     });
     if (toSell.length === 0) { if (manual) logSys('<span class="text-slate-400">目前沒有標記為廢品的物品可賣出（請先在 武器／防具／道具 分頁用「🗑️ 快速廢品」標記）。</span>'); return; }   // 無廢品→自動靜默、手動給提示
     let _sellQty = function (i) {
@@ -2239,6 +2255,7 @@ function toggleLock(uid) {
 function sellItem(uid, count, unitPrice) {
     let item = player.inv.find(i => i.uid === uid);
     if (!item || item.lock) return;
+    if (typeof isRentalItem === 'function' && isRentalItem(item)) { logSys('限時裝備無法販售。'); return; }
     if (DB.items[item.id] && DB.items[item.id].noSell && !(typeof trialDropBlocked === 'function' && trialDropBlocked(item.id))) { logSys('此物品無法販售。'); return; }   // 🏅 精通之證等不可販售；🔒 例外：「非本職的試煉道具」(誤撿/倉庫帶來、本職用不到)允許賣出清理，本職的試煉道具仍受保護
     let _wasGrant = !!(DB.items[item.id] && DB.items[item.id].grantSkills);   // 賣出授予技能頭盔時需重算
     let sellCount = Math.min(count, item.cnt);
