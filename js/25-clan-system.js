@@ -129,6 +129,13 @@ let _npcClanWarCache = {
     classic:{ at:0, ids:[], playerIds:[], npcIds:[], mutualIds:[] }
 };
 let _clanPanelView = 'home';
+let _rtClan = null;           // 線上血盟快取（跨帳號 create/search/join）
+let _rtClanKey = '';
+let _rtClanSearchDraft = '';
+let _rtClanSearchResults = [];
+let _rtClanSearchAt = 0;
+let _rtClanHbTimer = null;
+let _rtClanFetchPromise = null;
 
 function _clanDefaultState() {
     return {
@@ -1507,6 +1514,18 @@ function clanLevelInfo(xp) {
 }
 
 function clanGetModeInfo(p) {
+    // 線上血盟優先（跨玩家搜尋／加入）；本機 modes 仍供創盟帳號 Buff／攻城用。
+    if ((!p || p === player) && _rtClan && _rtClan.name) {
+        return {
+            name: _rtClan.name,
+            leaderId: _rtClan.leaderKey || '',
+            faction: _rtClan.faction === 'esti' ? 'esti' : 'tros',
+            createdAt: _rtClan.createdAt || 0,
+            castle: null,
+            online: true,
+            id: _rtClan.id || ''
+        };
+    }
     let st = _clanReadState();
     if (!st) return null;
     let info = st.modes[clanModeKey(p || player)];
@@ -1570,6 +1589,15 @@ function clanHasFoundingRoyal(p) {
 // 是否為該模式血盟的盟主本人（刪角警告 js/13 與改名權限共用；只比對 leaderId，不要求 royal 職業以免資料異常時漏警告）
 function clanIsLeaderRole(p) {
     if (!p || !p.cls) return false;
+    if ((!p || p === player) && _rtClan && _rtClan.leaderKey) {
+        try {
+            let ident = _rtClanIdentity();
+            if (ident) {
+                return !!(_rtClan.members || []).some(m =>
+                    m && m.leader && m.account === ident.account && Number(m.slot) === Number(ident.slot));
+            }
+        } catch (e) {}
+    }
     let st = _clanReadState();
     let info = st && st.modes[clanModeKey(p)];
     return !!(info && info.leaderId && info.leaderId === clanRoleId(p));
@@ -1580,6 +1608,7 @@ function clanCanSiege(p) {
 }
 
 function clanLeaderDisplayName(p) {
+    if ((!p || p === player) && _rtClan && _rtClan.leaderName) return String(_rtClan.leaderName).trim();
     let info = clanGetModeInfo(p || player);
     let role = clanLeaderRole(p || player);
     if (role && role.player && String(role.player.name || '').trim()) return String(role.player.name).trim();
@@ -1601,13 +1630,22 @@ function clanSyncCurrentPlayer() {
         delete player.siege.victoryCity;
         delete player.siege.rewardPending;
     }
+    // 線上血盟：以伺服器成員資格為準（跨帳號）
+    if (_rtClan && _rtClan.name) {
+        player.bloodPledge = _rtClan.faction === 'esti' ? 'esti' : 'tros';
+        player.clanName = _rtClan.name;
+        player.onlineClanId = _rtClan.id || null;
+        return true;
+    }
     if (!info) {
         player.bloodPledge = null;
         player.clanName = null;
+        player.onlineClanId = null;
         return false;
     }
     player.bloodPledge = info.faction;
     player.clanName = info.name;
+    player.onlineClanId = null;
     let id = clanRoleId(player);
     if (!id) return true;
     if (st.members[id] && st.members[id].mode === mode) return true;
@@ -1639,51 +1677,296 @@ function clanOnRoleDeleted(oldPlayer) {
     return result;
 }
 
+function _rtClanIsHttp() {
+    try {
+        let p = String(location.protocol || '');
+        return p === 'http:' || p === 'https:';
+    } catch (e) { return false; }
+}
+function _rtClanAccount() {
+    try {
+        if (typeof window !== 'undefined' && window.__fb5AuthAccount) return String(window.__fb5AuthAccount || '').trim();
+        if (typeof GameAccountAuth !== 'undefined' && GameAccountAuth && typeof GameAccountAuth.currentAccount === 'function')
+            return String(GameAccountAuth.currentAccount() || '').trim();
+    } catch (e) {}
+    return '';
+}
+function _rtClanIdentity() {
+    if (typeof player === 'undefined' || !player || !player.cls) return null;
+    let account = _rtClanAccount();
+    if (!account) return null;
+    return {
+        account: account,
+        slot: (typeof currentSlot !== 'undefined' ? currentSlot : 0),
+        name: player.name || '未命名',
+        lv: player.lv || 1,
+        cls: player.cls || '',
+        classic: !(player.classicMode === false),
+        avatar: player.avatar || '',
+        faction: player.avatar === '公主' ? 'esti' : 'tros'
+    };
+}
+function _rtClanPost(path, extra) {
+    if (!_rtClanIsHttp()) return Promise.resolve({ ok:false, error:'offline', message:'請透過伺服器網頁登入後使用線上血盟。' });
+    let base = _rtClanIdentity();
+    if (!base) return Promise.resolve({ ok:false, error:'need account', message:'請先登入帳號再操作血盟。' });
+    let body = Object.assign({}, base, extra || {});
+    return fetch('/api/clan/' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }).then(function (res) {
+        return res.json().then(function (data) {
+            if (data && typeof data === 'object') data._http = res.status;
+            return data;
+        });
+    }).catch(function () {
+        return { ok:false, error:'network', message:'無法連線血盟伺服器。' };
+    });
+}
+function _rtClanGet(pathWithQuery) {
+    if (!_rtClanIsHttp()) return Promise.resolve({ ok:false, error:'offline' });
+    return fetch('/api/clan/' + pathWithQuery, { method: 'GET' })
+        .then(function (res) { return res.json(); })
+        .catch(function () { return { ok:false, error:'network' }; });
+}
+function _rtClanApply(clan) {
+    _rtClan = clan && clan.id ? clan : null;
+    _rtClanKey = _rtClan ? (_rtClan.id || '') : '';
+    if (typeof player === 'undefined' || !player) return;
+    if (_rtClan) {
+        player.clanName = _rtClan.name;
+        player.bloodPledge = _rtClan.faction === 'esti' ? 'esti' : 'tros';
+        player.onlineClanId = _rtClan.id;
+        return;
+    }
+    player.onlineClanId = null;
+    let local = null;
+    try {
+        let st = _clanReadState();
+        local = st && st.modes[clanModeKey(player)];
+    } catch (e) {}
+    if (local) {
+        player.clanName = local.name;
+        player.bloodPledge = local.faction;
+    } else {
+        player.clanName = null;
+        player.bloodPledge = null;
+    }
+}
+function _rtClanEnsureHb() {
+    if (_rtClanHbTimer) return;
+    _rtClanHbTimer = setInterval(function () {
+        if (!_rtClanIsHttp() || !_rtClanIdentity()) return;
+        _rtClanPost('heartbeat', {}).then(function (data) {
+            if (data && data.ok) _rtClanApply(data.clan || null);
+        });
+    }, 12000);
+}
+function rtClanRefreshMine(forceRender) {
+    let id = _rtClanIdentity();
+    if (!id) {
+        _rtClanApply(null);
+        if (forceRender) renderClanTab();
+        return Promise.resolve(null);
+    }
+    _rtClanEnsureHb();
+    let q = 'mine?account=' + encodeURIComponent(id.account)
+        + '&slot=' + encodeURIComponent(id.slot)
+        + '&name=' + encodeURIComponent(id.name);
+    return _rtClanGet(q).then(function (data) {
+        if (data && data.ok) _rtClanApply(data.clan || null);
+        if (forceRender !== false) {
+            try { renderClanTab(); } catch (e) {}
+            try {
+                let panel = document.getElementById('interaction-content');
+                if (panel && typeof renderClanCreateNPC === 'function') renderClanCreateNPC(panel);
+            } catch (e2) {}
+        }
+        return _rtClan;
+    });
+}
+function rtClanSearch(q) {
+    _rtClanSearchDraft = String(q == null ? _rtClanSearchDraft : q).trim().slice(0, 20);
+    let url = 'search?q=' + encodeURIComponent(_rtClanSearchDraft);
+    return _rtClanGet(url).then(function (data) {
+        _rtClanSearchResults = (data && data.ok && Array.isArray(data.clans)) ? data.clans : [];
+        _rtClanSearchAt = Date.now();
+        try { renderClanTab(); } catch (e) {}
+        return _rtClanSearchResults;
+    });
+}
+function rtClanJoin(clanId) {
+    return _rtClanPost('join', { clanId: clanId }).then(function (data) {
+        if (!data || !data.ok) {
+            alert((data && data.message) || (data && data.error) || '加入血盟失敗。');
+            return data;
+        }
+        _rtClanApply(data.clan);
+        // 本機鏡像：讓貢獻／Buff 可用（不覆寫已有本機盟）
+        try {
+            let mode = clanModeKey(player);
+            let id = clanRoleId(player);
+            let faction = data.clan.faction === 'esti' ? 'esti' : 'tros';
+            _clanWithLock(st => {
+                if (!st.modes[mode]) {
+                    st.modes[mode] = {
+                        name: data.clan.name,
+                        leaderId: data.clan.leaderKey || id,
+                        faction: faction,
+                        createdAt: data.clan.createdAt || Date.now(),
+                        castle: null
+                    };
+                }
+                if (id) {
+                    if (!st.members[id]) st.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+                    else st.members[id].mode = mode;
+                }
+                return {};
+            });
+        } catch (e) {}
+        if (typeof saveGame === 'function') try { saveGame(); } catch (e) {}
+        if (typeof logSys === 'function') logSys(`<span class="text-amber-300 font-bold">你加入了血盟「${clanEsc(data.clan.name)}」。</span>`);
+        if (typeof updateUI === 'function') updateUI();
+        renderClanTab();
+        return data;
+    });
+}
+function rtClanLeave() {
+    if (!confirm('確定要退出目前的血盟嗎？')) return Promise.resolve(null);
+    return _rtClanPost('leave', {}).then(function (data) {
+        if (!data || !data.ok) {
+            alert((data && data.message) || '退出血盟失敗。');
+            return data;
+        }
+        _rtClanApply(null);
+        // 若同時是本機盟主，解散本機血盟以免殘留
+        try {
+            let mode = clanModeKey(player);
+            let id = clanRoleId(player);
+            _clanWithLock(st => {
+                let info = st.modes[mode];
+                if (info && info.leaderId === id) {
+                    st.modes[mode] = null;
+                    Object.keys(st.members).forEach(mid => {
+                        if (st.members[mid] && st.members[mid].mode === mode) delete st.members[mid];
+                    });
+                } else if (id) delete st.members[id];
+                return {};
+            });
+        } catch (e) {}
+        if (typeof saveGame === 'function') try { saveGame(); } catch (e) {}
+        if (typeof logSys === 'function') logSys('<span class="text-amber-300">你已退出了血盟。</span>');
+        if (typeof updateUI === 'function') updateUI();
+        renderClanTab();
+        return data;
+    });
+}
+window.rtClanSearch = rtClanSearch;
+window.rtClanJoin = rtClanJoin;
+window.rtClanLeave = rtClanLeave;
+window.rtClanRefreshMine = rtClanRefreshMine;
+
 function clanCreateFromInput() {
     if (!player || player.cls !== 'royal') { alert('只有王族可以創立血盟。'); return; }
     let input = document.getElementById('clan-name-input');
     let name = String(input ? input.value : '').trim();
     if (!name || name.length > 20) { alert('血盟名稱需為 1 至 20 個字。'); return; }
     if ((player.gold || 0) < CLAN_CREATE_COST) { alert('創立血盟需要 30,000 金幣。'); return; }
-    let mode = clanModeKey(player);
-    let leaderId = clanRoleId(player);
-    let faction = player.avatar === '公主' ? 'esti' : 'tros';
-    let result = _clanWithLock(st => {
-        if (st.modes[mode]) return { commit:false, error:'此模式已經創立血盟。' };
-        st.modes[mode] = { name:name, leaderId:leaderId, faction:faction, createdAt:Date.now(), castle:null };
-        if (!st.members[leaderId]) st.members[leaderId] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
-        return {};
-    });
-    if (!result.ok) { alert(result.error || '創立血盟失敗。'); return; }
-    let oldGold = player.gold;
-    player.gold -= CLAN_CREATE_COST;
-    player.bloodPledge = faction;
-    player.clanName = name;
-    if (typeof saveGame === 'function' && saveGame() !== true) {
-        player.gold = oldGold;
-        player.bloodPledge = null;
-        player.clanName = null;
-        let rb = _clanWithLock(st => {
-            if (st.modes[mode] && st.modes[mode].leaderId === leaderId) st.modes[mode] = null;
-            delete st.members[leaderId];
+    if (_rtClan && _rtClan.id) { alert('你已在血盟中，請先退出再創立。'); return; }
+
+    let finishLocalMirror = function (onlineClan) {
+        let mode = clanModeKey(player);
+        let leaderId = clanRoleId(player);
+        let faction = (onlineClan && onlineClan.faction) || (player.avatar === '公主' ? 'esti' : 'tros');
+        // 本機鏡像：供 Buff／攻城；若本機已有其他盟則不覆寫
+        _clanWithLock(st => {
+            if (st.modes[mode] && st.modes[mode].leaderId !== leaderId) return { commit:false };
+            st.modes[mode] = {
+                name: name,
+                leaderId: leaderId,
+                faction: faction,
+                createdAt: Date.now(),
+                castle: (st.modes[mode] && st.modes[mode].castle) || null
+            };
+            if (!st.members[leaderId]) st.members[leaderId] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+            else st.members[leaderId].mode = mode;
             return {};
         });
-        // ⚠️ v3.6.01 saveGame() 回 false ≠ 沒寫入（js/13 角色檔先 _lzSet 落地→寵物名冊後寫）：
-        //    磁碟可能已是「扣了 30,000 金幣」的版本，還原後必須補存一次寫回（比照 js/12 whTxnCommit v3.5.92）。
-        let restored = (typeof saveGame === 'function') && saveGame() === true;
-        alert('角色存檔失敗，創立血盟已取消'
-            + (rb && rb.ok ? '' : '（血盟資料回滾失敗，血盟可能仍存在，請開啟血盟分頁確認）')
-            + (restored ? '，金幣未扣除。' : '；金幣已在記憶體中還原但尚未寫入存檔，請勿繼續操作並重新整理頁面。'));
-        return;
-    }
-    _clanScanCache.at = 0;   // 新盟主誕生：清掃描快取讓盟主判定立即生效
-    if (typeof logSys === 'function') logSys(`<span class="text-amber-300 font-bold">你創立了血盟「${clanEsc(name)}」。</span>`);
-    if (typeof updateUI === 'function') updateUI();
-    renderClanTab();
-    try {
-        let panel = document.getElementById('interaction-content');
-        if (panel && typeof renderClanCreateNPC === 'function') renderClanCreateNPC(panel);
-    } catch (e) {}
+        _clanScanCache.at = 0;
+    };
+
+    let doCreate = function () {
+        let oldGold = player.gold;
+        player.gold -= CLAN_CREATE_COST;
+        player.bloodPledge = player.avatar === '公主' ? 'esti' : 'tros';
+        player.clanName = name;
+
+        let afterOk = function (onlineClan) {
+            finishLocalMirror(onlineClan);
+            if (onlineClan) _rtClanApply(onlineClan);
+            if (typeof saveGame === 'function' && saveGame() !== true) {
+                player.gold = oldGold;
+                player.bloodPledge = null;
+                player.clanName = null;
+                player.onlineClanId = null;
+                _rtClanApply(null);
+                try {
+                    let mode = clanModeKey(player);
+                    let leaderId = clanRoleId(player);
+                    _clanWithLock(st => {
+                        if (st.modes[mode] && st.modes[mode].leaderId === leaderId) st.modes[mode] = null;
+                        delete st.members[leaderId];
+                        return {};
+                    });
+                } catch (e) {}
+                if (onlineClan && onlineClan.id) _rtClanPost('leave', {});
+                let restored = (typeof saveGame === 'function') && saveGame() === true;
+                alert('角色存檔失敗，創立血盟已取消' + (restored ? '，金幣未扣除。' : '；請重新整理後確認金幣。'));
+                return;
+            }
+            if (typeof logSys === 'function') logSys(`<span class="text-amber-300 font-bold">你創立了血盟「${clanEsc(name)}」。</span>`);
+            if (typeof updateUI === 'function') updateUI();
+            renderClanTab();
+            try {
+                let panel = document.getElementById('interaction-content');
+                if (panel && typeof renderClanCreateNPC === 'function') renderClanCreateNPC(panel);
+            } catch (e) {}
+        };
+
+        if (_rtClanIsHttp() && _rtClanAccount()) {
+            _rtClanPost('create', { clanName: name, name: player.name || '未命名' }).then(function (data) {
+                if (!data || !data.ok) {
+                    player.gold = oldGold;
+                    player.bloodPledge = null;
+                    player.clanName = null;
+                    alert((data && data.message) || (data && data.error) || '創立血盟失敗。');
+                    return;
+                }
+                afterOk(data.clan);
+            });
+            return;
+        }
+        // 離線備援：僅本機創盟
+        let mode = clanModeKey(player);
+        let leaderId = clanRoleId(player);
+        let faction = player.avatar === '公主' ? 'esti' : 'tros';
+        let result = _clanWithLock(st => {
+            if (st.modes[mode]) return { commit:false, error:'此模式已經創立血盟。' };
+            st.modes[mode] = { name:name, leaderId:leaderId, faction:faction, createdAt:Date.now(), castle:null };
+            if (!st.members[leaderId]) st.members[leaderId] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+            return {};
+        });
+        if (!result.ok) {
+            player.gold = oldGold;
+            player.bloodPledge = null;
+            player.clanName = null;
+            alert(result.error || '創立血盟失敗。');
+            return;
+        }
+        afterOk(null);
+    };
+    doCreate();
 }
 
 function _clanAdjustContribution(points) {
@@ -1954,12 +2237,13 @@ function renderClanCreateNPC(div) {
         return;
     }
     if (typeof clanSyncCurrentPlayer === 'function') clanSyncCurrentPlayer();
+    rtClanRefreshMine(false);
     let read = _clanReadStateResult();
     if (!read.ok) {
         div.innerHTML = `<div class="p-3 text-red-300 font-bold">${clanEsc(read.error)}</div>`;
         return;
     }
-    let st = read.state, mode = clanModeKey(player), info = st.modes[mode];
+    let info = clanGetModeInfo(player);
     let gold = Math.floor(Number(player.gold) || 0);
     if (!info) {
         div.innerHTML = `
@@ -1968,33 +2252,33 @@ function renderClanCreateNPC(div) {
                     <div class="text-amber-200 font-bold text-lg">創立血盟</div>
                     <div class="text-sm text-slate-400 mt-1 leading-relaxed">
                         僅王族可創立血盟，費用 ${CLAN_CREATE_COST.toLocaleString()} 金幣。<br>
-                        創立後，同模式其他角色會自動成為成員。
+                        創立後其他玩家可搜尋血盟名稱並加入。
                     </div>
                 </div>
                 ${player.cls === 'royal' ? `
                 <div class="flex flex-col gap-2">
                     <div class="text-sm text-slate-300">目前金幣：<span class="text-amber-200 font-bold">${gold.toLocaleString()}</span></div>
                     <label class="text-sm text-slate-300" for="clan-name-input">血盟名稱</label>
-                    <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字">
+                    <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字" style="user-select:text;-webkit-user-select:text">
                     <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanCreateFromInput()">創立血盟（${CLAN_CREATE_COST.toLocaleString()} 金幣）</button>
                 </div>` : `
                 <div class="text-sm text-slate-400 bg-slate-900/60 border border-slate-700 rounded p-3 leading-relaxed">
                     你目前是「${clanEsc(CLAN_CLASS_NAMES[player.cls] || player.cls)}」，無法創立血盟。<br>
-                    請用王族角色來此創立；創立完成後再回來查看。
+                    請至右側「血盟」分頁搜尋並加入現有血盟，或請王族角色創立。
                 </div>`}
             </div>`;
         return;
     }
-    let levelInfo = clanLevelInfo(st.xp);
+    let levelInfo = clanLevelInfo((_clanReadState() || { xp:0 }).xp);
     let castle = info.castle ? CLAN_CASTLE_NAMES[info.castle] : '尚未佔領';
     div.innerHTML = `
         <div class="flex flex-col gap-4 p-2">
             <div class="border-b border-slate-600 pb-3">
                 <div class="text-amber-200 font-bold text-xl">${clanEsc(info.name)}</div>
                 <div class="text-sm text-slate-400 mt-1">盟主：${clanEsc(clanLeaderDisplayName(player))}　城堡：${clanEsc(castle)}</div>
-                <div class="text-sm text-cyan-200 mt-1">血盟 Lv.${levelInfo.level}</div>
+                <div class="text-sm text-cyan-200 mt-1">血盟 Lv.${levelInfo.level}${info.online ? '　<span class="text-emerald-300">線上</span>' : ''}</div>
             </div>
-            <div class="text-sm text-slate-300 leading-relaxed">此模式已有血盟。詳細管理、捐獻與宣戰請至右側「血盟」分頁。</div>
+            <div class="text-sm text-slate-300 leading-relaxed">已加入血盟。詳細管理、捐獻與宣戰請至右側「血盟」分頁。</div>
             <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="try{closeNpcInteraction()}catch(e){};switchTab('clan', document.getElementById('btn-clan'))">開啟血盟分頁</button>
         </div>`;
 }
@@ -2008,28 +2292,58 @@ function renderClanTab() {
         div.innerHTML = `<div class="p-3 text-red-300 font-bold">${clanEsc(read.error)}</div>`;
         return;
     }
-    let st = read.state, mode = clanModeKey(player), info = st.modes[mode];
+    let st = read.state, mode = clanModeKey(player), info = clanGetModeInfo(player);
+    // 開面板時刷新線上狀態（不重入死迴圈：forceRender false）
+    if (_rtClanIsHttp() && _rtClanAccount() && !_rtClanFetchPromise) {
+        _rtClanFetchPromise = rtClanRefreshMine(false).then(function () {
+            _rtClanFetchPromise = null;
+            let next = clanGetModeInfo(player);
+            if ((!info && next) || (info && next && info.id !== next.id) || (info && !next) || (info && next && info.name !== next.name)) {
+                try { renderClanTab(); } catch (e) {}
+            }
+        }).catch(function () { _rtClanFetchPromise = null; });
+    }
     if (!info) {
+        let searchRows = (_rtClanSearchResults || []).map(c => {
+            let safeId = String(c.id || '').replace(/[^a-zA-Z0-9]/g, '');
+            return `<div class="clan-search-row">
+                <div class="clan-search-info">
+                    <span class="text-amber-100 font-bold">${clanEsc(c.name)}</span>
+                    <span class="text-xs text-slate-400">盟主 ${clanEsc(c.leaderName || '—')}　${c.memberCount || 0} 人${c.onlineCount ? `　線上 ${c.onlineCount}` : ''}</span>
+                </div>
+                <button class="btn px-3 py-1 text-sm font-bold bg-emerald-900 border-emerald-600 text-emerald-100" onclick="rtClanJoin('${safeId}')">加入</button>
+            </div>`;
+        }).join('');
+        if (!_rtClanSearchAt && _rtClanIsHttp()) {
+            setTimeout(function () { try { rtClanSearch(_rtClanSearchDraft || ''); } catch (e) {} }, 0);
+        }
         div.innerHTML = `
             <div class="flex flex-col gap-4 p-2">
                 <div class="border-b border-slate-600 pb-3">
                     <div class="text-amber-200 font-bold text-lg">你尚未加入血盟</div>
-                    <div class="text-sm text-slate-400 mt-1">${player.cls === 'royal'
-                        ? '請輸入血盟名稱創立；同帳號其他角色會自動加入。'
-                        : '請用同帳號的王族角色創立血盟；創立後本角色會自動加入。'}</div>
+                    <div class="text-sm text-slate-400 mt-1">王族可創立；所有職業可搜尋血盟名稱加入。</div>
                 </div>
                 ${player.cls === 'royal' ? `
                 <div class="flex flex-col gap-2">
+                    <div class="text-slate-100 font-bold">創立血盟</div>
                     <label class="text-sm text-slate-300" for="clan-name-input">血盟名稱</label>
                     <input id="clan-name-input" maxlength="20" class="w-full bg-slate-900 border border-slate-600 text-white px-3 py-2 rounded" placeholder="輸入 1 至 20 個字" style="user-select:text;-webkit-user-select:text">
                     <button class="btn py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanCreateFromInput()">創立血盟（30,000 金幣）</button>
                 </div>` : ''}
+                <div class="flex flex-col gap-2 border-t border-slate-700 pt-3">
+                    <div class="text-slate-100 font-bold">搜尋血盟</div>
+                    <div class="flex gap-2">
+                        <input id="clan-search-input" maxlength="20" value="${clanEsc(_rtClanSearchDraft)}" class="min-w-0 flex-1 bg-slate-900 border border-slate-600 text-white px-2 py-2 rounded" placeholder="輸入血盟名稱關鍵字" style="user-select:text;-webkit-user-select:text" onkeydown="if(event.key==='Enter'){rtClanSearch(this.value)}">
+                        <button class="btn px-3 py-2 font-bold bg-slate-700 border-slate-500 text-slate-100" onclick="rtClanSearch(document.getElementById('clan-search-input').value)">搜尋</button>
+                    </div>
+                    <div class="clan-search-list">${searchRows || '<div class="text-slate-500 text-sm py-2">輸入關鍵字後按搜尋；空白可列出目前血盟。</div>'}</div>
+                </div>
             </div>`;
         return;
     }
     _clanSettleRole(player);
     st = _clanReadState() || st;
-    info = st.modes[mode];
+    let localInfo = st.modes[mode];
     npcClanEnsureWorld(player);
     let hostileCount = npcClanHostileList(player).length;
     let clanNav = `<div class="grid grid-cols-2 gap-2 border-b border-slate-700 pb-3">
@@ -2044,30 +2358,57 @@ function renderClanTab() {
     let buff = CLAN_BUFF_BY_LEVEL[levelInfo.level];
     let id = clanRoleId(player);
     let current = st.members[id] || { contribution:0, buffOn:false };
-    let roles = clanScanRoles(mode);
-    roles.sort((a, b) => (a.id === info.leaderId ? -1 : 0) - (b.id === info.leaderId ? -1 : 0) || (a.slot || 99) - (b.slot || 99));
-    let memberRows = roles.map(role => {
-        let p = role.player, member = st.members[role.id] || { contribution:0 };
-        let isLeader = role.id === info.leaderId;
-        return `<div class="flex items-center justify-between gap-3 py-2 border-b border-slate-700">
-            <div class="min-w-0">
-                <span class="text-slate-100 font-bold">${clanEsc(_clanRoleDisplayName(p))}</span>
-                <span class="text-xs text-slate-400 ml-2">${clanEsc(CLAN_CLASS_NAMES[p.cls] || p.cls)}</span>
-                ${isLeader ? '<span class="text-xs text-amber-300 ml-2">盟主</span>' : ''}
-            </div>
-            <span class="text-cyan-200 shrink-0">${member.contribution.toLocaleString()} 貢獻</span>
-        </div>`;
-    }).join('');
+    let memberRows = '';
+    if (_rtClan && Array.isArray(_rtClan.members) && _rtClan.members.length) {
+        memberRows = _rtClan.members.map(m => {
+            let isLeader = !!m.leader || m.key === _rtClan.leaderKey;
+            return `<div class="flex items-center justify-between gap-3 py-2 border-b border-slate-700">
+                <div class="min-w-0">
+                    <span class="text-slate-100 font-bold">${clanEsc(m.name || '未命名')}</span>
+                    <span class="text-xs text-slate-400 ml-2">${clanEsc(CLAN_CLASS_NAMES[m.cls] || m.cls || '')} Lv.${m.lv || 1}</span>
+                    ${isLeader ? '<span class="text-xs text-amber-300 ml-2">盟主</span>' : ''}
+                    ${m.online ? '<span class="text-xs text-emerald-300 ml-2">線上</span>' : '<span class="text-xs text-slate-500 ml-2">離線</span>'}
+                </div>
+            </div>`;
+        }).join('');
+    } else {
+        let roles = clanScanRoles(mode);
+        roles.sort((a, b) => (a.id === (localInfo && localInfo.leaderId) ? -1 : 0) - (b.id === (localInfo && localInfo.leaderId) ? -1 : 0) || (a.slot || 99) - (b.slot || 99));
+        memberRows = roles.map(role => {
+            let p = role.player, member = st.members[role.id] || { contribution:0 };
+            let isLeader = localInfo && role.id === localInfo.leaderId;
+            return `<div class="flex items-center justify-between gap-3 py-2 border-b border-slate-700">
+                <div class="min-w-0">
+                    <span class="text-slate-100 font-bold">${clanEsc(_clanRoleDisplayName(p))}</span>
+                    <span class="text-xs text-slate-400 ml-2">${clanEsc(CLAN_CLASS_NAMES[p.cls] || p.cls)}</span>
+                    ${isLeader ? '<span class="text-xs text-amber-300 ml-2">盟主</span>' : ''}
+                </div>
+                <span class="text-cyan-200 shrink-0">${member.contribution.toLocaleString()} 貢獻</span>
+            </div>`;
+        }).join('');
+    }
     let xpText = levelInfo.level >= 10 ? `${st.xp.toLocaleString()}（最高等級）` : `${levelInfo.current.toLocaleString()} / ${levelInfo.next.toLocaleString()}`;
     let diamonds = typeof window.pandoraGetSharedDiamonds === 'function' ? Number(window.pandoraGetSharedDiamonds()) || 0 : 0;
-    let castle = info.castle ? CLAN_CASTLE_NAMES[info.castle] : '尚未佔領';
+    let castle = (localInfo && localInfo.castle) ? CLAN_CASTLE_NAMES[localInfo.castle] : '尚未佔領';
+    let leaderLabel = (_rtClan && _rtClan.leaderName) ? _rtClan.leaderName : clanLeaderDisplayName(player);
+    let isOnlineLeader = !!( _rtClan && _rtClan.leaderKey && _rtClanKey && _rtClan.members && _rtClan.members.some(m => m && m.key === _rtClan.leaderKey && m.name === (player.name || '')) );
+    // 更穩：用 identity key 比對
+    try {
+        let ident = _rtClanIdentity();
+        if (ident && _rtClan) {
+            let myKey = (ident.account + '#' + ident.slot + '#' + (ident.name || '未命名'));
+            // partyMemberKey 格式一致
+            if (typeof partyMemberKey === 'function') { /* server only */ }
+            isOnlineLeader = _rtClan.leaderKey && _rtClan.members && _rtClan.members.some(m => m && m.leader && m.account === ident.account && Number(m.slot) === Number(ident.slot));
+        }
+    } catch (e) {}
     div.innerHTML = `
         <div class="flex flex-col gap-4 p-2">
             ${clanNav}
             <div class="flex items-start justify-between gap-3 border-b border-slate-600 pb-3">
                 <div>
-                    <div class="text-amber-200 font-bold text-xl">${clanEsc(info.name)}</div>
-                    <div class="text-sm text-slate-400 mt-1">盟主：${clanEsc(clanLeaderDisplayName(player))}　城堡：${clanEsc(castle)}</div>
+                    <div class="text-amber-200 font-bold text-xl">${clanEsc(info.name)}${info.online ? ' <span class="text-xs text-emerald-300 font-normal">線上</span>' : ''}</div>
+                    <div class="text-sm text-slate-400 mt-1">盟主：${clanEsc(leaderLabel)}　城堡：${clanEsc(castle)}</div>
                 </div>
                 <div class="text-right shrink-0">
                     <div class="text-cyan-200 font-bold">血盟 Lv.${levelInfo.level}</div>
@@ -2103,15 +2444,18 @@ function renderClanTab() {
                 <div class="text-slate-100 font-bold mb-1">血盟成員</div>
                 ${memberRows || '<div class="text-slate-400 py-2">目前沒有可顯示的成員。</div>'}
             </div>
-            ${(player.cls === 'royal' && id === info.leaderId) ? `
-            <div class="border-t border-slate-700 pt-3">
-                <div class="text-slate-100 font-bold mb-2">血盟改名（限盟主）</div>
-                <div class="flex gap-2">
-                    <input id="clan-rename-input" maxlength="20" value="${clanEsc(info.name)}" class="min-w-0 flex-1 bg-slate-900 border border-slate-600 text-white px-2 py-2 rounded">
-                    <button class="btn px-3 py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanRenameFromInput()">改名</button>
-                </div>
-            </div>` : ''}
-            ${player.cls === 'royal' ? '<button class="btn py-3 font-bold bg-red-900 border-red-600 text-red-100" onclick="clanOpenSiegePanel()">攻城</button>' : ''}
+            <div class="border-t border-slate-700 pt-3 flex flex-col gap-2">
+                <button class="btn py-2 font-bold bg-slate-800 border-slate-600 text-slate-200" onclick="rtClanLeave()">退出血盟</button>
+                ${(player.cls === 'royal' && ((localInfo && id === localInfo.leaderId) || isOnlineLeader)) ? `
+                <div>
+                    <div class="text-slate-100 font-bold mb-2">血盟改名（限盟主）</div>
+                    <div class="flex gap-2">
+                        <input id="clan-rename-input" maxlength="20" value="${clanEsc(info.name)}" class="min-w-0 flex-1 bg-slate-900 border border-slate-600 text-white px-2 py-2 rounded">
+                        <button class="btn px-3 py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanRenameFromInput()">改名</button>
+                    </div>
+                </div>` : ''}
+                ${player.cls === 'royal' ? '<button class="btn py-3 font-bold bg-red-900 border-red-600 text-red-100" onclick="clanOpenSiegePanel()">攻城</button>' : ''}
+            </div>
         </div>`;
 }
 

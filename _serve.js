@@ -1424,6 +1424,414 @@ async function handlePartyApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown party api" });
 }
 
+// ===== 🩸 Realtime player clans (create / search / join). Persisted to data/clans.json. =====
+const CLAN_MAX = 40;
+const CLAN_TTL_MS = 180000;
+const CLANS_FILE = path.join(ROOT, "data", "clans.json");
+/** @type {Map<string, object>} clanId -> clan */
+const rtClans = new Map();
+/** @type {Map<string, object>} memberKey -> presence (reuse party presence shape) */
+const clanPresence = new Map();
+let clanSaveTimer = null;
+
+function clanSanitizeName(raw) {
+  return String(raw || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 20);
+}
+
+function clanNewId() {
+  return "C" + Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
+}
+
+function clanLoadFromDisk() {
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(CLANS_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(CLANS_FILE, "utf8"));
+    const list = Array.isArray(raw && raw.clans) ? raw.clans : [];
+    rtClans.clear();
+    list.forEach((c) => {
+      if (!c || !c.id || !c.name) return;
+      const members = Array.isArray(c.members)
+        ? c.members
+            .filter((m) => m && m.key && m.account)
+            .map((m) => ({
+              key: String(m.key).slice(0, 96),
+              account: String(m.account || "").slice(0, 24),
+              slot: Math.max(0, Math.min(8, Number(m.slot) || 0)),
+              name: partySanitizeName(m.name) || "未命名",
+              lv: Math.max(1, Math.min(200, Number(m.lv) || 1)),
+              cls: String(m.cls || "").slice(0, 16),
+              classic: m.classic !== false,
+              leader: !!m.leader,
+              online: false,
+              lastSeen: Math.max(0, Number(m.lastSeen) || 0),
+            }))
+            .slice(0, CLAN_MAX)
+        : [];
+      if (!members.length) return;
+      let leaderKey = String(c.leaderKey || "").slice(0, 96);
+      if (!members.some((m) => m.key === leaderKey)) {
+        members[0].leader = true;
+        leaderKey = members[0].key;
+      }
+      members.forEach((m) => {
+        m.leader = m.key === leaderKey;
+      });
+      rtClans.set(String(c.id).slice(0, 48), {
+        id: String(c.id).slice(0, 48),
+        name: clanSanitizeName(c.name),
+        leaderKey: leaderKey,
+        members: members,
+        faction: c.faction === "esti" ? "esti" : "tros",
+        createdAt: Math.max(0, Number(c.createdAt) || Date.now()),
+      });
+    });
+  } catch (e) {
+    console.warn("[clan] load failed:", e && e.message ? e.message : e);
+  }
+}
+
+function clanSaveToDiskSoon() {
+  if (clanSaveTimer) return;
+  clanSaveTimer = setTimeout(() => {
+    clanSaveTimer = null;
+    try {
+      ensureDataDir();
+      const clans = [];
+      for (const c of rtClans.values()) {
+        if (!c || !c.id) continue;
+        clans.push({
+          id: c.id,
+          name: c.name,
+          leaderKey: c.leaderKey,
+          faction: c.faction || "tros",
+          createdAt: c.createdAt || Date.now(),
+          members: (c.members || []).map((m) => ({
+            key: m.key,
+            account: m.account,
+            slot: m.slot,
+            name: m.name,
+            lv: m.lv,
+            cls: m.cls,
+            classic: !!m.classic,
+            leader: !!m.leader,
+            lastSeen: m.lastSeen || 0,
+          })),
+        });
+      }
+      fs.writeFileSync(CLANS_FILE, JSON.stringify({ v: 1, clans: clans }, null, 0), "utf8");
+    } catch (e) {
+      console.warn("[clan] save failed:", e && e.message ? e.message : e);
+    }
+  }, 400);
+}
+
+function clanPublicMember(m) {
+  if (!m) return null;
+  return {
+    key: m.key,
+    account: m.account,
+    slot: m.slot,
+    name: m.name,
+    lv: m.lv || 1,
+    cls: m.cls || "",
+    classic: !!m.classic,
+    leader: !!m.leader,
+    online: !!m.online,
+    lastSeen: m.lastSeen || 0,
+  };
+}
+
+function clanPublic(clan, opts) {
+  if (!clan) return null;
+  const brief = !!(opts && opts.brief);
+  const onlineCount = (clan.members || []).filter((m) => m && m.online).length;
+  const out = {
+    id: clan.id,
+    name: clan.name,
+    leaderKey: clan.leaderKey,
+    faction: clan.faction || "tros",
+    memberCount: (clan.members || []).length,
+    onlineCount: onlineCount,
+    createdAt: clan.createdAt || 0,
+  };
+  if (!brief) out.members = (clan.members || []).map(clanPublicMember).filter(Boolean);
+  const leader = (clan.members || []).find((m) => m && m.key === clan.leaderKey);
+  out.leaderName = leader ? leader.name : "";
+  return out;
+}
+
+function clanFindByMemberKey(key) {
+  if (!key) return null;
+  for (const c of rtClans.values()) {
+    if (c && Array.isArray(c.members) && c.members.some((m) => m && m.key === key)) return c;
+  }
+  return null;
+}
+
+function clanFindByName(name) {
+  const n = clanSanitizeName(name).toLowerCase();
+  if (!n) return null;
+  for (const c of rtClans.values()) {
+    if (c && String(c.name || "").toLowerCase() === n) return c;
+  }
+  return null;
+}
+
+function clanUpsertPresence(body) {
+  const account = String((body && body.account) || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 24);
+  if (!account) return null;
+  const slot = Math.max(0, Math.min(8, Number(body.slot) || 0));
+  const name = partySanitizeName(body.name) || "未命名";
+  const key = partyMemberKey(account, slot, name);
+  if (!key) return null;
+  const presence = {
+    key: key,
+    account: account,
+    slot: slot,
+    name: name,
+    lv: Math.max(1, Math.min(200, Number(body.lv) || 1)),
+    cls: String(body.cls || "").slice(0, 16),
+    classic: body.classic !== false,
+    online: true,
+    lastSeen: Date.now(),
+  };
+  clanPresence.set(key, presence);
+  const clan = clanFindByMemberKey(key);
+  if (clan) {
+    const mem = clan.members.find((m) => m.key === key);
+    if (mem) {
+      mem.name = presence.name;
+      mem.lv = presence.lv;
+      mem.cls = presence.cls;
+      mem.classic = presence.classic;
+      mem.online = true;
+      mem.lastSeen = presence.lastSeen;
+    }
+  }
+  return { key: key, presence: presence, clan: clan };
+}
+
+function clanMarkOfflineStale(now) {
+  now = now || Date.now();
+  for (const c of rtClans.values()) {
+    (c.members || []).forEach((m) => {
+      if (!m) return;
+      if (now - (m.lastSeen || 0) > CLAN_TTL_MS) m.online = false;
+    });
+  }
+}
+
+try {
+  clanLoadFromDisk();
+} catch (e) {}
+
+async function handleClanApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    partyCors(res);
+    res.writeHead(204);
+    return res.end();
+  }
+
+  if (u === "/api/clan/status" && req.method === "GET") {
+    clanMarkOfflineStale(Date.now());
+    return json(res, 200, {
+      ok: true,
+      online: true,
+      clans: rtClans.size,
+      max: CLAN_MAX,
+    });
+  }
+
+  // 搜尋血盟（名稱關鍵字）
+  if (u === "/api/clan/search" && req.method === "GET") {
+    clanMarkOfflineStale(Date.now());
+    const url = new URL(req.url || "/", "http://localhost");
+    const q = String(url.searchParams.get("q") || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 20);
+    const list = [];
+    for (const c of rtClans.values()) {
+      if (!c || !c.name) continue;
+      if (q && String(c.name).toLowerCase().indexOf(q) < 0) continue;
+      list.push(clanPublic(c, { brief: true }));
+      if (list.length >= 40) break;
+    }
+    list.sort((a, b) => String(a.name).localeCompare(String(b.name), "zh-Hant"));
+    return json(res, 200, { ok: true, clans: list });
+  }
+
+  if (u === "/api/clan/mine" && req.method === "GET") {
+    clanMarkOfflineStale(Date.now());
+    const url = new URL(req.url || "/", "http://localhost");
+    const account = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    const slot = Math.max(0, Math.min(8, Number(url.searchParams.get("slot")) || 0));
+    const name = partySanitizeName(url.searchParams.get("name"));
+    const key = partyMemberKey(account, slot, name);
+    if (!key) return json(res, 400, { ok: false, error: "need account" });
+    const clan = clanFindByMemberKey(key);
+    return json(res, 200, { ok: true, clan: clanPublic(clan), key: key });
+  }
+
+  if (u === "/api/clan/heartbeat" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = clanUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    return json(res, 200, { ok: true, key: up.key, clan: clanPublic(up.clan) });
+  }
+
+  if (u === "/api/clan/create" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = clanUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號再創立血盟。" });
+    if (String(data.cls || up.presence.cls || "") !== "royal") {
+      return json(res, 403, { ok: false, error: "not royal", message: "只有王族可以創立血盟。" });
+    }
+    const existing = clanFindByMemberKey(up.key);
+    if (existing) {
+      return json(res, 200, { ok: true, clan: clanPublic(existing), already: true });
+    }
+    const name = clanSanitizeName(data.clanName || data.nameClan);
+    if (!name || name.length < 1) {
+      return json(res, 400, { ok: false, error: "bad name", message: "血盟名稱需為 1 至 20 個字。" });
+    }
+    if (clanFindByName(name)) {
+      return json(res, 409, { ok: false, error: "name taken", message: "此血盟名稱已被使用。" });
+    }
+    const id = clanNewId();
+    const faction = data.faction === "esti" || data.avatar === "公主" ? "esti" : "tros";
+    const member = {
+      ...up.presence,
+      leader: true,
+      online: true,
+    };
+    const clan = {
+      id: id,
+      name: name,
+      leaderKey: up.key,
+      members: [member],
+      faction: faction,
+      createdAt: Date.now(),
+    };
+    rtClans.set(id, clan);
+    clanSaveToDiskSoon();
+    return json(res, 200, { ok: true, clan: clanPublic(clan) });
+  }
+
+  if (u === "/api/clan/join" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = clanUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號再加入血盟。" });
+    if (clanFindByMemberKey(up.key)) {
+      return json(res, 400, { ok: false, error: "already in clan", message: "你已在血盟中，請先退出再加入。" });
+    }
+    let clan = null;
+    const clanId = String(data.clanId || "").slice(0, 48);
+    if (clanId) clan = rtClans.get(clanId) || null;
+    if (!clan && data.clanName) clan = clanFindByName(data.clanName);
+    if (!clan) return json(res, 404, { ok: false, error: "not found", message: "找不到此血盟。" });
+    if (clan.members.length >= CLAN_MAX) {
+      return json(res, 400, { ok: false, error: "full", message: "血盟已滿（最多 " + CLAN_MAX + " 人）。" });
+    }
+    clan.members.push({
+      ...up.presence,
+      leader: false,
+      online: true,
+    });
+    clanSaveToDiskSoon();
+    return json(res, 200, { ok: true, clan: clanPublic(clan) });
+  }
+
+  if (u === "/api/clan/leave" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = clanUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const clan = clanFindByMemberKey(up.key);
+    if (!clan) return json(res, 200, { ok: true, left: true, empty: true });
+    const wasLeader = clan.leaderKey === up.key;
+    clan.members = clan.members.filter((m) => m && m.key !== up.key);
+    if (!clan.members.length) {
+      rtClans.delete(clan.id);
+      clanSaveToDiskSoon();
+      return json(res, 200, { ok: true, left: true, dissolved: true });
+    }
+    if (wasLeader) {
+      clan.members[0].leader = true;
+      clan.leaderKey = clan.members[0].key;
+      clan.members.forEach((m) => {
+        m.leader = m.key === clan.leaderKey;
+      });
+    }
+    clanSaveToDiskSoon();
+    return json(res, 200, { ok: true, left: true, clan: clanPublic(clan) });
+  }
+
+  if (u === "/api/clan/kick" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = clanUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const clan = clanFindByMemberKey(up.key);
+    if (!clan) return json(res, 400, { ok: false, error: "no clan", message: "你尚未加入血盟。" });
+    if (clan.leaderKey !== up.key) {
+      return json(res, 403, { ok: false, error: "not leader", message: "只有盟主可以踢出成員。" });
+    }
+    const targetKey = String(data.targetKey || "").slice(0, 96);
+    const targetName = partySanitizeName(data.targetName);
+    let target = null;
+    if (targetKey) target = clan.members.find((m) => m && m.key === targetKey);
+    if (!target && targetName) target = clan.members.find((m) => m && m.name === targetName);
+    if (!target) return json(res, 404, { ok: false, error: "not found", message: "找不到該成員。" });
+    if (target.key === up.key) {
+      return json(res, 400, { ok: false, error: "self", message: "不能踢出自己，請改用退出血盟。" });
+    }
+    clan.members = clan.members.filter((m) => m && m.key !== target.key);
+    clanSaveToDiskSoon();
+    return json(res, 200, { ok: true, clan: clanPublic(clan) });
+  }
+
+  return json(res, 404, { ok: false, error: "unknown clan api" });
+}
+
 // ===== 帳號註冊（全站唯一）＋角色名稱登錄（全站唯一 ID）=====
 const ACCOUNTS_FILE = path.join(ROOT, "data", "accounts.json");
 const CHAR_NAMES_FILE = path.join(ROOT, "data", "char-names.json");
@@ -1986,6 +2394,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/party")) {
       await handlePartyApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/clan")) {
+      await handleClanApi(req, res, u);
       return;
     }
     if (u.startsWith("/api/accounts")) {

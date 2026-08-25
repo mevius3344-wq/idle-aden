@@ -2246,9 +2246,15 @@ function _chatAppend(ch, html, cls) {
 }
 function _chatClanKey() {
     try {
+        // 線上血盟：以伺服器 clanId 當聊天房間鍵（跨帳號）
+        if (typeof player !== 'undefined' && player && player.onlineClanId)
+            return 'online|' + String(player.onlineClanId);
+        if (typeof _rtClanKey !== 'undefined' && _rtClanKey)
+            return 'online|' + String(_rtClanKey);
         if (typeof clanGetModeInfo !== 'function' || typeof clanModeKey !== 'function') return '';
         let info = clanGetModeInfo(player);
         if (!info || !info.name) return '';
+        if (info.online && info.id) return 'online|' + String(info.id);
         return clanModeKey(player) + '|' + String(info.name);
     } catch (e) { return ''; }
 }
