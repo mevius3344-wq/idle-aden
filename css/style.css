@@ -3595,6 +3595,25 @@ button.classic-skill-cell { cursor:pointer; }
   border-color: #ff0000;
   box-shadow: 0 0 6px rgba(255, 0, 0, 0.5);
 }
+.account-auth-remember {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 2px 0 10px;
+  color: #cccccc;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.account-auth-remember input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #ff0000;
+  cursor: pointer;
+}
 .account-auth-btns {
   display: flex;
   justify-content: space-between;

@@ -8,6 +8,7 @@
 (function () {
   const ACC_PREFIX = "fb5_account_";
   const SESSION_KEY = "fb5_auth_session";
+  const REMEMBER_KEY = "fb5_auth_remember";
 
   function $(id) {
     return document.getElementById(id);
@@ -40,6 +41,73 @@
     const pass = $("auth-password");
     if (acc) acc.value = "";
     if (pass) pass.value = "";
+  }
+
+  function rememberChecked() {
+    const el = $("auth-remember");
+    return !!(el && el.checked);
+  }
+
+  function setRememberChecked(on) {
+    const el = $("auth-remember");
+    if (el) el.checked = !!on;
+  }
+
+  function loadRememberedCreds() {
+    try {
+      const raw = localStorage.getItem(REMEMBER_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || typeof data.account !== "string") return null;
+      return {
+        account: normalizeCred(data.account),
+        password: typeof data.password === "string" ? data.password : "",
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveRememberedCreds(account, password) {
+    try {
+      localStorage.setItem(
+        REMEMBER_KEY,
+        JSON.stringify({
+          account: normalizeCred(account),
+          password: String(password == null ? "" : password),
+          savedAt: Date.now(),
+        })
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearRememberedCreds() {
+    try {
+      localStorage.removeItem(REMEMBER_KEY);
+    } catch (e) {}
+  }
+
+  function applyRememberedCreds() {
+    const remembered = loadRememberedCreds();
+    if (!remembered || !remembered.account) {
+      setRememberChecked(false);
+      clearCredFields();
+      return false;
+    }
+    const acc = $("auth-account");
+    const pass = $("auth-password");
+    if (acc) acc.value = remembered.account;
+    if (pass) pass.value = remembered.password;
+    setRememberChecked(true);
+    return true;
+  }
+
+  function persistRememberPreference(account, password) {
+    if (rememberChecked()) saveRememberedCreds(account, password);
+    else clearRememberedCreds();
   }
 
   function readAccount() {
@@ -115,7 +183,7 @@
     });
     const welcome = $("auth-welcome");
     if (welcome) welcome.textContent = "";
-    clearCredFields();
+    if (!applyRememberedCreds()) clearCredFields();
     setStatus("請輸入帳號與密碼。");
     try {
       window.__fb5AuthAccount = "";
@@ -141,6 +209,7 @@
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}
+    persistRememberPreference(account, readPassword());
     setStatus("驗證成功，正在進入……", "ok");
     return syncCloud().finally(function () {
       showLoggedIn(account);
@@ -204,6 +273,7 @@
           setStatus("註冊失敗（本機儲存空間不足）。", "err");
           return;
         }
+        persistRememberPreference(account, password);
         setStatus("註冊成功（離線本機），請點登入。", "ok");
         return;
       }
@@ -211,6 +281,7 @@
         .then(function (r) {
           if (r && r.data && r.data.ok) {
             saveAccount(account, password);
+            persistRememberPreference(account, password);
             setStatus("註冊成功，請點登入。", "ok");
             return;
           }
@@ -329,11 +400,13 @@
   }
 
   function boot() {
-    // 強制空白：阻擋瀏覽器自動填入舊的「天堂」
-    clearCredFields();
-    setTimeout(clearCredFields, 0);
-    setTimeout(clearCredFields, 200);
-    setTimeout(clearCredFields, 800);
+    // 有「記住」則還原帳密；否則清空，並阻擋瀏覽器自動填入舊的「天堂」
+    if (!applyRememberedCreds()) {
+      clearCredFields();
+      setTimeout(clearCredFields, 0);
+      setTimeout(clearCredFields, 200);
+      setTimeout(clearCredFields, 800);
+    }
 
     const btnReg = $("btn-auth-register");
     const btnLogin = $("btn-auth-login");
@@ -341,6 +414,18 @@
     if (btnReg) btnReg.addEventListener("click", registerAccount);
     if (btnLogin) btnLogin.addEventListener("click", loginAccount);
     if (btnLogout) btnLogout.addEventListener("click", logoutAccount);
+
+    const remember = $("auth-remember");
+    if (remember) {
+      remember.addEventListener("change", function () {
+        if (!remember.checked) clearRememberedCreds();
+        else {
+          const account = readAccount();
+          const password = readPassword();
+          if (account) saveRememberedCreds(account, password);
+        }
+      });
+    }
 
     const pass = $("auth-password");
     if (pass) {
