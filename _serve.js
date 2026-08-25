@@ -758,7 +758,8 @@ async function handleChatApi(req, res, u) {
 
 // ===== 🤝 Realtime party (invite / roster / share). In-memory; lost on restart. =====
 const PARTY_MAX = 8;
-const PARTY_TTL_MS = 90000;
+const PARTY_TTL_MS = 90000; // 線上 presence（顯示綠點／同圖分享）
+const PARTY_MEMBER_TTL_MS = 12 * 60 * 60 * 1000; // 成員資格保留（對齊離線掛機 12h 上限）
 const PARTY_INVITE_MS = 60000;
 const PARTY_APPLY_MS = 120000;
 const PARTY_SHARE_RATE_MS = 80;
@@ -866,6 +867,21 @@ function partyFindByMemberKey(key) {
   return null;
 }
 
+function partyMemberLastSeen(m, pre) {
+  if (pre && pre.lastSeen) return pre.lastSeen;
+  return m && m.lastSeen ? m.lastSeen : 0;
+}
+
+function partyMemberOnline(m, pre, t) {
+  return !!(pre && t - (pre.lastSeen || 0) < PARTY_TTL_MS);
+}
+
+function partyMemberActive(m, pre, t) {
+  if (!m) return false;
+  const last = partyMemberLastSeen(m, pre);
+  return last > 0 && t - last < PARTY_MEMBER_TTL_MS;
+}
+
 function partyCleanupStale(now) {
   const t = now || Date.now();
   for (const [key, pre] of partyPresence.entries()) {
@@ -884,7 +900,7 @@ function partyCleanupStale(now) {
     party.members.forEach((m) => {
       if (!m) return;
       const pre = partyPresence.get(m.key);
-      m.online = !!(pre && t - (pre.lastSeen || 0) < PARTY_TTL_MS);
+      m.online = partyMemberOnline(m, pre, t);
       if (pre) {
         m.mapId = pre.mapId || m.mapId;
         m.mapName = pre.mapName || m.mapName;
@@ -892,26 +908,32 @@ function partyCleanupStale(now) {
         m.hp = pre.hp;
         m.mhp = pre.mhp;
         m.cls = pre.cls || m.cls;
+        m.lastSeen = pre.lastSeen || m.lastSeen || t;
       }
     });
-    const alive = party.members.filter((m) => m && m.online);
-    if (!alive.length) {
+    const activeMembers = party.members.filter((m) => partyMemberActive(m, partyPresence.get(m.key), t));
+    if (!activeMembers.length) {
       parties.delete(pid);
       continue;
     }
-    if (!alive.some((m) => m.key === party.leaderKey)) {
-      party.leaderKey = alive[0].key;
-      party.members.forEach((m) => {
-        if (m) m.leader = m.key === party.leaderKey;
-      });
-      partyPushEvent({
-        type: "leader",
-        partyId: party.id,
-        leaderKey: party.leaderKey,
-        name: alive[0].name,
-      });
+    party.members = activeMembers;
+    const leaderStill = party.members.some((m) => m && m.key === party.leaderKey);
+    if (!leaderStill) {
+      const online = party.members.filter((m) => m && m.online);
+      const pick = online[0] || party.members[0];
+      if (pick) {
+        party.leaderKey = pick.key;
+        party.members.forEach((m) => {
+          if (m) m.leader = m.key === party.leaderKey;
+        });
+        partyPushEvent({
+          type: "leader",
+          partyId: party.id,
+          leaderKey: party.leaderKey,
+          name: pick.name,
+        });
+      }
     }
-    party.members = party.members.filter((m) => m && (m.online || t - (m.lastSeen || 0) < PARTY_TTL_MS * 2));
     if (Array.isArray(party.applications)) {
       party.applications = party.applications.filter(
         (a) => a && t - (a.at || 0) < PARTY_APPLY_MS && !party.members.some((m) => m && m.key === a.key)
@@ -1155,6 +1177,8 @@ async function handlePartyApi(req, res, u) {
       ...up.presence,
       leader: true,
       online: true,
+      lastSeen: Date.now(),
+      joinedAt: Date.now(),
     };
     const party = {
       id: id,
@@ -1281,6 +1305,8 @@ async function handlePartyApi(req, res, u) {
       ...up.presence,
       leader: false,
       online: true,
+      lastSeen: Date.now(),
+      joinedAt: Date.now(),
     });
     partyPushEvent({
       type: "join",
@@ -1380,6 +1406,7 @@ async function handlePartyApi(req, res, u) {
       leader: false,
       online: true,
       lastSeen: Date.now(),
+      joinedAt: Date.now(),
     });
     partyPushEvent({
       type: "join",

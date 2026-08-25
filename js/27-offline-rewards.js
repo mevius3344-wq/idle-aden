@@ -44,9 +44,13 @@
         if (window.IpSessionLimit && typeof window.IpSessionLimit.claim === 'function') {
             window.IpSessionLimit.claim().then(function (r) {
                 if (r && r.ok && typeof _chatOnlineStartPolling === 'function') _chatOnlineStartPolling();
+                try { if (typeof rtPartyStart === 'function') rtPartyStart(); } catch (e2) {}
+                try { if (typeof rtPartyPollOnce === 'function') rtPartyPollOnce(); } catch (e3) {}
             }).catch(function () {});
-        } else if (typeof _chatOnlineStartPolling === 'function') {
-            _chatOnlineStartPolling();
+        } else {
+            if (typeof _chatOnlineStartPolling === 'function') _chatOnlineStartPolling();
+            try { if (typeof rtPartyStart === 'function') rtPartyStart(); } catch (e2) {}
+            try { if (typeof rtPartyPollOnce === 'function') rtPartyPollOnce(); } catch (e3) {}
         }
     }
 
@@ -55,6 +59,7 @@
         _onlineForced = true;
         _onlineSyncForcedFlag();
         if (typeof _chatOnlineStopPolling === 'function') _chatOnlineStopPolling();
+        try { if (typeof rtPartyStop === 'function') rtPartyStop(); } catch (e) {}
         if (window.IpSessionLimit && typeof window.IpSessionLimit.release === 'function') {
             try { window.IpSessionLimit.release(); } catch (e) {}
         }

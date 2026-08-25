@@ -208,12 +208,15 @@
                 rtPartyLog((rtPartyEsc(ev.name) || '隊員') + ' 離開了隊伍。');
             } else if (ev.type === 'kick') {
                 if (ev.key === rtPartyMyKey() || ev.toKey === rtPartyMyKey()) {
-                    _rtParty = null;
-                    rtPartyLog('你被移出隊伍。');
+                    if (!rtPartyIsSuspended()) {
+                        _rtParty = null;
+                        rtPartyLog('你被移出隊伍。');
+                    }
                 } else {
                     rtPartyLog((rtPartyEsc(ev.name) || '隊員') + ' 被移出隊伍。');
                 }
             } else if (ev.type === 'disband') {
+                if (rtPartyIsSuspended()) return;
                 _rtParty = null;
                 rtPartyLog('隊伍已解散。');
             } else if (ev.type === 'leader') {
@@ -242,10 +245,17 @@
         });
     }
 
+    function rtPartyIsSuspended() {
+        try {
+            return !!(typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced));
+        } catch (e) { return false; }
+    }
+
     function rtPartyApplySnapshot(data) {
         if (!data || !data.ok) return;
         if (data.seq && data.seq > _rtPartySeq) _rtPartySeq = data.seq;
-        _rtParty = data.party || null;
+        if (data.party) _rtParty = data.party;
+        else if (_rtParty && data.party === null && !rtPartyIsSuspended()) _rtParty = null;
         _rtPartyKey = rtPartyMyKey();
         _rtPartyInvites = Array.isArray(data.invites) ? data.invites : [];
         _rtPartyApplications = Array.isArray(data.applications) ? data.applications : [];
@@ -798,11 +808,11 @@
     }
 
     function rtPartyHeartbeat() {
-        if (!rtPartyIdentity()) return Promise.resolve();
+        if (!rtPartyIdentity() || rtPartyIsSuspended()) return Promise.resolve();
         return rtPartyPost('heartbeat').then(function (data) {
             if (data && data.ok) {
                 if (data.party) _rtParty = data.party;
-                else if (_rtParty && data.party === null) _rtParty = null;
+                else if (_rtParty && data.party === null && !rtPartyIsSuspended()) _rtParty = null;
                 if (data.seq && data.seq > _rtPartySeq) { /* poll will catch */ }
                 rtPartyRender();
             }
@@ -810,7 +820,7 @@
     }
 
     function rtPartyPollOnce() {
-        if (!rtPartyIsHttp()) return Promise.resolve();
+        if (!rtPartyIsHttp() || rtPartyIsSuspended()) return Promise.resolve();
         var id = rtPartyIdentity();
         if (!id) return Promise.resolve();
         var wait = _rtPartySeq > 0 ? 16000 : 0;
@@ -850,8 +860,16 @@
         _rtPartyAbort = null;
     }
 
+    function rtPartyStop() {
+        rtPartyStopPolling();
+        if (_rtPartyHbTimer) {
+            clearInterval(_rtPartyHbTimer);
+            _rtPartyHbTimer = null;
+        }
+    }
+
     function rtPartyStart() {
-        if (!rtPartyIsHttp()) return;
+        if (!rtPartyIsHttp() || rtPartyIsSuspended()) return;
         rtPartyStartPolling();
         if (_rtPartyHbTimer) return;
         _rtPartyHbTimer = setInterval(function () {
@@ -886,6 +904,8 @@
     window.rtPartyMemberCount = rtPartyMemberCount;
     window.rtPartyGet = function () { return _rtParty; };
     window.rtPartyStart = rtPartyStart;
+    window.rtPartyStop = rtPartyStop;
+    window.rtPartyPollOnce = rtPartyPollOnce;
     window.rtPartyRender = rtPartyRender;
 
     (function watch() {
