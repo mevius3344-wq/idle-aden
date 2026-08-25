@@ -1837,7 +1837,9 @@ function runQuickJunk(type) {
 function getSellPrice(item) {
     let d = DB.items[item.id];
     if (!d) return 0;
-    let price = Math.floor((d.p || 0) * 0.3);   // 賣價為定價的 30%（經典模式與一般模式相同）
+    let base = Math.max(0, Number(d.p) || 0);
+    let price = Math.floor(base * 0.3);   // 賣價為定價的 30%（經典模式與一般模式相同）
+    if (base > 0 && price < 1) price = 1;   // 低價物品至少賣 1 金，避免 floor 後變 0
     let mult = 1;
     if (getAttrAffix(item.attr)) mult *= 10;
     if (item.bless === true) mult *= 10;   // 🔧 僅「祝福的」享 10 倍賣價；'cursed'（詛咒的）為負面詞綴不加價
@@ -1980,16 +1982,31 @@ function autoSellJunk(manual) {   // manual=true → 玩家按「一鍵賣出」
         return i.junk && !i.lock && d && !d.noSell && (manual || (_now - i.junkSince >= _delayMs));
     });
     if (toSell.length === 0) { if (manual) logSys('<span class="text-slate-400">目前沒有標記為廢品的物品可賣出（請先在 武器／防具／道具 分頁用「🗑️ 快速廢品」標記）。</span>'); return; }   // 無廢品→自動靜默、手動給提示
+    let _sellQty = function (i) {
+        let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));   // 舊存檔缺 cnt → 視為 1，避免 Math.min(undefined)→NaN 把金幣弄壞
+        let cap = Math.floor(Number(i._autoSellQty));
+        if (!Number.isFinite(cap) || cap <= 0) cap = cnt;
+        return Math.max(1, Math.min(cnt, cap));
+    };
     let totalGold = 0, totalCount = 0;
-    toSell.forEach(i => { let q = Math.min(i.cnt, i._autoSellQty || i.cnt); totalGold += getSellPrice(i) * q; totalCount += q; });
+    toSell.forEach(i => { let q = _sellQty(i); totalGold += getSellPrice(i) * q; totalCount += q; });
+    totalGold = Math.max(0, Math.floor(Number(totalGold) || 0));
     let _grantSold = toSell.some(i => DB.items[i.id] && DB.items[i.id].grantSkills);
     // ⚠️ uid 精準移除：舊寫法 player.inv.filter(i => i.cnt > 0) 會把「cnt 為 undefined 的舊存檔物品」
     //    連同鎖定件、noSell 任務道具一併靜默刪除，而本函式每 10 秒由 gameLoop 自動跑一次＝無人看管的資料流失。
     let _gone = new Set();
-    toSell.forEach(i => { let q = Math.min(i.cnt, i._autoSellQty || i.cnt); i.cnt -= q; delete i._autoSellQty; if (i.cnt > 0) { i.junk = false; delete i.junkSince; } else _gone.add(i.uid); });
+    toSell.forEach(i => {
+        let q = _sellQty(i);
+        let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));
+        i.cnt = cnt - q;
+        delete i._autoSellQty;
+        if (i.cnt > 0) { i.junk = false; delete i.junkSince; }
+        else _gone.add(i.uid);
+    });
     if (_gone.size) player.inv = player.inv.filter(i => !_gone.has(i.uid));
-    player.gold += totalGold;
-    logSys(`<span class="text-amber-300">${manual ? '一鍵賣出' : '系統自動賣出'} ${toSell.length} 件(共 ${totalCount} 個)廢品，獲得 <span class="text-yellow-400 font-bold">${totalGold}</span> 金幣。</span>`);
+    if (typeof addPlayerGold === 'function') addPlayerGold(totalGold);
+    else player.gold = (Number(player.gold) || 0) + totalGold;
+    logSys(`<span class="text-amber-300">${manual ? '一鍵賣出' : '系統自動賣出'} ${toSell.length} 件(共 ${totalCount} 個)廢品，獲得 <span class="text-yellow-400 font-bold">${totalGold.toLocaleString()}</span> 金幣。</span>`);
     renderTabs();
     updateUI();
     if(_grantSold) { calcStats(); renderSkillSelects(); }
@@ -2082,7 +2099,7 @@ function _autoSellDecision(i, ruleSnapshot, craftRemain) {   // 🔧 v2.6.77 rul
     if (i._userKeep) return { sell:false };   // 🛡️ v2.6.69 審計#10：玩家曾手動取消規則標記→豁免自動販賣（重新儲存規則時清除）
     let ov = r.overrides[i.id];
     if (ov === 'keep') return { sell:false };
-    if (ov === 'sell') return { sell:true, qty:i.cnt };
+    if (ov === 'sell') return { sell:true, qty: Math.max(1, Math.floor(Number(i.cnt) || 1)) };
     // 🏛️ v2.7.56 解除封印後的「古老的○○」是普通武器／防具，沒有詞綴且多數無法強化，會立即符合一般裝備販賣規則；整系列優先保護（個別「永遠販賣」例外仍優先，故置於 overrides 之後）。
     if (r.protectOldSeries && (String(i.id).startsWith('wpn_old_') || String(i.id).startsWith('amr_old_'))) return { sell:false };
     if (r.protectRelic !== false && typeof isRelic === 'function' && isRelic(d)) return { sell:false };   // 🏺 v3.1.44 保護遺物（預設開·個別「永遠販賣」例外仍優先）
@@ -2226,7 +2243,8 @@ function sellItem(uid, count, unitPrice) {
     let _wasGrant = !!(DB.items[item.id] && DB.items[item.id].grantSkills);   // 賣出授予技能頭盔時需重算
     let sellCount = Math.min(count, item.cnt);
     let totalGot = sellCount * unitPrice;
-    player.gold += totalGot;
+    if (typeof addPlayerGold === 'function') addPlayerGold(totalGot);
+    else player.gold = (Number(player.gold) || 0) + totalGot;
     item.cnt -= sellCount;
     logSys(`賣出了 ${sellCount} 個 ${DB.items[item.id].n}，獲得 ${totalGot} 金幣。`);
     if (item.cnt <= 0) {

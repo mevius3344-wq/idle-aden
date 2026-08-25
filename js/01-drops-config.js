@@ -2263,12 +2263,31 @@ function blessEnhanceGain(en) {
 //    只夾「有硬性上限、超過即證明不可能」者：等級≤100（checkLvUp 硬上限）、裝備強化值≤各類上限、經驗/金幣為非負有限數。
 //    ⚠️金幣的「高但合法」值與屬性點(player.base/bonus)無乾淨上限 → 刻意不夾，避免誤傷合法玩家（純客戶端分辨不出高額合法 vs 作弊）。
 //    掛點：saveGame(寫檔前) + loadGame(讀檔後)；recomputeStats 另即時夾等級。失敗即爆裝/重算 hp/mp 等已由既有機制處理。
+/** 正規化金幣為非負有限整數（字串數字可轉回；NaN/Infinity → 0） */
+function normalizePlayerGold(v) {
+    let n = Number(v);
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.floor(n));
+}
+/** 安全增加／扣除金幣，避免字串拼接或 NaN 把持有額弄壞 */
+function addPlayerGold(delta) {
+    if (typeof player !== 'object' || !player) return 0;
+    let d = Number(delta);
+    if (!Number.isFinite(d) || d === 0) {
+        player.gold = normalizePlayerGold(player.gold);
+        return 0;
+    }
+    let before = normalizePlayerGold(player.gold);
+    let after = normalizePlayerGold(before + d);
+    player.gold = after;
+    return after - before;
+}
 function sanitizeState() {
     if (typeof player !== 'object' || !player) return;
-    let fin = (v, dft) => (typeof v === 'number' && isFinite(v)) ? v : dft;   // NaN/Infinity/非數 → 預設值
+    let fin = (v, dft) => { let n = Number(v); return Number.isFinite(n) ? n : dft; };   // 字串數字可轉回；NaN/Infinity/非數 → 預設值
     player.lv   = Math.max(1, Math.min(100, Math.floor(fin(player.lv, 1)) || 1));   // 等級 [1,100]
     player.exp  = Math.max(0, fin(player.exp, 0));                                   // 經驗非負有限
-    player.gold = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, fin(player.gold, 0)));   // 金幣：僅擋負值/NaN/Infinity，不擋高額合法金幣
+    player.gold = normalizePlayerGold(player.gold);   // 金幣：擋負值/NaN/Infinity／字串拼接殘骸
     let clampEn = it => { let dd = it && DB.items[it.id]; if (dd && (dd.type === 'wpn' || dd.type === 'arm' || dd.type === 'acc')) it.en = Math.min(Math.max(-1, Number(it.en) || 0), enhanceCap(dd)); };   // 只夾裝備類（素材/消耗品不碰）；🏰 下限 -1（詛咒卷軸紅變，見 executeCurseDeEnhance）
     if (Array.isArray(player.inv)) player.inv.forEach(clampEn);
     if (player.eq) for (let k in player.eq) clampEn(player.eq[k]);

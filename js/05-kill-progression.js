@@ -308,12 +308,16 @@ function doMobTransform(idx) {
 // 💰 一般怪金幣統一曲線：M=20+3L+0.06L²，區間=M×[0.65,1.35]；hard 非頭目×1.25。
 // 頭目保留各自已設定的金額；未設定者才回退同級曲線。席琳／恩賜倍率由旗標補回，避免 0/0 資料漏吃倍率。
 function monsterGoldRange(mob) {
+    if (mob && mob.noGold) return { min: 0, max: 0 };
     let lv = Math.max(1, Number(mob && mob.lv) || 1);
     let mean = 20 + 3 * lv + 0.06 * lv * lv;
     let diffMult = (mob && mob.hard && !mob.boss) ? 1.25 : 1;
     let gMin, gMax;
     let cfgMin = Number(mob && mob.goldMin), cfgMax = Number(mob && mob.goldMax);
-    let bossHasConfiguredGold = !!(mob && mob.boss && Number.isFinite(cfgMin) && Number.isFinite(cfgMax) && cfgMin > 0 && cfgMax >= cfgMin);
+    let hasCfg = Number.isFinite(cfgMin) && Number.isFinite(cfgMax);
+    // 明確設為 0/0（攻城／血盟／白目等）→ 不掉金幣；不可再回退曲線，否則「設 0 仍掉錢」
+    if (hasCfg && cfgMax <= 0) return { min: 0, max: 0 };
+    let bossHasConfiguredGold = !!(mob && mob.boss && hasCfg && cfgMin > 0 && cfgMax >= cfgMin);
     if (bossHasConfiguredGold) {
         // spawn 時席琳／恩賜已直接乘入頭目的 goldMin/goldMax，不再重複計算。
         gMin = Math.floor(cfgMin); gMax = Math.floor(cfgMax);
@@ -396,13 +400,17 @@ function killMob(idx) {
     let _goldDropRate = mob.boss ? 1 : 0.7;   // 💰 一般怪 70%；頭目 100%
     if (!_kbNoReward && !mob.noGold && Math.random() < _goldDropRate) {
         let _goldRange = monsterGoldRange(mob);
-        let g = _goldRange.min + Math.floor(Math.random() * (_goldRange.max - _goldRange.min + 1));
-        g = Math.max(1, Math.floor(g * (0.9 + Math.random() * 0.2)));   // 💰 最終金額額外浮動 −10%～+10%
-        // ⚠️v3.0.82 經典模式金幣÷2 已移除（一般＝經典；歷次：×1/10 → ×1/3 → ×1/2 → ×1）
-        g = Math.floor(g * (1 + dollFieldVal('goldBonus') / 100) * partyRewardMult());   // 🪆 娃娃加成後再乘有效隊伍人數（最高 ×8）
-        player.gold += g;
-        // 🔧 金幣不再逐殺輸出於系統日誌；改由 gameLoop 累積、flushAwaySummary 以「掛機期間獲得總金幣」統一顯示。
-
+        if (_goldRange.max > 0) {
+            let g = _goldRange.min + Math.floor(Math.random() * (_goldRange.max - _goldRange.min + 1));
+            g = Math.max(1, Math.floor(g * (0.9 + Math.random() * 0.2)));   // 💰 最終金額額外浮動 −10%～+10%
+            // ⚠️v3.0.82 經典模式金幣÷2 已移除（一般＝經典；歷次：×1/10 → ×1/3 → ×1/2 → ×1）
+            g = Math.floor(g * (1 + dollFieldVal('goldBonus') / 100) * partyRewardMult());   // 🪆 娃娃加成後再乘有效隊伍人數（最高 ×8）
+            g = Math.max(1, Math.floor(Number(g) || 0));
+            if (typeof addPlayerGold === 'function') addPlayerGold(g);
+            else player.gold = (Number(player.gold) || 0) + g;
+            // 累積擊殺金幣，由 tick 定期刷到系統日誌（避免每殺一隻洗版）
+            state._goldGainAcc = (Number(state._goldGainAcc) || 0) + g;
+        }
     }
     // 🦴 v3.1.71 用戶要求：取消「怪物直接掉落席琳遺骸」——遺骸唯一取得管道＝席琳結晶（NPC 伊奧兌換）／菈克希絲拆分舊詞綴裝備。
     //    原掉落機率公式已移轉到下方「席琳結晶」掉落（見該區塊）。

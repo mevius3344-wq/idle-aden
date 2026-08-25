@@ -1457,7 +1457,7 @@ function _updateUIImpl() {
 
     document.getElementById('st-ac').innerText = player.d.ac;
     document.getElementById('st-mr').innerText = player.d.mr;
-    document.getElementById('st-gold').innerText = player.gold.toLocaleString();
+    document.getElementById('st-gold').innerText = (typeof normalizePlayerGold === 'function' ? normalizePlayerGold(player.gold) : (Number(player.gold) || 0)).toLocaleString();
     
     document.getElementById('txt-hp').innerText = `${Math.floor(player.hp)}/${Math.floor(player.mhp)}`;
     document.getElementById('bar-hp').style.width = `${Math.max(0, (player.hp/player.mhp)*100)}%`;

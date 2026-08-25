@@ -578,6 +578,14 @@ function tick() {
         pvpPostKillWhisperTick();   // PVP：擊敗玩家後的一小時限時密語
     }
     if (state.ticks % 100 === 0) { try { refreshPandoraMarket(false); } catch (e) {} }   // 🔧 潘朵拉黑市：每 10 秒檢查是否到 10 分鐘換商品（含稀有公告）
+    // 💰 擊殺金幣累積回報：每 30 秒刷一次到系統日誌（補上已移除的 flushAwaySummary）
+    if (state.ticks % 300 === 0) {
+        let _gAcc = Math.floor(Number(state._goldGainAcc) || 0);
+        if (_gAcc > 0) {
+            state._goldGainAcc = 0;
+            try { logSys(`<span class="text-yellow-300">掛機期間獲得金幣 <span class="font-bold">${_gAcc.toLocaleString()}</span>。</span>`); } catch (e) {}
+        }
+    }
     if (state._junkSellAt == null) state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS;   // 🗑️ 自動賣廢品倒數：預設 10 秒（JUNK_AUTOSELL_TICKS）
     if (state.ticks >= state._junkSellAt) { try { if (typeof autoSellJunk === 'function' && (!player || player.autoSellOn !== false)) autoSellJunk(); } catch (e) {} state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS; }   // 🗑️ 倒數到→若「自動賣出」開啟(player.autoSellOn!==false·預設開)則賣出標示為廢品的物品並重新排程 10 秒；停止賣出時只重排程不賣。玩家手動標示廢品會把此時間往後推 10 秒（_bumpJunkSellTimer）。⚠️自動路徑 autoSellJunk() 不 saveGame（效能·靠其他存檔點落地）
     
@@ -1011,7 +1019,7 @@ function applySiegeEnemyScaling(mob) {
         mob.lv = 1;
         mob.hp = s.hpPerLv ? s.hpPerLv * L : s.hp; mob.curHp = mob.hp;   // 🔧 守護塔 500×等級、城門 300×等級
         mob.ac = s.ac; mob.mr = s.mr;
-        mob.exp = 0; mob.goldMin = 0; mob.goldMax = 0;
+        mob.exp = 0; mob.goldMin = 0; mob.goldMax = 0; mob.noGold = true;
         if (s.dr) mob.dr = s.dr;
         return;
     }
@@ -1020,7 +1028,7 @@ function applySiegeEnemyScaling(mob) {
     mob.ac = (s.acBase !== undefined ? s.acBase : -10) - Math.floor(L / (s.acDiv || 4));
     mob.mr = (s.mrBase || 0) + Math.floor(L / (s.mrDiv || 5));
     mob.exp = 30 * L;                               // 攻城怪經驗：30×玩家等級
-    mob.goldMin = 0; mob.goldMax = 0;               // 攻城怪不掉金幣
+    mob.goldMin = 0; mob.goldMax = 0; mob.noGold = true;               // 攻城怪不掉金幣
     mob.dmg = [1, s.dmgSides || 10];
     mob.db = s.dbHalf ? Math.floor(L / 2) : L;      // 傷害加成：+(玩家等級)；dbHalf 為 +(玩家等級/2)
     mob.hit = (s.hitBase || 0) + Math.floor(L / 2); // 額外命中：基底 +(玩家等級/2)
@@ -1920,6 +1928,7 @@ function applyPledgeEnemyScaling(mob) {
     mob.exp = 0;        // 🔧 血盟敵人：經驗值設為 0
     mob.goldMin = 0;    // 🔧 血盟敵人：金錢設為 0
     mob.goldMax = 0;
+    mob.noGold = true;
     mob.dmg = [1, s.dmgSides || 10];
     mob.db = scaledEnemyDamageBonus(L, !!s.dbHalf, 0);   // 一般攻擊傷害加成：+(玩家等級)；喬/賽尼斯(dbHalf) 為 +(玩家等級/2)
     mob.hit = scaledEnemyHit(L, s.hitBase || 0);      // 額外命中：基底 +(玩家等級/2)
