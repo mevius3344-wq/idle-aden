@@ -1031,15 +1031,35 @@
     .boss-marquee { height: 26px; }
     .boss-marquee-text { font-size: 12px; }
 }
-/* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼 */
+/* 🗂️ 統一日誌：單一全寬面板（戰鬥／系統／聊天分頁切換）；#syslog-panel 僅相容空殼
+   分頁一律 absolute 疊在 #unified-log-body 內，同一時間只顯示一個，避免互相擠壓／遮蔽。 */
 #log-row { flex: 0 0 340px; min-height: 0; width: 100%; display: flex; flex-direction: column; }
-#combat-log-panel { flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; display: flex; flex-direction: column; }
+#combat-log-panel { flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 #combat-log-panel > .panel-header { flex: 0 0 auto; }
-#unified-log-body { flex: 1 1 0; min-height: 0; }
+#unified-log-body {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 120px;
+  overflow: hidden;
+  isolation: isolate;
+}
 #combat-log-panel #world-input-row { flex: 0 0 auto; }
-.unified-log-pane { z-index: 1; }
-.unified-log-pane.hidden { display: none !important; }
+.unified-log-pane {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1;
+  box-sizing: border-box;
+}
+.unified-log-pane:not(.hidden) { z-index: 2; }
+.unified-log-pane.hidden,
+#combat-log.hidden, #sys-log.hidden,
+#world-log.hidden, #clan-log.hidden, #party-log.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 #combat-log-panel #combat-filter-pills.hidden { display: none !important; }
+#combat-log-panel #sys-log-pins.hidden { display: none !important; }
 #syslog-panel.hidden { display: none !important; flex: 0 0 0 !important; width: 0 !important; height: 0 !important; overflow: hidden; }
 /* ⚠️v2.6.37 狩獵區域改 1920/580 條狀後，戰鬥框變矮→地圖面板縮到內容(標題列+條狀框)、省下的高度由日誌列吸收長高。
    :has 掛在共同祖先 #col-center(其下 #map-view-panel 與 #log-row 為兄弟)；僅「狩獵中(battle-view 顯示且 area-fit)」套用→安全區(town-view·battle-view 隱藏)/攻城/裂痕(非 area-fit·仍 16:9 吃滿)維持原樣。 */
@@ -2098,7 +2118,7 @@ button.classic-skill-cell { cursor:pointer; }
 
     #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 0 !important; }
     #combat-log-panel { flex: 0 0 280px !important; width: 100%; height: 280px !important; min-height: 280px; }
-    #unified-log-body { min-height: 0; }
+    #unified-log-body { min-height: 140px; }
     #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 7px 9px; font-size: 14px !important; }
     #combat-log, #sys-log, #world-log, #clan-log, #party-log { padding: 9px !important; font-size: 13px !important; }

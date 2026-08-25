@@ -1981,7 +1981,14 @@ function switchUnifiedLogTab(tab) {
 
     _UNIFIED_LOG_PANES.forEach(function (cfg) {
         let pane = document.getElementById(cfg.logId);
-        if (pane) pane.classList.toggle('hidden', cfg.tab !== tab);
+        if (!pane) return;
+        let on = cfg.tab === tab;
+        pane.classList.toggle('hidden', !on);
+        // 強制關閉，避免舊 CSS／utility 把 display 蓋回 flex/block 造成分頁互相遮蔽
+        try {
+            pane.style.display = on ? '' : 'none';
+            pane.setAttribute('aria-hidden', on ? 'false' : 'true');
+        } catch (e) {}
     });
 
     let bc = document.getElementById('logtab-btn-combat');
