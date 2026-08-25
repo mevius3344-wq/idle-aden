@@ -642,6 +642,7 @@ async function handleChatApi(req, res, u) {
       alignment: Number(data.alignment) || 0,
       classic: data.classic !== false,
       clanKey: String(data.clanKey || "").slice(0, 80),
+      partyId: String(data.partyId || "").slice(0, 48),
       slot: Number(data.slot) || 0,
       sessionId: sessionId,
       fp: String(data.fp || "").slice(0, 120),
@@ -709,6 +710,636 @@ async function handleChatApi(req, res, u) {
   }
 
   return json(res, 404, { ok: false, error: "unknown chat api" });
+}
+
+// ===== 🤝 Realtime party (invite / roster / share). In-memory; lost on restart. =====
+const PARTY_MAX = 8;
+const PARTY_TTL_MS = 90000;
+const PARTY_INVITE_MS = 60000;
+const PARTY_SHARE_RATE_MS = 80;
+const PARTY_WAIT_MAX_MS = 20000;
+const PARTY_EVENT_MAX = 120;
+/** @type {Map<string, object>} partyId -> party */
+const parties = new Map();
+/** @type {Map<string, object>} memberKey -> presence */
+const partyPresence = new Map();
+/** @type {Map<string, object[]>} memberKey -> pending invites */
+const partyInvites = new Map();
+/** @type {Array<{since:number, resolve:Function, timer:any, key:string}>} */
+const partyWaiters = [];
+let partyEventSeq = 0;
+/** @type {Array<object>} */
+const partyEvents = [];
+
+function partyCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+function partySanitizeName(raw) {
+  return String(raw || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 16);
+}
+
+function partyMemberKey(account, slot, name) {
+  const a = String(account || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 24);
+  const s = Math.max(0, Math.min(8, Number(slot) || 0));
+  const n = partySanitizeName(name) || "未命名";
+  if (!a) return "";
+  return a + "#" + s + "#" + n;
+}
+
+function partyNewId() {
+  return "P" + Date.now().toString(36) + crypto.randomBytes(2).toString("hex");
+}
+
+function partyPushEvent(ev) {
+  partyEventSeq += 1;
+  ev.seq = partyEventSeq;
+  ev.at = Date.now();
+  partyEvents.push(ev);
+  while (partyEvents.length > PARTY_EVENT_MAX) partyEvents.shift();
+  partyNotifyWaiters();
+  return ev;
+}
+
+function partyNotifyWaiters() {
+  if (!partyWaiters.length) return;
+  const pending = partyWaiters.splice(0);
+  pending.forEach((w) => {
+    try {
+      clearTimeout(w.timer);
+    } catch (e) {}
+    try {
+      w.resolve(true);
+    } catch (e) {}
+  });
+}
+
+function partyPublicMember(m) {
+  if (!m) return null;
+  return {
+    key: m.key,
+    account: m.account,
+    slot: m.slot,
+    name: m.name,
+    lv: m.lv || 1,
+    cls: m.cls || "",
+    mapId: m.mapId || "",
+    mapName: m.mapName || "",
+    hp: m.hp || 0,
+    mhp: m.mhp || 0,
+    classic: !!m.classic,
+    leader: !!m.leader,
+    online: !!m.online,
+    lastSeen: m.lastSeen || 0,
+  };
+}
+
+function partyPublic(party) {
+  if (!party) return null;
+  return {
+    id: party.id,
+    leaderKey: party.leaderKey,
+    members: (party.members || []).map(partyPublicMember).filter(Boolean),
+    createdAt: party.createdAt || 0,
+  };
+}
+
+function partyFindByMemberKey(key) {
+  if (!key) return null;
+  for (const p of parties.values()) {
+    if (!p || !Array.isArray(p.members)) continue;
+    if (p.members.some((m) => m && m.key === key)) return p;
+  }
+  return null;
+}
+
+function partyCleanupStale(now) {
+  const t = now || Date.now();
+  for (const [key, pre] of partyPresence.entries()) {
+    if (!pre || t - (pre.lastSeen || 0) > PARTY_TTL_MS) partyPresence.delete(key);
+  }
+  for (const [key, list] of partyInvites.entries()) {
+    const keep = (list || []).filter((inv) => inv && t - (inv.at || 0) < PARTY_INVITE_MS);
+    if (keep.length) partyInvites.set(key, keep);
+    else partyInvites.delete(key);
+  }
+  for (const [pid, party] of parties.entries()) {
+    if (!party || !Array.isArray(party.members)) {
+      parties.delete(pid);
+      continue;
+    }
+    party.members.forEach((m) => {
+      if (!m) return;
+      const pre = partyPresence.get(m.key);
+      m.online = !!(pre && t - (pre.lastSeen || 0) < PARTY_TTL_MS);
+      if (pre) {
+        m.mapId = pre.mapId || m.mapId;
+        m.mapName = pre.mapName || m.mapName;
+        m.lv = pre.lv || m.lv;
+        m.hp = pre.hp;
+        m.mhp = pre.mhp;
+        m.cls = pre.cls || m.cls;
+      }
+    });
+    const alive = party.members.filter((m) => m && m.online);
+    if (!alive.length) {
+      parties.delete(pid);
+      continue;
+    }
+    if (!alive.some((m) => m.key === party.leaderKey)) {
+      party.leaderKey = alive[0].key;
+      party.members.forEach((m) => {
+        if (m) m.leader = m.key === party.leaderKey;
+      });
+      partyPushEvent({
+        type: "leader",
+        partyId: party.id,
+        leaderKey: party.leaderKey,
+        name: alive[0].name,
+      });
+    }
+    party.members = party.members.filter((m) => m && (m.online || t - (m.lastSeen || 0) < PARTY_TTL_MS * 2));
+    if (!party.members.length) parties.delete(pid);
+  }
+}
+
+function partyUpsertPresence(body) {
+  const account = String(body.account || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 24);
+  const name = partySanitizeName(body.name);
+  const slot = Math.max(0, Math.min(8, Number(body.slot) || 0));
+  const key = partyMemberKey(account, slot, name);
+  if (!key) return null;
+  const now = Date.now();
+  const row = {
+    key: key,
+    account: account,
+    slot: slot,
+    name: name || "未命名",
+    sessionId: String(body.sessionId || "").slice(0, 96),
+    lv: Math.max(1, Math.min(100, Number(body.lv) || 1)),
+    cls: String(body.cls || "").slice(0, 24),
+    mapId: String(body.mapId || "").slice(0, 64),
+    mapName: String(body.mapName || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 40),
+    hp: Math.max(0, Number(body.hp) || 0),
+    mhp: Math.max(0, Number(body.mhp) || 0),
+    classic: body.classic !== false,
+    lastSeen: now,
+  };
+  partyPresence.set(key, row);
+  const party = partyFindByMemberKey(key);
+  if (party) {
+    const m = party.members.find((x) => x && x.key === key);
+    if (m) {
+      Object.assign(m, {
+        mapId: row.mapId,
+        mapName: row.mapName,
+        lv: row.lv,
+        hp: row.hp,
+        mhp: row.mhp,
+        cls: row.cls,
+        classic: row.classic,
+        sessionId: row.sessionId,
+        online: true,
+        lastSeen: now,
+      });
+    }
+  }
+  return { key: key, presence: row, party: party };
+}
+
+function partyEventsFor(key, since) {
+  const s = Math.max(0, Number(since) || 0);
+  const party = partyFindByMemberKey(key);
+  const pid = party ? party.id : "";
+  return partyEvents.filter((ev) => {
+    if (!ev || !(ev.seq > s)) return false;
+    if (ev.toKey && ev.toKey === key) return true;
+    if (ev.partyId && pid && ev.partyId === pid) return true;
+    return false;
+  });
+}
+
+function partySnapshotFor(key) {
+  partyCleanupStale(Date.now());
+  const party = partyFindByMemberKey(key);
+  const invites = (partyInvites.get(key) || []).map((inv) => ({
+    id: inv.id,
+    partyId: inv.partyId,
+    fromName: inv.fromName,
+    fromKey: inv.fromKey,
+    at: inv.at,
+  }));
+  return {
+    ok: true,
+    seq: partyEventSeq,
+    party: partyPublic(party),
+    invites: invites,
+    events: [],
+  };
+}
+
+async function handlePartyApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    partyCors(res);
+    res.writeHead(204);
+    return res.end();
+  }
+
+  if (u === "/api/party/status" && req.method === "GET") {
+    partyCleanupStale(Date.now());
+    return json(res, 200, {
+      ok: true,
+      online: true,
+      parties: parties.size,
+      presence: partyPresence.size,
+      seq: partyEventSeq,
+      max: PARTY_MAX,
+    });
+  }
+
+  if (u === "/api/party/heartbeat" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    return json(res, 200, {
+      ok: true,
+      key: up.key,
+      party: partyPublic(up.party),
+      seq: partyEventSeq,
+    });
+  }
+
+  if (u === "/api/party/create" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號再組隊。" });
+    const existing = partyFindByMemberKey(up.key);
+    if (existing) {
+      return json(res, 200, { ok: true, party: partyPublic(existing), already: true });
+    }
+    const id = partyNewId();
+    const member = {
+      ...up.presence,
+      leader: true,
+      online: true,
+    };
+    const party = {
+      id: id,
+      leaderKey: up.key,
+      members: [member],
+      createdAt: Date.now(),
+      lastShareAt: 0,
+    };
+    parties.set(id, party);
+    partyPushEvent({ type: "create", partyId: id, toKey: up.key });
+    return json(res, 200, { ok: true, party: partyPublic(party) });
+  }
+
+  if (u === "/api/party/invite" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
+    let party = partyFindByMemberKey(up.key);
+    if (!party) {
+      return json(res, 400, { ok: false, error: "no party", message: "請先建立隊伍再邀請。" });
+    }
+    if (party.leaderKey !== up.key) {
+      return json(res, 403, { ok: false, error: "not leader", message: "只有隊長可以邀請。" });
+    }
+    if (party.members.length >= PARTY_MAX) {
+      return json(res, 400, { ok: false, error: "full", message: "隊伍已滿（最多 " + PARTY_MAX + " 人）。" });
+    }
+    const targetName = partySanitizeName(data.targetName);
+    if (!targetName) return json(res, 400, { ok: false, error: "empty", message: "請輸入對方角色名稱。" });
+    partyCleanupStale(Date.now());
+    let target = null;
+    for (const pre of partyPresence.values()) {
+      if (!pre) continue;
+      if (pre.name === targetName && pre.classic === (data.classic !== false)) {
+        target = pre;
+        break;
+      }
+    }
+    if (!target) {
+      return json(res, 404, { ok: false, error: "offline", message: "找不到線上的「" + targetName + "」。對方需登入並進入遊戲。" });
+    }
+    if (target.key === up.key) {
+      return json(res, 400, { ok: false, error: "self", message: "無法邀請自己。" });
+    }
+    if (party.members.some((m) => m && m.key === target.key)) {
+      return json(res, 400, { ok: false, error: "already", message: "對方已在隊伍中。" });
+    }
+    if (partyFindByMemberKey(target.key)) {
+      return json(res, 400, { ok: false, error: "busy", message: "對方已在其他隊伍中。" });
+    }
+    const inviteId = "I" + Date.now().toString(36) + crypto.randomBytes(2).toString("hex");
+    const inv = {
+      id: inviteId,
+      partyId: party.id,
+      fromKey: up.key,
+      fromName: up.presence.name,
+      toKey: target.key,
+      at: Date.now(),
+    };
+    const list = partyInvites.get(target.key) || [];
+    const filtered = list.filter((x) => x && x.partyId !== party.id);
+    filtered.push(inv);
+    partyInvites.set(target.key, filtered);
+    partyPushEvent({
+      type: "invite",
+      toKey: target.key,
+      inviteId: inviteId,
+      partyId: party.id,
+      fromName: up.presence.name,
+    });
+    return json(res, 200, { ok: true, inviteId: inviteId, targetName: target.name });
+  }
+
+  if (u === "/api/party/respond" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const inviteId = String(data.inviteId || "").slice(0, 48);
+    const accept = !!data.accept;
+    const list = partyInvites.get(up.key) || [];
+    const inv = list.find((x) => x && x.id === inviteId);
+    partyInvites.set(
+      up.key,
+      list.filter((x) => x && x.id !== inviteId)
+    );
+    if (!inv) return json(res, 404, { ok: false, error: "gone", message: "邀請已失效。" });
+    if (Date.now() - (inv.at || 0) > PARTY_INVITE_MS) {
+      return json(res, 410, { ok: false, error: "expired", message: "邀請已過期。" });
+    }
+    if (!accept) {
+      partyPushEvent({
+        type: "decline",
+        partyId: inv.partyId,
+        name: up.presence.name,
+        toKey: inv.fromKey,
+      });
+      return json(res, 200, { ok: true, accepted: false });
+    }
+    if (partyFindByMemberKey(up.key)) {
+      return json(res, 400, { ok: false, error: "busy", message: "你已在隊伍中，請先離隊。" });
+    }
+    const party = parties.get(inv.partyId);
+    if (!party) return json(res, 404, { ok: false, error: "no party", message: "隊伍已解散。" });
+    if (party.members.length >= PARTY_MAX) {
+      return json(res, 400, { ok: false, error: "full", message: "隊伍已滿。" });
+    }
+    party.members.push({
+      ...up.presence,
+      leader: false,
+      online: true,
+    });
+    partyPushEvent({
+      type: "join",
+      partyId: party.id,
+      name: up.presence.name,
+      key: up.key,
+    });
+    return json(res, 200, { ok: true, accepted: true, party: partyPublic(party) });
+  }
+
+  if (u === "/api/party/leave" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const party = partyFindByMemberKey(up.key);
+    if (!party) return json(res, 200, { ok: true, left: true });
+    const wasLeader = party.leaderKey === up.key;
+    party.members = party.members.filter((m) => m && m.key !== up.key);
+    partyPushEvent({ type: "leave", partyId: party.id, name: up.presence.name, key: up.key });
+    if (!party.members.length) {
+      parties.delete(party.id);
+      partyPushEvent({ type: "disband", partyId: party.id, toKey: up.key });
+    } else if (wasLeader) {
+      party.leaderKey = party.members[0].key;
+      party.members.forEach((m) => {
+        if (m) m.leader = m.key === party.leaderKey;
+      });
+      partyPushEvent({
+        type: "leader",
+        partyId: party.id,
+        leaderKey: party.leaderKey,
+        name: party.members[0].name,
+      });
+    }
+    return json(res, 200, { ok: true, left: true });
+  }
+
+  if (u === "/api/party/kick" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const party = partyFindByMemberKey(up.key);
+    if (!party) return json(res, 400, { ok: false, error: "no party" });
+    if (party.leaderKey !== up.key) {
+      return json(res, 403, { ok: false, error: "not leader", message: "只有隊長可以踢人。" });
+    }
+    const targetKey = String(data.targetKey || "").slice(0, 80);
+    if (!targetKey || targetKey === up.key) {
+      return json(res, 400, { ok: false, error: "bad target", message: "無法踢除。" });
+    }
+    const kicked = party.members.find((m) => m && m.key === targetKey);
+    party.members = party.members.filter((m) => m && m.key !== targetKey);
+    if (kicked) {
+      partyPushEvent({
+        type: "kick",
+        partyId: party.id,
+        name: kicked.name,
+        key: targetKey,
+        toKey: targetKey,
+      });
+    }
+    return json(res, 200, { ok: true, party: partyPublic(party) });
+  }
+
+  if (u === "/api/party/disband" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const party = partyFindByMemberKey(up.key);
+    if (!party) return json(res, 200, { ok: true, disbanded: true });
+    if (party.leaderKey !== up.key) {
+      return json(res, 403, { ok: false, error: "not leader", message: "只有隊長可以解散隊伍。" });
+    }
+    const pid = party.id;
+    const keys = party.members.map((m) => m && m.key).filter(Boolean);
+    parties.delete(pid);
+    keys.forEach((k) => {
+      partyPushEvent({ type: "disband", partyId: pid, toKey: k });
+    });
+    return json(res, 200, { ok: true, disbanded: true });
+  }
+
+  if (u === "/api/party/share" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const up = partyUpsertPresence(data);
+    if (!up || !up.party) return json(res, 400, { ok: false, error: "no party" });
+    const party = up.party;
+    const now = Date.now();
+    if (!party.shareAtByKey) party.shareAtByKey = {};
+    if (now - (party.shareAtByKey[up.key] || 0) < PARTY_SHARE_RATE_MS) {
+      return json(res, 429, { ok: false, error: "rate" });
+    }
+    party.shareAtByKey[up.key] = now;
+    party.lastShareAt = now;
+    const exp = Math.max(0, Math.min(500000, Math.floor(Number(data.exp) || 0)));
+    const gold = Math.max(0, Math.min(200000, Math.floor(Number(data.gold) || 0)));
+    const mapId = String(data.mapId || "").slice(0, 64);
+    const mobName = String(data.mobName || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 40);
+    if (!exp && !gold) return json(res, 200, { ok: true, skipped: true });
+    partyPushEvent({
+      type: "share",
+      partyId: party.id,
+      fromKey: up.key,
+      fromName: up.presence.name,
+      mapId: mapId,
+      exp: exp,
+      gold: gold,
+      mobName: mobName,
+    });
+    return json(res, 200, { ok: true });
+  }
+
+  if (u === "/api/party/poll" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const account = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    const slot = Math.max(0, Math.min(8, Number(url.searchParams.get("slot")) || 0));
+    const name = partySanitizeName(url.searchParams.get("name"));
+    const key = partyMemberKey(account, slot, name);
+    if (!key) return json(res, 400, { ok: false, error: "need account" });
+    const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
+    let waitMs = Number(url.searchParams.get("wait"));
+    if (!Number.isFinite(waitMs) || waitMs < 0) waitMs = 0;
+    waitMs = Math.min(PARTY_WAIT_MAX_MS, waitMs);
+
+    const build = () => {
+      partyCleanupStale(Date.now());
+      const snap = partySnapshotFor(key);
+      snap.events = partyEventsFor(key, since);
+      if (snap.events.length) {
+        const maxSeq = Math.max.apply(
+          null,
+          snap.events.map((e) => e.seq || 0)
+        );
+        if (maxSeq > snap.seq) snap.seq = maxSeq;
+      }
+      return snap;
+    };
+
+    const ready = partyEventsFor(key, since);
+    if (ready.length || waitMs <= 0 || since === 0) {
+      return json(res, 200, build());
+    }
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        try {
+          clearTimeout(waiter.timer);
+        } catch (e) {}
+        const idx = partyWaiters.indexOf(waiter);
+        if (idx >= 0) partyWaiters.splice(idx, 1);
+        try {
+          json(res, 200, build());
+        } catch (e) {}
+        resolve();
+      };
+      const waiter = {
+        since: since,
+        key: key,
+        resolve: finish,
+        timer: null,
+      };
+      waiter.timer = setTimeout(finish, waitMs);
+      partyWaiters.push(waiter);
+      req.on("close", () => {
+        if (done) return;
+        done = true;
+        try {
+          clearTimeout(waiter.timer);
+        } catch (e) {}
+        const idx = partyWaiters.indexOf(waiter);
+        if (idx >= 0) partyWaiters.splice(idx, 1);
+        resolve();
+      });
+    });
+    return;
+  }
+
+  return json(res, 404, { ok: false, error: "unknown party api" });
 }
 
 // ===== 帳號註冊（全站唯一）＋角色名稱登錄（全站唯一 ID）=====
@@ -1269,6 +1900,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/chat")) {
       await handleChatApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/party")) {
+      await handlePartyApi(req, res, u);
       return;
     }
     if (u.startsWith("/api/accounts")) {

@@ -14,7 +14,7 @@
     <title>經典天堂</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.8.81-status-top">
+    <link rel="stylesheet" href="css/style.css?v=v3.8.83-status-slim">
     <link rel="stylesheet" href="css/floating-ui.css?v=v3.5.100-audit-tail">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -203,6 +203,13 @@
                     <div class="bar-bg status-exp-bar" title="EXP"><div id="bar-exp" class="bar-fill bg-yellow-500" style="width:0%"></div><div id="txt-exp" class="bar-text font-normal">0.00%</div></div>
                 </div>
             </div>
+
+            <!-- 🤝 即時組隊（線上玩家） -->
+            <div id="rt-party-panel" class="panel" style="display:none;">
+                <div class="panel-header flex items-center justify-center" style="user-select:none;"><span class="text-center">即時組隊</span></div>
+                <div id="rt-party-body" class="p-2 flex flex-col gap-2"></div>
+            </div>
+            <div id="rt-party-invite-toast" class="rt-party-invite-toast hidden" aria-live="polite"></div>
 
             <!-- 🤝 隊伍面板（寵物／召喚／護衛；傭兵系統已移除） -->
             <div id="squad-panel" class="panel" style="display:none;">
@@ -584,7 +591,7 @@
 <script src="js/02-stats-recompute.js?v=v3.8.40-no-sherine"></script>
     <script src="js/03-combat-core.js?v=v3.8.78-newbie-pack"></script>
     <script src="js/04-combat-attack.js?v=v3.8.43-no-wpn-procs"></script>
-<script src="js/05-kill-progression.js?v=v3.8.73-gold-fix"></script>
+<script src="js/05-kill-progression.js?v=v3.8.82-rt-party"></script>
     <script src="js/06-status-allies.js?v=v3.8.43-no-wpn-procs"></script>
     <script src="js/07-skills-cast.js?v=v3.8.26-flywing-relics"></script>
 <script src="js/08-items-equip.js?v=v3.8.81-status-top"></script>
@@ -605,7 +612,8 @@
     <script src="js/22-pets.js?v=v3.8.50-classic-only"></script>
     <script src="js/24-pandora-relic-market.js?v=v3.8.64-no-wanderers"></script>
     <script src="js/25-clan-system.js?v=v3.8.54-clan-guild"></script>
-    <script src="js/26-world-channel.js?v=v3.8.66-clan-create-npc"></script>
+    <script src="js/26-world-channel.js?v=v3.8.82-rt-party"></script>
+    <script src="js/36-realtime-party.js?v=v3.8.82-rt-party"></script>
     <script src="js/27-offline-rewards.js?v=v3.8.62-idle-offline"></script>
 <script src="js/28-pvp-arena.js?v=v3.7.89-stage33-host-sign"></script>
 <script src="js/29-siege-v2-data.js?v=v3.7.63-siege-v2"></script>

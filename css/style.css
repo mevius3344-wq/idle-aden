@@ -2054,84 +2054,159 @@ button.classic-skill-cell { cursor:pointer; }
     }
     #game-screen.hidden { display: none !important; }
 
-    /* 狀態欄（職業／等級／AC／MR／金幣／血條）置頂，取代舊 mobile-vitals */
+    /* 狀態欄置頂：資訊列＋HP/MP 精簡，經驗條維持原高度，省下高度給戰鬥／聊天 */
     #col-left {
         order: -10;
         width: 100% !important;
         min-width: 0;
         flex: 0 0 auto;
-        gap: 4px !important;
+        gap: 3px !important;
     }
-    #col-center { order: 1; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 5px !important; }
-    #col-right { order: 3; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 5px !important; min-height: 0; }
+    #col-center { order: 1; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 4px !important; }
+    #col-right { order: 3; width: 100% !important; min-width: 0; flex: 0 0 auto; gap: 4px !important; min-height: 0; }
 
     #status-panel {
         position: sticky;
         top: 0;
         z-index: 70;
         margin: 0;
-        box-shadow: 0 4px 12px rgba(0,0,0,.55);
-        background-color: rgba(30, 41, 59, 0.96) !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,.5);
+        background-color: rgba(30, 41, 59, 0.97) !important;
     }
     #status-panel .panel-header {
-        padding: 4px 8px !important;
-        font-size: 13px !important;
+        padding: 2px 6px !important;
+        font-size: 12px !important;
         min-height: 0;
+        line-height: 1.15;
+    }
+    #status-panel .panel-header #st-class {
+        font-size: 12px !important;
+        min-width: 0 !important;
+        padding: 0 4px !important;
+    }
+    #status-panel .panel-header #classic-badge,
+    #status-panel .panel-header #victory-badge {
+        font-size: 0.72rem !important;
+    }
+    #status-panel .panel-header #victory-badge-crown {
+        width: 12px !important;
+        height: 9px !important;
     }
     #status-panel .status-compact-body {
-        padding: 4px 8px 6px !important;
-        gap: 4px !important;
-    }
-    #status-panel .status-level-row,
-    #status-panel .status-defense-row,
-    #status-panel .status-gold-row {
         display: grid !important;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 4px 8px;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        grid-template-rows: auto auto auto;
         align-items: center;
+        column-gap: 8px;
+        row-gap: 2px !important;
+        padding: 2px 6px 3px !important;
     }
-    #status-panel .status-level-row { grid-column: 1 / -1; display: flex !important; }
+    #status-panel .status-level-row {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex !important;
+        gap: 4px !important;
+        padding: 0 !important;
+        font-size: 11px;
+        white-space: nowrap;
+    }
     #status-panel .status-defense-row {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        flex-direction: unset;
-        gap: 4px 10px;
+        grid-column: 2;
+        grid-row: 1;
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        font-size: 11px;
+        white-space: nowrap;
     }
-    #status-panel .status-gold-row { display: flex !important; }
+    #status-panel .status-gold-row {
+        grid-column: 3;
+        grid-row: 1;
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 4px !important;
+        font-size: 11px;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    #status-panel .status-gold-row #st-gold {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     #status-panel #st-lv,
     #status-panel #st-ac,
     #status-panel #st-mr,
     #status-panel #st-gold {
-        font-size: 0.92rem !important;
-        line-height: 1.2 !important;
+        font-size: 0.78rem !important;
+        line-height: 1.1 !important;
+        font-weight: 600 !important;
     }
+    #status-panel .status-level-row .text-xl { font-size: 0.78rem !important; }
+    /* HP/MP：去掉厚底圖，改細雙條 */
     #status-panel .status-vitals-row {
-        margin-top: 1px;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        margin: 0 !important;
+        aspect-ratio: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        background: none !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        position: relative;
     }
+    #status-panel .status-vitals-row > .compact-vital-bar {
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        width: 100% !important;
+        height: 9px !important;
+        min-height: 9px !important;
+        transform: none !important;
+        border: 1px solid #334155;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.85);
+        box-shadow: none;
+    }
+    #status-panel .status-vitals-row > .compact-vital-bar .bar-text {
+        font-size: 8px !important;
+        line-height: 9px !important;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    /* 經驗條維持原高度／樣式 */
     #status-panel .status-exp-bar {
-        height: 8px;
-        width: 100%;
+        grid-column: 1 / -1;
+        grid-row: 3;
+        height: 8px !important;
+        width: 100% !important;
+        align-self: stretch;
+        margin: 0;
     }
-    #squad-panel .panel-header { padding: 5px 8px; }
+    #status-panel .status-exp-bar .bar-text {
+        font-size: 8px !important;
+        line-height: 8px !important;
+    }
 
     #map-view-panel { flex: 0 0 auto !important; min-height: 0; }
     #map-view-panel > .panel-header {
         display: grid;
         grid-template-columns: 1fr;
         gap: 4px;
-        padding: 5px;
+        padding: 4px;
     }
-    #map-view-panel > .panel-header > span { min-width: 0; font-size: 13px !important; gap: 4px !important; }
+    #map-view-panel > .panel-header > span { min-width: 0; font-size: 12px !important; gap: 4px !important; }
     #map-view-panel > .panel-header > div { display: flex; flex-wrap: wrap; gap: 4px !important; width: 100%; }
     #map-view-panel > .panel-header button,
-    #map-view-panel > .panel-header select { height: 32px; min-height: 32px; font-size: 12px !important; }
+    #map-view-panel > .panel-header select { height: 30px; min-height: 30px; font-size: 12px !important; }
     #map-view-panel > .panel-header button { flex: 1 1 calc(50% - 2px); min-width: 0 !important; padding: 2px 5px !important; }
     #map-view-panel > .panel-header select { min-width: 0; padding: 2px 4px !important; }
     #map-view-panel > .panel-header #map-category { flex: 0 1 calc(38% - 2px); }
     #map-view-panel > .panel-header #map-select { flex: 1 1 calc(62% - 2px); }
     #map-view-panel > .panel-header #pride-floor-indicator { flex: 1 0 100%; padding: 2px 4px !important; text-align: center; font-size: 11px !important; }
 
-    /* 狩獵／城鎮框：狀態置頂後可加大戰鬥畫面 */
+    /* 狩獵／城鎮框：狀態精簡後加大戰鬥畫面 */
     #battle-view.area-fit:not(.hidden),
     #battle-view:not(.area-fit):not(.hidden),
     #town-view:not(.hidden) {
@@ -2139,28 +2214,28 @@ button.classic-skill-cell { cursor:pointer; }
         max-width: 100%;
         aspect-ratio: 16 / 9;
         height: auto;
-        max-height: min(52vw, 240px);
+        max-height: min(58vw, 280px);
         min-height: 0;
     }
     #battle-view { padding: 4px !important; }
     #battle-view.area-fit:has(.boss-slot) { padding: 0 !important; }
     #battle-view.area-fit #mob-list,
     #battle-view.area-fit #mob-list:has(.boss-slot),
-    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(96px, 36vw, 160px); gap: 2px !important; }
+    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(110px, 40vw, 188px); gap: 2px !important; }
     #battle-view.area-fit .mob-target { padding: 2px; min-width: 0; }
     #battle-view .mob-name { font-size: 10px; line-height: 1.1; }
     #town-npc-map { width: 100%; height: 100%; }
 
     #log-row { flex: 0 0 auto !important; min-height: 0; flex-direction: column; gap: 0 !important; }
-    #combat-log-panel { flex: 0 0 148px !important; width: 100%; height: 148px !important; min-height: 148px; }
-    #unified-log-body { min-height: 72px; }
+    #combat-log-panel { flex: 0 0 176px !important; width: 100%; height: 176px !important; min-height: 176px; }
+    #unified-log-body { min-height: 88px; }
     #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 4px 7px; font-size: 12px !important; }
     #combat-log, #sys-log, #world-log, #clan-log, #party-log { padding: 6px !important; font-size: 12px !important; }
     #combat-log-panel .cf-pill { min-height: 26px; padding: 2px 6px; }
     #combat-log-panel .logtab-btn { font-size: .68rem; padding: 2px 6px; }
 
-    #status-panel .panel-header, #squad-panel .panel-header { padding: 5px 8px; }
+    #squad-panel .panel-header { padding: 4px 6px; }
     #squad-tab-team, #squad-tab-skill { max-height: none; }
 
     #col-right > .tab-bar { position: sticky; top: 0; z-index: 65; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4px !important; padding: 4px !important; }
@@ -3587,6 +3662,58 @@ button.classic-skill-cell { cursor:pointer; }
 .wc-ch-clan { color: #fbbf24; }
 .wc-ch-party { color: #6ee7b7; }
 .wc-player-name { font-weight: 700; font-style: normal; }
+
+/* 🤝 即時組隊面板 */
+#rt-party-panel .panel-header { padding: 6px 8px; font-size: 0.95rem; }
+#rt-party-body { font-size: 12px; line-height: 1.35; color: #cbd5e1; }
+.rt-party-hint { color: #94a3b8; font-size: 11px; line-height: 1.4; }
+.rt-party-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.rt-party-btn {
+    font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #475569; background: #334155; color: #e2e8f0;
+}
+.rt-party-btn:hover { background: #475569; }
+.rt-party-btn-main { border-color: #059669; background: #065f46; color: #d1fae5; }
+.rt-party-btn-main:hover { background: #047857; }
+.rt-party-btn-danger { border-color: #b91c1c; background: #7f1d1d; color: #fecaca; }
+.rt-party-btn-kick {
+    margin-top: 4px; font-size: 10px; padding: 2px 8px;
+    border-color: #7f1d1d; background: rgba(127,29,29,.35); color: #fca5a5;
+}
+.rt-party-invite-row { display: flex; gap: 6px; align-items: center; }
+.rt-party-invite-row input {
+    flex: 1; min-width: 0; background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+    border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none;
+}
+.rt-party-roster { display: flex; flex-direction: column; gap: 6px; }
+.rt-party-row {
+    background: rgba(15,23,42,.55); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px;
+}
+.rt-party-row.me { border-color: #0f766e; background: rgba(13,148,136,.12); }
+.rt-party-row-top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+.rt-party-name { font-weight: 700; color: #fde68a; }
+.rt-party-meta { color: #94a3b8; white-space: nowrap; font-size: 11px; }
+.rt-party-map { color: #a7f3d0; font-size: 11px; margin-top: 2px; }
+.rt-party-tag {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 0 4px; border-radius: 3px;
+    background: #334155; color: #94a3b8; margin-right: 2px;
+}
+.rt-party-tag.leader { background: rgba(180,83,9,.35); color: #fbbf24; }
+.rt-party-off { color: #64748b; font-weight: 600; font-size: 10px; }
+.rt-party-invite-toast {
+    position: fixed; right: 16px; bottom: 16px; z-index: 80; max-width: min(320px, 92vw);
+    display: flex; flex-direction: column; gap: 8px;
+}
+.rt-party-invite-toast.hidden { display: none !important; }
+.rt-party-invite-card {
+    background: rgba(15,23,42,.95); border: 1px solid #0f766e; border-radius: 8px;
+    padding: 10px 12px; color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+@media (max-width: 768px) {
+    #rt-party-panel { order: -9; }
+    .rt-party-invite-toast { right: 8px; left: 8px; max-width: none; bottom: 72px; }
+}
+
 .wc-name {
     font-weight: 700; cursor: pointer; text-decoration: underline dotted rgba(148,163,184,.5);
     text-underline-offset: 2px;

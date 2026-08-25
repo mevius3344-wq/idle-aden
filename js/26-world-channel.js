@@ -2129,13 +2129,13 @@ function _wcTriggerMassTaunt() {
 }
 
 // ================= 💬 真實玩家頻道發言（世界／血盟／隊伍）=================
-// 線上：世界／血盟經 /api/chat 即時互通；隊伍仍用本機 BroadcastChannel（同分頁多開）。
+// 線上：世界／血盟／即時組隊經 /api/chat 互通；本機多分頁仍用 BroadcastChannel 作備援。
 let _chatActiveChannel = 'world';   // world | clan | party
 let _chatAskCooldownUntil = 0;
 const _CHAT_PLACEHOLDERS = {
     world: '在世界頻道發言（線上玩家即時可見）',
     clan: '在血盟頻道發言（同血盟線上玩家）',
-    party: '在隊伍頻道發言（本機其他分頁角色）'
+    party: '在隊伍頻道發言（即時組隊成員）'
 };
 const _CHAT_LOG_IDS = { world: 'world-log', clan: 'clan-log', party: 'party-log' };
 let _chatBc = null;
@@ -2173,6 +2173,7 @@ function _chatOnlineSend(payload) {
             alignment: payload.alignment,
             classic: payload.classic,
             clanKey: payload.clanKey || '',
+            partyId: payload.partyId || '',
             slot: payload.slot,
             sessionId: payload.sessionId || '',
             fp: payload.fp || '',
@@ -2252,8 +2253,10 @@ function _chatClanKey() {
     } catch (e) { return ''; }
 }
 function _chatPartyPeersOk(payload) {
-    // 隊伍＝目前線上（其他分頁）且同模式的真實角色；單人時自己也可發言。
+    // 即時組隊：同 partyId；備援＝本機其他分頁同模式角色。
     if (!payload) return false;
+    let myPid = (typeof rtPartyId === 'function') ? String(rtPartyId() || '') : '';
+    if (myPid && payload.partyId && String(payload.partyId) === myPid) return true;
     if (payload.sessionId === (typeof _roleSessionId !== 'undefined' ? _roleSessionId : '')) return true;
     if (typeof _roleOtherActiveSessions !== 'function') return false;
     let classic = !!(typeof player !== 'undefined' && player && player.classicMode);
@@ -2318,8 +2321,8 @@ function _chatBroadcast(payload) {
     try {
         localStorage.setItem('fb5_real_chat_ping_v1', JSON.stringify({ t: Date.now(), payload: payload }));
     } catch (e) {}
-    // 線上：世界／血盟走伺服器；隊伍僅本機
-    if (payload && (payload.ch === 'world' || payload.ch === 'clan')) {
+    // 線上：世界／血盟／即時組隊走伺服器
+    if (payload && (payload.ch === 'world' || payload.ch === 'clan' || payload.ch === 'party')) {
         _chatOnlineSend(payload);
     }
 }
@@ -2359,11 +2362,15 @@ function worldChannelAsk() {
         return;
     }
     if (ch === 'party') {
-        let peers = (typeof _roleOtherActiveSessions === 'function') ? _roleOtherActiveSessions() : [];
-        let classic = !!player.classicMode;
-        let online = peers.filter(s => s && !!s.classic === classic);
-        if (!online.length) {
-            _chatAppend('party', '<span class="wc-sys">目前沒有其他本機分頁角色。線上玩家請改用世界／血盟頻道。</span>');
+        let pid = (typeof rtPartyId === 'function') ? String(rtPartyId() || '') : '';
+        if (!pid) {
+            let peers = (typeof _roleOtherActiveSessions === 'function') ? _roleOtherActiveSessions() : [];
+            let classic = !!player.classicMode;
+            let online = peers.filter(s => s && !!s.classic === classic);
+            if (!online.length) {
+                _chatAppend('party', '<span class="wc-sys">尚未加入即時組隊。請於左側「即時組隊」建立或接受邀請。</span>');
+                return;
+            }
         }
     }
 
@@ -2379,6 +2386,7 @@ function worldChannelAsk() {
         fp: (typeof _roleFingerprint === 'function' ? _roleFingerprint(player) : ''),
         classic: !!player.classicMode,
         clanKey: _chatClanKey(),
+        partyId: (typeof rtPartyId === 'function') ? String(rtPartyId() || '') : '',
         at: now
     };
     _chatDeliver(payload, false);

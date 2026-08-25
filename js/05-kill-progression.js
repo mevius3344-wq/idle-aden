@@ -245,7 +245,10 @@ setInterval(() => { try { renderAuditTab(); } catch(e) {} }, 2000);   // 開著�
 function classicDropMult() { return 1; }
 function trialItemDropMult(id) { return 1; }
 // 🤝 v3.7.62 有效隊伍人數＝主玩家＋未倒地傭兵，最高 8 人。寵物各拿完整經驗，但不佔掉落／金幣倍率名額。
-function partyActiveMemberCount() { return Math.min(8, 1 + ((player.allies || []).filter(a => a && !a._downed).length)); }
+function partyActiveMemberCount() {
+    // 掉落／金幣倍率仍只計本機傭兵；線上隊友改走 rtParty 分享，避免雙開互乘刷掉落。
+    return Math.min(8, 1 + ((player.allies || []).filter(a => a && !a._downed).length));
+}
 function partyExpShareCount() { return partyActiveMemberCount(); }   // 相容 native-preview／舊外部呼叫；不再作為除數
 function partyRewardMult() { return partyActiveMemberCount(); }
 function partyDropRate(rate) { return Math.min(1, Math.max(0, Number(rate) || 0) * partyRewardMult()); }
@@ -281,6 +284,8 @@ function partyQuestDropSubject(result) {
 // 🤝 組隊經驗加成保留：每名未倒地隊友使每位存活成員取得的完整怪物經驗再增加（王族隊長 8%／非王族 4%）。
 function partyExpBonusPct() {
     let _mates = (player.allies || []).filter(a => a && !a._downed).length;
+    let _remote = (typeof rtPartySameMapAllies === 'function') ? (rtPartySameMapAllies() || 0) : 0;
+    _mates += _remote;
     if (_mates <= 0) return 0;
     return _mates * ((player && player.cls === 'royal') ? 8 : 4);   // 👑 王族隊長每隊友 +8%；其餘職業每隊友 +4%（減半）
 }
@@ -398,6 +403,7 @@ function killMob(idx) {
         });
     }
     let _goldDropRate = mob.boss ? 1 : 0.7;   // 💰 一般怪 70%；頭目 100%
+    let _shareGold = 0;
     if (!_kbNoReward && !mob.noGold && Math.random() < _goldDropRate) {
         let _goldRange = monsterGoldRange(mob);
         if (_goldRange.max > 0) {
@@ -410,8 +416,19 @@ function killMob(idx) {
             else player.gold = (Number(player.gold) || 0) + g;
             // 累積擊殺金幣，由 tick 定期刷到系統日誌（避免每殺一隻洗版）
             state._goldGainAcc = (Number(state._goldGainAcc) || 0) + g;
+            _shareGold = g;
         }
     }
+    try {
+        if (typeof rtPartyNotifyKill === 'function') {
+            rtPartyNotifyKill({
+                exp: _playerExpGain,
+                gold: _shareGold,
+                mapId: (typeof mapState !== 'undefined' && mapState) ? mapState.current : '',
+                mobName: mob.n || ''
+            });
+        }
+    } catch (e) {}
     // 🦴 v3.1.71 用戶要求：取消「怪物直接掉落席琳遺骸」——遺骸唯一取得管道＝席琳結晶（NPC 伊奧兌換）／菈克希絲拆分舊詞綴裝備。
     //    原掉落機率公式已移轉到下方「席琳結晶」掉落（見該區塊）。
     // 🐾 v3.2.17 誘捕捕捉：身上有對應誘捕狀態且擊殺對應動物 → 寵物保管獲得基本等級寵物並失去該狀態
