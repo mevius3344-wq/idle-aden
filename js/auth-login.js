@@ -169,7 +169,7 @@
       el.classList.remove("hidden");
     });
     const welcome = $("auth-welcome");
-    if (welcome) welcome.textContent = "歡迎「" + account + "」進入經典天堂";
+    if (welcome) welcome.textContent = "歡迎「" + account + "」進入躺著變強";
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}

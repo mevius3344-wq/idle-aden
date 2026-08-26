@@ -2188,7 +2188,13 @@ function loadGame() {
         if (typeof ensureRelicDex === 'function') ensureRelicDex(_loadWarehouseReady ? _loadWarehouse : undefined);   // 🏺 舊存檔遷移：登錄現有遺物到遺物收集冊
 
         // 👇 正確的新版起點邏輯
-        // 🔧 讀檔回「家」改走 getHomeTown()：血盟成員回盟主村莊（海音/歐瑞），否則回職業起始村，與回村按鈕邏輯一致
+        // 🔧 讀檔先回家鄉村（傭兵刷新／待領經驗走進村流程）；若存檔當下在狩獵圖，記下座標，
+        //    由 js/27 離線結算後再送回掛機地圖（避免「離線掛機重開＝莫名其妙回村」）。
+        try {
+            window.__offlineLoadResumeMap = '';
+            let _savedMap = mapState && mapState.current ? String(mapState.current) : '';
+            if (_savedMap && _savedMap.indexOf('town_') !== 0) window.__offlineLoadResumeMap = _savedMap;
+        } catch (_resumeE) {}
         setMapSelectors(getHomeTown());
 
         if (player.eq && player.eq.ring3 === undefined) player.eq.ring3 = null;   // 🔧 舊存檔補上第三戒指欄

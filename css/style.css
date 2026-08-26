@@ -1163,7 +1163,9 @@
 #login-anim-image { position:absolute; left:0; top:63.75%; width:78.28125%; height:36.25%; object-fit:fill; pointer-events:none; user-select:none; }
 #login-title-layer { position:absolute; z-index:3; left:3.1%; top:14%; width:30.8%; color:#f7df91; text-shadow:0 2px 4px #000,0 0 6px #000; container-type:inline-size; }
 /* 🔤 v3.4.22 標題字級改用 cqw（跟隨標題框寬度）而非 vw：修正「寬而矮視窗下框縮小但字仍撐到 vw 上限→標題超框」；並整體略縮 */
-#login-title-layer h1 { margin:0 0 2.5%; font-size:clamp(13px,8cqw,30px); line-height:1.15; color:#f5d46c; }
+#login-title-layer .login-title-row { display:flex; align-items:flex-end; justify-content:center; gap:4px; margin-bottom:2.5%; }
+#login-title-layer h1 { margin:0; font-size:clamp(13px,8cqw,30px); line-height:1.15; color:#f5d46c; }
+#login-title-layer .login-title-goblin-dead { width:clamp(40px,12cqw,64px); height:auto; image-rendering:pixelated; image-rendering:crisp-edges; flex-shrink:0; transform:translateY(3px); pointer-events:none; user-select:none; filter:drop-shadow(0 2px 3px #000); }
 #login-title-layer p { margin:0; font-size:clamp(9px,1.05vw,16px); color:#e7d7b5; }
 #main-menu { position:absolute; z-index:4; left:50.4%; top:48.5%; width:25%; margin:0 !important; display:flex; flex-direction:column; align-items:stretch; gap:clamp(10px,1.45vw,22px) !important; }
 #main-menu.hidden { display:none !important; }
@@ -3887,6 +3889,12 @@ button.classic-skill-cell { cursor:pointer; }
   text-align: center;
   filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.85));
 }
+.account-auth-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+}
 .account-auth-game-title {
   margin: 0;
   font-size: clamp(1.45rem, 3.2vw, 2.05rem);
@@ -3898,6 +3906,17 @@ button.classic-skill-cell { cursor:pointer; }
     0 1px 0 #5a3d0e,
     0 2px 4px rgba(0, 0, 0, 0.9),
     0 0 18px rgba(231, 180, 70, 0.35);
+}
+.account-auth-goblin-dead {
+  width: clamp(52px, 9vw, 76px);
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+  transform: translateY(4px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+  user-select: none;
 }
 .account-auth-tagline {
   margin: 6px 0 0;

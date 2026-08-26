@@ -2056,6 +2056,42 @@
         };
     }
 
+    /** 讀檔強制回村後：若角色未死且先前在可掛機狩獵圖，送回該圖繼續掛 */
+    function _offlineResumeHuntMapAfterLoad() {
+        if (typeof player === 'undefined' || !player || player.dead) {
+            try { window.__offlineLoadResumeMap = ''; } catch (e0) {}
+            return false;
+        }
+        if (typeof mapState === 'undefined' || !mapState) return false;
+        if (_offlineValidHuntMap(mapState.current)) {
+            try { window.__offlineLoadResumeMap = ''; } catch (e1) {}
+            return false;   // 已在狩獵圖
+        }
+        let map = '';
+        try {
+            let cp = _offlineReadJson(_offlineStoreKey('checkpoint'));
+            let snap = cp && cp.snapshot;
+            let cpMap = snap && snap.map ? String(snap.map) : '';
+            if (cpMap && _offlineValidHuntMap(cpMap)) map = cpMap;
+        } catch (e2) {}
+        if (!map) {
+            let tagged = '';
+            try { tagged = window.__offlineLoadResumeMap ? String(window.__offlineLoadResumeMap) : ''; } catch (e3) {}
+            if (tagged && _offlineValidHuntMap(tagged)) map = tagged;
+        }
+        try { window.__offlineLoadResumeMap = ''; } catch (e4) {}
+        if (!map) return false;
+        try {
+            if (typeof setMapSelectors === 'function') setMapSelectors(map);
+            if (typeof changeMap === 'function') changeMap(true);
+            if (typeof logSys === 'function') {
+                let nm = _offlineMapName(map);
+                logSys('<span class="text-cyan-300">已返回離線掛機地圖：</span><span class="text-amber-200 font-bold">' + (nm || map) + '</span>');
+            }
+            return true;
+        } catch (e5) { return false; }
+    }
+
     const _offlineOriginalLoadGame = window.loadGame;
     if (typeof _offlineOriginalLoadGame === 'function') {
         window.loadGame = function () {
@@ -2071,7 +2107,10 @@
             _onlineForced = false;
             _onlineLastInputAt = _offlineNow();
             _onlineSyncForcedFlag();
-            setTimeout(function () { _offlineSettle('load'); }, 0);
+            setTimeout(function () {
+                try { _offlineSettle('load'); } catch (e) {}
+                try { _offlineResumeHuntMapAfterLoad(); } catch (e2) {}
+            }, 0);
             return result;
         };
     }

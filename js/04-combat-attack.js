@@ -495,7 +495,7 @@ function applyAttrMagicBuff(owner, skId, sourceLabel) {
     if (changed) logCombat(`<span class="font-bold text-yellow-300">【${sourceLabel}·${sk.n}】</span>武器魔法發動。`, 'player-special');
 }
 function playerAttrMagicProc(target, inst, wpn) {
-    if (!weaponCombatProcsOn()) return;
+    // ★ 屬性卷軸附加魔法：武器戰鬥特效全關時仍允許觸發
     let proc = (typeof getAttrMagicProc === 'function') ? getAttrMagicProc(inst) : null;
     if (!proc || Math.random() * 100 >= proc.rate) return;
     let sk = DB.skills[proc.skId];
@@ -565,6 +565,36 @@ function offhandAfterHit(inst, def, target, dmg) {
     if (target.curHp > 0 && def.onHitEleDmg && (!def.onHitEleDmg.rate || Math.random() * 100 < def.onHitEleDmg.rate)) { let _oh = def.onHitEleDmg; target.curHp -= _oh.dmg; target.justHit = _oh.ele; mobWake(target); logCombat(`<span class="font-bold" style="color:${RELIC_ELE_COLOR[_oh.ele] || '#e2e8f0'};">附加 ${_oh.dmg} 點${RELIC_ELE_LABEL[_oh.ele] || ''}屬性傷害。</span>`, 'player-special'); }   // 🏺 冰石的強襲鎚
 }
 
+// 👹 隱藏的魔族武器：紅惡靈逆襲／藍惡靈奪魔（武器戰鬥特效全關時仍允許觸發；經典模式亦可）
+function weaponSpecterProc(target, inst, wpn) {
+    if (!inst || !wpn || !(wpn.redSpecter || wpn.blueSpecter)) return;
+    let _en = capWpnEn(inst.en);
+    if (wpn.redSpecter && Math.random() * 100 < (4 + _en)) {
+        let t = (target && target.curHp > 0) ? target : null;
+        if (!t) { let _al = mapState.mobs.filter(m => m && m.curHp > 0); if (_al.length) t = _al[Math.floor(Math.random() * _al.length)]; }
+        if (t) {
+            let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
+            let core = magicBaseDamage(roll(4, 10), player.d, 0, true) * weaponMagicDamageCoef(player.d, wpn, t, 'water') * enhanceWpnFinalMult(_en, wpn);
+            let dmg = Math.floor(core * mrMult(effMr));
+            dmg = Math.max(1, Math.floor(Math.max(1, dmg) * fragileMult(t) * elementCounterMult('water', t.e)));
+            if (t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;
+            dmg = illusionMagicDmg(dmg, true);
+            let _hl = Math.floor(dmg * 0.10);
+            t.curHp -= dmg; t.justHit = 'water'; mobWake(t);
+            player.hp = Math.min(player.mhp, player.hp + _hl);
+            logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【紅惡靈逆襲】</span>對 <span class="${getMobColor(t.lv)}">${t.n}</span> 造成 ${dmg} 點水屬性魔法傷害，恢復 ${_hl} 點 HP。`, 'player-special');
+            let _ri = mapState.mobs.findIndex(m => m && m.uid === t.uid);
+            if (t.curHp <= 0) { if (_ri !== -1) killMob(_ri); } else if (!state.ff) renderMobs();
+            updateUI();
+        }
+    }
+    if (wpn.blueSpecter && Math.random() * 100 < (4 + _en)) {
+        let _mp = rollDice(3, 6);
+        player.mp = Math.min(player.mmp, player.mp + _mp);
+        logCombat(`<span class="font-bold" style="color:#60a5fa;text-shadow:0 0 6px #2563eb;">【藍惡靈奪魔】</span>奪取魔力，恢復 ${_mp} 點 MP。`, 'player-special');
+        updateUI();
+    }
+}
 // ⚔️ v3.5.97 instOverride：指定要判定的武器實例（迅猛雙斧副手＝player.eq.offwpn）。
 //   ⚠️ 傳入時會**跳過魔法娃娃區塊**——娃娃 proc 是「角色每次攻擊」的效果，不隨武器數量倍增；
 //      副手揮擊只該觸發副手「武器自己」的 proc。
@@ -588,11 +618,15 @@ function weaponSpellProc(target, attackHit, instOverride) {
             }
         }
     }
-    if (!weaponCombatProcsOn()) return;   // 關閉武器戰鬥特效：娃娃仍可觸發，武器附魔／共鳴類以下全停
     let inst = instOverride || player.eq.wpn;
     let wpn = inst ? DB.items[inst.id] : null;
+    // 👹 紅／藍惡靈、★屬性卷軸附加魔法：即使武器戰鬥特效全關仍觸發
+    if (wpn) {
+        weaponSpecterProc(target, inst, wpn);
+        playerAttrMagicProc(target, inst, wpn);
+    }
+    if (!weaponCombatProcsOn()) return;   // 關閉武器戰鬥特效：娃娃／惡靈／屬性附加魔法仍可觸發，其餘共鳴類全停
     if (!wpn) return;
-    playerAttrMagicProc(target, inst, wpn);   // ★ 屬性卷軸附加魔法：攻擊時判定，命中與否皆可觸發
     if (wpn.procOnHit && !attackHit) return;   // 🏺 長老的雷電能量：僅一般攻擊實際命中才觸發極道落雷
     if (wpn.procPoison) applyWeaponProcPoison(target, wpn.procPoison, wpnEnFinalMult(inst));   // 🔧 死亡之指：攻擊時毒咒（吃武器強化最終倍率）
     if (wpn.procBurstPoison) applyWeaponBurstPoison(target, wpn.procBurstPoison, capWpnEn(inst.en), wpnEnFinalMult(inst));   // 💥 破壞雙刀/鋼爪：攻擊時猛爆劇毒（吃武器強化最終倍率）
@@ -641,35 +675,6 @@ function weaponSpellProc(target, attackHit, instOverride) {
         if (!_ft) { let _fa = mapState.mobs.filter(m => m && m.curHp > 0); if (_fa.length) _ft = _fa[Math.floor(Math.random() * _fa.length)]; }
         let _fp = _fireProcPool();
         if (_ft && _fp.length) procFreeMagicSkill(_ft, _fp[Math.floor(Math.random() * _fp.length)], capWpnEn(inst.en), false, wpn);
-    }
-    // 👹 隱藏的魔族武器：紅惡靈逆襲(4D10水魔傷·受魔法傷害公式·吸10%HP) / 藍惡靈奪魔(回3D6 MP)，4% + 每強化 +1%（經典模式亦可觸發）
-    if (wpn.redSpecter || wpn.blueSpecter) {
-        let _en = capWpnEn(inst.en);
-        if (wpn.redSpecter && Math.random() * 100 < (4 + _en)) {
-            let t = (target && target.curHp > 0) ? target : null;
-            if (!t) { let _al = mapState.mobs.filter(m => m && m.curHp > 0); if (_al.length) t = _al[Math.floor(Math.random() * _al.length)]; }
-            if (t) {
-                let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
-                let core = magicBaseDamage(roll(4, 10), player.d, 0, true) * weaponMagicDamageCoef(player.d, wpn, t, 'water') * enhanceWpnFinalMult(_en, wpn);
-                let dmg = Math.floor(core * mrMult(effMr));
-                dmg = Math.max(1, Math.floor(Math.max(1, dmg) * fragileMult(t) * elementCounterMult('water', t.e)));   // ⚔️ 屬性剋制 ×1.4(剋)/×0.6(被剋)
-                if (t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;
-                dmg = illusionMagicDmg(dmg, true);   // 🔮 幻覺2/5回MP＋5/5：紅惡靈逆襲屬免費觸發魔法
-                let _hl = Math.floor(dmg * 0.10);
-                t.curHp -= dmg; t.justHit = 'water'; mobWake(t);
-                player.hp = Math.min(player.mhp, player.hp + _hl);
-                logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【紅惡靈逆襲】</span>對 <span class="${getMobColor(t.lv)}">${t.n}</span> 造成 ${dmg} 點水屬性魔法傷害，恢復 ${_hl} 點 HP。`, 'player-special');
-                let _ri = mapState.mobs.findIndex(m => m && m.uid === t.uid);
-                if (t.curHp <= 0) { if (_ri !== -1) killMob(_ri); } else if (!state.ff) renderMobs();
-                updateUI();
-            }
-        }
-        if (wpn.blueSpecter && Math.random() * 100 < (4 + _en)) {
-            let _mp = rollDice(3, 6);
-            player.mp = Math.min(player.mmp, player.mp + _mp);
-            logCombat(`<span class="font-bold" style="color:#60a5fa;text-shadow:0 0 6px #2563eb;">【藍惡靈奪魔】</span>奪取魔力，恢復 ${_mp} 點 MP。`, 'player-special');
-            updateUI();
-        }
     }
     // 🌅 遺物 九尾妖狐的怒火 procSkill2：第二觸發槽（獨立機率 rate%·免費施放·同 procSkill 傷害公式）——與主 procSkill 各自判定互不影響
     if (wpn.procSkill2 && wpn.procSkill2.skId && Math.random() * 100 < (wpn.procSkill2.rate || 5)) {

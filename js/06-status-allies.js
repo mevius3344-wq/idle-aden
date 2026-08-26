@@ -1832,16 +1832,46 @@ function _allyMagicStrikeHit(ally, t, wpnInst, wpn) {
         }
     }
 }
+// 👹 隱藏的魔族武器（傭兵）：紅／藍惡靈——武器戰鬥特效全關時仍允許觸發
+function allySpecterProc(ally, target, wpnInst, wpn) {
+    if (!ally || !wpnInst || !wpn || !(wpn.redSpecter || wpn.blueSpecter)) return;
+    let d = ally.d || {};
+    let _en = capWpnEn(wpnInst.en);
+    if (wpn.redSpecter && Math.random() * 100 < (4 + _en)) {
+        let t = _allyProcTarget(target);
+        if (t) {
+            let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
+            let core = magicBaseDamage(roll(4, 10), d, 0, true) * weaponMagicDamageCoef(d, wpn, t, 'water') * enhanceWpnFinalMult(_en, wpn);
+            let dmg = Math.floor(core * mrMult(effMr));
+            dmg = Math.max(1, Math.floor(Math.max(1, dmg) * fragileMult(t)));
+            dmg = Math.max(1, Math.floor(dmg * elementCounterMult('water', t.e)));
+            if (t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;
+            dmg = _allyIllusionMagicDmg(ally, dmg);
+            let _hl = Math.floor(dmg * 0.10);
+            ally.curHp = Math.min(ally.mhp || 1, (ally.curHp || 0) + _hl);
+            logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【協力·${ally._allyName}·紅惡靈逆襲】</span>對 <span class="${getMobColor(t.lv)}">${t.n}</span> 造成 ${dmg} 點水屬性魔法傷害，恢復 ${_hl} 點 HP。`, 'player-special');
+            _allyDamageMob(ally, t, dmg, 'water');
+        }
+    }
+    if (wpn.blueSpecter && Math.random() * 100 < (4 + _en)) {
+        let _mp = rollDice(3, 6);
+        ally.mp = Math.min(ally.mmp || 0, (ally.mp || 0) + _mp);
+        logCombat(`<span class="font-bold" style="color:#60a5fa;text-shadow:0 0 6px #2563eb;">【協力·${ally._allyName}·藍惡靈奪魔】</span>奪取魔力，恢復 ${_mp} 點 MP。`, 'player-special');
+    }
+}
 // ⚔️ v3.5.97 instOverride：指定要判定的武器實例（迅猛雙斧副手＝ally.eq.offwpn），鏡像玩家 weaponSpellProc 的同名參數。
 //   ⚠️ 傳入時跳過魔法娃娃 proc——娃娃是「角色每次攻擊」的效果，不隨武器數量倍增（與玩家端同一決定）。
 function allyWeaponProcs(ally, target, hitInfo, instOverride) {
     if (!instOverride) allyDollAttackProcs(ally, target);   // 🆕 v2.6.10 #3：魔法娃娃攻擊 proc（置於武器判定前→無武器也生效，比照玩家）
-    if (!weaponCombatProcsOn()) return;   // 關閉武器戰鬥特效：娃娃仍可觸發
     let wpnInst = instOverride || (ally.eq && ally.eq.wpn);
-    if (!wpnInst) return;
-    let wpn = DB.items[wpnInst.id];
-    if (!wpn) return;
-    allyAttrMagicProc(ally, target, wpnInst, wpn);   // ★ 屬性卷軸附加魔法：鏡像玩家，命中與否皆可觸發
+    let wpn = wpnInst ? DB.items[wpnInst.id] : null;
+    // 👹 紅／藍惡靈、★屬性卷軸附加魔法：即使武器戰鬥特效全關仍觸發
+    if (wpn) {
+        allySpecterProc(ally, target, wpnInst, wpn);
+        allyAttrMagicProc(ally, target, wpnInst, wpn);
+    }
+    if (!weaponCombatProcsOn()) return;   // 關閉武器戰鬥特效：娃娃／惡靈／屬性附加魔法仍可觸發
+    if (!wpnInst || !wpn) return;
     if (wpn.procPoison) applyWeaponProcPoison(target, wpn.procPoison, wpnEnFinalMult(wpnInst), _dpsAllySrc(ally));   // 🔧 死亡之指：傭兵攻擊時毒咒（與玩家一致·吃武器強化最終倍率）；🎯 DPS 歸該傭兵
     if (wpn.procBurstPoison) applyWeaponBurstPoison(target, wpn.procBurstPoison, capWpnEn(wpnInst.en), wpnEnFinalMult(wpnInst), _dpsAllySrc(ally));   // 💥 破壞雙刀/鋼爪：傭兵攻擊時猛爆劇毒（與玩家一致·吃武器強化最終倍率）；🎯 DPS 歸該傭兵
     if (wpn.procStatusSkill) { let _sv = player; player = ally; try { applyWeaponProcStatusSkill(target, wpn.procStatusSkill); } finally { player = _sv; } }   // 🌑 惡魔王武器：傭兵攻擊時施放疾病術（以傭兵自身魔法命中判定）
@@ -1890,31 +1920,6 @@ function allyWeaponProcs(ally, target, hitInfo, instOverride) {
         if (_ft && _fp.length) allyProcFreeMagicSkill(ally, _ft, _fp[Math.floor(Math.random() * _fp.length)], capWpnEn(wpnInst.en || 0), false, wpn);
     }
     let d = ally.d || {};
-    // 👹 隱藏的魔族武器（傭兵）：紅惡靈逆襲(4D10水魔傷·吸10%HP) / 藍惡靈奪魔(回3D6 MP)，4% + 每強化 +1%（與玩家一致；經典模式亦可觸發）
-    if (wpn.redSpecter || wpn.blueSpecter) {
-        let _en = capWpnEn(wpnInst.en);
-        if (wpn.redSpecter && Math.random() * 100 < (4 + _en)) {
-            let t = _allyProcTarget(target);
-            if (t) {
-                let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
-                let core = magicBaseDamage(roll(4, 10), d, 0, true) * weaponMagicDamageCoef(d, wpn, t, 'water') * enhanceWpnFinalMult(_en, wpn);
-                let dmg = Math.floor(core * mrMult(effMr));
-                dmg = Math.max(1, Math.floor(Math.max(1, dmg) * fragileMult(t)));
-                dmg = Math.max(1, Math.floor(dmg * elementCounterMult('water', t.e)));   // ⚔️ 屬性剋制倍率（取代舊 +6 固定加值）
-                if (t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;
-                dmg = _allyIllusionMagicDmg(ally, dmg);   // 🔮 與玩家紅惡靈逆襲一致
-                let _hl = Math.floor(dmg * 0.10);
-                ally.curHp = Math.min(ally.mhp || 1, (ally.curHp || 0) + _hl);   // 🐉 紅惡靈逆襲（傭兵）·v2.6.9 修：回復戰鬥HP(curHp) 非快照 hp
-                logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【協力·${ally._allyName}·紅惡靈逆襲】</span>對 <span class="${getMobColor(t.lv)}">${t.n}</span> 造成 ${dmg} 點水屬性魔法傷害，恢復 ${_hl} 點 HP。`, 'player-special');
-                _allyDamageMob(ally, t, dmg, 'water');
-            }
-        }
-        if (wpn.blueSpecter && Math.random() * 100 < (4 + _en)) {
-            let _mp = rollDice(3, 6);
-            ally.mp = Math.min(ally.mmp || 0, (ally.mp || 0) + _mp);
-            logCombat(`<span class="font-bold" style="color:#60a5fa;text-shadow:0 0 6px #2563eb;">【協力·${ally._allyName}·藍惡靈奪魔】</span>奪取魔力，恢復 ${_mp} 點 MP。`, 'player-special');
-        }
-    }
     if (hitInfo && hitInfo.hit && (wpn.eff === 'mp_drain' || wpn.mpOnHit)) {   // 瑪那魔杖/惡魔王魔杖(mpOnHit)：命中恢復MP → 傭兵自身（恢復量同玩家）
         ally.mp = Math.min(ally.mmp||0, (ally.mp||0) + mpOnHitAmount(wpn, capWpnEn(wpnInst.en)));   // 💧 單一真相 mpOnHitAmount（js/03）：傭兵鏡像玩家
     }

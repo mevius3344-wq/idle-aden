@@ -747,7 +747,8 @@ const WEAPON_PROC_OFF_KEEP_PREFIXES = [
     '免疫', '唯一', '可單手', '一般攻擊化為', '技能增幅', '自動施法',
     '箭矢不會', '寒冰氣息', '施放寒冰', '施放加速',
     'MP自然恢復', '魔法傷害成長', '沙哈之箭', '無限箭矢',
-    '衝擊之暈', '范德劍術', '不死／狼人'
+    '衝擊之暈', '范德劍術', '不死／狼人',
+    '紅惡靈', '藍惡靈'   // 👹 隱藏的魔族：特效全關時仍啟用
 ];
 function filterDisabledWeaponEffLabels(effArr, d) {
     if (!d || d.type !== 'wpn') return filterClassicEffLabels(effArr, d);
@@ -950,7 +951,7 @@ function tooltipItemDescription(d, itemId) {
     // ⚔️ 武器戰鬥特效關閉：背景敘述裡殘留的特效詞一併清掉（結構化「特效：」列另由 filterDisabledWeaponEffLabels 處理）
     if (d.type === 'wpn' && typeof weaponCombatProcsOn === 'function' && !weaponCombatProcsOn()) {
         ['共鳴','魔爆','連射(?:\\d+%?)?','反擊','(?:帶)?出血','穿透','切割','居合','魔擊','鈍擊','鉤擊','雙刃','格檔',
-         '月光爆裂','即死','雙擊','弱點曝光','吸取HP','紅惡靈(?:逆襲)?','藍惡靈(?:奪魔)?','猛爆劇毒','龍的一擊',
+         '月光爆裂','即死','雙擊','弱點曝光','吸取HP','猛爆劇毒','龍的一擊',
          '附毒','灼燒','碎甲','稻草詛咒'].forEach(t => legacyTags.push(t));
         desc = desc.replace(/(?:攻擊|命中)時[^。；;、]{0,40}(?:施放|觸發|發動|附加)[^。；;]*[。；;]?/g, '');
         desc = desc.replace(/(?:機率|有機率)[^。；;、]{0,24}(?:施放|觸發|發動)[^。；;]*[。；;]?/g, '');
@@ -1299,8 +1300,8 @@ function buildItemDescHTML(item) {
         desc += `<br><span class="c-attr-${attrCanon(item.attr)}">${_aff.n}（屬性第${_aff.tier}階）：額外傷害+${_aff.dmg}、額外魔法點數+${_aff.mp}，一般攻擊轉為${eleName}屬性（剋${counterName} ×1.4）。</span>`;   // 🔥 v3.0.77 五階制
     }
     let _attrMagic = getAttrMagicProc(item);
-    // ⚔️ 屬性附加魔法屬武器戰鬥特效；關閉時不顯示敘述
-    if (_attrMagic && (d.type !== 'wpn' || typeof weaponCombatProcsOn !== 'function' || weaponCombatProcsOn())) {
+    // ★ 屬性附加魔法：特效全關時仍啟用，說明照常顯示
+    if (_attrMagic) {
         let _attrMagicName = (DB.skills[_attrMagic.skId] && DB.skills[_attrMagic.skId].n) || _attrMagic.skId;
         let _attrMagicStars = '★'.repeat(_attrMagic.star);
         let _attrMagicRateNote = _attrMagic.star > 1 ? `（基礎 ${_attrMagic.baseRate}% × ${_attrMagic.star}）` : '';

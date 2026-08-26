@@ -11,10 +11,10 @@
          DESIGN_W/isMobileDevice/window.__mobileScaling 全專案零呼叫；唯一實際效果 viewport-fit=cover 直接併入上方 meta。
          （width=1180 手機縮放已於桌機專注決策時移除·本作 desktop-only） -->
 
-    <title>經典天堂</title>
+    <title>躺著變強</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.8.103-mobile-tab-groups">
+    <link rel="stylesheet" href="css/style.css?v=v3.8.114-lie-strong">
     <link rel="stylesheet" href="css/floating-ui.css?v=v3.5.100-audit-tail">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -32,7 +32,10 @@
         <!-- 帳號密碼：預設空白，自行註冊／登入 -->
         <div id="account-auth-panel" class="account-auth-panel" aria-label="帳號登入註冊">
             <div class="account-auth-brand">
-                <div class="account-auth-game-title">經典天堂</div>
+                <div class="account-auth-title-row">
+                    <div class="account-auth-game-title">躺著變強</div>
+                    <img class="account-auth-goblin-dead" src="assets/anim/哥布林/death_11.png" alt="" width="72" height="72" draggable="false" aria-hidden="true">
+                </div>
                 <p class="account-auth-tagline">登入帳號 · 開始冒險</p>
             </div>
             <div class="account-auth-box">
@@ -58,7 +61,10 @@
         </div>
 
         <div id="login-title-layer" class="text-center account-gated hidden">
-            <h1 class="text-4xl font-bold text-yellow-400 mb-2">經典天堂</h1>
+            <div class="login-title-row">
+                <h1 class="text-4xl font-bold text-yellow-400 mb-2">躺著變強</h1>
+                <img class="login-title-goblin-dead" src="assets/anim/哥布林/death_11.png" alt="" width="64" height="64" draggable="false" aria-hidden="true">
+            </div>
             <p class="text-base text-slate-400">創造您的角色並開始冒險</p>
         </div>
 
@@ -595,22 +601,22 @@
 
     <script src="js/34-ip-session-limit.js?v=v3.8.44-ip-dual"></script>
     <script src="js/35-cloud-save.js?v=v3.8.91-cloud-merge"></script>
-    <script src="js/auth-login.js?v=v3.8.91-cloud-merge"></script>
+    <script src="js/auth-login.js?v=v3.8.114-lie-strong"></script>
     <script src="js/anim-manifest.js?v=v3.8.12-necro-relics"></script>
     <script src="js/00-data.js?v=v3.8.110-newbie-embark"></script>
 <script src="js/01-drops-config.js?v=v3.8.111-newbie-regrant"></script>
 <script src="js/02-stats-recompute.js?v=v3.8.96-charm-mage"></script>
-    <script src="js/03-combat-core.js?v=v3.8.96-charm-mage"></script>
-    <script src="js/04-combat-attack.js?v=v3.8.96-charm-mage"></script>
+    <script src="js/03-combat-core.js?v=v3.8.113-attr-magic"></script>
+    <script src="js/04-combat-attack.js?v=v3.8.113-attr-magic"></script>
 <script src="js/05-kill-progression.js?v=v3.8.90-exp5x48h"></script>
-    <script src="js/06-status-allies.js?v=v3.8.102-town-no-fullheal"></script>
+    <script src="js/06-status-allies.js?v=v3.8.113-attr-magic"></script>
     <script src="js/07-skills-cast.js?v=v3.8.96-charm-mage"></script>
 <script src="js/08-items-equip.js?v=v3.8.90-exp5x48h"></script>
 <script src="js/09-vfx-render.js?v=v3.8.40-no-sherine"></script>
-    <script src="js/10-ui-tabs.js?v=v3.8.105-auction"></script>
+    <script src="js/10-ui-tabs.js?v=v3.8.113-attr-magic"></script>
 <script src="js/11-world-map.js?v=v3.8.106-clan-heine-only"></script>
 <script src="js/12-npc-quests.js?v=v3.8.78-newbie-pack"></script>
-<script src="js/13-shop-save.js?v=v3.8.111-newbie-regrant"></script>
+<script src="js/13-shop-save.js?v=v3.8.115-offline-resume-map"></script>
     <script src="js/14-craft-pandora.js?v=v3.8.80-tip-pin"></script>
 <script src="js/15-cards.js?v=v3.8.85-newbie-boost3x"></script>
 <script src="js/16-equip-book.js?v=v3.8.15-legacy-import-smooth"></script>
@@ -626,7 +632,7 @@
     <script src="js/26-world-channel.js?v=v3.8.109-live-update"></script>
     <script src="js/36-realtime-party.js?v=v3.8.107-party-stable"></script>
     <script src="js/37-auction-house.js?v=v3.8.105-auction"></script>
-    <script src="js/27-offline-rewards.js?v=v3.8.108-offline-death"></script>
+    <script src="js/27-offline-rewards.js?v=v3.8.115-offline-resume-map"></script>
 <script src="js/28-pvp-arena.js?v=v3.7.89-stage33-host-sign"></script>
 <script src="js/29-siege-v2-data.js?v=v3.7.63-siege-v2"></script>
 <script src="js/30-siege-v2.js?v=v3.8.7-no-merc"></script>
