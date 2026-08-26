@@ -533,7 +533,7 @@ function useItem(u, silent = false) {
         if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
         return;
     }
-    // 🎁 新手啟程禮包：開啟後發放限時 48 小時 +12 專武與 +8 裝備
+    // 🎁 新手啟程禮包：開啟後發放限時 7 天 +12 專武與 +8 裝備
     if (d.eff === 'newbie_pack') {
         if (silent) return;
         if (typeof claimNewbieEmbarkPack !== 'function') return;

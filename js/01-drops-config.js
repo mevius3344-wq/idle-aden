@@ -814,18 +814,20 @@ function invMergeBack(e) {
     return true;
 }
 
-// ===== 🎁 新手啟程禮包：職業專武 +12、套裝 +8，實時計時 48 小時後消失 =====
-const NEWBIE_EMBARK_MS = 48 * 60 * 60 * 1000;
+// ===== 🎁 新手啟程禮包：職業專武 +12、套裝 +8，實時計時 7 天後消失 =====
+const NEWBIE_EMBARK_MS = 7 * 24 * 60 * 60 * 1000;
 const NEWBIE_EMBARK_PACK_ID = 'item_newbie_embark';
+/** 禮包內容版本：已領取角色升到此版時會刪舊限時裝並重發 */
+const NEWBIE_EMBARK_REV = 2;
 const NEWBIE_EMBARK_WEAPONS = {
-    royal: 'wpn_golden_scepter',
-    knight: 'wpn_blackflame_sword',
-    elf: 'wpn_redflame_bow',
-    mage: 'wpn_crystalwand',
-    dark: 'wpn_death_finger',
-    illusion: 'wpn_qigu_sapphire',
+    royal: 'wpn_demon_sword_hidden',
+    knight: 'wpn_demon_sword_hidden',
+    elf: 'wpn_demon_bow_hidden',
+    mage: 'wpn_demon_wand_hidden',
+    dark: 'wpn_demon_claw_hidden',
+    illusion: 'wpn_demon_qigu_hidden',
     warrior: 'wpn_master_axe',
-    dragon: 'wpn_chain_annihilator',
+    dragon: 'wpn_demon_chain_hidden',
 };
 const NEWBIE_EMBARK_ARMOR = [
     { id: 'arm_49', en: 8 },   // 皮頭盔
@@ -836,7 +838,7 @@ const NEWBIE_EMBARK_ARMOR = [
     { id: 'arm_103', en: 8 },  // 小盾牌（雙手武器會跳過）
 ];
 function isRentalItem(it) {
-    return !!(it && Number(it.expireAt) > 0);
+    return !!(it && (it.rental || Number(it.expireAt) > 0));
 }
 function rentalRemainMs(it, now) {
     if (!isRentalItem(it)) return 0;
@@ -845,21 +847,18 @@ function rentalRemainMs(it, now) {
 function formatRentalRemain(ms) {
     ms = Math.max(0, Math.floor(Number(ms) || 0));
     let sec = Math.floor(ms / 1000);
-    let h = Math.floor(sec / 3600);
+    let d = Math.floor(sec / 86400);
+    let h = Math.floor((sec % 86400) / 3600);
     let m = Math.floor((sec % 3600) / 60);
     let s = sec % 60;
+    if (d > 0) return d + '天' + h + '小時';
     if (h > 0) return h + '小時' + m + '分';
     if (m > 0) return m + '分' + s + '秒';
     return s + '秒';
 }
-function grantRentalItem(id, en, expireAt, opts) {
+function makeRentalItem(id, en, expireAt) {
     if (!id || !DB.items[id]) return null;
-    opts = opts || {};
-    let d = DB.items[id];
-    if (d.w2h || d.isBow) {
-        // 雙手／弓：不發盾
-    }
-    let it = {
+    return {
         id: id,
         uid: typeof uid === 'function' ? uid() : ('r' + Date.now() + Math.random()),
         cnt: 1,
@@ -874,13 +873,122 @@ function grantRentalItem(id, en, expireAt, opts) {
         rental: true,
         noSell: true,
     };
+}
+/** 從指定角色物件清除所有限時租借裝備（背包＋已裝備） */
+function stripRentalGearFromPlayer(p) {
+    if (!p || typeof p !== 'object') return 0;
+    let removed = 0;
+    if (p.eq) {
+        Object.keys(p.eq).forEach(function (slot) {
+            if (!isRentalItem(p.eq[slot])) return;
+            p.eq[slot] = null;
+            removed++;
+        });
+    }
+    if (Array.isArray(p.inv)) {
+        let keep = [];
+        p.inv.forEach(function (it) {
+            if (isRentalItem(it)) removed++;
+            else keep.push(it);
+        });
+        p.inv = keep;
+    }
+    return removed;
+}
+/** 空欄位才裝備（重發禮包時不擠掉玩家已換上的非租借裝） */
+function equipRentalIfSlotEmpty(it, p) {
+    p = p || player;
+    if (!it || !p || !p.eq) return false;
+    let d = DB.items[it.id];
+    if (!d) return false;
+    let slot = d.type === 'wpn' ? 'wpn' : d.slot;
+    if (!slot || d.isArrow) return false;
+    if (p.eq[slot]) return false;
+    let twoHand = !!(d.w2h || d.isBow);
+    if (slot === 'wpn' && twoHand && !d.oneHand && p.eq.shield) {
+        let sd = DB.items[p.eq.shield.id];
+        if (!sd || !sd.armguard) return false;
+    }
+    if (slot === 'shield' && p.eq.wpn) {
+        let wd = DB.items[p.eq.wpn.id];
+        if (wd && (wd.w2h || wd.isBow) && !wd.oneHand) return false;
+    }
+    p.eq[slot] = it;
+    if (Array.isArray(p.inv)) {
+        p.inv = p.inv.filter(function (x) { return x && x.uid !== it.uid; });
+    }
+    return true;
+}
+function grantRentalItem(id, en, expireAt, opts) {
+    opts = opts || {};
+    let it = makeRentalItem(id, en, expireAt);
+    if (!it) return null;
     if (!Array.isArray(player.inv)) player.inv = [];
     player.inv.push(it);
     if (typeof registerEquipObtained === 'function') try { registerEquipObtained(id); } catch (e) {}
     if (opts.equip && typeof equipItem === 'function') {
         try { equipItem(it); } catch (e2) {}
+    } else if (opts.equipIfEmpty) {
+        try { equipRentalIfSlotEmpty(it, player); } catch (e3) {}
     }
     return it;
+}
+/**
+ * 對任意角色物件重發新手啟程禮包（刪舊限時裝 → 發新專武／套裝／7 天加成）。
+ * 回傳 true 表示有執行遷移。
+ */
+function applyNewbieEmbarkRevToPlayerObj(p, opts) {
+    opts = opts || {};
+    if (!p || !p.cls || !p.newbiePackClaimed) return false;
+    if ((Number(p.newbieEmbarkRev) || 0) >= NEWBIE_EMBARK_REV) return false;
+    let wpnId = NEWBIE_EMBARK_WEAPONS[p.cls];
+    if (!wpnId || !DB.items[wpnId]) return false;
+    stripRentalGearFromPlayer(p);
+    let expireAt = Date.now() + NEWBIE_EMBARK_MS;
+    let wpnDef = DB.items[wpnId];
+    let skipShield = !!(wpnDef && (wpnDef.w2h || wpnDef.isBow));
+    if (!Array.isArray(p.inv)) p.inv = [];
+    if (!p.eq || typeof p.eq !== 'object') p.eq = {};
+    let wpn = makeRentalItem(wpnId, 12, expireAt);
+    if (wpn) {
+        p.inv.push(wpn);
+        if (opts.equipIfEmpty !== false) equipRentalIfSlotEmpty(wpn, p);
+        if (typeof registerEquipObtained === 'function') try { registerEquipObtained(wpnId); } catch (e) {}
+    }
+    NEWBIE_EMBARK_ARMOR.forEach(function (row) {
+        if (skipShield && row.id === 'arm_103') return;
+        let arm = makeRentalItem(row.id, row.en, expireAt);
+        if (!arm) return;
+        p.inv.push(arm);
+        if (opts.equipIfEmpty !== false) equipRentalIfSlotEmpty(arm, p);
+        if (typeof registerEquipObtained === 'function') try { registerEquipObtained(row.id); } catch (e2) {}
+    });
+    p.newbiePackClaimed = true;
+    p.newbiePackExpireAt = expireAt;
+    p.newbieBoostExpireAt = expireAt;
+    p.newbieEmbarkRev = NEWBIE_EMBARK_REV;
+    return true;
+}
+/** 目前登入角色：若已領過舊版禮包則刪舊重發 */
+function migrateNewbieEmbarkIfNeeded(opts) {
+    opts = opts || {};
+    if (!player || !player.cls) return false;
+    let ok = applyNewbieEmbarkRevToPlayerObj(player, { equipIfEmpty: opts.equipIfEmpty !== false });
+    if (!ok) return false;
+    try {
+        if (typeof syncShahaArrow === 'function') syncShahaArrow();
+        if (typeof syncDualWield === 'function') syncDualWield();
+        if (typeof calcStats === 'function') calcStats();
+        if (typeof updateUI === 'function') updateUI();
+        if (typeof renderTabs === 'function') renderTabs(true);
+        if (typeof renderStatusEffects === 'function') renderStatusEffects();
+    } catch (e) {}
+    if (!opts.silent && typeof logSys === 'function') {
+        let wpnId = NEWBIE_EMBARK_WEAPONS[player.cls];
+        let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
+        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已更新！</span>舊限時裝備已回收，改發限時 7 天的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。');
+    }
+    return true;
 }
 function purgeExpiredRentalGear(silent) {
     if (!player || typeof player !== 'object') return 0;
@@ -946,7 +1054,8 @@ function claimNewbieEmbarkPack(opts) {
     }
     player.newbiePackClaimed = true;
     player.newbiePackExpireAt = expireAt;
-    player.newbieBoostExpireAt = expireAt;   // 🎁 48h：掉寶／金幣／卡片 ×3
+    player.newbieBoostExpireAt = expireAt;   // 🎁 7 天：掉寶／金幣／卡片 ×3
+    player.newbieEmbarkRev = NEWBIE_EMBARK_REV;
     try {
         if (typeof calcStats === 'function') calcStats();
         if (typeof updateUI === 'function') updateUI();
@@ -955,7 +1064,7 @@ function claimNewbieEmbarkPack(opts) {
     } catch (e2) {}
     if (!opts.silent && typeof logSys === 'function') {
         let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
-        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 48 小時的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。時效結束後裝備與加成會一併結束。');
+        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 7 天的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。時效結束後裝備與加成會一併結束。');
     }
     return { ok: true, granted: granted, expireAt: expireAt };
 }
@@ -1007,7 +1116,7 @@ const SAVE_DEFAULTS = {
     masteryQuest: null, mastery: null, masteryChangeCnt: 0,
     prideBeatJenis: false, demonTempleOpen: false, flameAffinity: 0, trialStage: 0, prideRank: { best: null, last: null, isNew: false }, prideRankSherine: { best: null, last: null, isNew: false },
     riftRank: { best: null, last: null, isNew: false }, riftRankSherine: { best: null, last: null, isNew: false }, riftRewardMs: null,
-    newbiePackClaimed: false, newbiePackExpireAt: null, newbieBoostExpireAt: null,
+    newbiePackClaimed: false, newbiePackExpireAt: null, newbieBoostExpireAt: null, newbieEmbarkRev: 0,
     elfEle: null, poly: null, summon: null, charmed: null, hots: {},   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制實際用的是 hots(複數 dict)，改在此初始化與 js/05/js/13 重設點一致
     manualCd: {}, cardDex: {}, cardDexV: 0, equipDex: {}, miscDex: {},
     alloc:   { str:0, dex:0, con:0, int:0, wis:0, cha:0 },

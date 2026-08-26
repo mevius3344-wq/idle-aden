@@ -504,7 +504,30 @@ function _migrateAllSavesToClassicMode(){
         } catch (e) {}
     }
 }
-if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){ try { _migrateAllSavesToClassicMode(); } catch (e) {} });
+/** 🎁 已領取舊版新手啟程禮包的存檔位：刪除舊限時裝並改發隱藏魔族專武（7 天） */
+function _migrateAllSavesNewbieEmbark(){
+    if (typeof applyNewbieEmbarkRevToPlayerObj !== 'function') return;
+    for (let n = 1; n <= 8; n++) {
+        let key = 'lineage_idle_save_' + n;
+        let raw; try { raw = _lzGet(key); } catch (e) { continue; }
+        if (raw == null || raw === '') continue;
+        try {
+            let un = (typeof _saveUnwrap === 'function') ? _saveUnwrap(raw) : { ok:true, payload:raw };
+            if (un && un.signed && !un.ok) continue;
+            let text = (un && un.payload != null) ? un.payload : raw;
+            let d = JSON.parse(text);
+            if (!d || !d.p || !d.p.newbiePackClaimed) continue;
+            if (!applyNewbieEmbarkRevToPlayerObj(d.p, { equipIfEmpty: true })) continue;
+            let out = JSON.stringify(d);
+            if (typeof _saveWrap === 'function') out = _saveWrap(out);
+            _lzSet(key, out);
+        } catch (e) {}
+    }
+}
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){
+    try { _migrateAllSavesToClassicMode(); } catch (e) {}
+    try { _migrateAllSavesNewbieEmbark(); } catch (e2) {}
+});
 
 // ===== 角色多開／刪除保護 =====
 // 每個正在遊戲中的分頁每 2 秒留下心跳。刪角時只要還有其他活躍分頁就拒絕，
@@ -1641,7 +1664,7 @@ function startGame() {
     updateClassPotionRows();
     renderSkillSelects();
     
-    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 48 小時）
+    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 7 天）
     try {
         if (typeof claimNewbieEmbarkPack === 'function') {
             claimNewbieEmbarkPack({ equip: true, silent: false });
@@ -2144,6 +2167,8 @@ function loadGame() {
         // 日後新增欄位只需登錄於 SAVE_DEFAULTS；上方逐項 if(undefined) 為歷史遷移，不必再增列。
         applySaveDefaults(player);
         try { if (typeof purgeExpiredRentalGear === 'function') purgeExpiredRentalGear(true); } catch (_rentE) {}
+        let _newbieEmbarkMigrated = false;
+        try { if (typeof migrateNewbieEmbarkIfNeeded === 'function') _newbieEmbarkMigrated = !!migrateNewbieEmbarkIfNeeded({ silent: false }); } catch (_nbE) {}
         if (typeof repairMasteryState === 'function') _masteryRepair = repairMasteryState(player);
         if (!player.siege || typeof player.siege !== 'object') player.siege = {};
         if (player.ismaelAccUsed && !(player.siege.accCdUntil > 0)) player.siege.accCdUntil = Date.now() + 24 * 3600 * 1000;
@@ -2270,6 +2295,7 @@ function loadGame() {
             }
         }
         if (_masteryRepair && _masteryRepair.changed) saveGame();   // 修復後立即固化，避免重載時再次遇到同一壞狀態
+        if (_newbieEmbarkMigrated) try { saveGame(); } catch (_nbSaveE) {}
         try { if (typeof purgeReplacedAllies === 'function') purgeReplacedAllies(); } catch (e) {}   // 🤝 v3.4.23 載入後掃描：出戰傭兵的來源存檔位若已換成新角色（enSeed 不同）→ 自動解散
     }
 }
