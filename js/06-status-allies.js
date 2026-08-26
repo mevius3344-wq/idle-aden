@@ -3345,7 +3345,16 @@ function _reviveAllyDone(ally, via) {
 function reviveDownedMercsAtTown() {
     if (!player || !player.allies) return;
     let n = 0;
-    player.allies.forEach(a => { if (a) { let _wd = a._downed; a._downed = false; a.curHp = a.mhp; a.mp = a.mmp; a._reviveCd = 0; a.statuses = {}; if (_wd) n++; } });   // 🤝 Phase4：回村→全體傭兵回滿 HP/MP 並清除異常狀態（倒地者亦復活，計入訊息）
+    // 🤝 回村僅復活倒地傭兵並補滿其血魔；未倒地者不免費回滿
+    player.allies.forEach(a => {
+        if (!a || !a._downed) return;
+        a._downed = false;
+        a.curHp = a.mhp;
+        a.mp = a.mmp;
+        a._reviveCd = 0;
+        a.statuses = {};
+        n++;
+    });
     if (n) { try { logSys(`<span class="text-emerald-300">回到安全區，${n} 名倒地的協力傭兵已恢復。</span>`); } catch (e) {} try { renderSquadPanel(); } catch (e) {} }
 }
 // 🤝 傭兵升級重算戰力：暫時把全域 player 換成該傭兵跑 recomputeStats（純計算·比照 buildAlly），取得新等級的衍生戰力後還原；保留當前 HP/MP（夾到新上限·不滿血）。

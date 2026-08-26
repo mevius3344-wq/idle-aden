@@ -2635,6 +2635,121 @@ function isMobileCompactUi() {
         return false;
     }
 }
+
+// 📱 手機右側選單：主分組＋橫滑子選單，避免 13 顆按鈕排成 5 列一直往下拉
+const MOBILE_TAB_GROUPS = {
+    ability: [
+        { key: 'stats', label: '能力', tab: 'stats' },
+        { key: 'skill', label: '技能', tab: 'skill' },
+        { key: 'collection', label: '收藏', action: 'collection' },
+        { key: 'pvp', label: '排行榜', tab: 'pvp' },
+        { key: 'audit', label: '統計', tab: 'audit' }
+    ],
+    gear: [
+        { key: 'equip', label: '裝備', tab: 'equip' },
+        { key: 'weapons', label: '武器', tab: 'weapons' },
+        { key: 'armors', label: '防具', tab: 'armors' },
+        { key: 'items', label: '道具', tab: 'items' }
+    ],
+    settings: [
+        { key: 'automation', label: '設定', tab: 'automation' },
+        { key: 'autosell', label: '自動賣出', action: 'autosell' }
+    ],
+    social: [
+        { key: 'clan', label: '血盟', tab: 'clan' },
+        { key: 'party', label: '組隊', tab: 'party' }
+    ]
+};
+const MOBILE_TAB_DEFAULTS = { ability: 'stats', gear: 'equip', settings: 'automation', social: 'clan' };
+let _mobileTabGroup = 'ability';
+let _mobileTabSubKey = 'stats';
+let _mobileTabSubByGroup = { ability: 'stats', gear: 'equip', settings: 'automation', social: 'clan' };
+
+function _mobileTabGroupOf(tabOrAction) {
+    let id = String(tabOrAction || '');
+    for (let g of Object.keys(MOBILE_TAB_GROUPS)) {
+        if ((MOBILE_TAB_GROUPS[g] || []).some(it => it.tab === id || it.action === id || it.key === id)) return g;
+    }
+    return null;
+}
+
+function _syncDesktopTabButtons(activeTab) {
+    let wrap = document.querySelector('#col-right .tab-bar-buttons');
+    if (!wrap) return;
+    Array.from(wrap.querySelectorAll('.btn')).forEach(b => {
+        let t = b.getAttribute('data-tab');
+        b.classList.toggle('active', !!(activeTab && t === activeTab));
+    });
+}
+
+function _syncMobileTabPrimary(group) {
+    document.querySelectorAll('#col-right .mobile-tab-group-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-group') === group);
+    });
+}
+
+function renderMobileTabSub() {
+    let box = document.getElementById('mobile-tab-sub');
+    if (!box) return;
+    if (!isMobileCompactUi()) {
+        box.innerHTML = '';
+        return;
+    }
+    let items = MOBILE_TAB_GROUPS[_mobileTabGroup] || [];
+    let cur = _mobileTabSubKey;
+    box.innerHTML = items.map(it => {
+        let active = it.key === cur ? ' active' : '';
+        let partyDot = it.key === 'party' ? '<span id="btn-party-dot-mobile" class="logtab-dot hidden"></span>' : '';
+        // 與桌面 #btn-party-dot 同步：若桌面點有顯示，子選單也顯示
+        return `<button type="button" class="btn mobile-tab-sub-btn${active}" data-sub="${it.key}" onclick="activateMobileTabSub('${it.key}')">${it.label}${partyDot}</button>`;
+    }).join('');
+    try {
+        let deskDot = document.getElementById('btn-party-dot');
+        let mobDot = document.getElementById('btn-party-dot-mobile');
+        if (deskDot && mobDot) {
+            if (deskDot.classList.contains('hidden')) mobDot.classList.add('hidden');
+            else mobDot.classList.remove('hidden');
+        }
+    } catch (e) {}
+}
+
+function activateMobileTabSub(key) {
+    let items = MOBILE_TAB_GROUPS[_mobileTabGroup] || [];
+    let it = items.find(x => x.key === key) || items[0];
+    if (!it) return;
+    _mobileTabSubKey = it.key;
+    _mobileTabSubByGroup[_mobileTabGroup] = it.key;
+    renderMobileTabSub();
+    if (it.action === 'collection') {
+        setMobileTabPanelOpen(false);
+        if (typeof openCollectionPanel === 'function') openCollectionPanel();
+        return;
+    }
+    if (it.action === 'autosell') {
+        setMobileTabPanelOpen(false);
+        if (typeof openAutoSellRules === 'function') openAutoSellRules();
+        return;
+    }
+    let btn = document.querySelector(`#col-right .tab-bar-buttons [data-tab="${it.tab}"]`);
+    switchTab(it.tab, btn || null, { fromMobileSub: true });
+}
+
+function switchMobileTabGroup(group, btn) {
+    if (!MOBILE_TAB_GROUPS[group]) return;
+    // 手機：同一主分組再點一次且內容已展開 → 收合
+    if (isMobileCompactUi() && group === _mobileTabGroup && btn && btn.classList.contains('active')) {
+        let col = document.getElementById('col-right');
+        if (col && col.classList.contains('mobile-tab-open')) {
+            setMobileTabPanelOpen(false);
+            return;
+        }
+    }
+    _mobileTabGroup = group;
+    _syncMobileTabPrimary(group);
+    let prefer = _mobileTabSubByGroup[group] || MOBILE_TAB_DEFAULTS[group];
+    activateMobileTabSub(prefer);
+}
+
 function setMobileTabPanelOpen(open) {
     let col = document.getElementById('col-right');
     if (!col) return;
@@ -2647,20 +2762,22 @@ function setMobileTabPanelOpen(open) {
 function collapseMobileTabPanel() {
     setMobileTabPanelOpen(false);
 }
-function switchTab(t, btn) {
+function switchTab(t, btn, opts) {
+    opts = opts || {};
     // 📱 手機：同一分頁再點一次＝收合內容，避免下方內容區一直佔高
-    if (isMobileCompactUi() && btn && btn.classList.contains('active')) {
+    if (!opts.fromMobileSub && isMobileCompactUi() && btn && btn.classList.contains('active')) {
         let col = document.getElementById('col-right');
         if (col && col.classList.contains('mobile-tab-open')) {
             setMobileTabPanelOpen(false);
             return;
         }
     }
-    Array.from(btn.parentElement.children).forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    _syncDesktopTabButtons(t);
+    if (btn) btn.classList.add('active');
     // 👇 更新陣列名單
     ['stats', 'equip', 'weapons', 'skill', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
-    document.getElementById(`tab-${t}`).classList.remove('hidden');
+    let panel = document.getElementById(`tab-${t}`);
+    if (panel) panel.classList.remove('hidden');
     if(typeof setEquipmentPanelEmbedded === 'function') setEquipmentPanelEmbedded(t === 'equip');
     if(t === 'audit' && typeof renderAuditTab === 'function') renderAuditTab();
     if(t === 'pvp' && typeof renderPvpTab === 'function') renderPvpTab();
@@ -2670,8 +2787,32 @@ function switchTab(t, btn) {
         try { if (typeof rtPartyRender === 'function') rtPartyRender(true); } catch (e2) {}
     }
     if(t === 'automation' && typeof syncNpcLanguageSetting === 'function') syncNpcLanguageSetting();
+    // 同步手機主／子選單高亮
+    let g = _mobileTabGroupOf(t);
+    if (g) {
+        _mobileTabGroup = g;
+        let hit = (MOBILE_TAB_GROUPS[g] || []).find(it => it.tab === t);
+        if (hit) {
+            _mobileTabSubKey = hit.key;
+            _mobileTabSubByGroup[g] = hit.key;
+        }
+        _syncMobileTabPrimary(g);
+        if (!opts.fromMobileSub) renderMobileTabSub();
+    }
     if (isMobileCompactUi()) setMobileTabPanelOpen(true);
 }
+
+// 手機載入／轉橫豎時重建子選單
+try {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        let mq = window.matchMedia('(max-width: 768px), (max-height: 520px) and (pointer: coarse)');
+        let onChange = function () { try { renderMobileTabSub(); } catch (e) {} };
+        if (mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onChange);
+        else onChange();
+    }
+} catch (e) {}
 
 // ===== 🤝 協力傭兵隊伍面板（Phase 1：顯示血/魔/經驗條＋每傭兵攻擊技能/治癒魔法設定）=====
 let _squadSigTeam = '';      // 🩹 v3.2.74 拆兩簽章：team 分頁(血/魔/經驗條·含寵物/召喚 HP 5%階)——變動才重建 team DOM

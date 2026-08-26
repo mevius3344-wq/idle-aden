@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // js/22-pets.js — 🐾 夥伴系統 v2（v3.2.17 依「夥伴更新.md」全面取代舊項圈系統）
 //   ・寵物＝獨立實體（等級/經驗/HP/MP/技能），非道具；捕捉入「寵物保管」（同模式全角色共通、上限＝PET_STORAGE_MAX·v3.6.37 用戶調整為 32）
 //   ・出戰上限 4 隻＋魅力門檻（6/12/15/20）；每隻未倒地寵物各得玩家完整經驗；升級需求＝玩家表 1/10
@@ -1225,11 +1225,17 @@ function petsReviveAtTown() {
     let outs = (typeof petsOutList === 'function') ? petsOutList() : [];
     if (!outs.length) return;
     let n = 0;
+    // 🐾 回村僅復活倒地寵物並補滿其血魔；未倒地者不免費回滿
     outs.forEach(p => {
-        if (p._downed) { p._downed = false; p._reviveCd = 0; p._animAct = null; n++; petDevotionGrant(p); }   // 🏺 v3.6.44 回村復活亦觸發珍愛夥伴 buff
-        p.hp = petMhpEff(p);   // 🏺 v3.7.20 回村補滿含 petHpAll 光環
+        if (!p || !p._downed) return;
+        p._downed = false;
+        p._reviveCd = 0;
+        p._animAct = null;
+        p.hp = petMhpEff(p);
         p.mp = (p.mmp || 0) + (((typeof petDerive === 'function' && petDerive(p)) || {}).mmpBonus || 0);
         p._statuses = newMobStatus();
+        n++;
+        petDevotionGrant(p);   // 🏺 v3.6.44 回村復活亦觸發珍愛夥伴 buff
     });
     petMarkDirty();
     if (n) { try { logCombat(`<span class="text-green-300 font-bold">回到安全區，${n} 隻倒下的寵物已恢復。</span>`, 'heal'); } catch (e) {} }

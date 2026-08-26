@@ -2289,7 +2289,37 @@ button.classic-skill-cell { cursor:pointer; }
     #squad-panel .panel-header { padding: 4px 6px; }
     #squad-tab-team, #squad-tab-skill { max-height: none; }
 
-    #col-right > .tab-bar { position: sticky; top: 0; z-index: 65; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4px !important; padding: 4px !important; }
+    #col-right > .tab-bar {
+        position: sticky; top: 0; z-index: 65;
+        display: flex; flex-direction: column; gap: 4px !important; padding: 4px !important;
+    }
+    #col-right > .tab-bar .mobile-tab-primary {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+    }
+    #col-right > .tab-bar .mobile-tab-group-btn {
+        min-height: 36px; padding: 5px 2px !important; font-size: 13px !important; font-weight: 800;
+    }
+    #col-right > .tab-bar .mobile-tab-sub {
+        display: flex !important;
+        flex-wrap: nowrap;
+        gap: 4px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0 1px 2px;
+    }
+    #col-right > .tab-bar .mobile-tab-sub::-webkit-scrollbar { display: none; }
+    #col-right > .tab-bar .mobile-tab-sub-btn {
+        flex: 0 0 auto;
+        min-height: 28px;
+        padding: 3px 10px !important;
+        font-size: 11px !important;
+        white-space: nowrap;
+        position: relative;
+    }
+    #col-right > .tab-bar .tab-bar-buttons { display: none !important; }
     #col-right > .tab-bar .btn { min-height: 34px; padding: 4px 2px !important; font-size: 12px !important; }
     /* 手機：類別內容預設收合，點分頁才展開，避免一進來就拉長捲動 */
     #tab-content-panel {
@@ -4022,6 +4052,10 @@ button.classic-skill-cell { cursor:pointer; }
 .account-auth-status.err { color: #f0a090; }
 /* 手機收合鈕：桌面永遠隱藏（僅窄螢幕 media 內才可能顯示） */
 .mobile-tab-collapse-btn { display: none !important; }
+/* 手機分組選單：桌面隱藏主／子列，維持原本 3 欄按鈕網格 */
+.mobile-tab-primary,
+.mobile-tab-sub { display: none !important; }
+.tab-bar-buttons { display: grid; }
 #st-class.st-class-unnamed {
     color: #94a3b8 !important;
     font-size: 0.95rem;

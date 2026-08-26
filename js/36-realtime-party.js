@@ -783,13 +783,17 @@
 
     function rtPartyRenderInvites() {
         var box = document.getElementById('rt-party-invite-toast');
-        var dot = document.getElementById('btn-party-dot');
         if (!box) return;
         var list = _rtPartyInvites || [];
-        if (dot) {
+        var dots = [
+            document.getElementById('btn-party-dot'),
+            document.getElementById('btn-party-dot-mobile')
+        ];
+        dots.forEach(function (dot) {
+            if (!dot) return;
             if (list.length) dot.classList.remove('hidden');
             else dot.classList.add('hidden');
-        }
+        });
         if (!list.length) {
             box.classList.add('hidden');
             box.innerHTML = '';

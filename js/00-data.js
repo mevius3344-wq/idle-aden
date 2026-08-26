@@ -1,4 +1,4 @@
-﻿/** 遊戲核心資料庫 */
+/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
 const GAME_VERSION = 'v3.8.34';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
