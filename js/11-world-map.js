@@ -1993,15 +1993,12 @@ const TOWN_NPC_POS_OVERRIDE = {
     town_pride: { _pride_entrance: [49, 58] },                          // 新增公會後仍維持原入口告示位置
     town_rift: { _rift_entrance: [48, 58] }                             // 新增公會後仍維持原入口告示位置
 };
-// 主村保留一個「創立血盟」入口（舊傭兵公會站位沿用）；線上血盟創立／搜尋加入以右側分頁為主，其餘安全區不再放置。
+// 僅海音保留「創立血盟」入口（舊傭兵公會站位沿用）；其餘村莊請用右側血盟分頁創立／搜尋加入。
 const CLAN_GUILD_TOWN_IDS = new Set([
-    'town_silver_knight', 'town_talking', 'town_elf', 'town_gludin',
-    'town_heine', 'town_oren', 'town_giran', 'town_aden'
+    'town_heine'
 ]);
 const ALLY_GUILD_TOWN_SPOTS = {
-    town_silver_knight: [70, 72], town_talking: [43, 52], town_elf: [75, 78],
-    town_gludin: [70, 55], town_giran: [75, 68], town_heine: [56, 29], town_oren: [45, 55],
-    town_aden: [48, 84]
+    town_heine: [56, 29]
 };
 function _isClanGuildNpc(npc) {
     if (!npc) return false;
