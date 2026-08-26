@@ -1,4 +1,4 @@
-const http = require("http");
+﻿const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -2032,6 +2032,518 @@ async function handleClanApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown clan api" });
 }
 
+// ===== 🏛 Realtime auction house (player listings). Persisted to data/auction.json. =====
+const AUCTION_FILE = path.join(ROOT, "data", "auction.json");
+const AUCTION_MAX_LISTINGS = 2000;
+const AUCTION_MAX_PER_ACCOUNT = 20;
+const AUCTION_TTL_MS = 72 * 60 * 60 * 1000; // 72h
+const AUCTION_LIST_FEE_RATE = 0.02; // 上架手續費 2%
+const AUCTION_LIST_FEE_MIN = 100;
+const AUCTION_LIST_FEE_MAX = 50000;
+const AUCTION_BUY_FEE_RATE = 0.05; // 購買手續費 5%（買家另付）
+const AUCTION_PRICE_MIN = 1;
+const AUCTION_PRICE_MAX = 999999999;
+/** @type {Map<string, object>} listingId -> listing */
+const rtAuction = new Map();
+/** @type {Map<string, object[]>} account -> claims */
+const rtAuctionClaims = new Map();
+let auctionSaveTimer = null;
+
+function auctionFeesForPrice(price) {
+  const p = Math.max(AUCTION_PRICE_MIN, Math.min(AUCTION_PRICE_MAX, Math.floor(Number(price) || 0)));
+  let listFee = Math.floor(p * AUCTION_LIST_FEE_RATE);
+  if (listFee < AUCTION_LIST_FEE_MIN) listFee = AUCTION_LIST_FEE_MIN;
+  if (listFee > AUCTION_LIST_FEE_MAX) listFee = AUCTION_LIST_FEE_MAX;
+  const buyFee = Math.max(0, Math.floor(p * AUCTION_BUY_FEE_RATE));
+  return { price: p, listFee: listFee, buyFee: buyFee, totalBuy: p + buyFee };
+}
+
+function auctionSanitizeItem(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = String(raw.id || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 48);
+  if (!id || !/^[a-z0-9_]+$/i.test(id)) return null;
+  const cnt = Math.max(1, Math.min(99999, Math.floor(Number(raw.cnt) || 1)));
+  const en = Math.max(-15, Math.min(30, Math.floor(Number(raw.en) || 0)));
+  let bless = false;
+  if (raw.bless === true || raw.bless === "blessed") bless = true;
+  else if (raw.bless === "cursed") bless = "cursed";
+  let anc = false;
+  if (raw.anc === true) anc = true;
+  else if (typeof raw.anc === "string" && raw.anc) anc = String(raw.anc).slice(0, 16);
+  let attr = false;
+  if (raw.attr === true) attr = true;
+  else if (typeof raw.attr === "string" && raw.attr) attr = String(raw.attr).slice(0, 24);
+  let seteff = false;
+  if (typeof raw.seteff === "string" && raw.seteff) seteff = String(raw.seteff).slice(0, 24);
+  const out = { id: id, cnt: cnt, en: en, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: false };
+  // 拒絕限時／巨靈願望等不可轉讓旗標
+  if (Number(raw.expireAt) > 0) return null;
+  if (raw.gw) return null;
+  if (raw.rental) return null;
+  const n = String(raw._n || raw.n || "")
+    .replace(/[<>&"']/g, "")
+    .trim()
+    .slice(0, 40);
+  if (n) out._n = n;
+  return out;
+}
+
+function auctionNewId(prefix) {
+  return (prefix || "A") + Date.now().toString(36) + crypto.randomBytes(3).toString("hex");
+}
+
+function auctionPublic(listing, opts) {
+  opts = opts || {};
+  if (!listing) return null;
+  const fees = auctionFeesForPrice(listing.price);
+  const out = {
+    id: listing.id,
+    sellerName: listing.sellerName,
+    sellerAccount: opts.revealSeller ? listing.sellerAccount : undefined,
+    price: listing.price,
+    listFee: listing.listFee,
+    buyFee: fees.buyFee,
+    totalBuy: fees.totalBuy,
+    item: listing.item,
+    createdAt: listing.createdAt,
+    expiresAt: listing.expiresAt,
+  };
+  if (opts.mine) {
+    out.sellerAccount = listing.sellerAccount;
+    out.sellerSlot = listing.sellerSlot;
+    out.sellerKey = listing.sellerKey;
+  }
+  return out;
+}
+
+function auctionCountByAccount(account) {
+  let n = 0;
+  for (const L of rtAuction.values()) {
+    if (L && L.sellerAccount === account) n += 1;
+  }
+  return n;
+}
+
+function auctionPushClaim(account, claim) {
+  const a = String(account || "").trim().slice(0, 24);
+  if (!a || !claim) return;
+  const list = rtAuctionClaims.get(a) || [];
+  list.push(claim);
+  if (list.length > 200) list.splice(0, list.length - 200);
+  rtAuctionClaims.set(a, list);
+}
+
+function auctionExpireStale(now) {
+  now = now || Date.now();
+  let changed = false;
+  for (const [id, L] of [...rtAuction.entries()]) {
+    if (!L) {
+      rtAuction.delete(id);
+      changed = true;
+      continue;
+    }
+    if ((L.expiresAt || 0) > now) continue;
+    auctionPushClaim(L.sellerAccount, {
+      id: auctionNewId("X"),
+      type: "item",
+      item: L.item,
+      reason: "expire",
+      listingId: L.id,
+      price: L.price,
+      at: now,
+    });
+    rtAuction.delete(id);
+    changed = true;
+  }
+  if (changed) auctionSaveToDiskSoon();
+}
+
+function auctionLoadFromDisk() {
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(AUCTION_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(AUCTION_FILE, "utf8"));
+    rtAuction.clear();
+    rtAuctionClaims.clear();
+    const list = Array.isArray(raw && raw.listings) ? raw.listings : [];
+    list.forEach((L) => {
+      if (!L || !L.id || !L.sellerAccount) return;
+      const item = auctionSanitizeItem(L.item);
+      if (!item) return;
+      const price = Math.max(AUCTION_PRICE_MIN, Math.min(AUCTION_PRICE_MAX, Math.floor(Number(L.price) || 0)));
+      const fees = auctionFeesForPrice(price);
+      rtAuction.set(String(L.id).slice(0, 48), {
+        id: String(L.id).slice(0, 48),
+        sellerAccount: String(L.sellerAccount || "").slice(0, 24),
+        sellerSlot: Math.max(0, Math.min(8, Number(L.sellerSlot) || 0)),
+        sellerName: partySanitizeName(L.sellerName) || "未命名",
+        sellerKey: String(L.sellerKey || "").slice(0, 96),
+        price: price,
+        listFee: Math.max(0, Math.floor(Number(L.listFee) || fees.listFee)),
+        item: item,
+        createdAt: Math.max(0, Number(L.createdAt) || Date.now()),
+        expiresAt: Math.max(0, Number(L.expiresAt) || Date.now() + AUCTION_TTL_MS),
+      });
+    });
+    const claims = raw && raw.claims && typeof raw.claims === "object" ? raw.claims : {};
+    Object.keys(claims).forEach((acc) => {
+      const arr = Array.isArray(claims[acc]) ? claims[acc] : [];
+      const cleaned = [];
+      arr.forEach((c) => {
+        if (!c || !c.id) return;
+        if (c.type === "gold") {
+          cleaned.push({
+            id: String(c.id).slice(0, 48),
+            type: "gold",
+            amount: Math.max(0, Math.floor(Number(c.amount) || 0)),
+            reason: String(c.reason || "sale").slice(0, 24),
+            listingId: String(c.listingId || "").slice(0, 48),
+            buyerName: partySanitizeName(c.buyerName) || "",
+            at: Math.max(0, Number(c.at) || Date.now()),
+          });
+        } else if (c.type === "item") {
+          const it = auctionSanitizeItem(c.item);
+          if (!it) return;
+          cleaned.push({
+            id: String(c.id).slice(0, 48),
+            type: "item",
+            item: it,
+            reason: String(c.reason || "return").slice(0, 24),
+            listingId: String(c.listingId || "").slice(0, 48),
+            price: Math.max(0, Math.floor(Number(c.price) || 0)),
+            at: Math.max(0, Number(c.at) || Date.now()),
+          });
+        }
+      });
+      if (cleaned.length) rtAuctionClaims.set(String(acc).slice(0, 24), cleaned.slice(0, 200));
+    });
+  } catch (e) {
+    console.warn("[auction] load failed:", e && e.message ? e.message : e);
+  }
+}
+
+function auctionSaveToDiskSoon() {
+  if (auctionSaveTimer) return;
+  auctionSaveTimer = setTimeout(() => {
+    auctionSaveTimer = null;
+    try {
+      ensureDataDir();
+      const listings = [];
+      for (const L of rtAuction.values()) {
+        if (!L || !L.id) continue;
+        listings.push({
+          id: L.id,
+          sellerAccount: L.sellerAccount,
+          sellerSlot: L.sellerSlot,
+          sellerName: L.sellerName,
+          sellerKey: L.sellerKey,
+          price: L.price,
+          listFee: L.listFee,
+          item: L.item,
+          createdAt: L.createdAt,
+          expiresAt: L.expiresAt,
+        });
+      }
+      const claims = {};
+      for (const [acc, arr] of rtAuctionClaims.entries()) {
+        if (!acc || !arr || !arr.length) continue;
+        claims[acc] = arr;
+      }
+      fs.writeFileSync(
+        AUCTION_FILE,
+        JSON.stringify({ listings: listings, claims: claims, savedAt: Date.now() }, null, 2),
+        "utf8"
+      );
+    } catch (e) {
+      console.warn("[auction] save failed:", e && e.message ? e.message : e);
+    }
+  }, 400);
+}
+
+try {
+  auctionLoadFromDisk();
+} catch (e) {}
+
+async function handleAuctionApi(req, res, u) {
+  if (req.method === "OPTIONS") {
+    partyCors(res);
+    res.writeHead(204);
+    return res.end();
+  }
+
+  auctionExpireStale(Date.now());
+
+  if (u === "/api/auction/fees" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const price = Math.floor(Number(url.searchParams.get("price")) || 1000);
+    const fees = auctionFeesForPrice(price);
+    return json(res, 200, {
+      ok: true,
+      listFeeRate: AUCTION_LIST_FEE_RATE,
+      listFeeMin: AUCTION_LIST_FEE_MIN,
+      listFeeMax: AUCTION_LIST_FEE_MAX,
+      buyFeeRate: AUCTION_BUY_FEE_RATE,
+      ttlMs: AUCTION_TTL_MS,
+      maxPerAccount: AUCTION_MAX_PER_ACCOUNT,
+      sample: fees,
+    });
+  }
+
+  if (u === "/api/auction/list" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const q = String(url.searchParams.get("q") || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 40);
+    const seller = String(url.searchParams.get("seller") || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 24);
+    const viewer = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    const page = Math.max(1, Math.min(100, Math.floor(Number(url.searchParams.get("page")) || 1)));
+    const pageSize = 40;
+    let rows = [];
+    for (const L of rtAuction.values()) {
+      if (!L || !L.item) continue;
+      if (seller && String(L.sellerName || "").toLowerCase().indexOf(seller) < 0 && String(L.sellerAccount || "").toLowerCase() !== seller) continue;
+      if (q) {
+        const hay = (
+          String(L.item.id || "") +
+          " " +
+          String(L.item._n || "") +
+          " " +
+          String(L.sellerName || "")
+        ).toLowerCase();
+        if (hay.indexOf(q) < 0) continue;
+      }
+      const pub = auctionPublic(L);
+      if (pub && viewer && L.sellerAccount === viewer) pub.isMine = true;
+      rows.push(pub);
+    }
+    rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    rows = rows.slice(start, start + pageSize);
+    return json(res, 200, {
+      ok: true,
+      listings: rows,
+      total: total,
+      page: page,
+      pageSize: pageSize,
+      fees: {
+        listFeeRate: AUCTION_LIST_FEE_RATE,
+        listFeeMin: AUCTION_LIST_FEE_MIN,
+        listFeeMax: AUCTION_LIST_FEE_MAX,
+        buyFeeRate: AUCTION_BUY_FEE_RATE,
+        ttlMs: AUCTION_TTL_MS,
+      },
+    });
+  }
+
+  if (u === "/api/auction/mine" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const account = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    const rows = [];
+    for (const L of rtAuction.values()) {
+      if (L && L.sellerAccount === account) rows.push(auctionPublic(L, { mine: true }));
+    }
+    rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const claims = (rtAuctionClaims.get(account) || []).slice();
+    return json(res, 200, { ok: true, listings: rows, claims: claims });
+  }
+
+  if (u === "/api/auction/claims" && req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const account = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    return json(res, 200, { ok: true, claims: (rtAuctionClaims.get(account) || []).slice() });
+  }
+
+  if (u === "/api/auction/create" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = String((data && data.account) || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
+    const slot = Math.max(0, Math.min(8, Number(data.slot) || 0));
+    const name = partySanitizeName(data.name) || "未命名";
+    const key = partyMemberKey(account, slot, name);
+    const item = auctionSanitizeItem(data.item);
+    if (!item) return json(res, 400, { ok: false, error: "bad item", message: "物品資料無效（限時／特殊道具無法上架）。" });
+    const itemName = String(data.itemName || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 40);
+    if (itemName) item._n = itemName;
+    const fees = auctionFeesForPrice(data.price);
+    if (fees.price < AUCTION_PRICE_MIN) {
+      return json(res, 400, { ok: false, error: "bad price", message: "價格過低。" });
+    }
+    if (rtAuction.size >= AUCTION_MAX_LISTINGS) {
+      return json(res, 400, { ok: false, error: "full", message: "拍賣行目前已滿，請稍後再試。" });
+    }
+    if (auctionCountByAccount(account) >= AUCTION_MAX_PER_ACCOUNT) {
+      return json(res, 400, {
+        ok: false,
+        error: "limit",
+        message: "每個帳號最多同時上架 " + AUCTION_MAX_PER_ACCOUNT + " 件。",
+      });
+    }
+    const now = Date.now();
+    const listing = {
+      id: auctionNewId("A"),
+      sellerAccount: account,
+      sellerSlot: slot,
+      sellerName: name,
+      sellerKey: key,
+      price: fees.price,
+      listFee: fees.listFee,
+      item: item,
+      createdAt: now,
+      expiresAt: now + AUCTION_TTL_MS,
+    };
+    rtAuction.set(listing.id, listing);
+    auctionSaveToDiskSoon();
+    return json(res, 200, {
+      ok: true,
+      listing: auctionPublic(listing, { mine: true }),
+      listFee: fees.listFee,
+      message: "上架成功。已收取上架手續費 " + fees.listFee.toLocaleString() + " 金幣。",
+    });
+  }
+
+  if (u === "/api/auction/buy" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = String((data && data.account) || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
+    const buyerName = partySanitizeName(data.name) || "未命名";
+    const listingId = String(data.listingId || "").slice(0, 48);
+    const L = rtAuction.get(listingId);
+    if (!L) return json(res, 404, { ok: false, error: "gone", message: "此商品已售出或下架。" });
+    if (L.sellerAccount === account) {
+      return json(res, 400, { ok: false, error: "self", message: "不能購買自己的商品。" });
+    }
+    const fees = auctionFeesForPrice(L.price);
+    rtAuction.delete(listingId);
+    auctionPushClaim(L.sellerAccount, {
+      id: auctionNewId("G"),
+      type: "gold",
+      amount: fees.price,
+      reason: "sale",
+      listingId: L.id,
+      buyerName: buyerName,
+      at: Date.now(),
+    });
+    auctionSaveToDiskSoon();
+    return json(res, 200, {
+      ok: true,
+      item: L.item,
+      price: fees.price,
+      buyFee: fees.buyFee,
+      totalPaid: fees.totalBuy,
+      sellerName: L.sellerName,
+      message:
+        "購買成功。支付 " +
+        fees.price.toLocaleString() +
+        "＋手續費 " +
+        fees.buyFee.toLocaleString() +
+        "＝" +
+        fees.totalBuy.toLocaleString() +
+        " 金幣。",
+    });
+  }
+
+  if (u === "/api/auction/cancel" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = String((data && data.account) || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    const listingId = String(data.listingId || "").slice(0, 48);
+    const L = rtAuction.get(listingId);
+    if (!L) return json(res, 404, { ok: false, error: "gone", message: "找不到此上架。" });
+    if (L.sellerAccount !== account) {
+      return json(res, 403, { ok: false, error: "forbidden", message: "只能下架自己的商品。" });
+    }
+    rtAuction.delete(listingId);
+    auctionSaveToDiskSoon();
+    return json(res, 200, {
+      ok: true,
+      item: L.item,
+      message: "已下架。上架手續費不退還。",
+    });
+  }
+
+  if (u === "/api/auction/claim" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    const account = String((data && data.account) || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    const list = rtAuctionClaims.get(account) || [];
+    if (!list.length) return json(res, 200, { ok: true, claims: [], message: "沒有待領取內容。" });
+    const claimId = data.claimId ? String(data.claimId).slice(0, 48) : "";
+    let taken = [];
+    if (claimId) {
+      const idx = list.findIndex((c) => c && c.id === claimId);
+      if (idx < 0) return json(res, 404, { ok: false, error: "gone", message: "找不到此筆領取。" });
+      taken = [list[idx]];
+      list.splice(idx, 1);
+    } else {
+      taken = list.splice(0, list.length);
+    }
+    if (list.length) rtAuctionClaims.set(account, list);
+    else rtAuctionClaims.delete(account);
+    auctionSaveToDiskSoon();
+    return json(res, 200, { ok: true, claims: taken, message: "領取成功。" });
+  }
+
+  return json(res, 404, { ok: false, error: "unknown auction api" });
+}
+
 // ===== 帳號註冊（全站唯一）＋角色名稱登錄（全站唯一 ID）=====
 const ACCOUNTS_FILE = path.join(ROOT, "data", "accounts.json");
 const CHAR_NAMES_FILE = path.join(ROOT, "data", "char-names.json");
@@ -2598,6 +3110,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/clan")) {
       await handleClanApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/auction")) {
+      await handleAuctionApi(req, res, u);
       return;
     }
     if (u.startsWith("/api/accounts")) {

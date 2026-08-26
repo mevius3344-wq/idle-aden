@@ -617,7 +617,9 @@ function renderSkillSelects() {
 
 // 1. 定義輔助函數 (請確保它在 openModal 外面或上方)
 function formatBonus(val) {
-    return val >= 0 ? `+${val}` : `${val}`;
+    let n = Number(val);
+    if (!Number.isFinite(n)) return '+0';
+    return n >= 0 ? `+${n}` : `${n}`;
 }
 
 // 武器種類標籤（單手劍 / 武士刀 / 匕首）；武士刀與瑟魯基之劍同時具單手劍與武士刀
@@ -1003,11 +1005,19 @@ function buildItemDescHTML(item) {
         let hitLabel = isRanged ? "遠距離命中" : "近距離命中";
         let dmgLabel = isRanged ? "遠距離傷害" : "近距離傷害";
 
-        // 顯示命中與傷害
+        // 顯示命中與傷害（基礎值）
         if(d.hit) desc += ` / ${hitLabel}: ${formatBonus(d.hit)}`;
         if(d.dmgBonus !== undefined) desc += ` / ${dmgLabel}: ${formatBonus(d.dmgBonus)}`; // 加上 !== undefined 避免 0 被漏掉
         
         if(d.mdmg) desc += ` / 魔法傷害: ${formatBonus(d.mdmg)}`;
+        // 強化固定加成（與 js/02 enhanceWpnBonus 一致）：每+1 近遠傷害各+1；命中+1~+10 後依表續加
+        if (!d.isArrow && !d.noEnhance && typeof enhanceWpnBonus === 'function') {
+            let _enShow = typeof capWpnEn === 'function' ? capWpnEn(item.en) : Math.max(0, Number(item.en) || 0);
+            if (_enShow > 0) {
+                let _eb = enhanceWpnBonus(_enShow);
+                desc += `<br><span class="text-sky-300">強化 +${_enShow}：額外傷害 ${formatBonus(_eb.dmg)}、額外命中 ${formatBonus(_eb.hit)}（近／遠距離皆加）</span>`;
+            }
+        }
         // ⚔️ 攻擊速度依「職業性別×武器種類」查表顯示（以目前角色為準；戰士雙持另依雙斧速度）
         if (typeof atkSpdApm === 'function' && typeof player !== 'undefined' && player && player.cls && atkSpdFamily(item.id)) {   // 箭矢等非揮擊武器不顯示
             let _apm = atkSpdApm(player, item.id);
@@ -1041,8 +1051,30 @@ function buildItemDescHTML(item) {
         }
     }
     if(d.type === 'arm' || d.type === 'acc') {
-        // 順便修復防禦為 0 (例如 T恤) 時不顯示的問題
-        if(d.ac !== undefined) desc += `<br><span class="text-blue-300">防禦(AC): ${d.ac >= 0 ? '-' + d.ac : '+' + (-d.ac)}</span>`;   // 🩹 v3.1.76 負值 ac（曼波帽子 -1＝防禦變弱·確認為刻意設計）：原字串前綴寫死「-」會顯示成「--1」→ 負值改顯示 +N
+        // 順便修復防禦為 0 (例如 T恤) 時不顯示的問題；防具強化 AC 一併顯示（與 js/02 enhanceArmAc 一致）
+        if(d.ac !== undefined) {
+            let _enArm = (d.type === 'arm' && !d.armguard && !d.noEnhance)
+                ? (typeof enhanceArmAc === 'function' ? enhanceArmAc(capEn(item.en, d)) : Math.max(0, Number(item.en) || 0))
+                : 0;
+            let _acTotal = (Number(d.ac) || 0) + _enArm;   // 數值越大＝防禦越好＝畫面顯示越負
+            let _acTxt = _acTotal >= 0 ? ('-' + _acTotal) : ('+' + (-_acTotal));
+            if (_enArm > 0) {
+                let _baseTxt = d.ac >= 0 ? ('-' + d.ac) : ('+' + (-d.ac));
+                desc += `<br><span class="text-blue-300">防禦(AC): ${_acTxt}</span><span class="text-sky-300">（基礎 ${_baseTxt}、強化 -${_enArm}）</span>`;
+            } else {
+                desc += `<br><span class="text-blue-300">防禦(AC): ${_acTxt}</span>`;   // 🩹 v3.1.76 負值 ac（曼波帽子 -1＝防禦變弱）：負值改顯示 +N
+            }
+        }
+        // 飾品強化加成顯示（與 js/02 一致：戒指 AC、項鍊/耳環 MR）
+        if (d.type === 'acc' && !d.noEnhance) {
+            let _ae = Math.min(Math.max(0, Number(item.en) || 0), 5);
+            if (_ae > 0) {
+                if (d.slot === 'ring') desc += `<br><span class="text-sky-300">強化 +${_ae}：防禦(AC) -${_ae}（每強化 AC-1）</span>`;
+                else if (d.slot === 'amulet') desc += `<br><span class="text-sky-300">強化 +${_ae}：魔防(MR) +${_ae * 3}（每強化 MR+3）</span>`;
+                else if (d.slot === 'ear' || d.slot === 'ear1' || d.slot === 'ear2') desc += `<br><span class="text-sky-300">強化 +${_ae}：魔防(MR) +${_ae * 2}（每強化 MR+2）</span>`;
+                else if (d.slot === 'belt') desc += `<br><span class="text-sky-300">強化 +${_ae}：負重上限 +${_ae * 20}（每強化 +20）</span>`;
+            }
+        }
         let isRanged = (d.ranged === true);
         let hitLabel = isRanged ? "遠距離命中" : "近距離命中";
         let dmgLabel = isRanged ? "遠距離傷害" : "近距離傷害";
@@ -2657,7 +2689,8 @@ const MOBILE_TAB_GROUPS = {
     ],
     social: [
         { key: 'clan', label: '血盟', tab: 'clan' },
-        { key: 'party', label: '組隊', tab: 'party' }
+        { key: 'party', label: '組隊', tab: 'party' },
+        { key: 'auction', label: '拍賣', tab: 'auction' }
     ]
 };
 const MOBILE_TAB_DEFAULTS = { ability: 'stats', gear: 'equip', settings: 'automation', social: 'clan' };
@@ -2775,7 +2808,7 @@ function switchTab(t, btn, opts) {
     _syncDesktopTabButtons(t);
     if (btn) btn.classList.add('active');
     // 👇 更新陣列名單
-    ['stats', 'equip', 'weapons', 'skill', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
+    ['stats', 'equip', 'weapons', 'skill', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'auction', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
     let panel = document.getElementById(`tab-${t}`);
     if (panel) panel.classList.remove('hidden');
     if(typeof setEquipmentPanelEmbedded === 'function') setEquipmentPanelEmbedded(t === 'equip');
@@ -2785,6 +2818,10 @@ function switchTab(t, btn, opts) {
     if(t === 'party') {
         try { if (typeof rtPartyStart === 'function') rtPartyStart(); } catch (e) {}
         try { if (typeof rtPartyRender === 'function') rtPartyRender(true); } catch (e2) {}
+    }
+    if(t === 'auction') {
+        try { if (typeof auctionOnOpen === 'function') auctionOnOpen(); } catch (e3) {}
+        try { if (typeof renderAuctionTab === 'function') renderAuctionTab(); } catch (e4) {}
     }
     if(t === 'automation' && typeof syncNpcLanguageSetting === 'function') syncNpcLanguageSetting();
     // 同步手機主／子選單高亮
