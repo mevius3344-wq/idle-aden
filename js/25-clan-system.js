@@ -2396,10 +2396,8 @@ function renderClanTab() {
     try {
         let ident = _rtClanIdentity();
         if (ident && _rtClan) {
-            let myKey = (ident.account + '#' + ident.slot + '#' + (ident.name || '未命名'));
-            // partyMemberKey 格式一致
-            if (typeof partyMemberKey === 'function') { /* server only */ }
-            isOnlineLeader = _rtClan.leaderKey && _rtClan.members && _rtClan.members.some(m => m && m.leader && m.account === ident.account && Number(m.slot) === Number(ident.slot));
+            let myKey = ident.account + '#' + Math.max(0, Math.min(8, Number(ident.slot) || 0));
+            isOnlineLeader = !!( _rtClan.leaderKey && (_rtClan.leaderKey === myKey || (_rtClan.members && _rtClan.members.some(m => m && m.leader && m.account === ident.account && Number(m.slot) === Number(ident.slot)))) );
         }
     } catch (e) {}
     div.innerHTML = `

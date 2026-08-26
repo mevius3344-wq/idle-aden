@@ -27,6 +27,7 @@
     var _rtPartyApplications = [];
     var _rtPartyInviteDraft = '';
     var _rtPartySearchTimer = null;
+    var _rtPartyNullMiss = 0;
 
     function rtPartyEsc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -109,8 +110,9 @@
 
     function rtPartyMyKey() {
         var id = rtPartyIdentity();
-        if (!id) return '';
-        return id.account + '#' + id.slot + '#' + (id.name || '未命名');
+        if (!id || !id.account) return '';
+        var slot = Math.max(0, Math.min(8, Number(id.slot) || 0));
+        return id.account + '#' + slot;
     }
 
     function rtPartyIsLeader() {
@@ -205,7 +207,12 @@
             } else if (ev.type === 'join') {
                 rtPartyLog((rtPartyEsc(ev.name) || '隊員') + ' 加入了隊伍。');
             } else if (ev.type === 'leave') {
-                rtPartyLog((rtPartyEsc(ev.name) || '隊員') + ' 離開了隊伍。');
+                if (ev.reason === 'expire' && (ev.key === rtPartyMyKey() || ev.toKey === rtPartyMyKey())) {
+                    rtPartyLog('因長時間未連線，你已離開隊伍。');
+                    _rtParty = null;
+                } else {
+                    rtPartyLog((rtPartyEsc(ev.name) || '隊員') + (ev.reason === 'expire' ? ' 因長時間未連線離開隊伍。' : ' 離開了隊伍。'));
+                }
             } else if (ev.type === 'kick') {
                 if (ev.key === rtPartyMyKey() || ev.toKey === rtPartyMyKey()) {
                     if (!rtPartyIsSuspended()) {
@@ -253,10 +260,24 @@
 
     function rtPartyApplySnapshot(data) {
         if (!data || !data.ok) return;
+        var me = rtPartyMyKey();
+        // 丟棄過期回應（切角色競態）
+        if (data.key && me && data.key !== me) return;
         if (data.seq && data.seq > _rtPartySeq) _rtPartySeq = data.seq;
-        if (data.party) _rtParty = data.party;
-        else if (_rtParty && data.party === null && !rtPartyIsSuspended()) _rtParty = null;
-        _rtPartyKey = rtPartyMyKey();
+        if (data.party) {
+            _rtParty = data.party;
+            _rtPartyNullMiss = 0;
+        } else if (_rtParty && (data.party === null || data.party === undefined)) {
+            if (!rtPartyIsSuspended()) {
+                _rtPartyNullMiss += 1;
+                // 連續兩次確認才清掉，避免部署／瞬斷誤判解散
+                if (_rtPartyNullMiss >= 2) {
+                    _rtParty = null;
+                    _rtPartyNullMiss = 0;
+                }
+            }
+        }
+        _rtPartyKey = me;
         _rtPartyInvites = Array.isArray(data.invites) ? data.invites : [];
         _rtPartyApplications = Array.isArray(data.applications) ? data.applications : [];
         rtPartyHandleEvents(data.events || []);
@@ -815,8 +836,18 @@
         if (!rtPartyIdentity() || rtPartyIsSuspended()) return Promise.resolve();
         return rtPartyPost('heartbeat').then(function (data) {
             if (data && data.ok) {
-                if (data.party) _rtParty = data.party;
-                else if (_rtParty && data.party === null && !rtPartyIsSuspended()) _rtParty = null;
+                var me = rtPartyMyKey();
+                if (data.key && me && data.key !== me) return;
+                if (data.party) {
+                    _rtParty = data.party;
+                    _rtPartyNullMiss = 0;
+                } else if (_rtParty && data.party === null && !rtPartyIsSuspended()) {
+                    _rtPartyNullMiss += 1;
+                    if (_rtPartyNullMiss >= 2) {
+                        _rtParty = null;
+                        _rtPartyNullMiss = 0;
+                    }
+                }
                 if (data.seq && data.seq > _rtPartySeq) { /* poll will catch */ }
                 rtPartyRender();
             }
@@ -874,6 +905,10 @@
 
     function rtPartyStart() {
         if (!rtPartyIsHttp() || rtPartyIsSuspended()) return;
+        try {
+            var game = document.getElementById('game-screen');
+            if (!game || game.classList.contains('hidden')) return;
+        } catch (e0) { return; }
         rtPartyStartPolling();
         if (_rtPartyHbTimer) return;
         _rtPartyHbTimer = setInterval(function () {
@@ -915,12 +950,17 @@
     (function watch() {
         function poke() {
             try {
-                if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
+                if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) {
+                    rtPartyStop();
+                    return;
+                }
                 var game = document.getElementById('game-screen');
                 if (game && !game.classList.contains('hidden') && typeof player !== 'undefined' && player && player.cls) {
                     rtPartyStart();
                     rtPartyRender();
                 } else {
+                    // 回選角／離開遊戲畫面：停止輪詢，避免用舊角色身分持續刷新 lastSeen
+                    rtPartyStop();
                     rtPartyRender();
                 }
             } catch (e) {}

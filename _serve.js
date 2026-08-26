@@ -756,7 +756,7 @@ async function handleChatApi(req, res, u) {
   return json(res, 404, { ok: false, error: "unknown chat api" });
 }
 
-// ===== 🤝 Realtime party (invite / roster / share). In-memory; lost on restart. =====
+// ===== 🤝 Realtime party (invite / roster / share). Persisted to data/parties.json. =====
 const PARTY_MAX = 8;
 const PARTY_TTL_MS = 90000; // 線上 presence（顯示綠點／同圖分享）
 const PARTY_MEMBER_TTL_MS = 12 * 60 * 60 * 1000; // 成員資格保留（對齊離線掛機 12h 上限）
@@ -765,6 +765,7 @@ const PARTY_APPLY_MS = 120000;
 const PARTY_SHARE_RATE_MS = 80;
 const PARTY_WAIT_MAX_MS = 20000;
 const PARTY_EVENT_MAX = 120;
+const PARTIES_FILE = path.join(ROOT, "data", "parties.json");
 /** @type {Map<string, object>} partyId -> party */
 const parties = new Map();
 /** @type {Map<string, object>} memberKey -> presence */
@@ -776,6 +777,7 @@ const partyWaiters = [];
 let partyEventSeq = 0;
 /** @type {Array<object>} */
 const partyEvents = [];
+let partySaveTimer = null;
 
 function partyCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -790,19 +792,135 @@ function partySanitizeName(raw) {
     .slice(0, 16);
 }
 
-function partyMemberKey(account, slot, name) {
+// 穩定身分：只用帳號＋欄位。角色名僅顯示用，避免改名／短暫空名造成「憑空離隊」。
+function partyMemberKey(account, slot, _name) {
   const a = String(account || "")
     .replace(/[<>&"']/g, "")
     .trim()
     .slice(0, 24);
   const s = Math.max(0, Math.min(8, Number(slot) || 0));
-  const n = partySanitizeName(name) || "未命名";
   if (!a) return "";
-  return a + "#" + s + "#" + n;
+  return a + "#" + s;
 }
 
 function partyNewId() {
   return "P" + Date.now().toString(36) + crypto.randomBytes(2).toString("hex");
+}
+
+function partySaveToDiskSoon() {
+  if (partySaveTimer) return;
+  partySaveTimer = setTimeout(() => {
+    partySaveTimer = null;
+    try {
+      ensureDataDir();
+      const list = [];
+      for (const p of parties.values()) {
+        if (!p || !p.id || !Array.isArray(p.members) || !p.members.length) continue;
+        list.push({
+          id: p.id,
+          leaderKey: p.leaderKey,
+          createdAt: p.createdAt || Date.now(),
+          members: (p.members || [])
+            .filter((m) => m && m.key && m.account)
+            .map((m) => ({
+              key: String(m.key).slice(0, 96),
+              account: String(m.account || "").slice(0, 24),
+              slot: Math.max(0, Math.min(8, Number(m.slot) || 0)),
+              name: partySanitizeName(m.name) || "未命名",
+              lv: Math.max(1, Math.min(200, Number(m.lv) || 1)),
+              cls: String(m.cls || "").slice(0, 24),
+              classic: m.classic !== false,
+              leader: !!m.leader,
+              mapId: String(m.mapId || "").slice(0, 64),
+              mapName: String(m.mapName || "")
+                .replace(/[<>&"']/g, "")
+                .trim()
+                .slice(0, 40),
+              lastSeen: Math.max(0, Number(m.lastSeen) || 0),
+              joinedAt: Math.max(0, Number(m.joinedAt) || 0),
+            })),
+        });
+      }
+      fs.writeFileSync(
+        PARTIES_FILE,
+        JSON.stringify({ parties: list, savedAt: Date.now() }, null, 2),
+        "utf8"
+      );
+    } catch (e) {
+      console.warn("[party] save failed:", e && e.message ? e.message : e);
+    }
+  }, 500);
+}
+
+function partyLoadFromDisk() {
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(PARTIES_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(PARTIES_FILE, "utf8"));
+    const list = Array.isArray(raw && raw.parties) ? raw.parties : [];
+    parties.clear();
+    const now = Date.now();
+    list.forEach((p) => {
+      if (!p || !p.id || !Array.isArray(p.members) || !p.members.length) return;
+      const members = p.members
+        .filter((m) => m && m.account)
+        .map((m) => {
+          const account = String(m.account || "").slice(0, 24);
+          const slot = Math.max(0, Math.min(8, Number(m.slot) || 0));
+          // 舊檔可能是 account#slot#name → 一律改寫成穩定 key
+          const key = partyMemberKey(account, slot);
+          if (!key) return null;
+          const lastSeen = Math.max(0, Number(m.lastSeen) || 0);
+          if (lastSeen > 0 && now - lastSeen > PARTY_MEMBER_TTL_MS) return null;
+          return {
+            key: key,
+            account: account,
+            slot: slot,
+            name: partySanitizeName(m.name) || "未命名",
+            lv: Math.max(1, Math.min(200, Number(m.lv) || 1)),
+            cls: String(m.cls || "").slice(0, 24),
+            classic: m.classic !== false,
+            leader: false,
+            online: false,
+            mapId: String(m.mapId || "").slice(0, 64),
+            mapName: String(m.mapName || "").slice(0, 40),
+            hp: 0,
+            mhp: 0,
+            lastSeen: lastSeen || now,
+            joinedAt: Math.max(0, Number(m.joinedAt) || 0),
+          };
+        })
+        .filter(Boolean)
+        .slice(0, PARTY_MAX);
+      if (!members.length) return;
+      let leaderKey = partyMemberKey(
+        String((p.members.find((x) => x && x.key === p.leaderKey) || {}).account || ""),
+        Number((p.members.find((x) => x && x.key === p.leaderKey) || {}).slot || 0)
+      );
+      // 從舊 leaderKey 解析 account#slot（忽略尾端名稱）
+      if (!leaderKey && p.leaderKey) {
+        const parts = String(p.leaderKey).split("#");
+        if (parts.length >= 2) leaderKey = partyMemberKey(parts[0], parts[1]);
+      }
+      if (!members.some((m) => m.key === leaderKey)) {
+        leaderKey = members[0].key;
+      }
+      members.forEach((m) => {
+        m.leader = m.key === leaderKey;
+      });
+      parties.set(String(p.id).slice(0, 48), {
+        id: String(p.id).slice(0, 48),
+        leaderKey: leaderKey,
+        members: members,
+        createdAt: Math.max(0, Number(p.createdAt) || now),
+        lastShareAt: 0,
+        shareAtByKey: {},
+        applications: [],
+      });
+    });
+  } catch (e) {
+    console.warn("[party] load failed:", e && e.message ? e.message : e);
+  }
 }
 
 function partyPushEvent(ev) {
@@ -879,11 +997,15 @@ function partyMemberOnline(m, pre, t) {
 function partyMemberActive(m, pre, t) {
   if (!m) return false;
   const last = partyMemberLastSeen(m, pre);
-  return last > 0 && t - last < PARTY_MEMBER_TTL_MS;
+  // 無 lastSeen 時以 joinedAt／現在兜底，避免舊資料或異常寫入造成秒退隊
+  const fallback = Math.max(Number(m.joinedAt) || 0, Number(m.lastSeen) || 0);
+  const use = last > 0 ? last : fallback > 0 ? fallback : t;
+  return t - use < PARTY_MEMBER_TTL_MS;
 }
 
 function partyCleanupStale(now) {
   const t = now || Date.now();
+  let dirty = false;
   for (const [key, pre] of partyPresence.entries()) {
     if (!pre || t - (pre.lastSeen || 0) > PARTY_TTL_MS) partyPresence.delete(key);
   }
@@ -895,6 +1017,7 @@ function partyCleanupStale(now) {
   for (const [pid, party] of parties.entries()) {
     if (!party || !Array.isArray(party.members)) {
       parties.delete(pid);
+      dirty = true;
       continue;
     }
     party.members.forEach((m) => {
@@ -908,12 +1031,33 @@ function partyCleanupStale(now) {
         m.hp = pre.hp;
         m.mhp = pre.mhp;
         m.cls = pre.cls || m.cls;
+        m.name = pre.name || m.name;
         m.lastSeen = pre.lastSeen || m.lastSeen || t;
+      } else if (!m.lastSeen) {
+        m.lastSeen = m.joinedAt || t;
       }
     });
+    const before = party.members.slice();
     const activeMembers = party.members.filter((m) => partyMemberActive(m, partyPresence.get(m.key), t));
+    const dropped = before.filter((m) => m && !activeMembers.some((a) => a && a.key === m.key));
+    dropped.forEach((m) => {
+      partyPushEvent({
+        type: "leave",
+        partyId: party.id,
+        name: m.name,
+        key: m.key,
+        reason: "expire",
+        toKey: m.key,
+      });
+      dirty = true;
+    });
     if (!activeMembers.length) {
+      const keys = before.map((m) => m && m.key).filter(Boolean);
       parties.delete(pid);
+      keys.forEach((k) => {
+        partyPushEvent({ type: "disband", partyId: pid, toKey: k, reason: "expire" });
+      });
+      dirty = true;
       continue;
     }
     party.members = activeMembers;
@@ -932,6 +1076,7 @@ function partyCleanupStale(now) {
           leaderKey: party.leaderKey,
           name: pick.name,
         });
+        dirty = true;
       }
     }
     if (Array.isArray(party.applications)) {
@@ -939,8 +1084,12 @@ function partyCleanupStale(now) {
         (a) => a && t - (a.at || 0) < PARTY_APPLY_MS && !party.members.some((m) => m && m.key === a.key)
       );
     }
-    if (!party.members.length) parties.delete(pid);
+    if (!party.members.length) {
+      parties.delete(pid);
+      dirty = true;
+    }
   }
+  if (dirty) partySaveToDiskSoon();
 }
 
 function partyPublicSummary(party, viewerKey) {
@@ -972,30 +1121,37 @@ function partyUpsertPresence(body) {
   const key = partyMemberKey(account, slot, name);
   if (!key) return null;
   const now = Date.now();
+  const prev = partyPresence.get(key);
+  const partyEarly = partyFindByMemberKey(key);
+  const mem = partyEarly && (partyEarly.members || []).find((x) => x && x.key === key);
+  const base = prev || mem || {};
+  const pickStr = (v, fallback) => (v != null && String(v) !== "" ? v : fallback);
+  const pickNum = (v, fallback) => (v != null && Number.isFinite(Number(v)) ? Number(v) : fallback);
   const row = {
     key: key,
     account: account,
     slot: slot,
-    name: name || "未命名",
-    sessionId: String(body.sessionId || "").slice(0, 96),
-    lv: Math.max(1, Math.min(100, Number(body.lv) || 1)),
-    cls: String(body.cls || "").slice(0, 24),
-    mapId: String(body.mapId || "").slice(0, 64),
-    mapName: String(body.mapName || "")
+    name: name || base.name || "未命名",
+    sessionId: String(pickStr(body.sessionId, base.sessionId) || "").slice(0, 96),
+    lv: Math.max(1, Math.min(100, pickNum(body.lv, base.lv) || 1)),
+    cls: String(pickStr(body.cls, base.cls) || "").slice(0, 24),
+    mapId: String(pickStr(body.mapId, base.mapId) || "").slice(0, 64),
+    mapName: String(pickStr(body.mapName, base.mapName) || "")
       .replace(/[<>&"']/g, "")
       .trim()
       .slice(0, 40),
-    hp: Math.max(0, Number(body.hp) || 0),
-    mhp: Math.max(0, Number(body.mhp) || 0),
-    classic: body.classic !== false,
+    hp: Math.max(0, pickNum(body.hp, base.hp) || 0),
+    mhp: Math.max(0, pickNum(body.mhp, base.mhp) || 0),
+    classic: body.classic !== false && base.classic !== false,
     lastSeen: now,
   };
   partyPresence.set(key, row);
-  const party = partyFindByMemberKey(key);
+  const party = partyEarly || partyFindByMemberKey(key);
   if (party) {
     const m = party.members.find((x) => x && x.key === key);
     if (m) {
       Object.assign(m, {
+        name: row.name,
         mapId: row.mapId,
         mapName: row.mapName,
         lv: row.lv,
@@ -1049,6 +1205,7 @@ function partySnapshotFor(key) {
       : [];
   return {
     ok: true,
+    key: key,
     seq: partyEventSeq,
     party: partyPublic(party),
     invites: invites,
@@ -1056,6 +1213,10 @@ function partySnapshotFor(key) {
     events: [],
   };
 }
+
+try {
+  partyLoadFromDisk();
+} catch (e) {}
 
 async function handlePartyApi(req, res, u) {
   if (req.method === "OPTIONS") {
@@ -1189,6 +1350,7 @@ async function handlePartyApi(req, res, u) {
     };
     parties.set(id, party);
     partyPushEvent({ type: "create", partyId: id, toKey: up.key });
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, party: partyPublic(party) });
   }
 
@@ -1314,6 +1476,7 @@ async function handlePartyApi(req, res, u) {
       name: up.presence.name,
       key: up.key,
     });
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, accepted: true, party: partyPublic(party) });
   }
 
@@ -1419,6 +1582,7 @@ async function handlePartyApi(req, res, u) {
       partyId: party.id,
       toKey: app.key,
     });
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, accepted: true, party: partyPublic(party) });
   }
 
@@ -1452,6 +1616,7 @@ async function handlePartyApi(req, res, u) {
         name: party.members[0].name,
       });
     }
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, left: true });
   }
 
@@ -1485,6 +1650,7 @@ async function handlePartyApi(req, res, u) {
         toKey: targetKey,
       });
     }
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, party: partyPublic(party) });
   }
 
@@ -1509,6 +1675,7 @@ async function handlePartyApi(req, res, u) {
     keys.forEach((k) => {
       partyPushEvent({ type: "disband", partyId: pid, toKey: k });
     });
+    partySaveToDiskSoon();
     return json(res, 200, { ok: true, disbanded: true });
   }
 
@@ -1561,6 +1728,18 @@ async function handlePartyApi(req, res, u) {
     const name = partySanitizeName(url.searchParams.get("name"));
     const key = partyMemberKey(account, slot, name);
     if (!key) return json(res, 400, { ok: false, error: "need account" });
+    // 長輪詢期間也刷新 lastSeen，避免僅靠 heartbeat 被背景分頁節流後誤判離線／掉隊
+    partyUpsertPresence({
+      account: account,
+      slot: slot,
+      name: name,
+      mapId: undefined,
+      mapName: undefined,
+      hp: undefined,
+      mhp: undefined,
+      lv: undefined,
+      cls: undefined,
+    });
     const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
     let waitMs = Number(url.searchParams.get("wait"));
     if (!Number.isFinite(waitMs) || waitMs < 0) waitMs = 0;
@@ -1656,26 +1835,37 @@ function clanLoadFromDisk() {
       if (!c || !c.id || !c.name) return;
       const members = Array.isArray(c.members)
         ? c.members
-            .filter((m) => m && m.key && m.account)
-            .map((m) => ({
-              key: String(m.key).slice(0, 96),
-              account: String(m.account || "").slice(0, 24),
-              slot: Math.max(0, Math.min(8, Number(m.slot) || 0)),
-              name: partySanitizeName(m.name) || "未命名",
-              lv: Math.max(1, Math.min(200, Number(m.lv) || 1)),
-              cls: String(m.cls || "").slice(0, 16),
-              classic: m.classic !== false,
-              leader: !!m.leader,
-              online: false,
-              lastSeen: Math.max(0, Number(m.lastSeen) || 0),
-            }))
+            .filter((m) => m && m.account)
+            .map((m) => {
+              const account = String(m.account || "").slice(0, 24);
+              const slot = Math.max(0, Math.min(8, Number(m.slot) || 0));
+              const key = partyMemberKey(account, slot);
+              if (!key) return null;
+              return {
+                key: key,
+                account: account,
+                slot: slot,
+                name: partySanitizeName(m.name) || "未命名",
+                lv: Math.max(1, Math.min(200, Number(m.lv) || 1)),
+                cls: String(m.cls || "").slice(0, 16),
+                classic: m.classic !== false,
+                leader: !!m.leader,
+                online: false,
+                lastSeen: Math.max(0, Number(m.lastSeen) || 0),
+              };
+            })
+            .filter(Boolean)
             .slice(0, CLAN_MAX)
         : [];
       if (!members.length) return;
-      let leaderKey = String(c.leaderKey || "").slice(0, 96);
+      let leaderKey = "";
+      if (c.leaderKey) {
+        const parts = String(c.leaderKey).split("#");
+        if (parts.length >= 2) leaderKey = partyMemberKey(parts[0], parts[1]);
+      }
       if (!members.some((m) => m.key === leaderKey)) {
-        members[0].leader = true;
-        leaderKey = members[0].key;
+        const lead = members.find((m) => m.leader) || members[0];
+        leaderKey = lead.key;
       }
       members.forEach((m) => {
         m.leader = m.key === leaderKey;

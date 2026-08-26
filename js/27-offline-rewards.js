@@ -106,6 +106,13 @@
     //   ⚠️ 0.5 曾試過＝10% 血時 12 小時只剩 4.7% 存活＝棘輪下的終身死刑，過兇，勿調回。
     const OFFLINE_LATENT_DEATH_HP_PCT = 0.35;
     const OFFLINE_LATENT_DEATH_MAX_PER_HOUR = 0.05;
+    // 🩹 v3.8.108 異常死亡修復：舊公式把「短樣本 1 次死亡」放大成最高 60 次/時（約 1 分鐘必掛）。
+    //   離線結算改為：死亡率至少稀釋到 2 小時樣本，並硬上限 0.12/時（12h 期望約 1.4 次、存活率約 e^-1.44≈24%）。
+    const OFFLINE_MAX_DEATH_RATE_PER_HOUR = 0.12;
+    const OFFLINE_DEATH_RATE_MIN_SAMPLE_MS = 2 * 60 * 60 * 1000;
+    // 連續狩獵無死亡達此時間後，允許 minHpPct 棘輪緩慢回升，避免一次破血永久鎖高潛在死亡率。
+    const OFFLINE_MINHP_RECOVER_MS = 30 * 60 * 1000;
+    const OFFLINE_MINHP_RECOVER_STEP = 0.04;
 
     let _offlineRuntime = null;
     let _offlineLoading = false;
@@ -297,7 +304,8 @@
             potionHealPerMin: _offlineClamp(raw.potionHealPerMin, 0, OFFLINE_MAX_EXP_PER_MIN),
             potionPerMin: _offlineClamp(raw.potionPerMin, 0, OFFLINE_MAX_KILLS_PER_MIN),
             potionId: raw.potionId ? String(raw.potionId) : '',
-            deathRatePerHour: _offlineClamp(raw.deathRatePerHour, 0, 60),
+            // 🩹 舊存檔可能高達 60/時；讀取時一律夾到離線合理上限，避免一結算就秒死
+            deathRatePerHour: _offlineClamp(raw.deathRatePerHour, 0, OFFLINE_MAX_DEATH_RATE_PER_HOUR),
             deaths: Math.max(0, Math.floor(_offlineFinite(raw.deaths, 0))),
             // 🩹 v3.7.90 缺欄必須預設 1（＝毫無危險證據）。_offlineClamp 的 fallback 是下界 0，
             //   舊存檔沒有這個欄位會被讀成「曾掉到 0% 血」→ 接上潛在暴斃率後全部既有存檔立刻吃滿風險。
@@ -312,6 +320,15 @@
         if (p >= OFFLINE_LATENT_DEATH_HP_PCT) return 0;
         let risk = (OFFLINE_LATENT_DEATH_HP_PCT - p) / OFFLINE_LATENT_DEATH_HP_PCT;   // 0~1
         return risk * risk * OFFLINE_LATENT_DEATH_MAX_PER_HOUR;                        // 平方＝越接近全滅才明顯上升
+    }
+
+    // 離線規劃用的有效死亡率：實測優先，否則潛在；並再夾一次上限
+    function _offlineEffectiveDeathRate(survival) {
+        survival = _offlineSurvivalProfile(survival);
+        if (!survival) return 0;
+        let rate = Math.max(0, Number(survival.deathRatePerHour) || 0);
+        if (!(rate > 0)) rate = _offlineLatentDeathRate(survival.minHpPct);
+        return _offlineClamp(rate, 0, OFFLINE_MAX_DEATH_RATE_PER_HOUR);
     }
 
     function _offlineProfile(raw) {
@@ -510,6 +527,21 @@
         let basePotionUses = base ? total(base.potionPerMin, baseMs) : 0;
         let basePotionHeal = base ? total(base.potionHealPerMin, baseMs) : 0;
         let deathEvents = (base ? base.deathRatePerHour * baseMs / 3600000 : 0) + rt.deaths;
+        // 🩹 短樣本死亡稀釋：至少當成 2 小時樣本計算，避免「剛死一次就永久秒掛」
+        let deathSampleMs = Math.max(sampleMs, OFFLINE_DEATH_RATE_MIN_SAMPLE_MS);
+        let deathRatePerHour = deathEvents > 0
+            ? _offlineClamp(deathEvents * 3600000 / deathSampleMs, 0, OFFLINE_MAX_DEATH_RATE_PER_HOUR)
+            : 0;
+        let minHpPct = Math.min(base ? base.minHpPct : 1, rt.minHpPct);
+        // 長時間無死亡且本段最低血已回安全區：歷史棘輪每次快照回升一格，最終可關掉潛在暴斃
+        if (rt.deaths === 0 && rt.activeMs >= OFFLINE_MINHP_RECOVER_MS && rt.minHpPct >= OFFLINE_LATENT_DEATH_HP_PCT) {
+            let from = base ? base.minHpPct : minHpPct;
+            minHpPct = _offlineClamp(from + OFFLINE_MINHP_RECOVER_STEP, 0, 1);
+            if (minHpPct < OFFLINE_LATENT_DEATH_HP_PCT) {
+                // 尚未跨過安全門檻前，至少不低於本次實測
+                minHpPct = Math.max(minHpPct, rt.minHpPct);
+            }
+        }
         return _offlineSurvivalProfile({
             sampleMs: sampleMs,
             damagePerMin: damage * 60000 / sampleMs,
@@ -517,9 +549,9 @@
             potionHealPerMin: (basePotionHeal + rt.potionHealing) * 60000 / sampleMs,
             potionPerMin: (basePotionUses + rt.potionUses) * 60000 / sampleMs,
             potionId: potionId,
-            deathRatePerHour: deathEvents * 3600000 / sampleMs,
+            deathRatePerHour: deathRatePerHour,
             deaths: Math.round(deathEvents),
-            minHpPct: Math.min(base ? base.minHpPct : 1, rt.minHpPct),
+            minHpPct: minHpPct,
             updatedAt: now
         });
     }
@@ -1047,8 +1079,8 @@
             return { used: taken + bought, bought: bought, cost: cost };
         };
         let stockedMs = potionRate > 0 ? effStock / potionRate * 60000 : combatMs;
-        // 💀 v3.7.90 實測死亡率一律優先；只有「從沒死過(=0)」才退到 minHpPct 推導的潛在暴斃率。
-        let deathPerHour = Math.max(0, survival.deathRatePerHour) || _offlineLatentDeathRate(survival.minHpPct);
+        // 💀 v3.7.90／v3.8.108：實測死亡率優先，否則潛在；讀寫皆夾合理上限，避免異常秒死
+        let deathPerHour = _offlineEffectiveDeathRate(survival);
         let deathRoll = deathPerHour > 0 ? Math.max(1e-9, 1 - Math.random()) : 1;
         let nativePlanner = typeof window !== 'undefined' ? window.idleLineageNativeOffline : null;
         if (nativePlanner && typeof nativePlanner.planSurvival === 'function') {
@@ -1514,6 +1546,16 @@
 
     function _offlineApplySettledDeath() {
         if (!player) return;
+        // 已死亡則只確保 UI，不重複清召喚／覆寫狀態
+        if (player.dead && !(Number(player.hp) > 0)) {
+            try {
+                let revive = document.getElementById('btn-revive');
+                if (revive) revive.classList.remove('hidden');
+                if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
+                if (typeof updateUI === 'function') updateUI();
+            } catch (e0) {}
+            return;
+        }
         player.hp = 0;
         player.dead = true;
         player.summon = null;
@@ -1534,6 +1576,10 @@
         let now = options.now || _offlineNow();
         let requestedElapsed = elapsed;
         let survivalPlan = _offlineSurvivalPlan(profile, elapsed, efficiency, true);
+        // 進結算時若角色已死亡，不再套用「離線戰鬥死亡」路徑（避免重複鎖頭目／清召喚）
+        if (player && player.dead) {
+            survivalPlan = Object.assign({}, survivalPlan, { died: false, deathAtMs: 0 });
+        }
         elapsed = survivalPlan.elapsedMs;
         let bossRoom = profile.bossRoom === true;
         let previewKills = bossRoom ? 0 : _offlineRewardAmount(profile.killsPerMin, elapsed, efficiency);
@@ -2042,6 +2088,7 @@
     }
 
     window.offlinePrepareCharacterSelect = function () {
+        try { if (typeof rtPartyStop === 'function') rtPartyStop(); } catch (e0) {}
         if (typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return false;
         let now = _offlineNow();
         _offlineRememberPendingCatchup(now);
