@@ -6,6 +6,29 @@ const crypto = require("crypto");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
+
+/** 部署指紋：index.html 內容 + _serve.js mtime/size。Manual Deploy 後變更，供線上玩家自動重載。 */
+function computeBuildId() {
+  try {
+    const h = crypto.createHash("sha1");
+    try {
+      h.update(fs.readFileSync(path.join(ROOT, "index.html")));
+    } catch (e) {}
+    try {
+      const st = fs.statSync(path.join(ROOT, "_serve.js"));
+      h.update("serve:" + String(st.mtimeMs) + ":" + String(st.size));
+    } catch (e2) {}
+    try {
+      const st2 = fs.statSync(path.join(ROOT, "js", "00-data.js"));
+      h.update("data:" + String(st2.mtimeMs) + ":" + String(st2.size));
+    } catch (e3) {}
+    return h.digest("hex").slice(0, 16);
+  } catch (e) {
+    return "dev-" + Date.now().toString(36);
+  }
+}
+const BUILD_ID = computeBuildId();
+const SERVER_STARTED_AT = Date.now();
 // Online (Render) keeps this off. Local Windows serve writes editable JSON to Desktop.
 const ENABLE_DESKTOP_SAVES =
   process.env.DESKTOP_PLAYER_DATA === "1" ||
@@ -3322,6 +3345,21 @@ const server = http.createServer(async (req, res) => {
       await handleLeaderboardApi(req, res, u);
       return;
     }
+    if (u === "/api/version" || u === "/api/build") {
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        });
+        return res.end();
+      }
+      return json(res, 200, {
+        ok: true,
+        buildId: BUILD_ID,
+        startedAt: SERVER_STARTED_AT,
+      });
+    }
   } catch (e) {
     return json(res, 500, { ok: false, error: String(e && e.message ? e.message : e) });
   }
@@ -3357,6 +3395,7 @@ server.on("error", (e) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log("READY http://localhost:" + PORT);
+  console.log("BUILD " + BUILD_ID);
   console.log(
     "IP_SESSION " +
       (IP_SESSION_ENABLED ? "max=" + IP_SESSION_MAX + " ttlMs=" + IP_SESSION_TTL_MS : "off")
