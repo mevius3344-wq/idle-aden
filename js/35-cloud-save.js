@@ -109,12 +109,25 @@
     return String(o || '').trim();
   }
 
-  function _localBelongsToCurrent(data) {
+  function _localBelongsToCurrent(data, allowOwnerless) {
     if (!data || !data.p) return false;
     var owner = _ownerOf(data);
     var acc = String(currentAccount() || '').trim();
-    if (!owner) return true; // 舊檔無標記：視為本機可合併（登出清快取後通常不會殘留他帳）
-    return !!(acc && owner.toLowerCase() === acc.toLowerCase());
+    if (!acc) return false;
+    // 無 cloudOwner 的舊檔：預設不視為「目前帳號」（避免乙機殘留存檔灌進甲機雲端蓋掉進度）
+    // 僅在雲端全空、需本機種子時顯式 allowOwnerless
+    if (!owner) return allowOwnerless === true;
+    return owner.toLowerCase() === acc.toLowerCase();
+  }
+
+  /** 明確標了「其他帳號」才算串帳；無標記舊檔不算他帳（可與雲端比進度合併） */
+  function _isForeignAccountSave(data) {
+    if (!data || !data.p) return false;
+    var owner = _ownerOf(data);
+    if (!owner) return false;
+    var acc = String(currentAccount() || '').trim();
+    if (!acc) return true;
+    return owner.toLowerCase() !== acc.toLowerCase();
   }
 
   /** 進度分數：等級／經驗／金幣／背包量；同進度再比 savedAt */
@@ -217,7 +230,7 @@
     if (!cloudData && !(r && r.ok) && r && r.status !== 404) return false;
 
     var localData = _readSlotLocal(slot);
-    if (localData && !_localBelongsToCurrent(localData)) {
+    if (localData && _isForeignAccountSave(localData)) {
       // 他帳殘留：有雲端就改用雲端，否則清掉避免顯示錯角
       if (cloudData) return _writeSlotLocal(slot, cloudData);
       _removeSlotLocal(slot);
@@ -225,7 +238,7 @@
     }
 
     if (!cloudData) {
-      if (localData && localData.p) cloudPushSlotSync(slot, localData);
+      if (localData && localData.p && _localBelongsToCurrent(localData, true)) cloudPushSlotSync(slot, localData);
       return false;
     }
     if (!localData || !localData.p) return _writeSlotLocal(slot, cloudData);
@@ -396,13 +409,13 @@
           var slot = Math.max(1, Math.min(8, parseInt(k, 10) || 0));
           if (!slot) return;
           var localData = _readSlotLocal(slot);
-          if (localData && !_localBelongsToCurrent(localData)) {
+          if (localData && _isForeignAccountSave(localData)) {
             if (_writeSlotLocal(slot, data)) any = true;
             return;
           }
           if (!localData || !localData.p || cloudSaveBeats(data, localData)) {
             if (_writeSlotLocal(slot, data)) any = true;
-          } else {
+          } else if (_localBelongsToCurrent(localData, true)) {
             cloudPushSlotSync(slot, localData);
           }
         });
@@ -499,9 +512,26 @@
     return any;
   }
 
+  /** 雲端全空時：把無 cloudOwner 的本機槽綁定目前帳號，才能回填（甲機救回）；已有他帳標記的不碰 */
+  function _stampOwnerlessLocalAsCurrent() {
+    var acc = String(currentAccount() || '').trim();
+    if (!acc) return;
+    for (var i = 1; i <= 8; i++) {
+      try {
+        var data = _readSlotLocal(i);
+        if (!data || !data.p) continue;
+        if (_ownerOf(data)) continue;
+        data.p.cloudOwner = acc;
+        data.cloudOwner = acc;
+        _writeSlotLocal(i, data);
+      } catch (e) {}
+    }
+  }
+
   // 雲端尚空時，把本機既有存檔上傳當種子（僅補 404；不覆蓋雲端既有；且僅本帳）
   function cloudBootstrapFromLocal() {
     if (!cloudCanSync()) return;
+    _stampOwnerlessLocalAsCurrent();
     for (var i = 1; i <= 8; i++) {
       (function (slot) {
         try {
@@ -551,10 +581,10 @@
     return fetch(_base() + '/bundle')
       .then(function (res) {
         return res.json().then(function (data) {
-          // 先清「不屬於本帳」的本機槽，避免串帳顯示／誤傳
+          // 只清「明確標了其他帳號」的本機槽；無標記舊檔保留（供雲端空洞時種子）
           for (var i = 1; i <= 8; i++) {
             var loc = _readSlotLocal(i);
-            if (loc && loc.p && !_localBelongsToCurrent(loc)) _removeSlotLocal(i);
+            if (loc && loc.p && _isForeignAccountSave(loc)) _removeSlotLocal(i);
           }
 
           if (_bundleHasPlayableSlots(data)) {
@@ -569,8 +599,9 @@
             }
             return true;
           }
-          // 雲端無角色：保留本帳本機並回填（修部署洗雲端後的空洞）
+          // 雲端無角色：綁定無標記本機檔後回填（修部署洗雲端後的空洞）
           try {
+            _stampOwnerlessLocalAsCurrent();
             cloudFlushLocalToCloud();
           } catch (e) {
             try {

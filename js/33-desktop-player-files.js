@@ -1,4 +1,4 @@
-// 本機桌面玩家資料同步：透過 _serve.js API 讀寫「桌面/天堂玩家資料」。
+// 本機桌面玩家資料同步：透過 _serve.js API 讀寫「桌面/天堂玩家資料」（說明標題為躺著變強）。
 // 僅 localhost／127.0.0.1；線上版（Render）不會啟用。
 (function () {
   'use strict';

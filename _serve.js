@@ -80,30 +80,41 @@ const DESKTOP_DIR = resolveDesktopPlayerDir();
 function ensureDesktopDir() {
   fs.mkdirSync(DESKTOP_DIR, { recursive: true });
   const readme = path.join(DESKTOP_DIR, "說明.txt");
-  if (!fs.existsSync(readme)) {
-    fs.writeFileSync(
-      readme,
-      [
-        "經典天堂 - 玩家資料（可直接用記事本修改）",
-        "",
-        "檔案說明：",
-        "  slot-1.json ~ slot-8.json  → 各存檔位角色",
-        "  warehouse_classic.json     → 經典模式共用倉庫",
-        "  pets_classic.json          → 經典模式寵物名冊",
-        "",
-        "修改流程：",
-        "  1. 用本機 node _serve.js 開遊戲（localhost）",
-        "  2. 遊戲存檔後會自動同步到此資料夾",
-        "  3. 關閉遊戲或返回角色選單後，用記事本改 JSON",
-        "  4. 再載入該角色 → 會優先讀取這裡的檔案",
-        "",
-        "注意：請保持 JSON 格式正確（逗號、引號）。改完記得存檔。",
-        "線上版（Render）不會寫入此資料夾。",
-        "",
-      ].join("\r\n"),
-      "utf8"
-    );
-  }
+  const header = "躺著變強 - 玩家資料（可直接用記事本修改）";
+  const defaultBody = [
+    header,
+    "",
+    "檔案說明：",
+    "  slot-1.json ~ slot-8.json  → 各存檔位角色",
+    "  warehouse_classic.json     → 經典模式共用倉庫",
+    "  pets_classic.json          → 經典模式寵物名冊",
+    "",
+    "修改流程：",
+    "  1. 用本機 node _serve.js 開遊戲（localhost）",
+    "  2. 遊戲存檔後會自動同步到此資料夾",
+    "  3. 關閉遊戲或返回角色選單後，用記事本改 JSON",
+    "  4. 再載入該角色 → 會優先讀取這裡的檔案",
+    "",
+    "注意：請保持 JSON 格式正確（逗號、引號）。改完記得存檔。",
+    "線上版（Render）不會寫入此資料夾。",
+    "",
+  ].join("\r\n");
+  try {
+    if (!fs.existsSync(readme)) {
+      fs.writeFileSync(readme, defaultBody, "utf8");
+    } else {
+      // 已有說明檔：只把舊標題（經典天堂／放置天堂等）改成目前遊戲名
+      let raw = fs.readFileSync(readme, "utf8");
+      let next = raw.replace(
+        /^(經典天堂|放置天堂(?:\s*-\s*日出之國)?|放置亞丁|Idle Lineage)\s*-\s*玩家資料[^\r\n]*/m,
+        header
+      );
+      if (next === raw && !/躺著變強\s*-\s*玩家資料/.test(raw)) {
+        next = raw.replace(/^[^\r\n]+/, header);
+      }
+      if (next !== raw) fs.writeFileSync(readme, next, "utf8");
+    }
+  } catch (e) {}
   return DESKTOP_DIR;
 }
 
@@ -468,13 +479,11 @@ async function handleCloudApi(req, res, u) {
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
       }
-      // 同角色(enSeed)拒絕用較貧／較舊進度覆蓋雲端（防多開／舊分頁洗白）
+      // 拒絕用較貧／較舊進度覆蓋雲端（防乙機空號／新角蓋掉甲機進度；刪角請先 DELETE）
       if (fs.existsSync(file)) {
         try {
           const existing = JSON.parse(fs.readFileSync(file, "utf8"));
-          const exSeed = String((existing && existing.p && existing.p.enSeed) || "");
-          const inSeed = String((data.p && data.p.enSeed) || "");
-          if (exSeed && inSeed && exSeed === inSeed && !cloudSaveBeats(data, existing)) {
+          if (existing && existing.p && data.p && !cloudSaveBeats(data, existing)) {
             return json(res, 409, {
               ok: false,
               error: "stale_save",
@@ -2758,12 +2767,42 @@ async function handleAuctionApi(req, res, u) {
 }
 
 // ===== 帳號註冊（全站唯一）＋角色名稱登錄（全站唯一 ID）=====
-const ACCOUNTS_FILE = path.join(ROOT, "data", "accounts.json");
-const CHAR_NAMES_FILE = path.join(ROOT, "data", "char-names.json");
+// 與雲端存檔同持久根目錄：Render 免費碟重部屬常清掉 ROOT/data，若有設 CLOUD_SAVE_DIR 則帳號表跟著活。
+const ACCOUNTS_FILE_LEGACY = path.join(ROOT, "data", "accounts.json");
+const CHAR_NAMES_FILE_LEGACY = path.join(ROOT, "data", "char-names.json");
+const ACCOUNTS_FILE = path.join(
+  process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(ROOT, "data"),
+  "accounts.json"
+);
+const CHAR_NAMES_FILE = path.join(
+  process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(ROOT, "data"),
+  "char-names.json"
+);
 
 function ensureDataDir() {
   try {
+    fs.mkdirSync(path.dirname(ACCOUNTS_FILE), { recursive: true });
+  } catch (e) {}
+  try {
     fs.mkdirSync(path.join(ROOT, "data"), { recursive: true });
+  } catch (e2) {}
+}
+
+/** 首次改路徑時，把舊 data/*.json 併入持久位置（不覆蓋已有鍵） */
+function migrateJsonSidecar(legacyFile, targetFile) {
+  try {
+    if (!fs.existsSync(legacyFile)) return;
+    if (path.resolve(legacyFile) === path.resolve(targetFile)) return;
+    const legacy = readJsonFile(legacyFile, {});
+    const current = readJsonFile(targetFile, {});
+    let changed = false;
+    Object.keys(legacy || {}).forEach(function (k) {
+      if (!current[k]) {
+        current[k] = legacy[k];
+        changed = true;
+      }
+    });
+    if (changed || !fs.existsSync(targetFile)) writeJsonFile(targetFile, current);
   } catch (e) {}
 }
 
@@ -3404,8 +3443,11 @@ server.listen(PORT, "0.0.0.0", () => {
     "CLOUD_SAVE " + (ENABLE_CLOUD_SAVE ? CLOUD_ROOT : "off")
   );
   try {
+    migrateJsonSidecar(ACCOUNTS_FILE_LEGACY, ACCOUNTS_FILE);
+    migrateJsonSidecar(CHAR_NAMES_FILE_LEGACY, CHAR_NAMES_FILE);
     bootstrapCharNamesFromCloud();
     console.log("ACCOUNTS " + Object.keys(loadAccounts()).length + " CHAR_NAMES " + Object.keys(loadCharNames()).length);
+    console.log("ACCOUNTS_FILE " + ACCOUNTS_FILE);
   } catch (e) {
     console.log("REGISTRY_ERR " + (e && e.message ? e.message : e));
   }

@@ -727,7 +727,7 @@ async function exportSave(slot){
         try {
             let handle = await window.showSaveFilePicker({
                 suggestedName: fname,
-                types: [{ description: desktopExport ? 'Idle Lineage 安裝版存檔' : '放置天堂網頁版存檔', accept: { 'application/json': ['.json'] } }]
+                types: [{ description: desktopExport ? 'Idle Lineage 安裝版存檔' : '躺著變強網頁版存檔', accept: { 'application/json': ['.json'] } }]
             });
             let w = await handle.createWritable();
             await w.write(data);
@@ -787,7 +787,7 @@ function importSave(n){
                 return;
             }
             if(!d || typeof d !== 'object' || !d.p || typeof d.p !== 'object' || !d.p.cls){
-                alert('匯入失敗：檔案內容不是有效的放置天堂存檔。'); return;
+                alert('匯入失敗：檔案內容不是有效的躺著變強存檔。'); return;
             }
             let existing = slotSummary(n);
             if(existing){ alert(`存檔 ${n} 已有角色，請先刪除角色後再匯入。`); return; }
@@ -1691,7 +1691,7 @@ function startGame() {
     if (typeof purgeSherineContent === 'function') purgeSherineContent();
     applySherineTheme();
     startGameTimers();
-    logSys(`===== 歡迎來到天堂放置冒險 =====`);
+    logSys(`===== 歡迎來到${typeof GAME_TITLE !== 'undefined' ? GAME_TITLE : '躺著變強'} =====`);
     if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
         let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
         logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);

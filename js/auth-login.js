@@ -169,7 +169,7 @@
       el.classList.remove("hidden");
     });
     const welcome = $("auth-welcome");
-    if (welcome) welcome.textContent = "歡迎「" + account + "」進入躺著變強";
+    if (welcome) welcome.textContent = "歡迎「" + account + "」進入" + (typeof GAME_TITLE !== "undefined" ? GAME_TITLE : "躺著變強");
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}
@@ -204,6 +204,48 @@
     return Promise.resolve(false);
   }
 
+  function listLocalAccounts() {
+    var out = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(ACC_PREFIX) !== 0) continue;
+        var account = normalizeCred(k.slice(ACC_PREFIX.length));
+        if (!accountLooksValid(account)) continue;
+        var password = getStoredPassword(account);
+        if (password == null) continue;
+        out.push({ account: account, password: password });
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  /** 把本機已註冊帳號補上伺服器（409＝已存在略過）。解決：甲機離線註冊／伺服器重部屬後乙機「帳號不存在」。 */
+  function ensureLocalAccountsOnServer() {
+    return accountsApiReady().then(function (online) {
+      if (!online) return false;
+      var rows = listLocalAccounts();
+      if (!rows.length) return false;
+      return Promise.all(
+        rows.map(function (row) {
+          return httpJson("POST", "/api/accounts/register", {
+            account: row.account,
+            password: row.password,
+          }).then(
+            function (r) {
+              return !!(r && r.data && (r.data.ok || r.status === 409));
+            },
+            function () {
+              return false;
+            }
+          );
+        })
+      ).then(function () {
+        return true;
+      });
+    });
+  }
+
   function enterGame(account) {
     setSession(account);
     try {
@@ -211,9 +253,16 @@
     } catch (e) {}
     persistRememberPreference(account, readPassword());
     setStatus("驗證成功，正在進入……", "ok");
-    return syncCloud().finally(function () {
-      showLoggedIn(account);
-    });
+    return ensureLocalAccountsOnServer()
+      .catch(function () {
+        return false;
+      })
+      .then(function () {
+        return syncCloud();
+      })
+      .finally(function () {
+        showLoggedIn(account);
+      });
   }
 
   function httpJson(method, url, body) {
@@ -274,7 +323,7 @@
           return;
         }
         persistRememberPreference(account, password);
-        setStatus("註冊成功（離線本機），請點登入。", "ok");
+        setStatus("註冊成功（僅本機）。換手機前請先連線再開一次並登入，帳號才會同步到伺服器。", "ok");
         return;
       }
       httpJson("POST", "/api/accounts/register", { account: account, password: password })
@@ -282,7 +331,7 @@
           if (r && r.data && r.data.ok) {
             saveAccount(account, password);
             persistRememberPreference(account, password);
-            setStatus("註冊成功，請點登入。", "ok");
+            setStatus("註冊成功（已上雲），其他手機可用同一帳密登入。", "ok");
             return;
           }
           const msg =
@@ -365,10 +414,15 @@
                 setStatus((reg && reg.data && reg.data.message) || "帳號同步失敗。", "err");
               });
             }
+            setStatus(
+              "帳號不存在於伺服器。請確認帳密，或回原手機連線登入一次以同步帳號；勿在乙機重新註冊同名以免蓋掉進度。",
+              "err"
+            );
+            return;
           }
           const msg =
             (r && r.data && r.data.message) ||
-            (r && r.status === 404 ? "帳號不存在，請先註冊。" : "帳號或密碼錯誤。");
+            "帳號或密碼錯誤。";
           setStatus(msg, "err");
         })
         .catch(function () {
@@ -453,9 +507,16 @@
       } catch (e) {}
       claimIp().then(function (r) {
         if (r && r.ok) {
-          syncCloud().finally(function () {
-            showLoggedIn(session);
-          });
+          ensureLocalAccountsOnServer()
+            .catch(function () {
+              return false;
+            })
+            .then(function () {
+              return syncCloud();
+            })
+            .finally(function () {
+              showLoggedIn(session);
+            });
         } else {
           setSession("");
           showLoggedOut();
@@ -467,6 +528,10 @@
       });
     } else {
       showLoggedOut();
+      // 未登入也嘗試把本機帳號補上伺服器，方便稍後乙機登入
+      try {
+        ensureLocalAccountsOnServer().catch(function () {});
+      } catch (e) {}
     }
   }
 

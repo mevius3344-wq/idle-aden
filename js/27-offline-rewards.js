@@ -110,6 +110,12 @@
     //   離線結算改為：死亡率至少稀釋到 2 小時樣本，並硬上限 0.12/時（12h 期望約 1.4 次、存活率約 e^-1.44≈24%）。
     const OFFLINE_MAX_DEATH_RATE_PER_HOUR = 0.12;
     const OFFLINE_DEATH_RATE_MIN_SAMPLE_MS = 2 * 60 * 60 * 1000;
+    // 🩹 離線戰鬥死亡寬限：指數抽樣在 U≈1 時會算出接近 0 的死亡時間，短離線就顯示「戰鬥 0 分鐘後死亡」。
+    //   戰鬥時間未滿此值一律不判死；滿了之後最早也只能死在此邊界（約牆鐘 7 分鐘＠70% 效率）。
+    const OFFLINE_DEATH_GRACE_COMBAT_MS = 5 * 60 * 1000;
+    // 採樣「傷害−治療」允許的落差：滿血時過量治療不會入帳，dmg 會系統性略高於 heal；
+    // 落差在此比例內視為可續戰噪聲，不以淨扣血判死。
+    const OFFLINE_PRESSURE_NET_TOLERANCE = 1.15;
     // 連續狩獵無死亡達此時間後，允許 minHpPct 棘輪緩慢回升，避免一次破血永久鎖高潛在死亡率。
     const OFFLINE_MINHP_RECOVER_MS = 30 * 60 * 1000;
     const OFFLINE_MINHP_RECOVER_STEP = 0.04;
@@ -326,6 +332,8 @@
     function _offlineEffectiveDeathRate(survival) {
         survival = _offlineSurvivalProfile(survival);
         if (!survival) return 0;
+        // 線上已證明可穩掛（無死亡計數＋最低血回安全區）→ 不套用過時 deathRate，避免「線上掛得住、離線必吃舊死亡率」
+        if (survival.deaths <= 0 && survival.minHpPct >= OFFLINE_LATENT_DEATH_HP_PCT) return 0;
         let rate = Math.max(0, Number(survival.deathRatePerHour) || 0);
         if (!(rate > 0)) rate = _offlineLatentDeathRate(survival.minHpPct);
         return _offlineClamp(rate, 0, OFFLINE_MAX_DEATH_RATE_PER_HOUR);
@@ -1040,6 +1048,29 @@
         return plan;
     }
 
+    // 戰鬥死亡時間寬限：短於寬限＝本次離線不判死；否則最早死在寬限邊界（避免「0 分鐘死亡」）
+    function _offlineClampDeathCombatMs(deathCombatMs, combatMs) {
+        if (!(deathCombatMs < Infinity) || !(combatMs > 0)) return deathCombatMs;
+        if (combatMs < OFFLINE_DEATH_GRACE_COMBAT_MS) return Infinity;
+        if (deathCombatMs < OFFLINE_DEATH_GRACE_COMBAT_MS) return OFFLINE_DEATH_GRACE_COMBAT_MS;
+        return deathCombatMs;
+    }
+
+    // 淨扣血（壓力死亡）用的每分鐘淨傷害。線上能掛住時常見「傷害>治療」假象：
+    // 滿血浪費的回復不會記入 healing，但每一點傷害都會記入 damage。
+    function _offlinePressureNetPerMin(damagePerMin, healingPerMin, survival) {
+        let damage = Math.max(0, Number(damagePerMin) || 0);
+        let healing = Math.max(0, Number(healingPerMin) || 0);
+        let net = damage - healing;
+        if (!(net > 0)) return 0;
+        let minHp = _offlineClamp(survival && survival.minHpPct == null ? 1 : (survival && survival.minHpPct), 0, 1);
+        // 線上最低血沒掉破安全線＝證明可穩定掛機，不因採樣偏差判壓力死
+        if (minHp >= OFFLINE_LATENT_DEATH_HP_PCT) return 0;
+        // 治療量追得上傷害（含容許落差）＝視為可續戰
+        if (healing > 0 && damage <= healing * OFFLINE_PRESSURE_NET_TOLERANCE) return 0;
+        return net;
+    }
+
     function _offlineSurvivalPlan(profile, elapsedMs, efficiency, consumePotions) {
         let result = {
             elapsedMs: Math.max(0, Math.floor(_offlineFinite(elapsedMs, 0))),
@@ -1050,8 +1081,11 @@
         let eff = _offlineClamp(efficiency, 0, 1);
         if (!survival || !eff || !(survival.sampleMs > 0)) return result;
         let combatMs = result.elapsedMs * eff;
-        let hp = Math.max(1, Number(player && player.hp) || 1);
-        let mhp = Math.max(hp, Number(player && player.mhp) || hp);
+        // 讀檔常清掉 dead 但 HP 仍為 0 → max(1,0)=1 搭配淨扣血會「0 分鐘秒死」；視為滿血結算
+        let mhp = Math.max(1, Number(player && player.mhp) || 1);
+        let hpRaw = Number(player && player.hp);
+        let hp = (!Number.isFinite(hpRaw) || hpRaw <= 0) ? mhp : Math.max(1, Math.min(mhp, hpRaw));
+        mhp = Math.max(hp, mhp);
         let damage = Math.max(0, survival.damagePerMin);
         let healing = Math.max(0, survival.healingPerMin);
         let potionHealing = Math.min(healing, Math.max(0, survival.potionHealPerMin));
@@ -1081,7 +1115,16 @@
         let stockedMs = potionRate > 0 ? effStock / potionRate * 60000 : combatMs;
         // 💀 v3.7.90／v3.8.108：實測死亡率優先，否則潛在；讀寫皆夾合理上限，避免異常秒死
         let deathPerHour = _offlineEffectiveDeathRate(survival);
-        let deathRoll = deathPerHour > 0 ? Math.max(1e-9, 1 - Math.random()) : 1;
+        // 指數等待時間 T=-ln(U)/λ；U 必須落在 (0,1)，舊寫法 1-random 在 random≈0 時 U≈1 → T≈0
+        let deathRoll = deathPerHour > 0 ? Math.min(1 - 1e-12, Math.max(1e-12, Math.random())) : 1;
+        let finalizePlan = (plan) => {
+            plan.potionId = potionId;
+            let nSettle = settlePotions(plan.potionUsed);
+            plan.potionUsed = nSettle.used;
+            plan.potionBought = nSettle.bought;
+            plan.potionCost = nSettle.cost;
+            return plan;
+        };
         let nativePlanner = typeof window !== 'undefined' ? window.idleLineageNativeOffline : null;
         if (nativePlanner && typeof nativePlanner.planSurvival === 'function') {
             let nativePlan = nativePlanner.planSurvival({
@@ -1104,15 +1147,18 @@
                 nativePlan.combatMs <= combatMs && Number.isFinite(nativePlan.deathAtMs) && nativePlan.deathAtMs >= 0 &&
                 Number.isFinite(nativePlan.potionUsed) && nativePlan.potionUsed >= 0 && nativePlan.potionUsed <= effStock &&
                 typeof nativePlan.died === 'boolean') {
-                nativePlan.elapsedMs = Math.floor(nativePlan.elapsedMs);
-                nativePlan.combatMs = Math.floor(nativePlan.combatMs);
-                nativePlan.deathAtMs = Math.floor(nativePlan.deathAtMs);
-                nativePlan.potionId = potionId;
-                let nSettle = settlePotions(nativePlan.potionUsed);
-                nativePlan.potionUsed = nSettle.used;
-                nativePlan.potionBought = nSettle.bought;
-                nativePlan.potionCost = nSettle.cost;
-                return nativePlan;
+                let nativeDeathCombat = nativePlan.died ? nativePlan.combatMs : Infinity;
+                nativeDeathCombat = _offlineClampDeathCombatMs(nativeDeathCombat, combatMs);
+                let nativeDied = nativeDeathCombat <= combatMs;
+                let nativeSurvivedCombat = nativeDied ? Math.max(0, nativeDeathCombat) : combatMs;
+                nativePlan.died = nativeDied;
+                nativePlan.combatMs = Math.floor(nativeSurvivedCombat);
+                nativePlan.elapsedMs = nativeDied ? Math.max(0, Math.floor(nativeSurvivedCombat / eff)) : result.elapsedMs;
+                nativePlan.deathAtMs = nativeDied ? nativePlan.elapsedMs : 0;
+                if (nativeDied && potionRate > 0 && potionId) {
+                    nativePlan.potionUsed = Math.max(0, Math.floor(potionRate * nativeSurvivedCombat / 60000 + 1e-7));
+                }
+                return finalizePlan(nativePlan);
             }
         }
         let deathCombatMs = Infinity;
@@ -1131,14 +1177,19 @@
             elapsedCombat += duration;
         };
         let stockedDuration = Math.min(combatMs, stockedMs);
-        runPressure(stockedDuration, damage - healing);
+        // 有藥水／等效回復覆蓋的區段：不以「平均淨扣血」判死（滿血浪費治療會虛高傷害）。
+        // 翻車風險改由 deathRate／潛在暴斃率表達；與線上「喝得上就掛得住」一致。
+        runPressure(stockedDuration, 0);
         if (deathCombatMs === Infinity && stockedDuration < combatMs) {
-            runPressure(combatMs - stockedDuration, damage - nonPotionHealing);
+            // 藥水真正用盡後，才用「非藥水治療」評估能否續戰
+            runPressure(combatMs - stockedDuration,
+                _offlinePressureNetPerMin(damage, nonPotionHealing, survival));
         }
         if (deathPerHour > 0) {
             let empiricalDeathMs = -Math.log(deathRoll) * 3600000 / deathPerHour;
             deathCombatMs = Math.min(deathCombatMs, empiricalDeathMs);
         }
+        deathCombatMs = _offlineClampDeathCombatMs(deathCombatMs, combatMs);
         let died = deathCombatMs <= combatMs;
         let survivedCombatMs = died ? Math.max(0, deathCombatMs) : combatMs;
         let survivedElapsedMs = died ? Math.max(0, Math.floor(survivedCombatMs / eff)) : result.elapsedMs;
@@ -1405,7 +1456,9 @@
     }
 
     function _offlineFormatDuration(ms) {
-        let totalMin = Math.max(0, Math.floor(ms / 60000));
+        let totalSec = Math.max(0, Math.floor(_offlineFinite(ms, 0) / 1000));
+        if (totalSec < 60) return totalSec + ' 秒';
+        let totalMin = Math.floor(totalSec / 60);
         let h = Math.floor(totalMin / 60);
         let m = totalMin % 60;
         return (h ? h + ' 小時 ' : '') + m + ' 分鐘';
@@ -1959,9 +2012,9 @@
         let tickNo = Number(state && state.ticks) || 0;
         if (rt.deathTick === tickNo) return;
         let hp = Math.max(0, Number(player.hp) || 0);
+        // 🩹 致命那一擊的整管掉血不計入 damagePerMin（否則短樣本會把「可掛地圖」算成極度淨扣血，
+        //    離線一結算就壓力秒死）。死亡率改由 deaths → deathRatePerHour 表達。
         if (rt.lastTick !== tickNo) {
-            let directHealing = _offlineSurvivalTickCtx && _offlineSurvivalTickCtx.rt === rt ? _offlineSurvivalTickCtx.directHealing : 0;
-            rt.damage += Math.max(0, rt.lastHp + directHealing - hp);
             rt.activeMs += TICK_MS;
             rt.lastTick = tickNo;
         }

@@ -1,8 +1,8 @@
 ﻿{
-  "name": "idle-paradise",
+  "name": "idle-aden",
   "version": "3.8.41",
   "private": true,
-  "description": "Idle Paradise static web game",
+  "description": "躺著變強 — idle web RPG",
   "scripts": {
     "start": "node server/index.js"
   },
