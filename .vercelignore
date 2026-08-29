@@ -1,0 +1,9 @@
+node_modules
+.git
+data
+.vscode
+.idea
+*.log
+.env
+.env.*
+!.env.example

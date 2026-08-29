@@ -10,3 +10,4 @@ Thumbs.db
 data/cloud/
 data/accounts.json
 data/char-names.json
+.vercel
