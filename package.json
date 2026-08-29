@@ -4,7 +4,14 @@
   "private": true,
   "description": "躺著變強 — idle web RPG",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "serve": "node _serve.js",
+    "db:migrate": "node scripts/migrate-neon.js",
+    "db:import": "node scripts/import-files-to-neon.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "dotenv": "^16.4.7"
   },
   "engines": {
     "node": "20.x"
