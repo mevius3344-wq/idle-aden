@@ -1,7 +1,9 @@
 {
   "version": 2,
-  "name": "idle-aden",
   "installCommand": "npm install",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
