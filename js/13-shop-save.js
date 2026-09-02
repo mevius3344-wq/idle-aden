@@ -363,6 +363,16 @@ function _slotBadgeHtml(party) {
     return '<span class="load-slot-status text-cyan-300 text-xs font-bold">' + label + where + '</span>';
 }
 
+// 選角能力面板：優先用已結算的 p.d（含裝備），否則 base+alloc+萬能藥；避免只顯示創角基底導致數字錯誤／切角不更新。
+function _summaryStatOf(p, key){
+    if(!p) return null;
+    if(p.d && typeof p.d[key] === 'number' && isFinite(p.d[key])) return p.d[key];
+    let b = (p.base && p.base[key]) || 0;
+    let a = (p.alloc && p.alloc[key]) || 0;
+    let n = (p.panacea && p.panacea[key]) || 0;
+    let v = b + a + n;
+    return (typeof v === 'number' && isFinite(v)) ? v : null;
+}
 function _summaryFromRaw(s){
     if(!s) return null;
     s = _saveUnwrap(s).payload;   // 🛡️ 先解存檔簽章（摘要顯示不驗章、僅取 payload；舊明文檔原樣回傳）
@@ -384,7 +394,13 @@ function _summaryFromRaw(s){
             mp: p.mp || 0,
             mmp: p.mmp || p.maxMp || 0,
             ac: p.d && typeof p.d.ac === 'number' ? p.d.ac : '',
-            base: p.base || {}
+            base: p.base || {},
+            str: _summaryStatOf(p, 'str'),
+            dex: _summaryStatOf(p, 'dex'),
+            con: _summaryStatOf(p, 'con'),
+            wis: _summaryStatOf(p, 'wis'),
+            cha: _summaryStatOf(p, 'cha'),
+            int: _summaryStatOf(p, 'int')
         };   // 🎮 經典模式旗標：供存檔位顯示與傭兵同模式招募限制（🏛️v3.0.83 傳統已取消·未載入過的舊傳統存檔以 classicMode 歸類）；avatar＝職業性別頭像名（assets/character/<avatar>.png）；name 未命名時留空字串（顯示端自行省略）
     } catch(e){ return null; }
 }
@@ -1119,8 +1135,8 @@ function renderLoadSelect(){
 }
 function updateLoadInfo(){
     const sum = slotSummary(_loadSelectedSlot);
-    const set = (id, text) => { const el = document.getElementById(id); if(el) el.innerText = text; };
-    const base = (sum && sum.base) || {};
+    const set = (id, text) => { const el = document.getElementById(id); if(el) el.textContent = text; };
+    const fmtStat = (v) => (v == null || v === '') ? '-' : String(v);
     const empty = !sum;
     set('load-info-name', empty ? '' : (sum.name || '未命名'));
     set('load-info-pledge', empty ? '' : ({ tros:'特羅斯', esti:'依詩蒂' }[sum.pledge] || sum.pledge || '-'));
@@ -1129,13 +1145,13 @@ function updateLoadInfo(){
     set('load-info-hp', empty ? '' : `${Math.floor(sum.hp || 0)} / ${Math.floor(sum.mhp || 0)}`);
     set('load-info-mp', empty ? '' : `${Math.floor(sum.mp || 0)} / ${Math.floor(sum.mmp || 0)}`);
     set('load-info-ac', empty ? '' : (sum.ac === '' ? '-' : sum.ac));
-    set('load-info-lv', empty ? '' : sum.lv);
-    set('load-info-str', empty ? '' : (base.str || ''));
-    set('load-info-dex', empty ? '' : (base.dex || ''));
-    set('load-info-con', empty ? '' : (base.con || ''));
-    set('load-info-wis', empty ? '' : (base.wis || ''));
-    set('load-info-cha', empty ? '' : (base.cha || ''));
-    set('load-info-int', empty ? '' : (base.int || ''));
+    set('load-info-lv', empty ? '' : String(sum.lv));
+    set('load-info-str', empty ? '' : fmtStat(sum.str));
+    set('load-info-dex', empty ? '' : fmtStat(sum.dex));
+    set('load-info-con', empty ? '' : fmtStat(sum.con));
+    set('load-info-wis', empty ? '' : fmtStat(sum.wis));
+    set('load-info-cha', empty ? '' : fmtStat(sum.cha));
+    set('load-info-int', empty ? '' : fmtStat(sum.int));
     const create = document.getElementById('load-btn-create');
     const enter = document.getElementById('load-btn-enter');
     const del = document.getElementById('load-btn-delete');
@@ -1149,8 +1165,11 @@ function loadSelectSlot(n){
     const doubleClick = !!sum && _loadLastClickSlot === n && now - _loadLastClickAt <= 500;
     _loadLastClickSlot = doubleClick ? 0 : n;
     _loadLastClickAt = doubleClick ? 0 : now;
+    const prevSlot = _loadSelectedSlot;
     _loadSelectedSlot = n;
     if(doubleClick){ loadEnterSelected(); return; }
+    // 同頁切換存檔位：先即時刷新能力面板，再重繪卡面／動畫（避免只改 selected 卻殘留上一角數值）
+    if(prevSlot !== n) updateLoadInfo();
     if(document.querySelector(`.load-slot-card.selected[data-slot="${n}"]`)){
         updateLoadInfo();
         return;
@@ -1536,7 +1555,8 @@ function selectClass(c) {
         dragon: "龍騎士繼承龍的血脈與戰鬥本能，\n他們相信真正的力量\n來自承受痛苦後仍向前踏出的意志。\n在戰場上，龍騎士總是以強韌的身體\n突破敵人的防線，\n並用龍之力量壓制對手。\n\n龍騎士能夠使用鎖鏈劍與龍魔法，\n以生命力換取強大的攻擊能力。\n他們的戰鬥方式比騎士更加猛烈，\n也比一般戰士更具危險性。\n只要掌握敵人的弱點，\n龍騎士便能在瞬間爆發出\n令人畏懼的破壞力。\n\n若你想成為龍騎士，\n就必須接受血脈的代價，\n並將痛楚化為勝利的力量。",
         warrior: "戰士是在無數戰場中成長的鬥士，\n他們沒有華麗的魔法，\n也不依靠血統或神秘力量，\n只憑強健的身體、沉重的武器\n以及永不退縮的意志生存。\n\n戰士能夠使用斧頭與鈍器，\n並以連續而沉重的攻擊壓迫敵人。\n他們在近距離戰鬥中擁有\n非常可靠的耐久力與破壞力，\n即使被包圍也能站在最前方\n為同伴開出前進的道路。\n\n想以戰士的身份冒險，\n就必須相信自己的雙手，\n並在每一次揮擊中證明力量。"
     };
-    document.getElementById('class-desc').innerText = classDescMap[curCreate.cls] || "";
+    const descEl = document.getElementById('class-desc');
+    if(descEl) descEl.innerText = classDescMap[curCreate.cls] || "";
     // 🖋️ v3.2.5 排版自動適配：先重設回 CSS 預設（15px/行高1.5），若文案超出框高（overflow:hidden 會無聲裁切）則
     //    ①字級 0.5px 步進縮小（地板 11px）→ ②仍超出再微收行高（1.5 → 最低 1.2·仍優於舊版 1.1）。
     //    行高/字距為相對單位會等比縮放；面板隱藏時 clientHeight=0 → 跳過（開啟創角時 selectClassBase 會再跑一次）。
@@ -1566,20 +1586,19 @@ function adjStat(s, v) {
 }
 
 function updateCreateUI() {
+    const setTxt = (id, text) => { const el = document.getElementById(id); if(el) el.textContent = text; };
+    const setDisabled = (id, on) => { const el = document.getElementById(id); if(el) el.disabled = !!on; };
     if(!curCreate.cls || !createBase[curCreate.cls]){
-        ['str','dex','con','int','wis','cha'].forEach(s => {
-            let el = document.getElementById(`c-${s}`);
-            if(el) el.innerText = '';
-        });
-        document.getElementById('creation-pts').innerText = '';
-        document.getElementById('btn-start').disabled = true;
+        ['str','dex','con','int','wis','cha'].forEach(s => setTxt('c-' + s, ''));
+        setTxt('creation-pts', '');
+        setDisabled('btn-start', true);
         return;
     }
     let b = createBase[curCreate.cls];
-    ['str','dex','con','int','wis','cha'].forEach(s => document.getElementById(`c-${s}`).innerText = b[s] + curCreate[s]);
+    ['str','dex','con','int','wis','cha'].forEach(s => setTxt('c-' + s, String(b[s] + curCreate[s])));
     let left = b.pts - (curCreate.str + curCreate.dex + curCreate.con + curCreate.int + curCreate.wis + curCreate.cha);
-    document.getElementById('creation-pts').innerText = left;
-    document.getElementById('btn-start').disabled = left <= 0 ? false : true;
+    setTxt('creation-pts', String(left));
+    setDisabled('btn-start', left > 0);
 }
 
 function startGame() {

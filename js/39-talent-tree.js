@@ -6,6 +6,12 @@ const TALENT_TIER_NEED = 5;
 const TALENT_TIER_MAX_LV = { 1: 5, 2: 5, 3: 5, 4: 1 };
 
 const TALENT_PATH_LABEL = { fury: '凶暴 · 傷害發育', survival: '堅決 · 生存意志', transcend: '超越 · 藥理潛能' };
+const TALENT_PATH_META = {
+    fury: { name: '凶暴', tag: '傷害發育', blurb: '物／遠／魔輸出與攻速' },
+    survival: { name: '堅決', tag: '生存意志', blurb: '血量、抗性與保命' },
+    transcend: { name: '超越', tag: '藥理潛能', blurb: '回復、藥水與極限條件' }
+};
+const TALENT_TIER_LABEL = { 1: '根基', 2: '專精', 3: '突破', 4: '核心' };
 
 function _talentNodeId(path, tier, slot) { return path + '_t' + tier + '_' + slot; }
 
@@ -460,6 +466,13 @@ function talentMobHitBonus(target) {
     return Math.floor(Math.abs(mobEffAC(target)) * pct / 100);
 }
 
+function talentPathSpent(t, path) {
+    t = t || talentState();
+    let sum = 0;
+    for (let tier = 1; tier <= 4; tier++) sum += talentPathTierPoints(t, path, tier);
+    return sum;
+}
+
 function talentNodeBtnClass(t, id) {
     let lv = talentNodeLevel(t, id);
     let locked = talentIsNodeLocked(t, id);
@@ -467,6 +480,7 @@ function talentNodeBtnClass(t, id) {
     if (locked && !lv) cls += ' talent-node-locked';
     else if (lv > 0) cls += ' talent-node-active';
     else if (talentCanAllocate(t, id)) cls += ' talent-node-ready';
+    else cls += ' talent-node-idle';
     return cls;
 }
 
@@ -491,6 +505,10 @@ function _talentPlayerAttr(key) {
     return talentEffAttr(player.d, key);
 }
 
+function _talentSlotLabel(slot) {
+    return { l: '左', c: '中', r: '右' }[slot] || slot;
+}
+
 /** 依 applyTalentToStats 公式產生可讀的能力加成說明 */
 function talentDescribeNode(id, curLv) {
     let meta = TALENT_NODE_META[id];
@@ -502,7 +520,7 @@ function talentDescribeNode(id, curLv) {
         name: meta.name,
         short: meta.short,
         desc: meta.desc,
-        path: TALENT_PATH_LABEL[meta.path] || meta.path,
+        path: (TALENT_PATH_META[meta.path] ? (TALENT_PATH_META[meta.path].name + ' · ' + TALENT_PATH_META[meta.path].tag) : (TALENT_PATH_LABEL[meta.path] || meta.path)),
         tier: meta.tier,
         lv: lv,
         maxLv: maxLv,
@@ -780,7 +798,21 @@ function renderTalentTab() {
     }).join('') : '<span class="text-slate-500 text-sm">背包中無符合條件的武器</span>'}</div></div>` : '';
 
     let cols = ['fury', 'survival', 'transcend'].map(path => {
-        let tiers = [1, 2, 3, 4].map(tier => {
+        let pm = TALENT_PATH_META[path] || { name: path, tag: '', blurb: '' };
+        let spent = talentPathSpent(t, path);
+        let body = '';
+        for (let tier = 1; tier <= 4; tier++) {
+            if (tier > 1) {
+                let prevPts = talentPathTierPoints(t, path, tier - 1);
+                let unlocked = talentTierUnlocked(t, path, tier);
+                let pct = Math.min(100, Math.round((prevPts / TALENT_TIER_NEED) * 100));
+                body += `<div class="talent-gate${unlocked ? ' is-open' : ' is-locked'}" data-path="${path}" data-to-tier="${tier}">` +
+                    `<div class="talent-gate-rail" aria-hidden="true"></div>` +
+                    `<div class="talent-gate-chip"><span class="talent-gate-label">${unlocked ? '已解鎖' : '解鎖下層'}</span>` +
+                    `<span class="talent-gate-prog">${prevPts}/${TALENT_TIER_NEED}</span>` +
+                    `<div class="talent-gate-bar"><i style="width:${pct}%"></i></div></div></div>`;
+            }
+            let unlockedTier = talentTierUnlocked(t, path, tier);
             let nodes = ['l', 'c', 'r'].map(slot => {
                 let id = _talentNodeId(path, tier, slot);
                 let m = TALENT_NODE_META[id];
@@ -788,28 +820,76 @@ function renderTalentTab() {
                 let max = talentNodeMaxLv(id);
                 let locked = talentIsNodeLocked(t, id) && lv <= 0;
                 let selected = _talentSelectedId === id;
-                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}${selected ? ' talent-node-selected' : ''}" ${locked ? 'disabled' : ''} onclick="talentOnNodeClick('${id}')"><span class="talent-node-tier">T${tier}</span><span class="talent-node-name">${m.name}</span><span class="talent-node-short">${m.short}</span><span class="talent-node-lv">${lv}/${max}</span></button>`;
+                let fill = max > 0 ? Math.min(100, Math.round((lv / max) * 100)) : 0;
+                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}${selected ? ' talent-node-selected' : ''}" data-path="${path}" data-tier="${tier}" data-slot="${slot}" ${locked ? 'disabled' : ''} onclick="talentOnNodeClick('${id}')">` +
+                    `<span class="talent-node-slot">${_talentSlotLabel(slot)}</span>` +
+                    `<span class="talent-node-name">${_talentEsc(m.name)}</span>` +
+                    `<span class="talent-node-short">${_talentEsc(m.short)}</span>` +
+                    `<span class="talent-node-lv">${lv}/${max}</span>` +
+                    `<span class="talent-node-fill" aria-hidden="true"><i style="width:${fill}%"></i></span>` +
+                    `</button>`;
             }).join('');
-            return `<div class="talent-tier-row" data-tier="${tier}"><div class="talent-tier-row-btns">${nodes}</div></div>`;
-        }).join('');
-        return `<div class="talent-path-col" data-path="${path}"><div class="talent-path-title">${TALENT_PATH_LABEL[path]}</div>${tiers}</div>`;
+            body += `<div class="talent-tier-block${unlockedTier ? '' : ' is-locked'}" data-tier="${tier}">` +
+                `<div class="talent-tier-meta"><span class="talent-tier-badge">T${tier}</span>` +
+                `<span class="talent-tier-name">${TALENT_TIER_LABEL[tier] || ('第' + tier + '層')}</span>` +
+                `<span class="talent-tier-xor">同層三選一</span>` +
+                `<span class="talent-tier-cap">滿級 ${TALENT_TIER_MAX_LV[tier]}</span></div>` +
+                `<div class="talent-tier-row-btns">${nodes}</div></div>`;
+        }
+        return `<div class="talent-path-col" data-path="${path}">` +
+            `<div class="talent-path-head"><div class="talent-path-name">${_talentEsc(pm.name)}</div>` +
+            `<div class="talent-path-tag">${_talentEsc(pm.tag)}</div>` +
+            `<div class="talent-path-blurb">${_talentEsc(pm.blurb)}</div>` +
+            `<div class="talent-path-spent">本路投入 <b>${spent}</b> 點</div></div>${body}</div>`;
     }).join('');
 
     root.innerHTML = `<div class="talent-panel">
-        <div class="talent-header"><h3 class="talent-title">九天星盤 · 4階層全三選一常駐互斥天賦樹</h3>
-        <p class="talent-sub">全職業共享 · 50 級解鎖 · 終身 18 點 · 純常駐（零移速／零反傷）</p></div>
+        <div class="talent-header"><h3 class="talent-title">九天星盤</h3>
+        <p class="talent-sub">三路並行 · 每層三選一 · 上一層滿 ${TALENT_TIER_NEED} 點解鎖下一層 · 終身 ${TALENT_POINT_CAP} 點</p></div>
         <div class="talent-status-bar"><span>等級資格 <b class="text-cyan-300">${slots}</b></span><span>已購買 <b class="text-amber-300">${t.bought}</b>/${TALENT_POINT_CAP}</span><span>已分配 <b class="text-rose-300">${talentAllocatedPoints(t)}</b></span><span>可分配 <b class="text-emerald-300">${talentUnspentPoints(t)}</b></span></div>
-        <div class="talent-buy-row">${t.bought < TALENT_POINT_CAP && t.bought < slots ? (needWeapon ? '' : `<button type="button" class="btn talent-buy-btn" onclick="talentBuyPoint()">購買天賦點（${talentCostLabel(t.bought)}）</button>`) : '<span class="text-slate-500 text-sm">' + (t.bought >= TALENT_POINT_CAP ? '已達購買上限' : '等級不足') + '</span>'}<button type="button" class="btn talent-reset-btn" onclick="talentResetAll()">一鍵重置配點</button></div>
+        <div class="talent-legend" aria-hidden="true">
+            <span class="talent-legend-item talent-legend-ready">可配點</span>
+            <span class="talent-legend-item talent-legend-active">已投入</span>
+            <span class="talent-legend-item talent-legend-locked">未解鎖／互斥</span>
+            <span class="talent-legend-item talent-legend-selected">檢視中</span>
+        </div>
+        <div class="talent-buy-row">${t.bought < TALENT_POINT_CAP && t.bought < slots ? (needWeapon ? '' : `<button type="button" class="btn talent-buy-btn" onclick="talentBuyPoint()">購買天賦點（${talentCostLabel(t.bought)}）</button>`) : '<span class="text-slate-500 text-sm">' + (t.bought >= TALENT_POINT_CAP ? '已達購買上限' : '等級不足（50 級起每 2 級 +1 購買資格）') + '</span>'}<button type="button" class="btn talent-reset-btn" onclick="talentResetAll()">一鍵重置配點</button></div>
         ${weaponPick}
         <div class="talent-tree-wrap"><svg id="talent-svg-lines" class="talent-svg-lines" aria-hidden="true"></svg><div class="talent-tree-cols">${cols}</div></div>
         ${talentRenderDetailPanel(_talentSelectedId)}
-        <p class="talent-hint">點選節點查看能力說明 · 面板內配點／退點 · 同層三選一互斥 · 上路徑滿 5 點解鎖下層</p></div>`;
+        <p class="talent-hint">點選節點查看說明 · 同層只能選一條分支 · 連線越亮代表你目前的成長路線</p></div>`;
     requestAnimationFrame(() => talentDrawLines());
 }
 
 function talentOnNodeClick(nodeId) {
     _talentSelectedId = nodeId;
     renderTalentTab();
+}
+
+function _talentBtnCenter(btn, wrapRect) {
+    let br = btn.getBoundingClientRect();
+    return {
+        x: br.left + br.width / 2 - wrapRect.left,
+        yTop: br.top - wrapRect.top,
+        yMid: br.top + br.height / 2 - wrapRect.top,
+        yBot: br.bottom - wrapRect.top
+    };
+}
+
+function _talentSvgLine(svg, x1, y1, x2, y2, cls) {
+    let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('class', cls);
+    svg.appendChild(line);
+}
+
+function _talentSvgPath(svg, d, cls) {
+    let path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', cls);
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
 }
 
 function talentDrawLines() {
@@ -821,24 +901,42 @@ function talentDrawLines() {
     svg.setAttribute('width', Math.max(1, wrap.clientWidth));
     svg.setAttribute('height', Math.max(1, wrap.clientHeight));
     svg.innerHTML = '';
+
     ['fury', 'survival', 'transcend'].forEach(path => {
-        let prev = null;
-        for (let tier = 1; tier <= 4; tier++) {
-            let activeId = talentPathTierNodes(path, tier).find(id => talentNodeLevel(t, id) > 0);
-            let btn = activeId ? document.getElementById('talent-btn-' + activeId) : document.getElementById('talent-btn-' + _talentNodeId(path, tier, 'l'));
-            if (!btn) continue;
-            let br = btn.getBoundingClientRect();
-            let cx = br.left + br.width / 2 - rect.left;
-            let cy = br.top + br.height / 2 - rect.top;
-            if (prev) {
-                let lit = !!(activeId && talentNodeLevel(t, activeId) > 0 && prev.lit);
-                let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', prev.cx); line.setAttribute('y1', prev.cy);
-                line.setAttribute('x2', cx); line.setAttribute('y2', cy);
-                line.setAttribute('class', lit ? 'talent-line talent-line-lit' : 'talent-line talent-line-dim');
-                svg.appendChild(line);
-            }
-            prev = { cx, cy, lit: !!(activeId && talentNodeLevel(t, activeId) > 0) };
+        for (let tier = 1; tier < 4; tier++) {
+            let activePrev = talentPathTierNodes(path, tier).find(id => talentNodeLevel(t, id) > 0);
+            let prevId = activePrev || _talentNodeId(path, tier, 'c');
+            let prevBtn = document.getElementById('talent-btn-' + prevId);
+            if (!prevBtn) continue;
+            let from = _talentBtnCenter(prevBtn, rect);
+            let nextIds = ['l', 'c', 'r'].map(slot => _talentNodeId(path, tier + 1, slot));
+            let nextPts = nextIds.map(id => {
+                let btn = document.getElementById('talent-btn-' + id);
+                return btn ? { id, btn, p: _talentBtnCenter(btn, rect), lv: talentNodeLevel(t, id) } : null;
+            }).filter(Boolean);
+            if (!nextPts.length) continue;
+
+            let midY = (from.yBot + Math.min.apply(null, nextPts.map(n => n.p.yTop))) / 2;
+            let prevLit = !!(activePrev && talentNodeLevel(t, activePrev) > 0);
+            let stemCls = 'talent-line talent-line-' + path + (prevLit ? ' talent-line-lit' : ' talent-line-dim');
+
+            // 主幹：上一層選中節點 → 分岔點
+            _talentSvgLine(svg, from.x, from.yBot, from.x, midY, stemCls);
+
+            // 橫向匯流：覆蓋三個子節點中心
+            let xs = nextPts.map(n => n.p.x);
+            let xMin = Math.min.apply(null, xs.concat([from.x]));
+            let xMax = Math.max.apply(null, xs.concat([from.x]));
+            _talentSvgLine(svg, xMin, midY, xMax, midY, stemCls);
+
+            nextPts.forEach(n => {
+                let childLit = prevLit && n.lv > 0;
+                let childCls = 'talent-line talent-line-' + path + (childLit ? ' talent-line-lit' : ' talent-line-dim');
+                // 分岔 → 各子節點頂端（弧線更像技能樹分支）
+                let d = 'M ' + n.p.x + ' ' + midY + ' C ' + n.p.x + ' ' + (midY + (n.p.yTop - midY) * 0.35) + ', ' +
+                    n.p.x + ' ' + (midY + (n.p.yTop - midY) * 0.65) + ', ' + n.p.x + ' ' + n.p.yTop;
+                _talentSvgPath(svg, d, childCls);
+            });
         }
     });
 }
