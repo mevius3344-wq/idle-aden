@@ -418,3 +418,4 @@
     window.wbBossZoneList = wbBossZoneList;
     window.wbServerState = wbServerState;
     window.wbUpdateIndicator = wbUpdateIndicator;
+})();
