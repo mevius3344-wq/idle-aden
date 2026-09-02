@@ -302,6 +302,7 @@ function migrateSaves(){
     // 舊單一存檔 → 第1格（既有玩家預設落在存檔1）
     let oldS = _lsGet('lineage_idle_save');
     if(oldS && !_lsGet('lineage_idle_save_1')) _lzSetStoredRaw('lineage_idle_save_1', oldS);
+    try { purgeClosedClassCharacterSlots({ silent: true }); } catch (e) {}
 }
 // 🗑️ v3.7.94 僅清掉舊版離線掛機殘骸（v<6）；v6 checkpoint／claim 由 js/27 使用，不可刪。
 (function _purgeOfflineLeftovers(){
@@ -1066,7 +1067,11 @@ function returnToCharacterSelect(){
     return true;
 }
 function renderLoadSelect(){
-    // 📁 開啟選角畫面：先同步雲端／桌面改過的 slot，摘要才會是最新
+    // 📁 開啟選角畫面：先清除暫停職業，再同步雲端
+    try {
+      if (typeof window.purgeClosedClassCloudSlots === 'function') window.purgeClosedClassCloudSlots();
+    } catch (_cloudPurgeE) {}
+    try { purgeClosedClassCharacterSlots({ silent: true }); } catch (_purgeClsE) {}
     try {
       if (typeof cloudCanSync === 'function' && cloudCanSync() && typeof cloudPullSlotIntoStorage === 'function') {
         for (let _i = 1; _i <= 8; _i++) cloudPullSlotIntoStorage(_i);
@@ -1219,9 +1224,40 @@ function deleteCharacterSlot(slot, opts){
     opts = opts || {};
     const sum = slotSummary(slot);
     if(!sum) return { ok: false, reason: 'empty' };
+    if (opts.skipConfirm) {
+        const oldPlayer = opts.oldPlayer || _roleReadSavePlayer(slot);
+        const expected = sum.name || '未命名';
+        return _executeDeleteCharacter(slot, oldPlayer, expected);
+    }
     const confirmed = _confirmDeleteCharacter(slot, sum, opts.oldPlayer);
     if(!confirmed.ok) return confirmed;
     return _executeDeleteCharacter(slot, confirmed.oldPlayer, confirmed.expected);
+}
+
+/** 清除暫停開放職業（幻術士／龍騎士／戰士）的存檔位；回傳已刪除清單 */
+function purgeClosedClassCharacterSlots(opts) {
+    opts = opts || {};
+    const removed = [];
+    for (let slot = 1; slot <= 8; slot++) {
+        const oldPlayer = _roleReadSavePlayer(slot);
+        if (!oldPlayer || !isCreationClsClosed(oldPlayer.cls)) continue;
+        const sum = slotSummary(slot);
+        if (!sum) continue;
+        const r = deleteCharacterSlot(slot, { skipConfirm: true, oldPlayer: oldPlayer });
+        if (r.ok) removed.push({ slot: slot, name: r.name, cls: oldPlayer.cls });
+    }
+    if (removed.length && !opts.silent) {
+        try {
+            if (typeof logSys === 'function') {
+                logSys(
+                    '<span class="text-amber-300 font-bold">【系統】</span>已清除暫停開放職業的角色：' +
+                        removed.map(function (x) { return x.name || ('存檔' + x.slot); }).join('、')
+                );
+            }
+        } catch (e) {}
+        try { if (typeof saveGame === 'function' && player && player.cls) saveGame(); } catch (e2) {}
+    }
+    return removed;
 }
 function deleteCurrentCharacter(){
     if(typeof player === 'undefined' || !player || !player.cls) return;
@@ -1294,6 +1330,30 @@ const CREATION_CLASS_BASE_TO_RAW = {
     dark: { m: 'm_dark', f: 'f_dark' }, illusionist: { m: 'm_illusionist', f: 'f_illusionist' },
     Dknight: { m: 'm_Dknight', f: 'f_Dknight' }, warrior: { m: 'm_warrior', f: 'f_warrior' }
 };
+/** 創角暫時關閉的職業（base 鍵）；既有該職業角色會在載入時自動清除 */
+const CREATION_CLOSED_CLASS_BASES = { illusionist: 1, Dknight: 1, warrior: 1 };
+const CREATION_CLOSED_MESSAGE = '幻術士、龍騎士、戰士暫時不開放創角，敬請期待。';
+function isCreationClassBaseClosed(base) {
+    return !!(base && CREATION_CLOSED_CLASS_BASES[base]);
+}
+function isCreationClsClosed(cls) {
+    return cls === 'illusion' || cls === 'dragon' || cls === 'warrior';
+}
+function applyCreationClassAvailability() {
+    Object.keys(CREATION_CLASS_BASE_TO_RAW).forEach(function (base) {
+        var btn = document.getElementById('btn-class-base-' + base);
+        if (!btn) return;
+        var closed = isCreationClassBaseClosed(base);
+        btn.disabled = closed;
+        btn.classList.toggle('is-closed', closed);
+        if (closed) {
+            btn.title = '暫未開放';
+            btn.setAttribute('aria-disabled', 'true');
+        } else {
+            btn.removeAttribute('aria-disabled');
+        }
+    });
+}
 let creationSelectedClassBase = null;
 let creationSelectedGender = 'm';
 function creationClassBaseFromRaw(raw){
@@ -1313,6 +1373,10 @@ function rawClassFromBaseAndGender(base, gender){
     return pair[gender] || pair.m;
 }
 function selectClassBase(base){
+    if (isCreationClassBaseClosed(base)) {
+        alert(CREATION_CLOSED_MESSAGE);
+        return;
+    }
     creationSelectedClassBase = base;
     selectClass(rawClassFromBaseAndGender(creationSelectedClassBase, creationSelectedGender));
 }
@@ -1385,6 +1449,11 @@ function setCreationClassAnimation(c){
     }
     requestAnimationFrame(tick);
 })();
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', function () {
+        try { applyCreationClassAvailability(); } catch (e) {}
+    });
+}
 function showCreation() {
     const main = document.getElementById('main-menu');
     const creation = document.getElementById('creation-panel');
@@ -1392,6 +1461,7 @@ function showCreation() {
     if(main) main.classList.add('hidden');
     if(load) load.classList.add('hidden');
     if(creation) creation.classList.remove('hidden');
+    applyCreationClassAvailability();
     const nameInput = document.getElementById('create-name-input');
     if(nameInput){
         let hint = '';
@@ -1425,6 +1495,11 @@ function backToMenu() {
 }
 
 function selectClass(c) {
+    var _closedBase = creationClassBaseFromRaw(c);
+    if (isCreationClassBaseClosed(_closedBase)) {
+        alert(CREATION_CLOSED_MESSAGE);
+        return;
+    }
     curCreate.rawCls = c; // 記住玩家選的具體選項 (例如 f_knight)
     
     updateCreationChoiceButtons(c);
@@ -1505,6 +1580,10 @@ function updateCreateUI() {
 
 function startGame() {
     if(!curCreate.cls || !curCreate.rawCls) return;
+    if (isCreationClsClosed(curCreate.cls)) {
+        alert(CREATION_CLOSED_MESSAGE);
+        return;
+    }
     let nameInput = document.getElementById('create-name-input');
     let createName = nameInput ? String(nameInput.value || '').trim() : '';
     createName = createName.replace(/[<>&"']/g, '').slice(0, 12);
@@ -2020,6 +2099,7 @@ function loadGame() {
         if(!player.panacea) player.panacea = { str:0, dex:0, con:0, int:0, wis:0, cha:0 };
         if(!player.siege) player.siege = { active:false, city:'kent', gateKilled:false, towerKilled:false, endTime:0, kills:0, result:null, cooldownUntil:0, accCdUntil:0 };
         if(player.panaceaUsed === undefined) player.panaceaUsed = 0;
+        try { syncPanaceaUsedFromTallies(); } catch (e) {}
         if(player.siege.accCdUntil === undefined) player.siege.accCdUntil = 0;
         if(player.cds && player.cds.purifySk === undefined) player.cds.purifySk = 0;   // 🔧 舊檔遷移：淨化技獨立冷卻
         if(player.cds && player.cds.convertSk === undefined) player.cds.convertSk = 0;   // 🔄 舊檔遷移：轉換技獨立施法冷卻
@@ -2308,8 +2388,19 @@ function loadGame() {
 
 // 配點/萬能藥的「自然屬性值」：基礎+配點+萬能藥（不含裝備與 buff）；屬性上限只套用在此值上，裝備/buff 可再往上疊加
 function naturalStat(s) { return (player.base[s] || 0) + (player.alloc[s] || 0) + ((player.panacea && player.panacea[s]) || 0); }
+function panaceaQuotaRemain() { return Math.max(0, (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 60) - (player.panaceaUsed || 0)); }
+function panaceaStatRemain(s) {
+    let cap = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);
+    return Math.max(0, cap - naturalStat(s));
+}
+function syncPanaceaUsedFromTallies() {
+    if (!player || !player.panacea) return;
+    let sum = 0;
+    ['str', 'dex', 'con', 'int', 'wis', 'cha'].forEach(function (k) { sum += player.panacea[k] || 0; });
+    if ((player.panaceaUsed || 0) !== sum) player.panaceaUsed = sum;
+}
 function adjBonusStat(s) {
-    let capN = 60;   // 屬性配點上限：一律 60，不分等級；上限只看 naturalStat(base+配點+萬能藥)，裝備/buff 一律不計入、可再往上疊加
+    let capN = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);   // 屬性配點上限：一律 60，不分等級；上限只看 naturalStat(base+配點+萬能藥)，裝備/buff 一律不計入、可再往上疊加
     if (player.bonus > 0 && naturalStat(s) < capN) {
         player.alloc[s]++; player.bonus--;
         calcStats();
@@ -2332,7 +2423,7 @@ function startRespec() {
 }
 // 六大屬性的 +/- 路由：重置中＝改草稿；否則＝花用升級點數（僅 +、不可退）
 function adjAlloc(s, dir) {
-    let capN = 60;
+    let capN = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);
     if (_respec) {
         let b = createBase[player.cls];
         if (dir > 0) { if (respecPtsLeft() > 0 && (b[s] + _respec.draft[s]) < capN) _respec.draft[s]++; }

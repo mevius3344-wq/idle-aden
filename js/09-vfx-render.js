@@ -2466,7 +2466,90 @@ function _allySpritesApply() {   // 8fps ticker 驅動
         }
     });
 }
-setInterval(() => { if (!document.hidden && !(typeof catchupActive === 'function' && catchupActive())) { try { _mobAnimApply(); } catch (e) {} try { _updateFreezeFx(); } catch (e) {} try { _updateMobSkillFx(); } catch (e) {} try { _allySpritesApply(); } catch (e) {} try { _playerMorphApply(); } catch (e) {} } }, Math.floor(1000 / MOB_ANIM_FPS));
+// 🤝 線上組隊成員（同地圖）：唯讀 sprite，位置與本地傭兵錯開；僅 idle＋名稱＋血條
+let _remotePartySpriteStates = Object.create(null);
+function _remotePartySpritePos(i) {
+    var spots = [
+        { x: '11%', b: 14 }, { x: '17%', b: 20 }, { x: '23%', b: 16 },
+        { x: '89%', b: 14 }, { x: '83%', b: 20 }, { x: '77%', b: 16 },
+        { x: '54%', b: 28 }, { x: '36%', b: 28 }
+    ];
+    return spots[i % spots.length];
+}
+function _remotePartyActor(mem) {
+    var av = (typeof ATK_AV_BY_CLS !== 'undefined' && ATK_AV_BY_CLS[mem.cls]) ? ATK_AV_BY_CLS[mem.cls] : '王子';
+    return { cls: mem.cls, avatar: av, curHp: mem.hp, mhp: mem.mhp, _faceD: 2 };
+}
+function _remotePartySpritesApply() {
+    var bv = document.getElementById('battle-view');
+    var inBattle = bv && !bv.classList.contains('hidden') && bv.classList.contains('area-fit');
+    var members = (typeof rtPartySameMapMembers === 'function') ? rtPartySameMapMembers() : [];
+    var liveKeys = Object.create(null);
+    members.forEach(function (m) { if (m && m.key) liveKeys[m.key] = 1; });
+    for (var k in _remotePartySpriteStates) {
+        if (!liveKeys[k]) {
+            var st0 = _remotePartySpriteStates[k];
+            if (st0 && st0.el) { try { st0.el.remove(); } catch (e) {} }
+            delete _remotePartySpriteStates[k];
+        }
+    }
+    if (!inBattle || !members.length) return;
+    members.forEach(function (mem, i) {
+        if (!mem || !mem.key) return;
+        var form = _actorBattleForm(_remotePartyActor(mem), true);
+        if (!form) return;
+        var a = _morphBattleCache[form.key];
+        if (a === undefined) { _battleSpriteProbe(form); return; }
+        if (!a || a === 'probing') return;
+        var st = _remotePartySpriteStates[mem.key] || (_remotePartySpriteStates[mem.key] = { el: null, imgs: null, key: null, dkey: null, phase: 0 });
+        st.key = form.key;
+        if (st.dkey !== form.domKey) {
+            if (st.el) { try { st.el.remove(); } catch (e) {} }
+            st.el = null; st.imgs = null; st.dkey = form.domKey;
+        }
+        if (!st.el) {
+            var el = document.createElement('div');
+            el.className = 'party-sprite remote-party';
+            var tag = document.createElement('div');
+            tag.className = 'remote-party-tag';
+            var bar = document.createElement('div');
+            bar.className = 'remote-party-hp';
+            var barIn = document.createElement('div');
+            barIn.className = 'remote-party-hp-in';
+            bar.appendChild(barIn);
+            var sh = document.createElement('img'); sh.className = 'pm-shadow';
+            var bd = document.createElement('img'); bd.className = 'pm-body';
+            [sh, bd].forEach(function (im) { im.alt = ''; im.draggable = false; });
+            el.append(tag, bar, sh, bd);
+            bv.appendChild(el);
+            st.el = el; st.imgs = { sh: sh, bd: bd, tag: tag, bar: barIn };
+        } else if (st.el.parentElement !== bv) bv.appendChild(st.el);
+        var w = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100;
+        st.el.style.width = w + 'px';
+        var pp = _remotePartySpritePos(i);
+        st.el.style.left = 'calc(' + pp.x + ' - ' + Math.round(w / 2) + 'px)';
+        st.el.style.bottom = pp.b + 'px';
+        st.el.style.zIndex = String(24 - pp.b);
+        st.el.style.opacity = mem.online ? '0.92' : '0.55';
+        if (st.imgs.tag) {
+            st.imgs.tag.textContent = (mem.name || '隊員') + ' Lv.' + (mem.lv || 1);
+        }
+        if (st.imgs.bar) {
+            var pct = Math.max(0, Math.min(100, Math.round((mem.hp / mem.mhp) * 100)));
+            st.imgs.bar.style.width = pct + '%';
+        }
+        st.phase = (st.phase + 1) % 999;
+        var f = a.idle ? (Math.floor(Date.now() / (1000 / MOB_ANIM_FPS)) + i * 3 + st.phase) % a.idle.length : 0;
+        if (a.idle && a.idle[f] && st.imgs.bd.src !== a.idle[f].src) st.imgs.bd.src = a.idle[f].src;
+        var ss = a.shadow && a.shadow.idle;
+        if (ss && ss.length) {
+            var sf = f < ss.length ? f : (f % ss.length);
+            if (st.imgs.sh.style.visibility === 'hidden') st.imgs.sh.style.visibility = '';
+            if (st.imgs.sh.src !== ss[sf].src) st.imgs.sh.src = ss[sf].src;
+        } else if (st.imgs.sh.style.visibility !== 'hidden') st.imgs.sh.style.visibility = 'hidden';
+    });
+}
+setInterval(() => { if (!document.hidden && !(typeof catchupActive === 'function' && catchupActive())) { try { _mobAnimApply(); } catch (e) {} try { _updateFreezeFx(); } catch (e) {} try { _updateMobSkillFx(); } catch (e) {} try { _allySpritesApply(); } catch (e) {} try { _remotePartySpritesApply(); } catch (e) {} try { _playerMorphApply(); } catch (e) {} } }, Math.floor(1000 / MOB_ANIM_FPS));
 
 // 🌙 v3.6.03 掛網記憶體釋放：切到背景的瞬間清空 #vfx-layer 全部特效元素＋冰凍/怪技能追蹤 dict。
 //    背景分頁的移除管線全數停擺（animationend 不觸發·WAAPI onfinish 暫停·setTimeout 節流至 1/分鐘），

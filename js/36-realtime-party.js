@@ -136,6 +136,134 @@
         return n;
     }
 
+    /** 同地圖的線上組隊成員（不含自己），供戰場 sprite 顯示 */
+    function rtPartySameMapMembers() {
+        if (!_rtParty || !Array.isArray(_rtParty.members)) return [];
+        var me = rtPartyMyKey();
+        var mapId = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+        if (!mapId) return [];
+        return (_rtParty.members || []).filter(function (m) {
+            return m && m.key !== me && m.online && m.cls && m.mapId === mapId;
+        }).map(function (m) {
+            return {
+                key: m.key,
+                name: m.name || '隊員',
+                cls: m.cls,
+                lv: m.lv || 1,
+                hp: Math.max(0, Math.floor(Number(m.hp) || 0)),
+                mhp: Math.max(1, Math.floor(Number(m.mhp) || 1)),
+                online: !!m.online
+            };
+        });
+    }
+
+    var _rtPartyMobRev = 0;
+
+    function rtPartyMobHostKey() {
+        if (!_rtParty || !Array.isArray(_rtParty.members)) return '';
+        var mapId = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+        if (!mapId) return '';
+        var leader = _rtParty.leaderKey || '';
+        var leaderOn = (_rtParty.members || []).some(function (m) {
+            return m && m.key === leader && m.online && m.mapId === mapId;
+        });
+        if (leaderOn) return leader;
+        if (rtPartySameMapAllies() > 0) return rtPartyMyKey();
+        return '';
+    }
+
+    function rtPartyShouldHostMobs() {
+        return rtPartyMobHostKey() === rtPartyMyKey() && rtPartySameMapAllies() > 0;
+    }
+
+    function rtPartyShouldFollowMobs() {
+        var host = rtPartyMobHostKey();
+        return !!(host && host !== rtPartyMyKey() && rtPartySameMapAllies() > 0);
+    }
+
+    function rtPartyMobDefByName(n) {
+        if (!n || typeof DB === 'undefined' || !DB.mobs) return null;
+        for (var k in DB.mobs) {
+            if (DB.mobs[k] && DB.mobs[k].n === n) return k;
+        }
+        return null;
+    }
+
+    function rtPartyPackMobSync() {
+        if (typeof mapState === 'undefined' || !mapState || !Array.isArray(mapState.mobs)) return null;
+        var mapId = mapState.current || '';
+        if (!mapId) return null;
+        var slots = [];
+        var limit = (typeof backSlotsActive === 'function' && backSlotsActive()) ? 5 : 3;
+        for (var i = 0; i < limit; i++) {
+            var m = mapState.mobs[i];
+            if (!m || m._dead || (m.curHp != null && m.curHp <= 0)) {
+                slots.push({ i: i, dead: 1 });
+                continue;
+            }
+            slots.push({
+                i: i,
+                n: m.n || '',
+                uid: String(m.uid || ''),
+                hp: Math.max(0, Math.floor(Number(m.curHp) || 0)),
+                mhp: Math.max(1, Math.floor(Number(m.hp) || 1)),
+                boss: !!m.boss,
+                dead: 0
+            });
+        }
+        _rtPartyMobRev += 1;
+        return { mapId: mapId, rev: _rtPartyMobRev, slots: slots };
+    }
+
+    function rtPartyApplyMobSync(sync) {
+        if (!sync || !sync.mapId || typeof mapState === 'undefined' || !mapState) return;
+        if (sync.mapId !== mapState.current) return;
+        if (rtPartyShouldHostMobs()) return;
+        var rev = Math.floor(Number(sync.rev) || 0);
+        if (rev && rev <= _rtPartyMobRev) return;
+        _rtPartyMobRev = rev || _rtPartyMobRev;
+        var slots = sync.slots || [];
+        var changed = false;
+        slots.forEach(function (s) {
+            if (!s || s.i == null) return;
+            var idx = Math.max(0, Math.min(4, Math.floor(Number(s.i) || 0)));
+            if (s.dead || !s.n) {
+                var deadM = mapState.mobs[idx];
+                if (deadM && deadM._partyMirror) {
+                    mapState.mobs[idx] = null;
+                    if (mapState.spawnAt) mapState.spawnAt[idx] = null;
+                    changed = true;
+                }
+                return;
+            }
+            var cur = mapState.mobs[idx];
+            if (!cur || String(cur.uid) !== String(s.uid)) {
+                var mobId = rtPartyMobDefByName(s.n);
+                var base = mobId && DB.mobs[mobId] ? DB.mobs[mobId] : null;
+                if (!base) return;
+                mapState.mobs[idx] = Object.assign({}, base, {
+                    curHp: Math.max(0, Math.floor(Number(s.hp) || 0)),
+                    hp: Math.max(1, Math.floor(Number(s.mhp) || base.hp || 1)),
+                    uid: String(s.uid || (typeof uid === 'function' ? uid() : String(Date.now()))),
+                    _partyMirror: true,
+                    _magCd: {},
+                    justHit: false,
+                    st: (typeof newMobStatus === 'function') ? newMobStatus() : {},
+                    _born: (typeof _mobBornSeq !== 'undefined') ? (++_mobBornSeq) : 0
+                });
+                if (base.hard && typeof initHardSkin === 'function') initHardSkin(mapState.mobs[idx]);
+                changed = true;
+            } else if (cur._partyMirror) {
+                cur.curHp = Math.max(0, Math.floor(Number(s.hp) || 0));
+                if (s.mhp) cur.hp = Math.max(1, Math.floor(Number(s.mhp) || cur.hp || 1));
+                changed = true;
+            }
+        });
+        if (changed) {
+            try { if (typeof renderMobs === 'function') renderMobs(); } catch (e) {}
+        }
+    }
+
     function rtPartyMemberCount() {
         if (!_rtParty || !Array.isArray(_rtParty.members)) return 0;
         return _rtParty.members.filter(function (m) { return m && m.online; }).length;
@@ -248,6 +376,8 @@
                 }
             } else if (ev.type === 'share') {
                 rtPartyApplyShare(ev);
+            } else if (ev.type === 'mob_sync' && ev.mobSync) {
+                rtPartyApplyMobSync(ev.mobSync);
             }
         });
     }
@@ -281,6 +411,7 @@
         _rtPartyInvites = Array.isArray(data.invites) ? data.invites : [];
         _rtPartyApplications = Array.isArray(data.applications) ? data.applications : [];
         rtPartyHandleEvents(data.events || []);
+        if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
         rtPartyRender();
         rtPartyRenderInvites();
     }
@@ -796,7 +927,7 @@
                 html += '<button type="button" class="rt-party-btn rt-party-btn-danger" onclick="rtPartyDisband()">解散隊伍</button>';
             }
             html += '</div>';
-            html += '<div class="rt-party-hint">同地圖隊員可分享擊殺經驗／金幣；隊伍頻道可即時通話。</div>';
+            html += '<div class="rt-party-hint">同地圖隊員共用怪物（隊長同步）、分享擊殺經驗／金幣；隊伍頻道可即時通話。</div>';
         }
         body.innerHTML = html;
         restoreInvite();
@@ -834,7 +965,12 @@
 
     function rtPartyHeartbeat() {
         if (!rtPartyIdentity() || rtPartyIsSuspended()) return Promise.resolve();
-        return rtPartyPost('heartbeat').then(function (data) {
+        var extra = {};
+        if (rtPartyShouldHostMobs()) {
+            var pack = rtPartyPackMobSync();
+            if (pack) extra.partyMobs = pack;
+        }
+        return rtPartyPost('heartbeat', extra).then(function (data) {
             if (data && data.ok) {
                 var me = rtPartyMyKey();
                 if (data.key && me && data.key !== me) return;
@@ -848,6 +984,7 @@
                         _rtPartyNullMiss = 0;
                     }
                 }
+                if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
                 if (data.seq && data.seq > _rtPartySeq) { /* poll will catch */ }
                 rtPartyRender();
             }
@@ -939,6 +1076,9 @@
     window.rtPartyNotifyKill = rtPartyNotifyKill;
     window.rtPartyId = rtPartyId;
     window.rtPartySameMapAllies = rtPartySameMapAllies;
+    window.rtPartySameMapMembers = rtPartySameMapMembers;
+    window.rtPartyShouldFollowMobs = rtPartyShouldFollowMobs;
+    window.rtPartyShouldHostMobs = rtPartyShouldHostMobs;
     window.rtPartyIsLeader = rtPartyIsLeader;
     window.rtPartyMemberCount = rtPartyMemberCount;
     window.rtPartyGet = function () { return _rtParty; };

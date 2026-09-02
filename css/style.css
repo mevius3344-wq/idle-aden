@@ -536,6 +536,22 @@
             filter: drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));
         }
         .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
+        .party-sprite.remote-party .remote-party-tag {
+            position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+            margin-bottom: 2px; padding: 1px 6px; border-radius: 4px;
+            font-size: 10px; line-height: 1.25; white-space: nowrap; pointer-events: none;
+            color: #e0f2fe; background: rgba(8, 20, 36, 0.78); border: 1px solid rgba(56, 189, 248, 0.45);
+            text-shadow: 0 1px 2px #000;
+        }
+        .party-sprite.remote-party .remote-party-hp {
+            position: absolute; left: 50%; bottom: calc(100% - 2px); transform: translateX(-50%);
+            width: 56px; height: 4px; margin-bottom: 14px; border-radius: 2px;
+            background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(100, 116, 139, 0.6); overflow: hidden;
+        }
+        .party-sprite.remote-party .remote-party-hp-in {
+            height: 100%; width: 100%; background: linear-gradient(90deg, #22c55e, #4ade80);
+            transition: width 0.35s ease;
+        }
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
         /* ⚔️ v2.7.22 武器揮動特效層：與影子同定位(絕對·底部置中·native)但疊在本體「前」(DOM 順序在本體 img 之後)＋screen 加亮(金色刀光弧發光) */
@@ -1080,6 +1096,9 @@
 #battle-view { position: relative; }   /* 🏷️ 供 #status-icon-bar 絕對定位錨定 */
 /* 🏷️ 原版天堂風格狀態列：固定於戰鬥畫面右上，第一個狀態在最右側，數量增加時向左堆疊。圖示右下角顯示剩餘秒數（renderStatusIconBar·每 tick 刷新）。 */
 #status-icon-bar { position:absolute; top:10px; right:12px; left:12px; z-index:30; display:flex; flex-flow:row-reverse wrap; align-content:flex-start; gap:4px; pointer-events:none; }
+/* 🏝️ 遺忘之島途中：搭船後戰鬥畫面頂部常駐目標提示 */
+.oblivion-travel-hint { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:28; padding:6px 14px; border-radius:6px; background:rgba(8,47,73,.88); border:1px solid rgba(34,211,238,.55); color:#a5f3fc; font-weight:700; font-size:14px; line-height:1.35; white-space:nowrap; pointer-events:none; text-shadow:0 1px 2px rgba(0,0,0,.85); box-shadow:0 2px 10px rgba(0,0,0,.45); }
+.oblivion-travel-hint.hidden { display:none !important; }
 /* 🔧 v2.7.9 用戶要求：圖示縮小(38→28px)＋半透明(.55·hover 恢復不透明便於辨識)；倒數文字(.status-icon-time)已移除不再產生，剩餘秒數只留 hover title。 */
 .status-icon { position:relative; width:28px; height:28px; flex:0 0 28px; border:1px solid rgba(226,232,240,.55); border-radius:4px; overflow:hidden; background:#111827; box-shadow:0 1px 3px rgba(0,0,0,.8); opacity:.55; transition:opacity .15s; pointer-events:auto; }
 .status-icon:hover { opacity:1; }
@@ -1384,6 +1403,18 @@ button.classic-skill-cell { cursor:pointer; }
 .creation-class-btn img { width:100%; height:100%; object-fit:contain; pointer-events:none; filter:drop-shadow(0 0 7px rgba(255,221,135,.42)) drop-shadow(0 2px 4px #000); }
 .creation-class-btn:hover,.creation-class-btn.active { transform:scale(1.08); background:radial-gradient(circle,rgba(255,241,190,.42) 0%,rgba(110,74,20,.34) 44%,rgba(0,0,0,0) 76%); }
 .creation-class-btn.active img { filter:drop-shadow(0 0 12px rgba(255,232,151,.9)) drop-shadow(0 2px 5px #000) brightness(1.18); }
+.creation-class-btn.is-closed,
+.creation-class-btn:disabled {
+    opacity:0.38;
+    filter:grayscale(0.85);
+    cursor:not-allowed;
+    pointer-events:none;
+    transform:none !important;
+}
+.creation-class-btn.is-closed img,
+.creation-class-btn:disabled img {
+    filter:grayscale(1) brightness(0.75) drop-shadow(0 1px 2px #000);
+}
 .creation-class-btn.class-left { left:2.2%; }
 .creation-class-btn.class-right { right:2.2%; }
 .creation-class-btn.class-pos-1 { top:1%; }

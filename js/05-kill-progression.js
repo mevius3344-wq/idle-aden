@@ -339,6 +339,7 @@ function monsterGoldRange(mob) {
 function killMob(idx) {
     let mob = mapState.mobs[idx];
     if (!mob || mob._dead) return;        // 冪等保護：同一隻怪只結算一次獎勵
+    if (mob._partyMirror && typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs()) return;   // 🤝 組隊共用怪：隊員鏡像怪由隊長結算，避免重複掉落
     if (mob._justTransformedTick != null && state.ticks - mob._justTransformedTick <= 5 && mob.curHp > 0) return;   // 🌅 審查修：同一擊內的過時二次 killMob（on-hit 特效先殺→主判定又用舊 target.curHp 呼叫同槽位）→剛變身的滿血新階段不吃這種幽靈擊殺（真死亡 curHp<=0 不受影響）
     if (mob.transformTo && DB.mobs[mob.transformTo]) { doMobTransform(idx); return; }   // 🌅 三段變身：即使 HP=0 也不會死亡而是強制變身（先於 _dead/特效/獎勵）
     if (state.antharas && mapState.current === 'antharas_lair' && mob.n === '被侵蝕的瘋狂安塔瑞斯' &&
@@ -800,6 +801,11 @@ function prideEndClimb(msg) {
 // ======================= 🏝️ 遺忘之島：旅程 =======================
 // 由海音 NPC 依斯巴搭船開始（費用 10 萬金幣）；先進入「遺忘之島途中(野外)」隨機遭遇，
 // 擊敗傳送門「遺忘之島」後進入「遺忘之島」本島。旅程狀態存於 state.oblivion（不存檔；重載一律回村）。
+function updateOblivionTravelHint() {
+    let el = document.getElementById('oblivion-travel-hint'); if (!el) return;
+    let on = state.oblivion === 'travel' && mapState.current === 'oblivion_travel';
+    el.classList.toggle('hidden', !on);
+}
 function enterOblivionMap(mapKey) {
     if (typeof mercenaryRoleBattleBlocked === 'function' && mercenaryRoleBattleBlocked(mapKey)) return false;
     saveSiegeBossHp();
@@ -825,6 +831,7 @@ function enterOblivionMap(mapKey) {
         renderMobs();
         syncMapSelectors();
         updatePrideFloorIndicator();
+        updateOblivionTravelHint();
         updateUI();
     }
 }

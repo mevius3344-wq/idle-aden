@@ -258,6 +258,9 @@
         return false;
       })
       .then(function () {
+        try {
+          if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
+        } catch (e) {}
         return syncCloud();
       })
       .finally(function () {
@@ -512,6 +515,9 @@
               return false;
             })
             .then(function () {
+              try {
+                if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
+              } catch (e) {}
               return syncCloud();
             })
             .finally(function () {

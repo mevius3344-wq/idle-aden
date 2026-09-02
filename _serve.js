@@ -4,6 +4,13 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 
+let _pandoraApiHandler = null;
+try {
+  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+    _pandoraApiHandler = require("./lib/rt-pandora-market").handlePandoraApi;
+  }
+} catch (e) {}
+
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
 
@@ -434,6 +441,25 @@ function cloudSaveBeats(a, b) {
   return cloudSaveTime(a) >= cloudSaveTime(b);
 }
 
+function cloudSameCharacterIdentity(a, b) {
+  if (!a || !a.p || !b || !b.p) return true;
+  const sa = String(a.p.enSeed || "");
+  const sb = String(b.p.enSeed || "");
+  if (sa && sb) return sa === sb;
+  if (sa || sb) return false;
+  const na = String(a.p.name || "").trim();
+  const nb = String(b.p.name || "").trim();
+  const ca = String(a.p.cls || "");
+  const cb = String(b.p.cls || "");
+  if (na && nb && ca && cb) return na === nb && ca === cb;
+  return true;
+}
+
+function cloudIdentityConflict(incoming, existing) {
+  if (!incoming || !incoming.p || !existing || !existing.p) return false;
+  return !cloudSameCharacterIdentity(incoming, existing);
+}
+
 async function handleCloudApi(req, res, u) {
   if (!ENABLE_CLOUD_SAVE) {
     return json(res, 404, { ok: false, error: "cloud save disabled" });
@@ -483,6 +509,14 @@ async function handleCloudApi(req, res, u) {
       if (fs.existsSync(file)) {
         try {
           const existing = JSON.parse(fs.readFileSync(file, "utf8"));
+          if (existing && existing.p && data.p && cloudIdentityConflict(data, existing)) {
+            return json(res, 409, {
+              ok: false,
+              error: "identity_conflict",
+              message: "此存檔位已有不同角色，無法以另一角色覆蓋。請使用其他存檔位或先刪除雲端角色。",
+              meta: cloudFileMeta(file),
+            });
+          }
           if (existing && existing.p && data.p && !cloudSaveBeats(data, existing)) {
             return json(res, 409, {
               ok: false,
@@ -795,6 +829,7 @@ const PARTY_MEMBER_TTL_MS = 12 * 60 * 60 * 1000; // 成員資格保留（對齊�
 const PARTY_INVITE_MS = 60000;
 const PARTY_APPLY_MS = 120000;
 const PARTY_SHARE_RATE_MS = 80;
+const PARTY_MOB_SYNC_TTL_MS = 12000;
 const PARTY_WAIT_MAX_MS = 20000;
 const PARTY_EVENT_MAX = 120;
 const PARTIES_FILE = path.join(ROOT, "data", "parties.json");
@@ -947,6 +982,7 @@ function partyLoadFromDisk() {
         createdAt: Math.max(0, Number(p.createdAt) || now),
         lastShareAt: 0,
         shareAtByKey: {},
+        mobSync: null,
         applications: [],
       });
     });
@@ -995,6 +1031,45 @@ function partyPublicMember(m) {
     leader: !!m.leader,
     online: !!m.online,
     lastSeen: m.lastSeen || 0,
+  };
+}
+
+function partySanitizeMobSlots(slots) {
+  if (!Array.isArray(slots)) return [];
+  return slots
+    .slice(0, 5)
+    .map((s) => {
+      if (!s || typeof s !== "object") return null;
+      const i = Math.max(0, Math.min(4, Math.floor(Number(s.i) || 0)));
+      if (s.dead || !s.n) return { i, dead: 1 };
+      return {
+        i,
+        n: String(s.n || "")
+          .replace(/[<>&"']/g, "")
+          .trim()
+          .slice(0, 40),
+        uid: String(s.uid || "").slice(0, 24),
+        hp: Math.max(0, Math.floor(Number(s.hp) || 0)),
+        mhp: Math.max(1, Math.floor(Number(s.mhp) || 1)),
+        boss: !!s.boss,
+        dead: !!(s.dead || Number(s.hp) <= 0),
+      };
+    })
+    .filter(Boolean);
+}
+
+function partyMobSyncForMember(party, key, mapId) {
+  if (!party || !party.mobSync || !mapId) return null;
+  const ms = party.mobSync;
+  if (!ms.mapId || ms.mapId !== mapId) return null;
+  if (ms.hostKey && ms.hostKey === key) return null;
+  if (Date.now() - (ms.at || 0) > PARTY_MOB_SYNC_TTL_MS) return null;
+  return {
+    mapId: ms.mapId,
+    hostKey: ms.hostKey || "",
+    rev: ms.rev || 0,
+    slots: partySanitizeMobSlots(ms.slots),
+    at: ms.at || 0,
   };
 }
 
@@ -1235,11 +1310,14 @@ function partySnapshotFor(key) {
             at: a.at,
           }))
       : [];
+  const pre = partyPresence.get(key);
+  const mapId = pre && pre.mapId ? pre.mapId : "";
   return {
     ok: true,
     key: key,
     seq: partyEventSeq,
     party: partyPublic(party),
+    partyMobs: party ? partyMobSyncForMember(party, key, mapId) : null,
     invites: invites,
     applications: applications,
     events: [],
@@ -1343,10 +1421,36 @@ async function handlePartyApi(req, res, u) {
     }
     const up = partyUpsertPresence(data);
     if (!up) return json(res, 400, { ok: false, error: "need account" });
+    const party = up.party;
+    if (party && data.partyMobs && up.key === party.leaderKey) {
+      const pm = data.partyMobs;
+      const mapId = String(pm.mapId || "").slice(0, 64);
+      const slots = partySanitizeMobSlots(pm.slots);
+      if (mapId && slots.length) {
+        const rev = Math.max(0, Math.floor(Number(pm.rev) || 0));
+        party.mobSync = {
+          mapId,
+          hostKey: up.key,
+          rev,
+          slots,
+          at: Date.now(),
+        };
+        partyPushEvent({
+          type: "mob_sync",
+          partyId: party.id,
+          mobSync: party.mobSync,
+        });
+        partySaveToDiskSoon();
+      }
+    }
+    const partyMobs = party
+      ? partyMobSyncForMember(party, up.key, up.presence.mapId || "")
+      : null;
     return json(res, 200, {
       ok: true,
       key: up.key,
-      party: partyPublic(up.party),
+      party: partyPublic(party),
+      partyMobs,
       seq: partyEventSeq,
     });
   }
@@ -1379,6 +1483,8 @@ async function handlePartyApi(req, res, u) {
       members: [member],
       createdAt: Date.now(),
       lastShareAt: 0,
+      shareAtByKey: {},
+      mobSync: null,
     };
     parties.set(id, party);
     partyPushEvent({ type: "create", partyId: id, toKey: up.key });
@@ -3366,6 +3472,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/auction")) {
       await handleAuctionApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/pandora") && _pandoraApiHandler) {
+      await _pandoraApiHandler(req, res, u);
       return;
     }
     if (u.startsWith("/api/accounts")) {

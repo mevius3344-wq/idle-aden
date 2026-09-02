@@ -7,7 +7,8 @@
     "start": "node server/index.js",
     "serve": "node _serve.js",
     "db:migrate": "node scripts/migrate-neon.js",
-    "db:import": "node scripts/import-files-to-neon.js"
+    "db:import": "node scripts/import-files-to-neon.js",
+    "db:purge-closed-classes": "node scripts/purge-closed-class-saves.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

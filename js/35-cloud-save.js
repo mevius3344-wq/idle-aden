@@ -5,6 +5,8 @@
   'use strict';
 
   var _ready = null; // null unknown, true/false
+  var _readyCheckedAt = 0;
+  var _conflictNotified = false;
 
   function currentAccount() {
     try {
@@ -57,13 +59,17 @@
     return null;
   }
 
-  function cloudReady() {
+  function cloudReady(forceRecheck) {
     if (!_httpOk()) {
       _ready = false;
       return false;
     }
+    if (forceRecheck) _ready = null;
+    else if (_ready === false && Date.now() - _readyCheckedAt < 60000) return false;
+    else if (_ready === false && Date.now() - _readyCheckedAt >= 60000) _ready = null;
     if (_ready === true) return true;
     if (_ready === false) return false;
+    _readyCheckedAt = Date.now();
     var r = _xhrJson('GET', '/api/cloud/status', null, true);
     if (r && r.ok && r.data && r.data.ok) {
       _ready = true;
@@ -157,6 +163,47 @@
     return String((data && data.p && data.p.enSeed) || '');
   }
 
+  function cloudSameCharacterIdentity(a, b) {
+    if (!a || !a.p || !b || !b.p) return true;
+    var sa = cloudSaveEnSeed(a);
+    var sb = cloudSaveEnSeed(b);
+    if (sa && sb) return sa === sb;
+    if (sa || sb) return false;
+    var na = String(a.p.name || '').trim();
+    var nb = String(b.p.name || '').trim();
+    var ca = String(a.p.cls || '');
+    var cb = String(b.p.cls || '');
+    if (na && nb && ca && cb) return na === nb && ca === cb;
+    return true;
+  }
+
+  function _notifyConflict(msg) {
+    if (_conflictNotified) return;
+    _conflictNotified = true;
+    try {
+      if (typeof logSys === 'function') {
+        logSys('<span class="text-amber-300 font-bold">☁ ' + msg + '</span>');
+      } else {
+        console.warn('[cloud-save]', msg);
+      }
+    } catch (e) {}
+  }
+
+  function _backupConflictingLocal(slot, dataObj) {
+    if (!dataObj || !dataObj.p || typeof _lzSet !== 'function') return;
+    try {
+      var payload = JSON.stringify({ backedUpAt: Date.now(), reason: 'identity_conflict', data: dataObj });
+      var wrapped = typeof _saveWrap === 'function' ? _saveWrap(payload) : payload;
+      _lzSet('lineage_idle_save_' + slot + '_device_bak', wrapped);
+    } catch (e) {}
+  }
+
+  /** 登入拉雲端時：同槽若為不同角色，以雲端為準（避免手機／電腦互蓋） */
+  function _preferCloudOnIdentityConflict(localData, cloudData) {
+    if (!localData || !localData.p || !cloudData || !cloudData.p) return false;
+    return !cloudSameCharacterIdentity(localData, cloudData);
+  }
+
   /** a 是否應取代 b（富／新勝貧／舊） */
   function cloudSaveBeats(a, b) {
     if (!a || !a.p) return false;
@@ -205,7 +252,20 @@
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataObj),
-      }).catch(function () {});
+      })
+        .then(function (res) {
+          if (res.status === 409) {
+            return res.json().then(function (body) {
+              if (body && (body.error === 'identity_conflict' || body.error === 'stale_save')) {
+                cloudPullSlotIntoStorage(slot);
+                if (body.error === 'identity_conflict') {
+                  _notifyConflict('此存檔位雲端為不同角色，已改載入雲端版本。');
+                }
+              }
+            });
+          }
+        })
+        .catch(function () {});
     } catch (e) {}
   }
 
@@ -214,6 +274,15 @@
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return false;
     var r = _xhrJson('PUT', _base() + '/slot/' + slot, JSON.stringify(dataObj), true);
+    if (r && r.status === 409 && r.data && r.data.error === 'identity_conflict') {
+      cloudPullSlotIntoStorage(slot);
+      _notifyConflict('此存檔位雲端為不同角色，已改載入雲端版本。');
+      return false;
+    }
+    if (r && r.status === 409 && r.data && r.data.error === 'stale_save') {
+      cloudPullSlotIntoStorage(slot);
+      return false;
+    }
     return !!(r && r.ok);
   }
 
@@ -242,6 +311,19 @@
       return false;
     }
     if (!localData || !localData.p) return _writeSlotLocal(slot, cloudData);
+
+    // 無 cloudOwner 的本機殘留 vs 雲端已有「不同」角色 → 以雲端為準
+    if (!_ownerOf(localData) && cloudData && cloudData.p && !cloudSameCharacterIdentity(localData, cloudData)) {
+      _backupConflictingLocal(slot, localData);
+      _notifyConflict('存檔位 ' + slot + '：本機試玩角色與雲端不同，已載入雲端角色。');
+      return _writeSlotLocal(slot, cloudData);
+    }
+
+    if (_preferCloudOnIdentityConflict(localData, cloudData)) {
+      _backupConflictingLocal(slot, localData);
+      _notifyConflict('存檔位 ' + slot + '：手機／電腦角色不同，已載入雲端版本（本機副本已備份）。');
+      return _writeSlotLocal(slot, cloudData);
+    }
 
     if (cloudSaveBeats(cloudData, localData)) {
       return _writeSlotLocal(slot, cloudData);
@@ -413,6 +495,11 @@
             if (_writeSlotLocal(slot, data)) any = true;
             return;
           }
+          if (_preferCloudOnIdentityConflict(localData, data)) {
+            _backupConflictingLocal(slot, localData);
+            if (_writeSlotLocal(slot, data)) any = true;
+            return;
+          }
           if (!localData || !localData.p || cloudSaveBeats(data, localData)) {
             if (_writeSlotLocal(slot, data)) any = true;
           } else if (_localBelongsToCurrent(localData, true)) {
@@ -436,6 +523,63 @@
       }
     } catch (e) {}
     return any;
+  }
+
+  function _isClosedPlayableCls(cls) {
+    return cls === 'illusion' || cls === 'dragon' || cls === 'warrior';
+  }
+
+  function _purgeOneClosedSlot(slot, data) {
+    if (!data || !data.p || !_isClosedPlayableCls(data.p.cls)) return false;
+    try {
+      if (typeof releaseCharNameId === 'function' && data.p.name) {
+        releaseCharNameId(data.p.name, { slot: slot, enSeed: data.p.enSeed || '' });
+      }
+    } catch (e0) {}
+    _removeSlotLocal(slot);
+    if (!cloudCanSync()) return true;
+    try {
+      var r = _xhrJson('DELETE', _base() + '/slot/' + slot, null, true);
+      return !!(r && r.ok);
+    } catch (e1) {
+      return false;
+    }
+  }
+
+  function purgeClosedClassCloudSlots(bundleOpt) {
+    var any = false;
+    if (bundleOpt && bundleOpt.slots) {
+      Object.keys(bundleOpt.slots).forEach(function (k) {
+        var slot = Math.max(1, Math.min(8, parseInt(k, 10) || 0));
+        if (!slot) return;
+        if (_purgeOneClosedSlot(slot, bundleOpt.slots[k])) any = true;
+      });
+    } else if (cloudCanSync()) {
+      var r = _xhrJson('GET', _base() + '/bundle', null, true);
+      if (r && r.ok && r.data && r.data.ok && r.data.slots) {
+        Object.keys(r.data.slots).forEach(function (k) {
+          var slot = Math.max(1, Math.min(8, parseInt(k, 10) || 0));
+          if (!slot) return;
+          if (_purgeOneClosedSlot(slot, r.data.slots[k])) any = true;
+        });
+      }
+    }
+    for (var i = 1; i <= 8; i++) {
+      var local = _readSlotLocal(i);
+      if (local && local.p && _isClosedPlayableCls(local.p.cls)) {
+        if (_purgeOneClosedSlot(i, local)) any = true;
+      }
+    }
+    return any;
+  }
+
+  function _stripClosedSlotsFromBundle(bundle) {
+    if (!bundle || !bundle.slots) return bundle;
+    Object.keys(bundle.slots).forEach(function (k) {
+      var d = bundle.slots[k];
+      if (d && d.p && _isClosedPlayableCls(d.p.cls)) delete bundle.slots[k];
+    });
+    return bundle;
   }
 
   function cloudPullBundleSync() {
@@ -578,6 +722,7 @@
    */
   function cloudSyncOnLogin() {
     if (!cloudCanSync()) return Promise.resolve(false);
+    _conflictNotified = false;
     return fetch(_base() + '/bundle')
       .then(function (res) {
         return res.json().then(function (data) {
@@ -588,7 +733,10 @@
           }
 
           if (_bundleHasPlayableSlots(data)) {
+            try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
+            _stripClosedSlotsFromBundle(data);
             cloudApplyBundle(data);
+            try { purgeClosedClassCharacterSlots({ silent: true }); } catch (ePurge2) {}
             // 本機有、雲端沒有的本帳槽 → 補上傳
             for (var s = 1; s <= 8; s++) {
               var local = _readSlotLocal(s);
@@ -630,6 +778,7 @@
   window.cloudFlushLocalToCloud = cloudFlushLocalToCloud;
   window.cloudClearLocalCache = cloudClearLocalCache;
   window.cloudSyncOnLogin = cloudSyncOnLogin;
+  window.purgeClosedClassCloudSlots = purgeClosedClassCloudSlots;
   window.cloudSaveProgressScore = cloudSaveProgressScore;
   window.cloudSaveBeats = cloudSaveBeats;
 })();
