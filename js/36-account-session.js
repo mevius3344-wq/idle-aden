@@ -7,8 +7,11 @@
 (function () {
   var HEARTBEAT_MS = 10000;
   var FETCH_TIMEOUT_MS = 15000;
+  var LOGIN_GRACE_MS = 30000;
   var _held = false;
   var _timer = null;
+  var _holdSinceMs = 0;
+  var _hbFailStreak = 0;
 
   function isOnlineHost() {
     try {
@@ -53,6 +56,16 @@
       });
   }
 
+  function normalizeAccountId(raw) {
+    var s = String(raw == null ? "" : raw).replace(/^\s+|\s+$/g, "");
+    try {
+      if (typeof s.normalize === "function") s = s.normalize("NFC");
+    } catch (e) {}
+    if (!s || s.length > 32) return "";
+    if (!/^[\u4e00-\u9fffA-Za-z0-9_-]+$/.test(s)) return "";
+    return s;
+  }
+
   function authPayload() {
     var account = "";
     try {
@@ -61,9 +74,7 @@
         account = String(window.GameAccountAuth.currentAccount() || "").trim();
       }
     } catch (e) {}
-    try {
-      if (typeof account.normalize === "function") account = account.normalize("NFC");
-    } catch (e1) {}
+    account = normalizeAccountId(account);
     var authToken = "";
     try {
       if (typeof window.anticheatGetAuthToken === "function") authToken = window.anticheatGetAuthToken();
@@ -104,6 +115,19 @@
     } catch (e2) {}
   }
 
+  function handleHeartbeatResult(r) {
+    if (r && r.data && r.data.ok) {
+      _hbFailStreak = 0;
+      return;
+    }
+    var inGrace = _holdSinceMs > 0 && Date.now() - _holdSinceMs < LOGIN_GRACE_MS;
+    if (inGrace && _hbFailStreak < 4) {
+      _hbFailStreak += 1;
+      return;
+    }
+    onSessionLost(r && r.data);
+  }
+
   function startHeartbeat() {
     stopHeartbeat();
     _timer = setInterval(function () {
@@ -111,23 +135,11 @@
       var body = authPayload();
       if (!body) return;
       postJson("/api/accounts/session/heartbeat", body)
-        .then(function (r) {
-          if (!r || !r.data || !r.data.ok) {
-            onSessionLost(r && r.data);
-          }
-        })
+        .then(handleHeartbeatResult)
         .catch(function () {
           // 網路瞬斷不踢出，下一輪心跳再試
         });
     }, HEARTBEAT_MS);
-    var bodyNow = authPayload();
-    if (bodyNow) {
-      postJson("/api/accounts/session/heartbeat", bodyNow)
-        .then(function (r) {
-          if (!r || !r.data || !r.data.ok) onSessionLost(r && r.data);
-        })
-        .catch(function () {});
-    }
   }
 
   function validate() {
@@ -137,6 +149,8 @@
       .then(function (r) {
         if (r && r.data && r.data.ok) {
           _held = true;
+          _holdSinceMs = Date.now();
+          _hbFailStreak = 0;
           startHeartbeat();
           return r.data;
         }
@@ -154,6 +168,8 @@
 
   function hold() {
     _held = true;
+    _holdSinceMs = Date.now();
+    _hbFailStreak = 0;
     startHeartbeat();
     return Promise.resolve({ ok: true });
   }

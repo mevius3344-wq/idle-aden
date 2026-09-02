@@ -661,7 +661,13 @@
         setStatus(msg, "err");
       })
       .catch(function () {
-        tryOffline();
+        accountsApiReady().then(function (online) {
+          if (online) {
+            setStatus("無法連線伺服器，請稍後再試。", "err");
+            return;
+          }
+          tryOffline();
+        });
       });
   }
 
@@ -709,6 +715,7 @@
     try {
       account = currentSession() || String(window.__fb5AuthAccount || "").trim();
     } catch (e0) {}
+    account = normalizeCred(account);
     var password = account ? getStoredPassword(account) : null;
     if (account && password != null) {
       _sessionRecovering = true;
@@ -802,19 +809,6 @@
       try {
         window.__fb5AuthAccount = session;
       } catch (e) {}
-      var hasToken = false;
-      try {
-        hasToken = !!(typeof window.anticheatGetAuthToken === "function" && window.anticheatGetAuthToken());
-      } catch (e0) {}
-      if (!hasToken) {
-        setSession("");
-        try {
-          window.__fb5AuthAccount = "";
-        } catch (e1) {}
-        showLoggedOut();
-        setStatus("請重新登入以套用最新版本。", "ok");
-        return;
-      }
       restoreSession(session);
     } else {
       showLoggedOut();
