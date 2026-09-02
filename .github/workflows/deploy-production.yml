@@ -1,0 +1,59 @@
+# push 到 main 時自動部署 Render（遊戲）與 Vercel（API）
+# 一次性設定（GitHub 倉庫 → Settings → Secrets and variables → Actions）：
+#   RENDER_DEPLOY_HOOK  → Render 服務 Settings → Deploy Hook 產生的 URL
+#   VERCEL_DEPLOY_HOOK  → Vercel 專案 Settings → Git → Deploy Hooks → Production URL
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Trigger Render + Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render (idle-aden.onrender.com)
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK 未設定，略過 Render 部署。請到 Render → idle-aden → Settings → Deploy Hook 建立後加入 GitHub Secrets。"
+            exit 0
+          fi
+          echo "Triggering Render deploy..."
+          curl -fsS -X POST "$HOOK"
+          echo "Render deploy triggered."
+
+      - name: Deploy to Vercel (idle-aden.vercel.app API)
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::VERCEL_DEPLOY_HOOK 未設定，略過 Vercel 部署。請到 Vercel → idle-aden → Settings → Git → Deploy Hooks 建立後加入 GitHub Secrets。"
+            exit 0
+          fi
+          echo "Triggering Vercel deploy..."
+          curl -fsS -X POST "$HOOK"
+          echo "Vercel deploy triggered."
+
+      - name: Wait and verify Render version
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then exit 0; fi
+          echo "Waiting 90s for Render to start..."
+          sleep 90
+          for i in 1 2 3 4 5 6; do
+            BODY=$(curl -fsS "https://idle-aden.onrender.com/api/version?t=$RANDOM" || true)
+            echo "Attempt $i: $BODY"
+            echo "$BODY" | grep -q '"gameVersion"' && echo "✅ Render reports gameVersion" && exit 0
+            sleep 30
+          done
+          echo "::warning::Render 尚未回報 gameVersion，可能仍在部署或服務未更新程式碼。"

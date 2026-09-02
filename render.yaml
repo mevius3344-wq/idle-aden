@@ -3,11 +3,12 @@ services:
     name: idle-aden
     runtime: node
     plan: free
+    repo: https://github.com/mevius3344-wq/idle-aden
     branch: main
     autoDeployTrigger: commit
     buildCommand: npm install --omit=dev
     startCommand: node _serve.js
-    healthCheckPath: /
+    healthCheckPath: /api/version
     envVars:
       - key: NODE_VERSION
         value: "20"
