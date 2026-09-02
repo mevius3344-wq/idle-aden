@@ -673,9 +673,9 @@ function tick() {
     if((player.cds.convertSk || 0) > 0) player.cds.convertSk--;   // 🔄 轉換技獨立冷卻（與攻擊／治癒共用相同施法速度公式）
     if((player.cds.castLock || 0) > 0) player.cds.castLock--;   // 🔮 天堂職業施法冷卻下限（法師快·王族/黑妖慢）·autoCastSpells 依此節流攻擊魔法
     if(canAct) autoCastSpells();   // 每 tick 嘗試自動施法，實際間隔由上方冷卻控制
+    if(player.cds.pot > 0) player.cds.pot--;   // 藥水冷卻（0.1 秒/tick；基準 10 tick＝1 秒·九天星盤快速消化可微幅縮短）
 
     if(state.ticks % 10 === 0) {
-        if(player.cds.pot > 0) player.cds.pot--;   // 藥水冷卻維持每秒遞減
         if(player.reviveScrollCd > 0) player.reviveScrollCd--;   // 復活卷軸冷卻：僅存活時倒數（此區塊死亡時不執行）
         if(player.magicShieldCd > 0) player.magicShieldCd--;     // 魔法屏障抵擋後冷卻：僅存活時倒數
         // 🔧 架構統一：所有 buff（以秒計）的「唯一」遞減點，每秒扣 1。
@@ -701,8 +701,10 @@ function tick() {
 
     // === 出怪判定：以邏輯 tick (state.ticks) 為準，與主迴圈時間補跑同步 ===
     // mapState.spawnAt[i] = 該格子預定出怪的 tick 值；為 null 代表該格目前有怪、無需排程。
-    if (!(typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs())) {
-        let isPureBossMap = PURE_BOSS_MAPS.includes(mapState.current) && !KING_ROOMS[mapState.current];   // 🔧 軍王之室仍屬純BOSS房(免自動瞬移/追蹤)，但四軍王房改用五格
+    if (!(typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs())
+        && !(typeof wbShouldFollow === 'function' && wbShouldFollow())) {
+        let isWbMap = typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current);
+        let isPureBossMap = (PURE_BOSS_MAPS.includes(mapState.current) && !KING_ROOMS[mapState.current]) || isWbMap;   // 👑 世界王欄位＝純BOSS房式中央重生
         if(!mapState.spawnAt) mapState.spawnAt = [null, null, null, null, null];
         let nowT = state.ticks;
         if(KING_ROOMS[mapState.current] && state._kbRespawnAt != null) {
@@ -716,8 +718,22 @@ function tick() {
             for(let i=0; i<slotCount; i++) {
                 if(mapState.mobs[i]) { mapState.spawnAt[i] = null; continue; } // 有怪：清除排程
                 if(isPureBossMap && i !== 1) continue;                          // 純 BOSS 房只生中央
+                if(isWbMap && i === 1 && typeof wbShouldHost === 'function' && !wbShouldHost()) continue;   // 👑 世界王：非主機不本地刷王
                 let delay;
-                if(isPureBossMap) {
+                if(isWbMap) {
+                    let _wbDead = false;
+                    try {
+                        if (typeof wbServerState === 'function') {
+                            let _st = wbServerState();
+                            _wbDead = !!(_st && _st.dead);
+                        }
+                    } catch (e) {}
+                    if (_wbDead) {
+                        mapState.spawnAt[i] = null;
+                        continue;
+                    }
+                    delay = 50;
+                } else if(isPureBossMap) {
                     delay = 50;                                                 // 🔧 純BOSS房(三龍窟)：BOSS死亡後固定 5 秒(50 tick)才刷新，不受日光術/席琳的世界加速影響（2026-06 用戶調整 3 分鐘→5 秒）
                 } else if(KING_ROOMS[mapState.current]) {
                     delay = 50;                                                 // 🔧 軍王之室：固定 5 秒復活，不受日光術/席琳的世界加速影響
@@ -736,6 +752,9 @@ function tick() {
                     delay = Math.max(5, Math.round(50 * _mv));                       // 🚧 下限 5 tick＝0.5 秒
                     if (isSiegeArea(mapState.current) && typeof npcClanSiegeRespawnMultiplier === 'function') {
                         delay = Math.max(1, Math.round(delay * npcClanSiegeRespawnMultiplier()));
+                    }
+                    if (typeof mapPopCrowdMult === 'function') {
+                        delay = Math.max(5, Math.round(delay * mapPopCrowdMult(mapState.current)));   // 👥 同圖人數越多出怪越慢
                     }
                 }
                 if(mapState.spawnAt[i] == null) mapState.spawnAt[i] = nowT + delay; // 空格剛出現：排程 delay 後（一般／純BOSS房／軍王之室皆 5 秒）
@@ -1017,6 +1036,7 @@ const BOSS_BIG_MAPS = ['antaras_lair', 'fafurion_lair', 'valakas_lair'];   // �
 //    單體純BOSS房與雙BOSS祭壇維持三格；攻城建築出現時也不會壓縮為三格。
 function backSlotsActive() {
     let kingRoom = KING_ROOMS[mapState.current];
+    if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) return false;   // 👑 世界王欄位：中央單體（三格版面）
     return mapState.current === 'rift_battle'
         || !!(kingRoom && !kingRoom.dual)
         || !PURE_BOSS_MAPS.includes(mapState.current);
@@ -1970,6 +1990,12 @@ function pledgeBlessTick() {
 
 function spawnMob(idx) {
     if (mapState.current === 'rift_battle') { spawnRiftMob(idx); return; }   // 🌀 時空裂痕：自訂動態出怪（不靠 DB.maps）
+    // 👑 世界王欄位：中央固定頭目（全服即時同步）
+    if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
+        if (idx !== 1) { mapState.mobs[idx] = null; return; }
+        if (typeof wbShouldFollow === 'function' && wbShouldFollow()) return;
+        if (typeof wbSpawnCenterBoss === 'function') { wbSpawnCenterBoss(); return; }
+    }
     let pool = DB.maps[mapState.current];
     if(!pool) return;
     // 🐉 v3.7.57 侵蝕的安塔瑞斯巢穴：棲息地=中央「被侵蝕的安塔瑞斯」+其餘「大地荒龍」；入口/通道/深處=中央固定區域頭目（場上無王時）、其餘格走 DB.maps 池
@@ -2025,7 +2051,8 @@ function spawnMob(idx) {
     let _normalBossChance = Math.max(0.01, Math.min(1, (((player && player.d && player.d.bossEncounterPct) || 1) / 100)));
     // 🏝️ 遺忘之島途中：傳送門 BOSS 出現率額外 +10%（疊加玩家頭目遭遇率）
     let _bossRollChance = (mapState.current === 'oblivion_travel') ? Math.min(1, _normalBossChance + 0.10) : _normalBossChance;
-    let wantBoss = !npcClanBattle && !wcMassTauntBattle && (allowMultiBoss || !bossInBattle) && bossPool.length > 0 && (!_elderRoom || _elderBossOk) && (mapState.forceBoss || (siegeArea ? (!mapState.suppressSiegeBoss && Math.random() < 0.10) : (_elderRoom ? Math.random() < 0.05 : Math.random() < _bossRollChance)));
+    let _wbDisabled = typeof wbBossRollDisabled === 'function' && wbBossRollDisabled(mapState.current);
+    let wantBoss = !_wbDisabled && !npcClanBattle && !wcMassTauntBattle && (allowMultiBoss || !bossInBattle) && bossPool.length > 0 && (!_elderRoom || _elderBossOk) && (mapState.forceBoss || (siegeArea ? (!mapState.suppressSiegeBoss && Math.random() < 0.10) : (_elderRoom ? Math.random() < 0.05 : Math.random() < _bossRollChance)));
     if(mapState.forceBoss) mapState.forceBoss = false;   // 強制旗標只作用於下一次生怪
     if(wantBoss) {
         // 🔧 同名BOSS限制：場上已有同名BOSS時不再抽到該名→需地圖池有 2 種以上「不同名」BOSS 才可能同時出現多隻；若無不同名可出則退回一般怪
@@ -2064,31 +2091,9 @@ function spawnMob(idx) {
         try { for (let _k in player.eq) { let _e = player.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].trackBoost) { _trkRate = 0.7; break; } } } catch (e) {}
         if (Math.random() < _trkRate) mobId = player.tracking.mob;
     }
-    // 🔧 卡瑞（BOSS）：身上「同時」攜帶 飛龍的爪子/蜥蜴的角/水晶球/妖魔戰士護身符 時，
-    //    於龍之谷地監6樓 1% 機率出現（場上無其他 BOSS 時才出現，且同時最多一隻）
-    if (mapState.current === 'zone_31'
-        && !bossInBattle
-        && !mapState.mobs.some(m => m && m.n === '卡瑞')
-        && ['item_dragon_claw', 'item_lizard_horn', 'item_crystal_ball', 'item_orc_amulet'].every(q => player.inv.some(i => i.id === q && i.cnt > 0))
-        && Math.random() < 0.01) {
-        mobId = 'kari';
-    }
-    // 🔥 50級試煉：大洞穴隱遁者村莊地區 1% 出現「魔族暗殺團」（妖精 stage2 收集密封情報書／法師 stage1 收集間諜報告書）
-    if (mapState.current === 'hidden_cave' && !mapState.mobs.some(m => m && m.n === '魔族暗殺團')
-        && ((player.cls === 'elf' && player.trialStage === 2 && !player.inv.some(i => i.id === 'item_sealed_intel'))
-            || (player.cls === 'mage' && player.trialStage === 1 && !player.inv.some(i => i.id === 'item_spy_report')))
-        && Math.random() < 0.01) {
-        mobId = 'demon_assassin';
-    }
-    // 🐉 林德拜爾（BOSS）：身上持有任意「幼龍蛋」（頑皮／淘氣）於任一野外地圖時，1% 機率改為刷出林德拜爾
-    //    （場上無其他 BOSS 時才出現、同時最多一隻；蛋全數賣出或存入倉庫即不再遭遇）
-    if (!bossInBattle
-        && MAP_CATEGORIES.wild.some(m => m.v === mapState.current)
-        && !mapState.mobs.some(m => m && m.n === '林德拜爾')
-        && player.inv.some(i => (i.id === 'item_dragon_egg' || i.id === 'item_dragon_egg2') && i.cnt > 0)
-        && Math.random() < 0.01) {
-        mobId = 'lindvior';
-    }
+    // 🔧 卡瑞（BOSS）：改由「世界王」欄位挑戰（wb_kari），野外不再隨機出現
+    // 🔥 50級試煉魔族暗殺團：改由世界王欄位
+    // 🐉 林德拜爾：改由世界王欄位（持有幼龍蛋可從選單前往 wb_lindvior）
     let _actualPlayerEncounter = mapState._trollSpawn && DB.mobs[mobId] && DB.mobs[mobId].trollPlayer;
     if (!npcClanBattle && !wcMassTauntBattle && _actualPlayerEncounter && typeof wcMassTauntMaybeStartGroupBattle === 'function' &&
         wcMassTauntMaybeStartGroupBattle(mapState._trollSpawn)) wcMassTauntBattle = true;
@@ -2280,6 +2285,7 @@ function getPhysicalDmg(diceStr, target, wpn, arrowData, forceHeavy, forceHit, f
 
     // 命中判定 = 投擲一顆20面骰，骰到1必定未命中，骰到20為重擊，2~19 則 命中值 >= 判定即命中
     let rawHitValue = player.lv + hitBonus - target.lv + mobEffAC(target);
+    if (typeof talentMobHitBonus === 'function') rawHitValue += talentMobHitBonus(target);
     let hitValue = stretchHitValue(rawHitValue);
     hitValue = Math.max(hitValue, physicalHitSoftFloor(hitBonus, target));
     if (player.buffs && player.buffs.sk_warrior_outlaw > 0) hitValue = Math.max(hitValue, 10);   // ⚔️ 亡命之徒：一般攻擊最低命中率 50%

@@ -107,6 +107,10 @@ const TOWN_BG_1920 = {
 function mapDisplayName(v) { for (let _c in MAP_CATEGORIES) { let _e = MAP_CATEGORIES[_c].find(x => x.v === v); if (_e) return _e.t; } return null; }
 function applyAreaBackground() {
     let cur = mapState.current, cat = mapCategoryOf(cur);
+    if (typeof isWorldBossMap === 'function' && isWorldBossMap(cur) && typeof wbEntryByMap === 'function') {
+        let _wbe = wbEntryByMap(cur);
+        if (_wbe && _wbe.srcMap) cur = _wbe.srcMap;   // 👑 世界王欄位：背景沿用原出沒地圖
+    }
     let ov = a => `linear-gradient(rgba(15,23,42,${a}), rgba(15,23,42,${a}))`;
     let bv = document.getElementById('battle-view');
     if (bv && cur.startsWith('town_')) {   // 🏙️ v2.6.0：安全區(town_)戰鬥框恆隱藏、絕不套狩獵背景。必須清掉 area-fit/has-bg——否則 CSS `#battle-view.area-fit{display:flex}`(1,1,0) 會蓋過 `.hidden`(0,1,0) 使隱藏的戰鬥框又顯示、露出與安全區同名的狩獵圖(如象牙塔/傲慢之塔安全區顯示名＝有同名 assets/area/<名>.jpg)。
@@ -2388,7 +2392,7 @@ function loadGame() {
 
 // 配點/萬能藥的「自然屬性值」：基礎+配點+萬能藥（不含裝備與 buff）；屬性上限只套用在此值上，裝備/buff 可再往上疊加
 function naturalStat(s) { return (player.base[s] || 0) + (player.alloc[s] || 0) + ((player.panacea && player.panacea[s]) || 0); }
-function panaceaQuotaRemain() { return Math.max(0, (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 60) - (player.panaceaUsed || 0)); }
+function panaceaQuotaRemain() { return Math.max(0, (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 30) - (player.panaceaUsed || 0)); }
 function panaceaStatRemain(s) {
     let cap = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);
     return Math.max(0, cap - naturalStat(s));

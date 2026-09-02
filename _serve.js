@@ -11,6 +11,11 @@ try {
   }
 } catch (e) {}
 
+let _worldBossApiHandler = null;
+try {
+  _worldBossApiHandler = require("./lib/rt-world-boss").handleWorldBossApi;
+} catch (e) {}
+
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
 
@@ -1275,6 +1280,29 @@ function partyUpsertPresence(body) {
   return { key: key, presence: row, party: party };
 }
 
+function partyMapPopulation(now) {
+  const t = now || Date.now();
+  const counts = {};
+  for (const pre of partyPresence.values()) {
+    if (!pre || !pre.mapId) continue;
+    if (t - (pre.lastSeen || 0) > PARTY_TTL_MS) continue;
+    const id = String(pre.mapId || "").slice(0, 64);
+    if (!id || id.startsWith("town_")) continue;
+    counts[id] = (counts[id] || 0) + 1;
+  }
+  return counts;
+}
+
+function partyMapPopulationPayload(mapId, now) {
+  const counts = partyMapPopulation(now);
+  const cur = String(mapId || "").slice(0, 64);
+  return {
+    counts: counts,
+    here: cur && counts[cur] ? counts[cur] : 0,
+    at: now || Date.now(),
+  };
+}
+
 function partyEventsFor(key, since) {
   const s = Math.max(0, Number(since) || 0);
   const party = partyFindByMemberKey(key);
@@ -1446,13 +1474,23 @@ async function handlePartyApi(req, res, u) {
     const partyMobs = party
       ? partyMobSyncForMember(party, up.key, up.presence.mapId || "")
       : null;
+    const mapPop = partyMapPopulationPayload(up.presence.mapId || "", Date.now());
     return json(res, 200, {
       ok: true,
       key: up.key,
       party: partyPublic(party),
       partyMobs,
+      mapPop,
       seq: partyEventSeq,
     });
+  }
+
+  if (u === "/api/map/population" && req.method === "GET") {
+    partyCleanupStale(Date.now());
+    const url = new URL(req.url || "/", "http://localhost");
+    const mapId = String(url.searchParams.get("mapId") || "").slice(0, 64);
+    const payload = partyMapPopulationPayload(mapId, Date.now());
+    return json(res, 200, { ok: true, mapPop: payload });
   }
 
   if (u === "/api/party/create" && req.method === "POST") {
@@ -3462,7 +3500,7 @@ const server = http.createServer(async (req, res) => {
       await handleChatApi(req, res, u);
       return;
     }
-    if (u.startsWith("/api/party")) {
+    if (u.startsWith("/api/party") || u.startsWith("/api/map/")) {
       await handlePartyApi(req, res, u);
       return;
     }
@@ -3476,6 +3514,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/pandora") && _pandoraApiHandler) {
       await _pandoraApiHandler(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/worldboss") && _worldBossApiHandler) {
+      await _worldBossApiHandler(req, res, u, json);
       return;
     }
     if (u.startsWith("/api/accounts")) {

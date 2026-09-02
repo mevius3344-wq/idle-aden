@@ -985,6 +985,7 @@
                     }
                 }
                 if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
+                if (data.mapPop && typeof mapPopApply === 'function') mapPopApply(data.mapPop);
                 if (data.seq && data.seq > _rtPartySeq) { /* poll will catch */ }
                 rtPartyRender();
             }

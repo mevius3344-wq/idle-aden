@@ -429,7 +429,9 @@ d.mr += (baseMr + bonusMr);
         // 祝福的：防具→AC-1、傷害減免+1；飾品→AC-1、MR+1
         applyBlessStats(d, e.bless, (ed.slot==='ring'||ed.slot==='amulet'||ed.slot==='belt'||ed.slot==='ear') ? 'acc' : 'arm');   // 祝福的/詛咒的
         applyAncStats(d, e.anc, (ed.slot==='ring'||ed.slot==='amulet'||ed.slot==='belt'||ed.slot==='ear') ? 'acc' : 'arm');   // 遠古系變體能力
-        // 🔥 v3.0.77 屬性詞綴改版：只能存在於武器（額外傷害/魔法點數，於上方武器區塊計入）；舊防具/飾品屬性詞綴（元素抗性+MR）已廢除並由 loadGame 清除
+        // 🔥 v3.8.131 三詞玩法：防具／飾品亦可帶屬性詞綴（額外傷害/魔法點數；一般攻擊轉屬性仍僅武器）
+        let _eAtt = getAttrAffix(e.attr);
+        if (_eAtt) { d.extraDmg += _eAtt.dmg; d.extraMp += _eAtt.mp; }
         if(ed.set && !_setSeen[e.id]) { _setSeen[e.id] = true; setCheck[ed.set] = (setCheck[ed.set]||0) + 1; }   // 🔧 以「不重複物品」計件：兩枚同款戒指只算 1 件，杜絕灌水湊套裝
         
         // 🔧 架構#4：移除 ed.skAdd 死碼 —— 全資料庫無任何物品使用此欄位，且其語意（永久寫入 player.skills、
@@ -572,7 +574,7 @@ d.mr += (baseMr + bonusMr);
     //    全專案沒有任何路徑會在 buffs.poly 歸零時把它清成 null，只看物件存在＝變身期滿後攻速加成永久殘留。
     { let _polySpd = 0; if (p._setPoly || (p.buffs.poly > 0 && p.poly)) { try { for (let _k in p.eq) { let _e = p.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].polyAtkSpdPct) _polySpd += DB.items[_e.id].polyAtkSpdPct; } } catch (e) {} } if (_polySpd > 0) spdMult *= (1 / (1 + _polySpd / 100)); }   // 🏺 v3.2.17 浣熊的變身葉：變身狀態時攻擊速度 +20%（需裝備·限變身期間）
     { let _mhw = p.eq.wpn ? DB.items[p.eq.wpn.id] : null; if(d.meleeHaste > 0 && _mhw && !_mhw.isBow && !_mhw.ranged) spdMult *= (1 / (1 + d.meleeHaste / 100)); }   // 🏺 遺物 狂野的鬃毛外套：裝備近距離武器時攻速 +meleeHaste%
-    if(p.buffs.blue > 0) d.mpR += getWisBlueBonus(d.wis);          // 藍色藥水：依精神提升MP恢復
+    if(p.buffs.blue > 0) { d.mpR += getWisBlueBonus(d.wis); if (d.talentPotionBonusPct > 0) d.mpR += Math.floor(getWisBlueBonus(d.wis) * d.talentPotionBonusPct / 100); }   // 藍色藥水：依精神提升MP恢復；🌟 鍊金精修加成藍水回魔
     if(p.buffs.cautious > 0 || (_mercPots && p.cls === 'mage')) { d.magicDmg += 2; d.mpR += 2; }      // 慎重藥水；法師傭兵常駐
     if(p.buffs.sk_reduction_armor > 0) d.dr += Math.floor(p.lv/10);   // 增幅防禦：等同傷害減免 floor(等級/10)，併入 DR 顯示與計算
     if(p.statuses && p.statuses.evilAura > 0) { d.ac += 10; d.er -= 10; }   // 🔧 邪靈之氣減益：AC+10、ER−10（持續6秒，由黑暗精靈使施放）

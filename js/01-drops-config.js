@@ -1818,7 +1818,7 @@ function freshPlayerState() { return JSON.parse(PLAYER_INIT_SNAPSHOT); }
 function freshMapState() { return JSON.parse(MAPSTATE_INIT_SNAPSHOT); }
 let _mobBornSeq = 0;   // 🎯 全域單調遞增「出生序」（每隻怪生成時 +1；越小＝越早出生／在場上存活越久）→ getTarget 用來「優先打先出生的怪」
 /** 萬能藥全角色累計使用上限（瓶）；屬性自然值上限仍為 STAT_NATURAL_CAP */
-const PANACEA_USE_MAX = 60;
+const PANACEA_USE_MAX = 30;
 const STAT_NATURAL_CAP = 60;
 
 let createBase = { 

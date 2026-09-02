@@ -161,6 +161,13 @@ const MAP_REGIONS = [
 function mapEntryOf(v) { for (let c in MAP_CATEGORIES) { let e = MAP_CATEGORIES[c].find(x => x.v === v); if (e) return e; } return null; }
 // 地圖 v 屬於哪個「地區」下拉分類（特例：攻城動態、攻城獲勝城堡歸所屬地區、傲慢之塔攀登樓層、時空裂痕戰場）
 function mapRegionOf(v) {
+    if (typeof isWorldBossMap === 'function' && isWorldBossMap(v)) {
+        if (typeof wbEntryByMap === 'function') {
+            let e = wbEntryByMap(v);
+            if (e && (e.zone === 'dream' || e.zone === 'oblivion')) return 'boss_zone';
+        }
+        return 'worldboss';
+    }
     if (SIEGE_OUTER_INNER.includes(v)) return 'siege';
     if (CASTLE_EXTRA.includes(v)) return 'windwood';   // 🏰 風木地監→風木地區（攻城獲勝後開放）
     for (let _ck in SIEGE_CITY) { if (SIEGE_CITY[_ck].castle === v) return _ck; }   // 🏰 攻城獲勝城堡→所屬地區(地區 key 與 SIEGE_CITY key 同名：kent/windwood/heine)
@@ -172,6 +179,13 @@ function mapRegionOf(v) {
 // 某地區下拉應顯示的地圖清單（攻城動態另接；其餘由 MAP_REGIONS 取 v、自 MAP_CATEGORIES 解析顏色/條件、以地區自訂名覆寫顯示）
 function regionMapList(rk) {
     if (rk === 'siege') return getSiegeAreas();
+    if (rk === 'worldboss' || rk === 'boss_zone') {
+        if (typeof wbRegionMapList === 'function') {
+            let wb = wbRegionMapList(rk);
+            if (wb && wb.length) return wb;
+        }
+        return [];
+    }
     let reg = MAP_REGIONS.find(r => r.key === rk); if (!reg) return [];
     let out = reg.maps.map(m => { let ce = mapEntryOf(m.v) || {}; return Object.assign({}, ce, { v: m.v, t: m.t || ce.t || m.v }); });
     // 🏰 攻城獲勝城堡：依位置注入所屬地區（取代舊「城堡」分類）。getCastleAreas 自帶 siegeVictoryActive 時效守衛、只回傳當前獲勝城池(風木另含風木地監)
@@ -258,6 +272,7 @@ function getCastleAreas() {
     return [{v:c.castle, t:c.castleName}];
 }
 function mapCategoryOf(v) {
+    if (typeof isWorldBossMap === 'function' && isWorldBossMap(v)) return 'special';
     if (SIEGE_OUTER_INNER.includes(v)) return 'siege';
     if (SIEGE_CASTLES.includes(v) || CASTLE_EXTRA.includes(v)) return 'castle';
     if (typeof v === 'string' && (v.startsWith('pride_f') || v === 'pride_climb')) return 'tower';   // 🗼 攀登中的樓層歸入傲慢之塔分類
@@ -276,6 +291,10 @@ function rebuildMapCategoryOptions() {
     let catSel = document.getElementById('map-category'); if (!catSel) return;
     let opts = [];
     if (player.siege && player.siege.active) opts.push(['siege','攻城']);   // ⚔️ 攻城進行中（攻城獲勝城堡不再獨立成「城堡」分類，已注入肯特/風木/海音地區）
+    if (typeof wbWorldBossList === 'function' && wbWorldBossList().length) opts.push(['worldboss', '世界王']);
+    if (typeof wbBossZoneVisible === 'function' && wbBossZoneVisible() && typeof wbBossZoneList === 'function' && wbBossZoneList().length) {
+        opts.push(['boss_zone', 'BOSS專區']);
+    }
     MAP_REGIONS.forEach(r => { if (regionHasVisible(r.key)) opts.push([r.key, r.label]); });   // 🗺️ 17 地區（依 map_categories.md 順序；經典模式空地區自動隱藏）
     catSel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
 }
@@ -307,7 +326,9 @@ function populateMapSelect(cat) {
     list.forEach(m => {
         if (m.classicHide && player.classicMode) return;   // 🔥 經典模式：隱藏席琳神殿（連選項都不顯示）
         let o = document.createElement('option');
-        o.value = m.v; o.textContent = m.t;
+        o.value = m.v;
+        o.setAttribute('data-base-title', m.t);
+        o.textContent = m.t + (typeof mapPopSuffix === 'function' ? mapPopSuffix(m.v) : '');
         if (mapOptDisabled(m)) { o.disabled = true; o.style.color = '#64748b'; }
         else if (m.c) o.style.color = m.c;
         sel.appendChild(o);
@@ -338,6 +359,7 @@ function setMapSelectors(mapKey) {
     let sel = document.getElementById('map-select'); if (sel) sel.value = mapKey;
     updatePrideFloorIndicator();
     updateMercRoleHint();
+    try { if (typeof mapPopUpdateIndicator === 'function') mapPopUpdateIndicator(); } catch (e) {}
 }
 // 🧑‍🤝‍🧑 v3.7.84 地圖列右側「目前擔任隊員中」常駐提示：受僱期間非安全區全部灰階＝點不下去，
 //    所以改用一個常駐標籤說明原因（否則玩家只會看到一整排灰色而不知道為什麼）。setMapSelectors 與每輪 updateUI 各呼叫一次。
@@ -447,6 +469,15 @@ function updatePrideFloorIndicator() {
         ind.classList.remove('hidden');
         if (sel) sel.classList.add('hidden');
         if (cat) cat.classList.remove('hidden');   // 傲慢之塔維持原行為：左側分類選單仍顯示
+    } else if (typeof isWorldBossMap === 'function' && isWorldBossMap(cur)) {
+        try { if (typeof wbUpdateIndicator === 'function') wbUpdateIndicator(); } catch (e) {}
+        if (sel) sel.classList.remove('hidden');
+        if (cat) cat.classList.remove('hidden');
+    } else if (cur === 'dream_island') {
+        try { rebuildMapCategoryOptions(); } catch (e) {}   // 🏝️ 進入夢幻之島→刷新選單以顯示 BOSS 專區
+        ind.classList.add('hidden');
+        if (sel) sel.classList.remove('hidden');
+        if (cat) cat.classList.remove('hidden');
     } else if (state.oblivion && (cur === 'oblivion_travel' || cur === 'oblivion_island')) {
         ind.textContent = (cur === 'oblivion_island') ? '遺忘之島' : '遺忘之島途中';
         ind.classList.remove('hidden');
@@ -1259,7 +1290,12 @@ function changeMap(force) {
 
         // 進入新區域：依邏輯 tick 排程出怪（中央 50t=5秒、左側 70t=7秒、右側 90t=9秒）
         let t0 = state.ticks;
-        mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
+        if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
+            mapState.spawnAt = [null, t0 + 50, null, null, null];   // 👑 世界王：僅中央格
+            try { if (typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (e) {}
+        } else {
+            mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
+        }
         mapState.suppressSiegeBoss = true;   // 初次進場：必定不出現肯特城門/守護塔
         // 🏛️ 雙BOSS祭壇：進場立即生成兩隻BOSS（之後不逐格補怪，兩隻皆亡才會在 15 秒後同時復活）
         if (KING_ROOMS[mapState.current] && KING_ROOMS[mapState.current].dual) {

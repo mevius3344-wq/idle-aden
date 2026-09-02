@@ -739,7 +739,8 @@
             let result = old.castMobMagic ? old.castMobMagic(mob, sk) : undefined;
             mob.hit = hitBefore;
             if (!player.dead && player.hp < hpBefore) {
-                player.statuses.stun = Math.max(num(player.statuses.stun, 0), 5);
+                let _st = typeof talentCcDurationTicks === 'function' ? talentCcDurationTicks(5, mob) : 5;
+                player.statuses.stun = Math.max(num(player.statuses.stun, 0), _st);
                 player._siegeKentDefDownUntil = state.ticks + 40;
                 calcStats();
                 logCombat('<span class="text-red-300">破陣突刺使你硬直 0.5 秒，防禦降低 3（4 秒）。</span>', 'enemy');

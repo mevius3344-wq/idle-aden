@@ -138,6 +138,8 @@ function _sumDerive(mob, owner) {
     const flat = Math.round(mean * 0.55);
     const dice = Math.max(1, Math.round((mean - flat) * 2));
     const mastery = (owner.mastery === 'm_summon');   // 🧙 召喚精通沿用：傷害×1.2、命中+5
+    let sm = (typeof talentSummonStatMult === 'function' ? talentSummonStatMult(owner) : 1);
+    if (sm > 1) { flat = Math.round(flat * sm); dice = Math.max(1, Math.round(dice * sm)); }
     return {
         flat, dice, aspd: m.aspd,
         dmgMult: (mastery ? 1.2 : 1) * (1 + Math.min(12, Math.max(0, ((owner.d && owner.d.magicDmg) || 0) + _sumOwnerMdBonus(owner))) / 80),   // 🏺 v3.7.20 +summonMdmg
@@ -145,6 +147,11 @@ function _sumDerive(mob, owner) {
         ac: 10 - Math.floor(m.lv / 4),   // 被打時的防禦（越低越難被命中）
         dr: Math.floor(m.lv / 10)
     };
+}
+
+function _summonTalentHp(hp, owner) {
+    let sm = (typeof talentSummonStatMult === 'function' ? talentSummonStatMult(owner || player) : 1);
+    return Math.max(1, Math.round((hp || 1) * sm));
 }
 
 // ---------- 一之二、造屍術 v2＋屬性精靈 v2（v3.2.21）----------
@@ -462,12 +469,12 @@ function summonV2CastFor(skId, silent) {   // castSkill 分流入口（sk_summon
         const cnt = _sumCountFor(form);
         if (cnt <= 0) { if (!silent) logSys(`<span class="text-red-400">魅力不足：無法召喚 ${form}（數量=(魅力+6)/${(_sumTierOf(form).tier.div || 8)}）。</span>`); return false; }
         const e = _sumTierOf(form);
-        for (let i = 0; i < cnt; i++) ents.push({ uid: uid(), skId: skId, form: form, lv: e.mob.lv, hp: e.mob.hp, mhp: e.mob.hp, _atkCd: 5 + i * 3 });
+        for (let i = 0; i < cnt; i++) { let _shp = _summonTalentHp(e.mob.hp, player); ents.push({ uid: uid(), skId: skId, form: form, lv: e.mob.lv, hp: _shp, mhp: _shp, _atkCd: 5 + i * 3 }); }
         castMsg = `你召喚了 <span class="text-purple-300">${form}</span> ×${cnt}。`;
     } else if (skId === 'sk_zombie') {   // 🧟 造屍術：單一殭屍·階級依玩家等級/職業
         const t = _zmbTierForPlayer();
         if (!t) { if (!silent) logSys('<span class="text-red-400">等級不足，無法施展造屍術。</span>'); return false; }
-        ents.push({ uid: uid(), skId: skId, form: '人形殭屍', lv: t.lv, hp: t.hp, mhp: t.hp, _atkCd: 5 });
+        let _zhp = _summonTalentHp(t.hp, player); ents.push({ uid: uid(), skId: skId, form: '人形殭屍', lv: t.lv, hp: _zhp, mhp: _zhp, _atkCd: 5 });
         castMsg = `你施放造屍術，喚起了 <span class="text-purple-300">人形殭屍</span>（Lv.${t.lv}·HP ${t.hp}）。`;
     } else if (skId === 'sk_elf_summon' || skId === 'sk_elf_summon2') {   // 🧝 屬性精靈：依玩家屬性·一律 1 隻（👑 v3.2.25 精靈精通改為昇華精靈王·不再加隻數）
         const ele = player.elfEle;
@@ -477,7 +484,7 @@ function summonV2CastFor(skId, silent) {   // castSkill 分流入口（sk_summon
         const form = _spiritFormName(skId, ele);
         // 動態分派：精靈王＝原「強力X屬性精靈」圖（專屬）；強力屬性精靈（無精通）與一般精靈＝「X屬性精靈」圖
         const gfx = (king ? '強力' : '') + SPIRIT_ELE_ZH[ele] + '屬性精靈';
-        ents.push({ uid: uid(), skId: skId, form: form, formGfx: gfx, ele: ele, lv: spec.lv, hp: spec.hp, mhp: spec.hp, _king: king, _atkCd: 5 });
+        let _ehp = _summonTalentHp(spec.hp, player); ents.push({ uid: uid(), skId: skId, form: form, formGfx: gfx, ele: ele, lv: spec.lv, hp: _ehp, mhp: _ehp, _king: king, _atkCd: 5 });
         castMsg = king
             ? `精靈之力在你的精通下昇華——你召喚了 <span class="text-purple-300 font-bold">${form}</span>！`
             : `你召喚了 <span class="text-purple-300">${form}</span>。`;

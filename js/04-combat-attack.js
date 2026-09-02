@@ -765,6 +765,7 @@ function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp)
     if (total > 0) total = illusionMagicDmg(total, true, illusionRecoverMp !== false);   // 🔮 全體免費施法只在第一個目標回MP；5件仍逐目標生效
     if (total > 0) {
         t.curHp -= total; if (typeof terrorVisageOnDamage === 'function') terrorVisageOnDamage(t, total, 'magic'); t.justHit = (sk.ele && sk.ele !== 'none') ? sk.ele : 'magic'; t._spellHurt = true; mobWake(t);   // 🎬 v3.0.14 法術傷害→hurt(含頭目)；🌅 巨大骷髏：免費觸發法術視為魔法
+        if (typeof playerOnDealDamage === 'function') playerOnDealDamage(total);
         if(typeof playSpellFx === 'function') { try { playSpellFx(sk.n, t); } catch(e){} }   // ⚡ v2.7.16 娃娃/寵物免費施放(如娃娃克特/聖伯納→極道落雷)也疊法術特效
         if (t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;
         logCombat(`<span class="font-bold" style="color:#93c5fd;text-shadow:0 0 6px #2563eb;">【${sk.n}】</span>額外施放，對 <span class="${getMobColor(t.lv)}">${t.n}</span> 造成 <span class="${isCrit ? 'text-yellow-500 font-bold' : 'text-cyan-300'}">${total}</span> 點傷害${isCrit ? '（爆擊!）' : ''}。`, 'player-special');
@@ -1269,7 +1270,8 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
         let _lancePair = player.eq.shield && player.eq.shield.id === 'relic_guard_towershield' && player.eq.wpn && player.eq.wpn.id === 'relic_bk_lance';   // 🏺 v3.5.27 黑騎士的精銳長槍＋漆黑塔盾：格檔100%（重擊/非重擊皆同）·經典模式亦可觸發
         if(player.eq.shield && (!player.classicMode || _lancePair)) {   // 🎮 經典模式：盾牌無格檔（長槍＋塔盾成對＝例外放行）
             let _sh = DB.items[player.eq.shield.id];
-            let _blockChance = _lancePair ? 100 : ((_sh && _sh.block) ? (heavy ? _sh.block : _sh.block * 0.3) : 0);   // 🛡️ 非重擊：格檔發動率為重擊的 30%
+            let _blockChance = _lancePair ? 100 : ((_sh && _sh.block) ? (heavy ? _sh.block : _sh.block * 0.3) : 0);
+            if (player.d && player.d.talentBlockBonus > 0) _blockChance += player.d.talentBlockBonus;
             if(_blockChance > 0 && Math.random() * 100 < _blockChance) { let _before = totalDmg; totalDmg = Math.floor(totalDmg * 0.5); blockReduced = _before - totalDmg; blocked = true; }
         }
 
@@ -1290,7 +1292,8 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
             updateUI();
             return;
         }
-        player.hp -= totalDmg;
+        if (typeof talentMitigateIncomingDamage === 'function') totalDmg = talentMitigateIncomingDamage(totalDmg, mob);
+        if (totalDmg > 0) player.hp -= totalDmg;
         if (isBasicAttack && totalDmg > 0) corrosiveJellySkinOnBasicHit(mob, player);
         // 🏺 v3.7.20 長老的黑曜水晶球（crushTornado）：被重擊時 → 對敵方全體施放龍捲風（procFreeMagicSkill target:'all' 自動掃全場·免費施放）
         if (heavy && player.hp > 0 && player.eq && player.eq.shield) {
@@ -1352,7 +1355,7 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
         if (player.hp <= 0) killPlayer();
         else if (stunChance > 0 && Math.random() * 100 < stunChance) {   // 衝擊之暈：命中後依機率附加暈眩
             if (playerStatusResisted('stun')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了暈眩！</span>', 'magic'); updateUI(); }
-            else { player.statuses.stun = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 的衝擊使你暈眩了！`, 'enemy'); }
+            else { if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('stun', 60, mob); else player.statuses.stun = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 的衝擊使你暈眩了！`, 'enemy'); }
         }
         else updateUI();
 
@@ -1809,7 +1812,8 @@ function reflectWallOnDamage(mob, dmg, kind, ally) {
         logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【血壁空間】</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 反彈了${_k}傷害，協力·${ally._allyName} 受到 ${dmg} 點傷害！`, 'enemy');
         if (ally.curHp <= 0) { ally.curHp = 0; ally._downed = true; ally._reviveCd = 150; logCombat(`<span class="text-amber-400 font-bold">協力傭兵 ${ally._allyName} 倒下了！（可用返生術立即復活，或 15 秒後自動使用復活卷軸，或回村免費復活）</span>`, 'enemy'); try { renderSquadPanel(); } catch (e) {} }
     } else {
-        player.hp -= dmg;
+        if (typeof talentMitigateIncomingDamage === 'function') dmg = talentMitigateIncomingDamage(dmg, mob);
+        if (dmg > 0) player.hp -= dmg;
         logCombat(`<span class="font-bold" style="color:#f87171;text-shadow:0 0 6px #dc2626;">【血壁空間】</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 反彈了${_k}傷害，你受到 ${dmg} 點傷害！`, 'enemy');
         if (player.hp <= 0 && typeof killPlayer === 'function') killPlayer();
     }
@@ -2194,7 +2198,7 @@ function _applyMobMagicInner(mob, sk) {
             // 🏺 v3.6.44 石化魔法的精髓：受石化→持續時間減半（60→30）＋獲得石化精髓（DR+50/MR+50·10 秒）
             let _sd = 60;
             if (hasStoneEssenceHelm()) { _sd = 30; player._stoneEssUntil = state.ticks + 100; logCombat('<span class="font-bold text-stone-300">【石化精髓】</span>石化魔法被淬鍊為守護之力！（傷害減免 +50、MR +50，10 秒）', 'player-special'); }
-            player.statuses.stone = _sd; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被石化了！`, 'enemy');
+            if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('stone', _sd, mob); else player.statuses.stone = _sd; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被石化了！`, 'enemy');
             if (typeof antEyeTryTrigger === 'function') antEyeTryTrigger();   // 🐉 v3.7.57 地龍之魔眼：被石化時觸發（解除+10分免疫+增益·每小時1次）
         }
         return;
@@ -2202,7 +2206,7 @@ function _applyMobMagicInner(mob, sk) {
     if(sk.type === 'paralyze') {
         if(player.d.immPoison) return; // 潔尼斯戒指：免疫麻痺
         let chance = Math.max(0, ((sk.pbase !== undefined ? sk.pbase : 50) - player.d.mr) / 2);
-        if(Math.random() * 100 < chance && !player.dead) { if(playerStatusResisted('paralyze')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了麻痺！</span>', 'magic'); } else { player.statuses.paralyze = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被麻痺了！`, 'enemy'); } }
+        if(Math.random() * 100 < chance && !player.dead) { if(playerStatusResisted('paralyze')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了麻痺！</span>', 'magic'); } else { if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('paralyze', 60, mob); else player.statuses.paralyze = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被麻痺了！`, 'enemy'); } }
         return;
     }
     if(sk.type === 'silence') {
@@ -2239,7 +2243,7 @@ function _applyMobMagicInner(mob, sk) {
         let chance = Math.max(0, ((sk.pbase !== undefined ? sk.pbase : 150) - player.d.mr) / 2);
         if(Math.random() * 100 < chance && !player.dead) {
             if(playerStatusResisted('stun')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了暈眩！</span>', 'magic'); }
-            else { player.statuses.stun = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被暈眩了！`, 'enemy'); }
+            else { if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('stun', 60, mob); else player.statuses.stun = 60; logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '魔法'}，你被暈眩了！`, 'enemy'); }
         }
         return;
     }
@@ -2435,7 +2439,8 @@ function _applyMobMagicInner(mob, sk) {
         dmg = Math.max(0, Math.floor(dmg * antHelperDrMult()));   // 🐉 v3.7.57 助戰者「護衛」減免（魔法）
         dmg = dollDamageReduced(dmg);   // 🪆 魔法娃娃：受傷機率傷害減免（史巴托/巫妖）
         dmg = shieldDmgReduceProc(player, dmg);   // 🌑 v3.3.33 反叛者的盾牌：受傷 proc（魔法亦適用）
-        player.hp -= dmg;
+        if (typeof talentMitigateIncomingDamage === 'function') dmg = talentMitigateIncomingDamage(dmg, mob);
+        if (dmg > 0) player.hp -= dmg;
         if (dmg > 0) _relicOnDamageHeal();   // 🏺 遺物 白螞蟻蛋殼：受魔法傷害時亦觸發受擊自癒（5 秒節流·physical/magic 共用冷卻）
         if (dmg > 0) _relicOnHurtCast(mob);   // 🏺 遺物 法師的護身短刀：受魔法傷害時亦 20% 免費施放自動攻擊法術
         if (dmg > 0 && typeof applyPlayerHitstun === 'function') applyPlayerHitstun();   // ⚔️ 天堂職業硬直：被魔法直接命中→延遲下次攻擊
@@ -2509,7 +2514,7 @@ function _applyMobMagicInner(mob, sk) {
                 let chance = Math.max(0, ((sk.sec.pbase !== undefined ? sk.sec.pbase : 150) - player.d.mr) / 2);
                 if(Math.random() * 100 < chance && !player.dead) {
                     if(playerStatusResisted('stun')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了暈眩！</span>', 'magic'); }
-                    else { player.statuses.stun = (sk.sec.dur || 6) * 10; logCombat(`你被暈眩了！`, 'enemy'); }
+                    else { let _st = (sk.sec.dur || 6) * 10; if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('stun', _st, mob); else player.statuses.stun = _st; logCombat(`你被暈眩了！`, 'enemy'); }
                 }
             }
             if(sk.sec.type === 'sleep') {
@@ -2518,7 +2523,7 @@ function _applyMobMagicInner(mob, sk) {
             }
             if(sk.sec.type === 'paralyze' && !player.d.immPoison) {   // 潔尼斯戒指：免疫麻痺（與主 paralyze 分支一致）
                 let chance = Math.max(0, ((sk.sec.pbase !== undefined ? sk.sec.pbase : 50) - player.d.mr) / 2);
-                if(Math.random() * 100 < chance && !player.dead) { if(playerStatusResisted('paralyze')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了麻痺！</span>', 'magic'); } else { player.statuses.paralyze = (sk.sec.dur || 6) * 10; logCombat(`你被麻痺了！`, 'enemy'); } }
+                if(Math.random() * 100 < chance && !player.dead) { if(playerStatusResisted('paralyze')) { logCombat('<span class="text-sky-300 font-bold">你抵抗了麻痺！</span>', 'magic'); } else { let _pt = (sk.sec.dur || 6) * 10; if (typeof talentSetPlayerCc === 'function') talentSetPlayerCc('paralyze', _pt, mob); else player.statuses.paralyze = _pt; logCombat(`你被麻痺了！`, 'enemy'); } }
             }
         }
 

@@ -24,6 +24,11 @@ function bindMobBlockedVs(m, target) {   // 怪物：自己被束縛且目標為
 }
 function mobEffAC(m, actor) { let _weakOk = (m.weakExpose > 0) && ((actor && actor !== player) ? allyHasMastery(actor, 'k_weakness') : hasMastery('k_weakness')); return (m.ac || 0) + ((m.st && m.st.disease > 0) ? 8 : 0) + ((m.st && (m.st.confuse > 0 || m.st.panic > 0)) ? 5 : 0) + ((m.st && m.st.guardbreak > 0) ? 10 : 0) + (_weakOk ? 3 * Math.min(5, m.weakExpose) : 0) - ((m.st && m.st.shatter > 0) ? 10 : 0) - ((m._acGuardEnd > state.ticks) ? (m._acGuardVal || 0) : 0); }   // 🔮 月光碎裂：AC-10；混亂/恐慌：AC+5；🐉 護衛毀滅：AC+10；🐉 弱點精通：每層弱點曝光 AC+3（更易被命中·讀「攻擊者」精通：傭兵傳 actor→吃傭兵自身精通、玩家/召喚無 actor→吃玩家精通）   // 🗼 鋼鐵防護：暫時降低 AC
 function moonShatterOnDamage(owner, target, dmg) {
+    if (owner === player && dmg > 0 && typeof playerOnDealDamage === 'function') playerOnDealDamage(dmg);
+    if (target && target.boss && dmg > 0 && typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)
+        && typeof wbReportDamage === 'function' && typeof wbShouldFollow === 'function' && wbShouldFollow()) {
+        wbReportDamage(target, dmg);
+    }
     if (!owner || !owner._setMoon5 || !target || target._dead || (target.curHp || 0) <= 0 || !(dmg > 0)) return false;
     if (!target.st) target.st = newMobStatus();
     let firstApply = !(target.st.shatter > 0);

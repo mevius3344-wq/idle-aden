@@ -201,7 +201,7 @@ function gainSherineRemains(remId, group, silent) {
     return itemInfo;
 }
 
-// ===== 🔥 屬性詞綴定義（v3.0.77 屬性強化系統改版：4 屬性 × 5 階，只能存在於武器） =====
+// ===== 🔥 屬性詞綴定義（v3.0.77 屬性強化系統改版：4 屬性 × 5 階；v3.8.131 起武器／防具／飾品皆可賦予） =====
 // dmg = 額外傷害+N；mp = 額外魔法點數+N（N＝1/3/5/7/9，走 recompute d.extraDmg/d.extraMp·玩家＋傭兵 buildAlly 共用）
 // ele = 一般攻擊轉變的屬性（剋制走 elementCounterMult ×1.4/×0.6）；tier = 階級（第4階需武器+10、第5階需+11，見 doBianAttr）
 // 取得途徑＝屬性強化卷軸（四元素·怪物掉落）於象牙塔『碧恩』賦予，每次 7% 獨立事件，失敗僅消耗卷軸
@@ -476,7 +476,7 @@ function batchUseItem(u) {
     if (d.eff === 'panacea') {
         const STAT_CN = { str:'力量', dex:'敏捷', con:'體質', int:'智力', wis:'精神', cha:'魅力' };
         let st = d.pstat;
-        let useMax = (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 60);
+        let useMax = (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 30);
         let statCap = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);
         let remainQuota = (typeof panaceaQuotaRemain === 'function') ? panaceaQuotaRemain() : Math.max(0, useMax - (player.panaceaUsed || 0));
         let remainStat = (typeof panaceaStatRemain === 'function') ? panaceaStatRemain(st) : Math.max(0, statCap - naturalStat(st));
@@ -646,7 +646,7 @@ function useItem(u, silent = false) {
         }
         if (item.id.includes('potion_heal') || item.id === 'potion_strong' || item.id === 'potion_ult') {
             if (player.cds.pot > 0) return;
-            let h = Math.floor(potionHealBase(d) * (1 + (getConPotionPct(player.d.con) + dollFieldVal('potionBonus') + playerEquipPotionBonusPct() + (player._miscPotionBonus || 0)) / 100));   // 🍶 藥水基準改隨機區間 valMin~valMax（紅10~20/橙30~50/白60~80）；🪆 魔法娃娃 potionBonus%（吸血鬼）；🧰 道具收集冊 材料/其他全收集：藥水恢復%
+            let h = Math.floor(potionHealBase(d) * (1 + (getConPotionPct(player.d.con) + dollFieldVal('potionBonus') + playerEquipPotionBonusPct() + (player._miscPotionBonus || 0) + (player.d.talentPotionBonusPct || 0)) / 100));   // 🍶 藥水基準改隨機區間 valMin~valMax（紅10~20/橙30~50/白60~80）；🪆 魔法娃娃 potionBonus%（吸血鬼）；🧰 道具收集冊 材料/其他全收集：藥水恢復%；🌟 九天星盤鍊金精修
             if (hasMastery('k_survive')) h = Math.floor(h * 1.25);   // 🏅 生存精通：治癒藥水恢復 +25%
             if (hasMastery('k_tough') && player.hp < player.mhp * 0.4) h = Math.floor(h * 1.5);   // ⚔️ 堅韌精通：HP<40% 時藥水治癒量 +50%
             if (hasMastery('k_dragonblood')) h = Math.floor(h * 1.15);   // 🐉 龍血精通：治癒藥水恢復 +15%
@@ -654,7 +654,7 @@ function useItem(u, silent = false) {
             if (player.statuses && player.statuses.potionFrost > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌅 藥水霜化（巨大骷髏·枯竭詛咒）：治癒藥水恢復量 −50%
             if (player.statuses && player.statuses.foulWater > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌊 v3.6.20 汙濁之水（玩家NPC二模板）：治癒藥水也減半
             player.hp = Math.min(player.mhp, player.hp + h);
-            player.cds.pot = 1;
+            player.cds.pot = (typeof talentPotCdTicks === 'function' ? talentPotCdTicks() : 10);
             if(!silent) logSys(`飲用 ${d.n}，恢復 ${h} HP。`);
         } else if (item.id === 'new_item_141') {
             // 安特的水果：只能手動使用，恢復 44~107 HP（自動使用會帶 silent=true，直接略過不消耗）
@@ -663,7 +663,7 @@ function useItem(u, silent = false) {
             let h = 44 + Math.floor(Math.random() * (107 - 44 + 1));
             if (hasMastery('k_survive')) h = Math.floor(h * 1.25);   // 🏅 生存精通：安特的水果恢復 +25%
             player.hp = Math.min(player.mhp, player.hp + h);
-            player.cds.pot = 1;
+            player.cds.pot = (typeof talentPotCdTicks === 'function' ? talentPotCdTicks() : 10);
             logSys(`食用 ${d.n}，恢復 ${h} HP。`);
         } else if (d.eff === 'poly') {
             let ringOn = hasPolyRing();
@@ -731,7 +731,7 @@ function useItem(u, silent = false) {
         } else if (d.eff === 'panacea') {
             const STAT_CN = { str:'力量', dex:'敏捷', con:'體質', int:'智力', wis:'精神', cha:'魅力' };
             let st = d.pstat;
-            let useMax = (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 60);
+            let useMax = (typeof PANACEA_USE_MAX === 'number' ? PANACEA_USE_MAX : 30);
             let statCap = (typeof STAT_NATURAL_CAP === 'number' ? STAT_NATURAL_CAP : 60);
             let remainQuota = (typeof panaceaQuotaRemain === 'function') ? panaceaQuotaRemain() : Math.max(0, useMax - (player.panaceaUsed || 0));
             let remainStat = (typeof panaceaStatRemain === 'function') ? panaceaStatRemain(st) : Math.max(0, statCap - naturalStat(st));
