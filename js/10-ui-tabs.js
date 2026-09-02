@@ -2543,8 +2543,29 @@ function viewLeaderboardEquip(name) {
             });
         })
         .then(function (r) {
-            if (r && r.status >= 200 && r.status < 300 && r.data && r.data.ok) {
+            if (r && r.status >= 200 && r.status < 300 && r.data && r.data.ok && r.data.eq != null) {
                 _lbEquipState = { name: name, loading: false, error: '', data: r.data };
+            } else if (r && r.data && r.data.ok && Array.isArray(r.data.rows)) {
+                // 舊版 API 忽略 view=equip 時會回列表；改打巢狀路徑再試一次
+                return fetch('/api/leaderboard/equip?name=' + encodeURIComponent(name) + '&t=' + Date.now(), { method: 'GET', cache: 'no-store' })
+                    .then(function (res2) {
+                        return res2.json().then(function (data2) {
+                            return { status: res2.status, data: data2 };
+                        }, function () { return { status: res2.status, data: null }; });
+                    })
+                    .then(function (r2) {
+                        if (r2 && r2.status >= 200 && r2.status < 300 && r2.data && r2.data.ok && r2.data.eq != null) {
+                            _lbEquipState = { name: name, loading: false, error: '', data: r2.data };
+                        } else {
+                            _lbEquipState = {
+                                name: name,
+                                loading: false,
+                                error: (r2 && r2.data && r2.data.message) || '無法載入該角色裝備（伺服器尚未更新，請稍後再試）。',
+                                data: null
+                            };
+                        }
+                        renderLeaderboardEquipModal();
+                    });
             } else {
                 _lbEquipState = {
                     name: name,
