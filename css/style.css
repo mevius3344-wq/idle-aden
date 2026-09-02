@@ -1037,6 +1037,71 @@
     color: #f87171;
     margin-right: 0.35rem;
 }
+
+/* 👑 世界王時間表（地圖分類＝世界王時顯示） */
+.wb-schedule-panel {
+    border-bottom: 1px solid #5b3d2a;
+    background: linear-gradient(180deg, rgba(30, 20, 14, 0.96) 0%, rgba(15, 12, 18, 0.94) 100%);
+    padding: 6px 10px 8px;
+    flex-shrink: 0;
+}
+.wb-schedule-panel.hidden { display: none !important; }
+.wb-schedule-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+}
+.wb-schedule-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fdba74;
+    text-shadow: 0 0 6px rgba(251, 146, 60, 0.25);
+}
+.wb-schedule-meta {
+    font-size: 11px;
+    color: #94a3b8;
+}
+.wb-schedule-meta b { color: #fde68a; }
+.wb-schedule-scroll {
+    max-height: 132px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.wb-schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.wb-schedule-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 3px 6px;
+    color: #94a3b8;
+    font-weight: 600;
+    background: rgba(15, 12, 18, 0.98);
+    border-bottom: 1px solid #334155;
+}
+.wb-schedule-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.45);
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+.wb-schedule-table tr:last-child td { border-bottom: none; }
+.wb-schedule-name { color: #fdba74; font-weight: 700; }
+.wb-schedule-alive { color: #4ade80; font-weight: 700; }
+.wb-schedule-dead { color: #f87171; font-weight: 700; }
+.wb-schedule-cd { color: #fde68a; font-variant-numeric: tabular-nums; }
+.wb-schedule-hp { color: #7dd3fc; font-size: 11px; }
+@media (max-width: 900px) {
+    .wb-schedule-scroll { max-height: 108px; }
+    .wb-schedule-table { font-size: 11px; }
+}
 .boss-announce-tag::before { content: '【'; }
 .boss-announce-tag::after { content: '】'; }
 .boss-announce-player { color: #93c5fd; }

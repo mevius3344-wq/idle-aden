@@ -216,6 +216,9 @@ function renderAuditDrops(el) {
             // 🦊 v3.5.4 變身鏈頭目（玉藻→九尾→殺生石）：後續階不在出怪池無自己的列→掉落物併入鏈根（玉藻）顯示（實際掉落也確實由打倒最終階獲得）
             let _seen = { [mid]: 1 }, _t = mob.transformTo;
             while (_t && DB.mobs[_t] && !_seen[_t]) { _seen[_t] = 1; _auditMobDrops(DB.mobs[_t].n).forEach(id => { if (drops.indexOf(id) === -1) drops.push(id); }); _t = DB.mobs[_t].transformTo; }
+            if ((mob.lv || 0) >= (typeof LV30_SCROLL_DROP_MIN === 'number' ? LV30_SCROLL_DROP_MIN : 30) && mob.race !== '血盟' && typeof LV30_SCROLL_DROPS !== 'undefined') {
+                LV30_SCROLL_DROPS.forEach(entry => { let id = entry[0]; if (id && DB.items[id] && drops.indexOf(id) === -1) drops.push(id); });
+            }
             let dropHtml = drops.length
                 ? drops.map(id => `<span class="${getItemColor({ id })}">${DB.items[id].n}</span>`).join('、')
                 : '<span class="text-slate-500">（無掉落物）</span>';
@@ -530,6 +533,16 @@ function killMob(idx) {
         let _relicX2 = (DB.items[itemId].relic && typeof mainPlayerHasEquippedEffect === 'function' && mainPlayerHasEquippedEffect('relicDropX2')) ? 2 : 1;   // 幸運暴走兔腳只讀主操作玩家裝備
         if(Math.random() < partyDropRate((ratePct * _dropBase * _clMult * _relicX2) / 100)) gainItem(itemId, 1);
     });
+
+    // === 🔮 v3.8.147 30級以上通用卷軸：飾品卷＋碧恩賦予卷軸（各獨立 roll·與 MOB_DROPS 並存）===
+    if (!_kbNoReward && !mob.siegeV2 && (mob.lv || 0) >= (typeof LV30_SCROLL_DROP_MIN === 'number' ? LV30_SCROLL_DROP_MIN : 30) && mob.race !== '血盟' && typeof LV30_SCROLL_DROPS !== 'undefined') {
+        let _lv30Mult = mob.boss ? (typeof LV30_SCROLL_BOSS_MULT === 'number' ? LV30_SCROLL_BOSS_MULT : 10) : 1;
+        LV30_SCROLL_DROPS.forEach(entry => {
+            let itemId = entry[0], ratePct = entry[1];
+            if (!DB.items[itemId]) return;
+            if (Math.random() < partyDropRate((ratePct * _lv30Mult * _dropMult) / 100)) gainItem(itemId, 1);
+        });
+    }
 
     // === 🔧 萬能藥稀有掉落：等級 40 以上、非血盟。一般敵人 0.01%；頭目 1%（排除夢幻之島頭目），擊殺後隨機掉落 6 種萬能藥之一 ===
     if (!_kbNoReward && !mob.siegeV2 && (mob.lv || 0) >= 40 && mob.race !== '血盟') {   // 🗝️ 軍王之室小怪／城戰 V2 守軍不進萬能藥掉落

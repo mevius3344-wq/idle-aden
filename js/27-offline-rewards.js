@@ -1386,6 +1386,14 @@
                     Object.keys(split).forEach(id => _offlineGainItem(id, split[id], mob, loot));
                 }
             }
+            if (mob.lv >= (typeof LV30_SCROLL_DROP_MIN === 'number' ? LV30_SCROLL_DROP_MIN : 30) && mob.race !== '血盟' && !mob.siegeV2 && typeof LV30_SCROLL_DROPS !== 'undefined') {
+                let lv30Mult = mob.boss ? (typeof LV30_SCROLL_BOSS_MULT === 'number' ? LV30_SCROLL_BOSS_MULT : 10) : 1;
+                LV30_SCROLL_DROPS.forEach(entry => {
+                    let id = entry[0], ratePct = entry[1];
+                    if (!DB.items[id]) return;
+                    _offlineGainItem(id, _offlineBinomial(kills, Math.min(1, (ratePct * lv30Mult * dropMult) / 100)), mob, loot);
+                });
+            }
             let refine = Array.isArray(player.skills) && player.skills.includes('sk_dark_refine');
             if (map === 'silent_outer') {
                 _offlineGainItem('mat_blackstone2', _offlineBinomial(kills, Math.min(1, (refine ? 0.30 : 0.20) * classic * party)), mob, loot);

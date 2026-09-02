@@ -1,6 +1,6 @@
 ﻿/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.8.143';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.8.147';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '躺著變強';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1291,9 +1291,9 @@ const DB = {
         "scroll_attr_water": { n: "水之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-wa3", noUse: true, gachaWeight: 0, d: "封存伊娃潮汐的卷軸，可交由象牙塔的碧恩嘗試將水之力灌入裝備中的武器／防具／飾品。" },
         "scroll_attr_wind":  { n: "風之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-wi3", noUse: true, gachaWeight: 0, d: "封存沙哈疾風的卷軸，可交由象牙塔的碧恩嘗試將風之力灌入裝備中的武器／防具／飾品。" },
         "scroll_attr_earth": { n: "地之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-ea3", noUse: true, gachaWeight: 0, d: "封存馬普勒大地之力的卷軸，可交由象牙塔的碧恩嘗試將地之力灌入裝備中的武器／防具／飾品。" },
-        "new_item_bless_wpn": { n: "賦予武器祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },   // 🔥 v3.0.77 停用（碧恩改賦予屬性·克里斯特移除）
-        "new_item_bless_arm": { n: "賦予盔甲祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },
-        "new_item_bless_acc": { n: "賦予飾品祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },
+        "new_item_bless_wpn": { n: "賦予武器祝福卷軸", type: "misc", p: 100000, c: "text-purple-300", noUse: true, gachaWeight: 0, d: "於象牙塔『碧恩』對裝備中的武器使用：可「附魔祝福」或隨機「詞條調整」（取代／附加／消除 詛咒、遠古、祝福、屬性之一）。成功率 7%。" },
+        "new_item_bless_arm": { n: "賦予盔甲祝福卷軸", type: "misc", p: 100000, c: "text-purple-300", noUse: true, gachaWeight: 0, d: "於象牙塔『碧恩』對裝備中的防具使用：可「附魔祝福」或隨機「詞條調整」（取代／附加／消除 詛咒、遠古、祝福、屬性之一）。成功率 7%。" },
+        "new_item_bless_acc": { n: "賦予飾品祝福卷軸", type: "misc", p: 100000, c: "text-purple-300", noUse: true, gachaWeight: 0, d: "於象牙塔『碧恩』對裝備中的飾品使用：可「附魔祝福」或隨機「詞條調整」（取代／附加／消除 詛咒、遠古、祝福、屬性之一）。成功率 7%。" },
         "new_item_uncurse": { n: "解除詛咒的卷軸", type: "misc", p: 0, c: "text-cyan-200", d: "於象牙塔『碧恩』處用來移除裝備的詛咒（無法直接使用；沒有卷軸時碧恩也可收費 100 萬金幣解除）。", noUse: true, gachaWeight: 0 },
         // 🚫 v3.2.17「肉 new_item_143」已隨舊項圈夥伴系統移除（誘捕改用 漂浮之眼肉 等專屬誘捕道具）
         "new_item_144": { n: "夏洛伯之爪", p: 1, c: "text-blue-300", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
@@ -2676,7 +2676,7 @@ const DB = {
                 { id: "npc_taras", n: "塔拉斯", title: "試煉", type: "quest", d: "鑽研亡者學識的塔拉斯。主持法師的 30、45 級試煉：達等級後接取任務，收集不死族遺物，一次完成領取全部獎勵。" },
                 { id: "npc_tas", n: "塔斯", title: "製作", type: "craft", d: "煉藥師塔斯能將純白之力調和成各色靈藥。以 3 個純白的萬能藥，製作任一屬性的萬能藥。" },
                 { id: "npc_bayes", n: "巴耶斯", title: "魔法商人", type: "shop", d: "博覽群書的巴耶斯，書架上盡是深奧的咒文。販售各種高階魔法書。" },
-                { id: "npc_bian", n: "碧恩", title: "三詞強化", type: "bless", d: "屬性強化師碧恩：使用四屬性強化卷軸為裝備中的武器／防具／飾品賦予或提升屬性（7%）；使用古代的卷軸隨機賦予遠古／永恆／不朽／太初詞綴（7%）。祝福詞綴仍靠掉落／製作。" },
+                { id: "npc_bian", n: "碧恩", title: "三詞強化", type: "bless", d: "屬性強化師碧恩：四屬性卷軸賦予屬性、古代卷軸賦予遠古；武器／盔甲／飾品祝福卷軸可附魔祝福或隨機調整詞條（成功率 7%）。" },
                 { id: "npc_digallatin", n: "迪嘉勒廷", title: "試煉", type: "quest", d: "嚴苛的試煉主持者迪嘉勒廷，只認可真正的強者。主持騎士、妖精、法師與王族的 50 級試煉（需等級 50 接取；完成階段任務後開啟魔族神殿）。" },
                 { id: "npc_dytite", n: "迪泰特", title: "解除封印", type: "craft", d: "通曉古法的迪泰特，能讀懂被歲月遺忘的封印。以古代的卷軸解除被遺忘裝備的封印，還原成古老的武器與防具。" },
                 { id: "npc_mystic_mage", n: "神秘的魔法師", title: "魔杖改造", type: "craft", d: "不願透露姓名的魔法師，擅長以鋼鐵重鑄法器。以 +7 以上的瑪那魔杖或力量魔法杖，加上魔法寶石與金屬塊，鍛造出鋼鐵瑪那魔杖（成品為 +0）。" }

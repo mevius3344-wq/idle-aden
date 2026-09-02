@@ -349,6 +349,7 @@ function onMapCategoryChange() {
     }
     // 🧑‍🤝‍🧑 v3.7.84 隊員期間切到「沒有安全區」的地區＝整區灰階、無可選目標 → 補一則提示，否則畫面毫無回應
     else if (typeof mercRoleSafeAreaOnly === 'function' && mercRoleSafeAreaOnly() && typeof mercenaryRoleNotifySafeAreaOnly === 'function') mercenaryRoleNotifySafeAreaOnly();
+    try { if (typeof wbOnCategoryChange === 'function') wbOnCategoryChange(cat); } catch (e) {}
 }
 function setMapSelectors(mapKey) {
     // 將「分類選單 + 地圖選單」同步到指定地圖
@@ -360,6 +361,7 @@ function setMapSelectors(mapKey) {
     updatePrideFloorIndicator();
     updateMercRoleHint();
     try { if (typeof mapPopUpdateIndicator === 'function') mapPopUpdateIndicator(); } catch (e) {}
+    try { if (typeof wbOnCategoryChange === 'function') wbOnCategoryChange(cat); } catch (e) {}
 }
 // 🧑‍🤝‍🧑 v3.7.84 地圖列右側「目前擔任隊員中」常駐提示：受僱期間非安全區全部灰階＝點不下去，
 //    所以改用一個常駐標籤說明原因（否則玩家只會看到一整排灰色而不知道為什麼）。setMapSelectors 與每輪 updateUI 各呼叫一次。
@@ -1004,7 +1006,8 @@ function ismaelCursedExchange(kind) {
     updateUI(); saveGame();
     let el = document.getElementById('interaction-content'); if (el) renderIsmaelExchange(el);
 }
-// ===== 🔥 碧恩：三詞玩法（v3.8.132 恢復）— 祝福＝掉落／製作；屬性＋遠古＝碧恩 =====
+// ===== 🔥 碧恩：三詞玩法（v3.8.132+）— 祝福卷軸／屬性卷軸／古代卷軸 =====
+//   祝福卷軸（武器／盔甲／飾品）：附魔祝福（7%）或詞條調整（隨機 取代/附加/消除 × 詛咒/遠古/祝福/屬性）。
 //   屬性：武器／防具／飾品皆可；每次 7% 獨立事件；第5階武器可 1% 附加／重抽屬性魔法。
 //   遠古：武器／防具／飾品皆可；消耗古代的卷軸、每次 7% 獨立事件（已有遠古詞綴則不可重複）。
 //   衝屬性第4階需 +10、第5階需 +11（🗡️ noEnhance 古老的劍／巨劍 豁免）；失敗僅消耗卷軸。
@@ -1015,6 +1018,12 @@ const ATTR_SCROLLS = {
     earth: { id: 'scroll_attr_earth', n: '地之裝備強化卷軸', btn: 'bg-amber-900 border-amber-600 text-amber-200 hover:bg-amber-800' },
 };
 const BIAN_ANC_SCROLL = 'item_ancient_scroll';
+const BIAN_BLESS_SCROLLS = { wpn: 'new_item_bless_wpn', arm: 'new_item_bless_arm', acc: 'new_item_bless_acc' };
+const BIAN_AFFIX_TYPES = ['curse', 'anc', 'bless', 'attr'];
+const BIAN_AFFIX_OPS = ['replace', 'add', 'remove'];
+const BIAN_AFFIX_LABEL = { curse: '詛咒', anc: '遠古', bless: '祝福', attr: '屬性' };
+const BIAN_OP_LABEL = { replace: '取代', add: '附加', remove: '消除' };
+const BIAN_BLESS_SUCCESS = 0.07;
 const BIAN_SLOT_LABELS = {
     wpn: '武器', offwpn: '副手武器', helm: '頭盔', armor: '盔甲', shield: '盾牌', cloak: '斗篷', tshirt: '內衣',
     gloves: '手套', boots: '靴子', shin: '脛甲', ring1: '戒指①', ring2: '戒指②', ring3: '戒指③', ring4: '戒指④',
@@ -1040,6 +1049,137 @@ function bianAttrSlots() {
         seen.add(k);
     }
     return out;
+}
+function bianBlessScrollId(item) {
+    let d = item && DB.items[item.id];
+    let kind = d ? bianAffixKind(d) : null;
+    return kind ? BIAN_BLESS_SCROLLS[kind] : null;
+}
+function bianConsumeScroll(scrollId) {
+    let sc = player.inv.find(i => i.id === scrollId);
+    if (!sc || sc.cnt < 1) return false;
+    sc.cnt--;
+    if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
+    return true;
+}
+function bianRandomAttrEle() {
+    let keys = Object.keys(ATTR_SCROLLS);
+    return keys[Math.floor(Math.random() * keys.length)];
+}
+function bianApplyAffixOp(item, type, op) {
+    if (!item) return { ok: false, msg: '裝備不存在。' };
+    if (type === 'curse') {
+        if (op === 'remove') {
+            if (item.bless !== 'cursed') return { ok: false, msg: '此裝備沒有詛咒可消除。' };
+            item.bless = false;
+            return { ok: true, msg: '消除了 <span class="c-cursed">詛咒</span>。' };
+        }
+        if (op === 'add' || op === 'replace') {
+            if (op === 'add' && item.bless === 'cursed') return { ok: false, msg: '已有詛咒，無法再附加。' };
+            item.bless = 'cursed';
+            return { ok: true, msg: (op === 'replace' ? '取代為' : '附加了') + ' <span class="c-cursed">詛咒</span>。' };
+        }
+    }
+    if (type === 'bless') {
+        if (op === 'remove') {
+            if (item.bless !== true) return { ok: false, msg: '此裝備沒有祝福可消除。' };
+            item.bless = false;
+            return { ok: true, msg: '消除了 <span class="c-blessed">祝福</span>。' };
+        }
+        if (item.bless === 'cursed') return { ok: false, msg: '被詛咒的裝備須先解除詛咒。' };
+        if (op === 'add' && item.bless === true) return { ok: false, msg: '已有祝福，無法再附加。' };
+        if (op === 'replace' && item.bless === true) {
+            item.bless = false;
+            return { ok: true, msg: '以「無祝福」<span class="text-slate-400">取代</span>了祝福。' };
+        }
+        item.bless = true;
+        return { ok: true, msg: (op === 'replace' ? '取代為' : '附加了') + ' <span class="c-blessed">祝福</span>。' };
+    }
+    if (type === 'anc') {
+        if (op === 'remove') {
+            if (!item.anc) return { ok: false, msg: '此裝備沒有遠古詞綴可消除。' };
+            delete item.anc;
+            return { ok: true, msg: '消除了遠古詞綴。' };
+        }
+        let rolled = rollAncAffix();
+        if (op === 'add' && item.anc) return { ok: false, msg: '已有遠古詞綴，無法再附加。' };
+        item.anc = rolled;
+        return { ok: true, msg: (op === 'replace' ? '取代為' : '附加了') + ` <span class="${ancColorClass(rolled)}">${ancName(rolled)}</span>。` };
+    }
+    if (type === 'attr') {
+        if (op === 'remove') {
+            if (!item.attr) return { ok: false, msg: '此裝備沒有屬性可消除。' };
+            delete item.attr;
+            delete item.attrMagic;
+            delete item.attrMagicStar;
+            return { ok: true, msg: '消除了屬性詞綴。' };
+        }
+        let ele = bianRandomAttrEle();
+        let prefix = ATTR_ELE_PREFIX[ele];
+        if (op === 'add' && item.attr) return { ok: false, msg: '已有屬性，請用「取代」或先消除。' };
+        if (item.attr && getAttrAffix(item.attr) && getAttrAffix(item.attr).ele === ele && op === 'replace') {
+            let cur = getAttrAffix(item.attr);
+            if (cur.tier >= 5) return { ok: false, msg: '屬性已達第五階，無法再取代升階。' };
+            item.attr = prefix + (cur.tier + 1);
+        } else {
+            if (item.attr && (item.attrMagic || item.attrMagicStar)) { delete item.attrMagic; delete item.attrMagicStar; }
+            item.attr = prefix + '1';
+        }
+        let aff = getAttrAffix(item.attr);
+        return { ok: true, msg: (op === 'replace' ? '取代為' : '附加了') + ` <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span>（第${aff.tier}階）。` };
+    }
+    return { ok: false, msg: '無法處理此詞條操作。' };
+}
+function doBianBlessApply(slotKey) {
+    let item = player.eq[slotKey];
+    if (!item) { logSys('該欄位沒有裝備。'); return; }
+    let d = DB.items[item.id];
+    if (!bianAffixKind(d)) { logSys('只能對武器／防具／飾品附魔祝福。'); return; }
+    if (isRelic(d)) { logSys('<span class="c-relic">遺物無法使用祝福卷軸。</span>'); return; }
+    if (item.bless === 'cursed') { logSys('<span class="text-red-400">被詛咒的裝備須先解除詛咒。</span>'); return; }
+    if (item.bless === true) { logSys('<span class="text-amber-300">此裝備已有祝福。</span>'); return; }
+    let scrollId = bianBlessScrollId(item);
+    let scName = scrollId && DB.items[scrollId] ? DB.items[scrollId].n : '祝福卷軸';
+    let sc = player.inv.find(i => i.id === scrollId);
+    if (!scrollId || !sc || sc.cnt < 1) { logSys(`<span class="text-red-400">缺少 ${scName}。</span>`); return; }
+    if (!bianConsumeScroll(scrollId)) { logSys(`<span class="text-red-400">缺少 ${scName}。</span>`); return; }
+    if (Math.random() < BIAN_BLESS_SUCCESS) {
+        item.bless = true;
+        logSys(`<span class="c-blessed font-bold">附魔祝福成功！</span>碧恩為 ${getItemFullName(item)} 賦予了祝福。`);
+    } else {
+        logSys(`<span class="text-slate-400">碧恩：祝福之力潰散了……附魔失敗（僅消耗 1 張 ${scName}）。</span>`);
+    }
+    calcStats(); updateUI(); renderTabs(true); saveGame();
+    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
+}
+function doBianAffixRoll(slotKey) {
+    let item = player.eq[slotKey];
+    if (!item) { logSys('該欄位沒有裝備。'); return; }
+    let d = DB.items[item.id];
+    if (!bianAffixKind(d)) { logSys('只能對武器／防具／飾品調整詞條。'); return; }
+    if (isRelic(d)) { logSys('<span class="c-relic">遺物無法使用祝福卷軸。</span>'); return; }
+    let scrollId = bianBlessScrollId(item);
+    let scName = scrollId && DB.items[scrollId] ? DB.items[scrollId].n : '祝福卷軸';
+    if (!scrollId || !player.inv.find(i => i.id === scrollId && i.cnt >= 1)) {
+        logSys(`<span class="text-red-400">缺少 ${scName}。</span>`); return;
+    }
+    if (!bianConsumeScroll(scrollId)) { logSys(`<span class="text-red-400">缺少 ${scName}。</span>`); return; }
+    if (Math.random() >= BIAN_BLESS_SUCCESS) {
+        logSys(`<span class="text-slate-400">碧恩：卷軸能量潰散了……詞條調整失敗（僅消耗 1 張 ${scName}）。</span>`);
+        calcStats(); updateUI(); renderTabs(true); saveGame();
+        let _f = document.getElementById('interaction-content'); if (_f) renderBianAttr(_f);
+        return;
+    }
+    let type = BIAN_AFFIX_TYPES[Math.floor(Math.random() * BIAN_AFFIX_TYPES.length)];
+    let op = BIAN_AFFIX_OPS[Math.floor(Math.random() * BIAN_AFFIX_OPS.length)];
+    let result = bianApplyAffixOp(item, type, op);
+    if (!result.ok) {
+        logSys(`<span class="text-amber-300">碧恩抽選「${BIAN_OP_LABEL[op]}${BIAN_AFFIX_LABEL[type]}」但${result.msg}</span>`);
+    } else {
+        logSys(`<span class="text-yellow-300 font-bold">詞條調整成功！</span>碧恩對 ${getItemFullName(item)} ${BIAN_OP_LABEL[op]}${BIAN_AFFIX_LABEL[type]}：${result.msg}`);
+    }
+    calcStats(); updateUI(); renderTabs(true); saveGame();
+    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
 }
 function doBianAttr(slotKey, ele) {
     let item = player.eq[slotKey];
@@ -1150,6 +1290,8 @@ function renderBianAttr(el) {
         let magic = it && getAttrMagicProc(it);
         if (magic) curTxt += `｜<span class="text-yellow-300">${'★'.repeat(magic.star)} ${(DB.skills[magic.skId] && DB.skills[magic.skId].n) || magic.skId} ${magic.rate}%</span>`;
         if (it && it.anc) curTxt += `｜<span class="${ancColorClass(it.anc)}">${ancName(it.anc)}</span>`;
+        if (it && it.bless === true) curTxt += '｜<span class="c-blessed">祝福</span>';
+        else if (it && it.bless === 'cursed') curTxt += '｜<span class="c-cursed">詛咒</span>';
         let btns = it ? Object.keys(ATTR_SCROLLS).map(e2 => {
             let c = ATTR_SCROLLS[e2], have = cnt(c.id);
             return have > 0
@@ -1160,6 +1302,17 @@ function renderBianAttr(el) {
             btns += ancCnt > 0
                 ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-purple-900 border-purple-500 text-purple-200 hover:bg-purple-800" onclick="doBianAnc('${sl.k}')">遠古 (${ancCnt})</button>`
                 : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少古代的卷軸">遠古 (0)</button>`;
+        }
+        if (it) {
+            let blessScroll = bianBlessScrollId(it);
+            let blessCnt = blessScroll ? cnt(blessScroll) : 0;
+            let canBless = blessScroll && blessCnt > 0 && it.bless !== true && it.bless !== 'cursed';
+            btns += canBless
+                ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-amber-900 border-amber-500 text-amber-100 hover:bg-amber-800" onclick="doBianBlessApply('${sl.k}')">附魔祝福 (${blessCnt})</button>`
+                : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="${it.bless === 'cursed' ? '須先解除詛咒' : it.bless === true ? '已有祝福' : '缺少對應祝福卷軸'}">附魔祝福 (${blessCnt})</button>`;
+            btns += blessCnt > 0
+                ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-violet-900 border-violet-500 text-violet-100 hover:bg-violet-800" onclick="doBianAffixRoll('${sl.k}')">詞條調整 (${blessCnt})</button>`
+                : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少對應祝福卷軸">詞條調整 (0)</button>`;
         }
         return `<div class="flex flex-col gap-1 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
             <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}｜${curTxt}</span>
@@ -1175,10 +1328,11 @@ function renderBianAttr(el) {
     }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-2 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">碧恩：三詞玩法—<b>祝福</b>靠掉落／製作驚喜；<b>屬性</b>與<b>遠古</b>請交給我。裝備中的武器／防具／飾品皆可賦予（遺物除外）。屬性與遠古成功率皆為 <b>7%</b>；第5階武器附加／重抽魔法為 <b>1%</b>。失敗僅消耗卷軸。</div>
+            <div class="text-slate-300 text-sm leading-relaxed">碧恩：三詞玩法—<b>祝福</b>可用對應祝福卷軸附魔，或隨機調整詛咒／遠古／祝福／屬性詞條；<b>屬性</b>與<b>遠古</b>另有專用卷軸。裝備中的武器／防具／飾品皆可操作（遺物除外）。成功率 <b>7%</b>；第5階武器附加／重抽魔法為 <b>1%</b>。失敗僅消耗卷軸。</div>
+            <div class="text-xs text-slate-400">祝福卷軸：<b>附魔祝福</b>＝賦予「祝福的」；<b>詞條調整</b>＝隨機抽選「取代／附加／消除」之一，再隨機作用於詛咒、遠古、祝福或屬性（各 25% 均等）。</div>
             <div class="text-xs text-slate-400">屬性：無屬性成功→第1階；同屬性成功→提升1階（最高5階）；不同屬性成功→該屬性第1階。衝第4階需 +10、第5階需 +11（古老的劍／巨劍免門檻）。防具／飾品亦可帶屬性加成；一般攻擊轉屬性仍僅武器。</div>
             <div class="text-xs text-slate-400">遠古：消耗古代的卷軸，成功後隨機獲得「遠古／永恆／不朽／太初」之一（每件限一次）。三詞齊全（祝福＋遠古＋屬性）時圖示為最高亮 tri-glow。</div>
-            <div class="text-xs text-slate-400">持有：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span>｜<span class="c-ancient">古代 ${ancCnt}</span></div>
+            <div class="text-xs text-slate-400">持有：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span>｜<span class="c-ancient">古代 ${ancCnt}</span>｜<span class="c-blessed">武祝 ${cnt('new_item_bless_wpn')}</span>｜<span class="c-blessed">甲祝 ${cnt('new_item_bless_arm')}</span>｜<span class="c-blessed">飾祝 ${cnt('new_item_bless_acc')}</span></div>
             ${rows}
             ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
         </div>`;

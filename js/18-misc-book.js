@@ -17,11 +17,7 @@ const MISC_CATEGORIES = [
 ];
 
 // 已停用且無獲取管道的舊道具：保留物品定義供舊存檔辨識，但永不列入收集冊、完成數或全收集加成。
-const MISC_BOOK_EXCLUDED = {
-    new_item_bless_wpn: true,
-    new_item_bless_arm: true,
-    new_item_bless_acc: true
-};
+const MISC_BOOK_EXCLUDED = {};
 
 // ---- 將一個道具分到類別 key（回傳 null＝不收錄：MISC_BOOK_EXCLUDED 名單／裝備／怪物卡片）----
 //   ⚠️ v3.5.87 起本函式已無「收集冊本體」的排除分支：item_card_book / item_equip_book 的 DB.items 定義已刪除，
@@ -69,7 +65,7 @@ const OBTAINABLE_MISC = (function buildObtainableMisc() {
     // (e) 地區獵殺加成道具（const 在 js/01 為閉包內·此處內聯）
     ['new_item_164', 'new_item_195', 'new_item_165'].forEach(add);
     // (f) 兌換/特殊取得的卷軸（gachaWeight0·掃描器漏掉·顯式補）：祝福的卷軸(伊賽馬利)、解除詛咒卷軸
-    ['scroll_weapon_b', 'scroll_armor_b', 'new_item_uncurse'].forEach(add);
+    ['scroll_weapon_b', 'scroll_armor_b', 'new_item_uncurse', 'new_item_bless_wpn', 'new_item_bless_arm', 'new_item_bless_acc'].forEach(add);
     // (g) v3.5.87 兌換限定道具無掉落表來源→顯式補登：魔法娃娃的袋子/高級盒子（銀卡/金卡兌換·gachaWeight0）
     //     否則只靠 registerMiscObtained 動態補登（僅在記憶體）→重載後不在靜態索引，收集冊計數靜默退回
     ['doll_bag', 'doll_box_high'].forEach(add);
@@ -122,7 +118,7 @@ function miscCollectionBonus(p, d) {
 
 // ---- 無法獲得但仍有用途的卷軸 → 預設「圖鑑已開通」(計入收集·讓卷軸類仍可完成) ----
 //   new_item_uncurse 既有持有者仍可用、無新來源所以全模式開通；祝福的施法卷軸 scroll_*_b 仍可由伊賽馬利兌換→只在經典開通。
-//   已停用的三種賦予祝福卷軸由 MISC_BOOK_EXCLUDED 完全排除，不再用自動開通方式佔據收集冊格位。
+//   舊版停用道具若需排除，加進 MISC_BOOK_EXCLUDED。
 //   🏛️v3.0.83 傳統模式已取消：經典+傳統的強化卷軸自動開通分支移除（施法卷軸已恢復全模式可取得）。
 const MISC_SCROLL_UNCURSE = ['new_item_uncurse'];
 const MISC_SCROLL_BLESSED = ['scroll_weapon_b', 'scroll_armor_b'];

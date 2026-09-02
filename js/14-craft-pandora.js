@@ -1436,17 +1436,26 @@ function refreshPandoraMarket(force) {
         if ((nowT - start) >= PANDORA_SLOT_TICKS) {
             m.phase = 'gap';
             m.gapUntilTick = nowT + PANDORA_GAP_TICKS;
+            if (!s.sold) m.retainSlot = Object.assign({}, s, { sold: false });
+            else m.retainSlot = null;
             m.slots = [];
             if (player.pandoraAnnounce) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; }
             changed = true;
         }
     } else if (m.phase === 'gap' && nowT >= (m.gapUntilTick || 0)) {
-        let s = _pandoraStock(nowT, { slots: [] });
+        let s;
+        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
+            s = Object.assign({}, m.retainSlot, { setTick: nowT, sold: false });
+            m.retainSlot = null;
+        } else {
+            s = _pandoraStock(nowT, { slots: [] });
+            latest = s;
+        }
         m.phase = 'active';
         m.slots = [s];
         m.phaseStartTick = nowT;
         m.seq = (m.seq || 0) + 1;
-        latest = s; changed = true;
+        changed = true;
     }
 
     if (!changed) return false;
@@ -1507,7 +1516,12 @@ function renderSyslogPandora() {
         let lot = window._pandoraServerLot;
         if (lot.phase === 'gap') {
             let mins = Math.max(1, Math.ceil((lot.msUntilNext || 0) / 60000));
-            el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架</span>`;
+            let retainNote = '';
+            if (lot.retainItemId && DB.items[lot.retainItemId]) {
+                let inst = { id: lot.retainItemId, bless: !!lot.retainBless };
+                retainNote = ` · 無人競標，保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span>`;
+            }
+            el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架${retainNote}</span>`;
             return;
         }
         if (!lot.itemId) { el.innerHTML = ''; return; }
@@ -1523,7 +1537,12 @@ function renderSyslogPandora() {
     if (m && m.phase === 'gap') {
         let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
         let mins = Math.max(1, Math.ceil(((m.gapUntilTick || 0) - nowT) / 600));
-        el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架</span>`;
+        let retainNote = '';
+        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
+            let inst = { id: m.retainSlot.id, bless: m.retainSlot.bless === true };
+            retainNote = ` · 無人競標，保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span>`;
+        }
+        el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架${retainNote}</span>`;
         return;
     }
     let s = (m && m.slots && m.slots.length) ? m.slots[0] : null;
@@ -1574,13 +1593,16 @@ function pandoraTipHide() { let el = document.getElementById('pandora-tooltip');
 function pandoraRenderServerAuction(div, lot) {
     if (!div) return;
     let relicBalance = '';
-    let relicBoard = '';
     try {
         if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
-        if (typeof pandoraRelicBoardHTML === 'function') relicBoard = pandoraRelicBoardHTML();
     } catch (e) {}
     if (!lot || lot.phase === 'gap') {
         let mins = lot && lot.msUntilNext ? Math.max(1, Math.ceil(lot.msUntilNext / 60000)) : '?';
+        let retainHtml = '';
+        if (lot && lot.retainItemId && DB.items[lot.retainItemId]) {
+            let inst = { id: lot.retainItemId, bless: !!lot.retainBless };
+            retainHtml = `<p class="text-purple-300 text-sm mt-3">無人競標，下輪將保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span></p>`;
+        }
         div.innerHTML = `
         <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
             <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
@@ -1589,12 +1611,11 @@ function pandoraRenderServerAuction(div, lot) {
             <div class="text-center text-slate-300 p-8 shrink-0">
                 <p class="text-lg font-bold text-amber-200 mb-2">本輪競標已結束</p>
                 <p>下一件商品約 <span class="text-yellow-300 font-bold">${mins}</span> 分鐘後上架</p>
-                <p class="text-slate-500 text-xs mt-3">新商品上架時會於世界頻道全服廣播</p>
+                ${retainHtml}
+                <p class="text-slate-500 text-xs mt-3">有人得標後才會換新商品；無人競標則保留同件商品</p>
             </div>
-            ${relicBoard}
             <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
         </div>`;
-        try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (e2) {}
         return;
     }
     if (!lot.itemId || !DB.items[lot.itemId]) {
@@ -1625,12 +1646,10 @@ function pandoraRenderServerAuction(div, lot) {
                 <input id="pandora-bid-amount" type="text" inputmode="numeric" class="flex-1 px-2 py-1 rounded bg-slate-800 border border-slate-600 text-yellow-200" placeholder="出價至少 ${minBid.toLocaleString()} 金" autocomplete="off">
                 <button class="btn bg-purple-700 hover:bg-purple-600 border-purple-500 font-bold px-4 py-1 rounded" onclick="pandoraPlaceBid()">競標</button>
             </div>
-            <p class="text-slate-500 text-xs mt-2">出價會先扣金幣；被超越時自動退還。結標後最高者得標。結束後間歇 60 分鐘再上架下一件。</p>
+            <p class="text-slate-500 text-xs mt-2">出價會先扣金幣；被超越時自動退還。結標後最高者得標。無人競標則保留同件商品；得標後間歇 60 分鐘再上架新商品。</p>
         </div>
-        ${relicBoard}
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
     </div>`;
-    try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (e2) {}
 }
 
 function pandoraPlaceBid() {
@@ -1657,13 +1676,16 @@ function pandoraRenderMarket(div) {
     if (!m) { div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市目前沒有商品，請稍候。</div>'; return; }
     let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
     let relicBalance = '';
-    let relicBoard = '';
     try {
         if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
-        if (typeof pandoraRelicBoardHTML === 'function') relicBoard = pandoraRelicBoardHTML();
     } catch (e) {}
     if (m.phase === 'gap') {
         let mins = Math.max(1, Math.ceil(((m.gapUntilTick || 0) - nowT) / 600));
+        let retainHtml = '';
+        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
+            let inst = { id: m.retainSlot.id, bless: m.retainSlot.bless === true };
+            retainHtml = `<p class="text-purple-300 text-sm mt-3">無人競標，下輪將保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span></p>`;
+        }
         div.innerHTML = `
         <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
             <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
@@ -1672,11 +1694,10 @@ function pandoraRenderMarket(div) {
             <div class="text-center text-slate-300 p-8 shrink-0">
                 <p class="text-lg font-bold text-amber-200 mb-2">本輪競標已結束</p>
                 <p>下一件商品約 <span class="text-yellow-300 font-bold">${mins}</span> 分鐘後上架</p>
+                ${retainHtml}
             </div>
-            ${relicBoard}
             <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
         </div>`;
-        try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (e2) {}
         return;
     }
     let s = m.slots && m.slots[0];
@@ -1709,10 +1730,8 @@ function pandoraRenderMarket(div) {
             <span class="text-slate-400 font-normal">離線模式·約 ${nextMin} 分鐘後換貨｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
         </h3>
         <div class="pandora-market-grid">${card}</div>
-        ${relicBoard}
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
     </div>`;
-    try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (e2) {}
 }
 
 // 購買指定格商品（上架時已決定祝福與否；售出格保持「已售出」直到該格輪換）

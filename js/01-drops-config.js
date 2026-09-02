@@ -758,6 +758,15 @@
     // 粗糙的米索莉塊 / 元素石各 2%，學會「世界樹的呼喚」則各 3%；精靈玉維持 20% / 30%
     const AREA_BONUS_MAPS = ['zone_15', 'zone_16', 'zone_17', 'zone_01'];
     const AREA_BONUS_ITEMS = ['new_item_164', 'new_item_195', 'new_item_165'];
+    // 🔮 v3.8.147 30級以上通用卷軸掉落（碧恩賦予卷軸＋飾品卷軸）：與 MOB_DROPS 並存、各自獨立 roll；非血盟、排除城戰 V2 守軍
+    const LV30_SCROLL_DROP_MIN = 30;
+    const LV30_SCROLL_DROPS = [
+        ['scroll_acc', 0.1],
+        ['new_item_bless_wpn', 0.02],
+        ['new_item_bless_arm', 0.02],
+        ['new_item_bless_acc', 0.02],
+    ];
+    const LV30_SCROLL_BOSS_MULT = 10;
 
 // ===== 🔧 計時慣例（單一事實來源，新增任何計時效果前先讀這裡）=====
 // • player.statuses（異常狀態）：以 tick(0.1秒) 計，於 tick() 開頭的通用迴圈「統一」遞減，勿在他處再扣

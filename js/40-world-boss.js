@@ -9,6 +9,11 @@
     var _wbSeq = 0;
     var _wbLastState = null;
     var _wbDamaged = false;
+    var _wbScheduleStates = {};
+    var _wbScheduleRespawnMs = 300000;
+    var _wbScheduleVisible = false;
+    var _wbScheduleFetchAt = 0;
+    var _wbScheduleTick = null;
 
     function wbIsHttp() {
         return typeof rtPartyIsHttp === 'function' && rtPartyIsHttp();
@@ -150,6 +155,103 @@
         }
         zones = zones.filter(function (z, i, a) { return a.indexOf(z) === i; });
         return _wbRegistry.filter(function (e) { return zones.indexOf(e.zone) >= 0; });
+    }
+
+    function wbFormatCountdown(ms) {
+        if (!ms || ms <= 0) return '—';
+        var sec = Math.ceil(ms / 1000);
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = sec % 60;
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        if (h > 0) return h + ':' + p(m) + ':' + p(s);
+        return m + ':' + p(s);
+    }
+
+    function wbScheduleBossState(mapId) {
+        return _wbScheduleStates[mapId] || null;
+    }
+
+    function wbFetchScheduleStatus(force) {
+        var now = Date.now();
+        if (!force && now - _wbScheduleFetchAt < 8000) return Promise.resolve();
+        _wbScheduleFetchAt = now;
+        if (!wbIsHttp()) {
+            _wbScheduleRespawnMs = 300000;
+            return Promise.resolve();
+        }
+        return fetch('/api/worldboss/status', { cache: 'no-store' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || !data.ok) return;
+                if (data.respawnMs) _wbScheduleRespawnMs = Math.max(30000, Number(data.respawnMs) || 300000);
+                var map = {};
+                (data.bosses || []).forEach(function (st) {
+                    if (st && st.mapId) map[st.mapId] = st;
+                });
+                _wbScheduleStates = map;
+                wbRenderSchedule();
+            })
+            .catch(function () {});
+    }
+
+    function wbRenderSchedule() {
+        var panel = document.getElementById('wb-schedule-panel');
+        var body = document.getElementById('wb-schedule-body');
+        var meta = document.getElementById('wb-schedule-meta');
+        if (!panel || !body) return;
+        if (!_wbScheduleVisible) {
+            panel.classList.add('hidden');
+            return;
+        }
+        panel.classList.remove('hidden');
+        if (meta) {
+            var mins = Math.max(1, Math.round(_wbScheduleRespawnMs / 60000));
+            meta.innerHTML = '擊敗後 <b>' + mins + '</b> 分鐘全服重生 · 共用血量 · 每秒更新';
+        }
+        var list = wbWorldBossList();
+        var now = Date.now();
+        var rows = list.map(function (entry) {
+            var mob = DB.mobs[entry.mobId] || {};
+            var lv = mob.lv || '—';
+            var st = wbScheduleBossState(entry.v);
+            var statusHtml = '<span class="wb-schedule-alive">存活</span>';
+            var cdHtml = '<span class="text-slate-500">—</span>';
+            if (st) {
+                if (st.dead && st.respawnAt && st.respawnAt > now) {
+                    statusHtml = '<span class="wb-schedule-dead">已擊敗</span>';
+                    cdHtml = '<span class="wb-schedule-cd">' + wbFormatCountdown(st.respawnAt - now) + '</span>';
+                } else if (!st.dead && st.hp > 0 && st.mhp > 0) {
+                    var pct = Math.max(0, Math.min(100, Math.round((st.hp / st.mhp) * 100)));
+                    statusHtml = '<span class="wb-schedule-alive">存活</span> <span class="wb-schedule-hp">(' + pct + '%)</span>';
+                }
+            }
+            return '<tr data-wb-map="' + entry.v + '"><td class="wb-schedule-name">' + (entry.t || mob.n || entry.mobId) + '</td><td>' + lv + '</td><td>' + statusHtml + '</td><td>' + cdHtml + '</td></tr>';
+        }).join('');
+        body.innerHTML = rows || '<tr><td colspan="4" class="text-slate-500 text-center">尚無世界王資料</td></tr>';
+    }
+
+    function wbOnCategoryChange(cat) {
+        _wbScheduleVisible = cat === 'worldboss';
+        var panel = document.getElementById('wb-schedule-panel');
+        if (panel) panel.classList.toggle('hidden', !_wbScheduleVisible);
+        if (_wbScheduleVisible) {
+            wbFetchScheduleStatus(true);
+            wbRenderSchedule();
+        }
+    }
+
+    function wbStartScheduleLoop() {
+        if (_wbScheduleTick) return;
+        _wbScheduleTick = setInterval(function () {
+            var catEl = document.getElementById('map-category');
+            var cat = catEl ? catEl.value : '';
+            if (cat === 'worldboss') {
+                if (!_wbScheduleVisible) wbOnCategoryChange('worldboss');
+                wbFetchScheduleStatus(false);
+                wbRenderSchedule();
+            }
+        }, 1000);
     }
 
     function wbShouldHost() {
@@ -321,6 +423,7 @@
                             try { pushBossMarquee('【世界王】' + (ev.killerName || '勇者') + ' 擊敗了 ' + (ev.mobName || '頭目') + '！', { online: true }); } catch (e) {}
                         }
                     });
+                    wbFetchScheduleStatus(true);
                 }
             }).catch(function () {});
     }
@@ -396,6 +499,9 @@
     function wbInit() {
         wbBuildRegistry();
         wbStartLoop();
+        wbStartScheduleLoop();
+        var catEl = document.getElementById('map-category');
+        if (catEl && catEl.value === 'worldboss') wbOnCategoryChange('worldboss');
     }
 
     if (document.readyState === 'loading') {
@@ -418,4 +524,7 @@
     window.wbBossZoneList = wbBossZoneList;
     window.wbServerState = wbServerState;
     window.wbUpdateIndicator = wbUpdateIndicator;
+    window.wbOnCategoryChange = wbOnCategoryChange;
+    window.wbRenderSchedule = wbRenderSchedule;
+    window.wbFetchScheduleStatus = wbFetchScheduleStatus;
 })();
