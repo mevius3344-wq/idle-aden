@@ -100,6 +100,30 @@
         return en + n + cnt;
     }
 
+    function _ahIconHtml(item) {
+        if (!item || !item.id) return '<div class="ah-item-icon ah-item-icon--empty" aria-hidden="true"></div>';
+        var d = (typeof DB !== 'undefined' && DB.items) ? DB.items[item.id] : null;
+        if (!d) return '<div class="ah-item-icon ah-item-icon--empty" aria-hidden="true"></div>';
+        var imgUrl = (typeof getIconUrl === 'function') ? getIconUrl(d) : '';
+        try {
+            if (window.GAME_HOST && typeof window.GAME_HOST.assetUrl === 'function') imgUrl = window.GAME_HOST.assetUrl(imgUrl);
+        } catch (e0) {}
+        var glow = (typeof getGlowClass === 'function') ? getGlowClass(item, d) : '';
+        var corner = (Number(item.en) || 0) > 0
+            ? ('<span class="classic-icon-corner-value is-enhance">+' + ((typeof capEn === 'function') ? capEn(item.en, d) : item.en) + '</span>')
+            : ((item.cnt || 1) > 1 ? ('<span class="classic-icon-corner-value is-count">' + (item.cnt || 1).toLocaleString() + '</span>') : '');
+        return '<div class="ah-item-icon classic-icon-box" aria-hidden="true">' +
+            '<img src="' + _ahEsc(imgUrl) + '" alt="" class="ah-item-icon-img object-contain pointer-events-none ' + glow + '" onerror="this.style.opacity=\'0\';">' +
+            corner + '</div>';
+    }
+
+    function _ahItemTitleHtml(item) {
+        return '<div class="ah-item-title flex gap-2.5 items-start min-w-0 flex-1">' +
+            _ahIconHtml(item) +
+            '<div class="text-sm leading-snug min-w-0 ' + ((typeof getItemColor === 'function') ? getItemColor(item) : '') + ' font-bold">' + _ahItemLabel(item) + '</div>' +
+            '</div>';
+    }
+
     function _ahCanListItem(item) {
         if (!item || !item.id) return { ok: false, reason: '無效物品' };
         if (item.lock) return { ok: false, reason: '鎖定中無法上架' };
@@ -266,7 +290,7 @@
             var isMine = !!L.isMine;
             html += '<div class="border border-slate-700 rounded-lg p-2.5 bg-slate-800/80 flex flex-col gap-1.5">' +
                 '<div class="flex justify-between gap-2 items-start">' +
-                '<div class="text-sm leading-snug flex-1">' + _ahItemLabel(L.item) + '</div>' +
+                _ahItemTitleHtml(L.item) +
                 '<div class="text-amber-300 font-bold text-sm whitespace-nowrap">' + _ahFmtGold(L.price) + ' 金</div>' +
                 '</div>' +
                 '<div class="text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-0.5">' +
@@ -299,8 +323,8 @@
         }
         items.slice(0, 80).forEach(function (it) {
             html += '<div class="border border-slate-700 rounded-lg p-2 bg-slate-800/70 flex items-center justify-between gap-2">' +
-                '<div class="text-sm flex-1 min-w-0">' + _ahItemLabel(it) + '</div>' +
-                '<button type="button" class="btn px-3 py-1 text-sm font-bold text-sky-200" style="border-color:#0284c7;background:linear-gradient(135deg,#0c4a6e,#075985);" ' +
+                _ahItemTitleHtml(it) +
+                '<button type="button" class="btn px-3 py-1 text-sm font-bold text-sky-200 shrink-0" style="border-color:#0284c7;background:linear-gradient(135deg,#0c4a6e,#075985);" ' +
                 'onclick="auctionPromptList(\'' + _ahEsc(it.uid) + '\')">上架</button></div>';
         });
         return html;
@@ -319,7 +343,7 @@
                 if (!c) return;
                 var label = c.type === 'gold'
                     ? ('金幣 <span class="text-yellow-300 font-bold">' + _ahFmtGold(c.amount) + '</span>' + (c.buyerName ? (' · 買家 ' + _ahEsc(c.buyerName)) : ''))
-                    : ('物品 ' + _ahItemLabel(c.item) + ' <span class="text-slate-500">(' + _ahEsc(c.reason || '') + ')</span>');
+                    : ('<span class="flex gap-2 items-center min-w-0">' + _ahIconHtml(c.item) + '<span class="min-w-0">物品 ' + _ahItemLabel(c.item) + ' <span class="text-slate-500">(' + _ahEsc(c.reason || '') + ')</span></span></span>');
                 html += '<div class="flex justify-between items-center gap-2 text-sm">' +
                     '<div>' + label + '</div>' +
                     '<button type="button" class="btn px-2 py-0.5 text-xs" onclick="auctionClaimOne(\'' + _ahEsc(c.id) + '\')">領取</button></div>';
@@ -336,8 +360,8 @@
             if (!L) return;
             var remain = _ahFmtRemain((L.expiresAt || 0) - Date.now());
             html += '<div class="border border-slate-700 rounded-lg p-2.5 bg-slate-800/80 flex flex-col gap-1.5">' +
-                '<div class="flex justify-between gap-2"><div class="text-sm">' + _ahItemLabel(L.item) + '</div>' +
-                '<div class="text-amber-300 font-bold text-sm">' + _ahFmtGold(L.price) + ' 金</div></div>' +
+                '<div class="flex justify-between gap-2 items-start">' + _ahItemTitleHtml(L.item) +
+                '<div class="text-amber-300 font-bold text-sm whitespace-nowrap">' + _ahFmtGold(L.price) + ' 金</div></div>' +
                 '<div class="text-xs text-slate-400">剩餘 ' + remain + ' · 上架費已付 ' + _ahFmtGold(L.listFee) + '</div>' +
                 '<div class="flex justify-end"><button type="button" class="btn px-3 py-1 text-sm" onclick="auctionCancel(\'' + _ahEsc(L.id) + '\')">下架取回</button></div></div>';
         });

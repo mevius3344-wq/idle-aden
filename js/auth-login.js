@@ -251,6 +251,40 @@
       .catch(function () {});
   }
 
+  function verifySessionInBackground(account, opts) {
+    opts = opts || {};
+    claimIp().then(function (r) {
+      if (!r || !r.ok) {
+        if (opts.onFail) {
+          opts.onFail(
+            (r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。"
+          );
+        }
+        return;
+      }
+      validateAccountSession().then(function (sess) {
+        if (sess && (sess.ok || sess.offline)) {
+          if (opts.onOk) opts.onOk(sess);
+          else runBackgroundCloudSync(account);
+          return;
+        }
+        if (opts.onFail) {
+          opts.onFail((sess && sess.message) || "登入驗證失敗，請重新登入。");
+        }
+      });
+    });
+  }
+
+  function kickToLogin(message, tone) {
+    setSession("");
+    try {
+      window.__fb5AuthAccount = "";
+    } catch (e) {}
+    if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+    showLoggedOut();
+    setStatus(message || "請重新登入。", tone || "err");
+  }
+
   function listLocalAccounts() {
     var out = [];
     try {
@@ -301,7 +335,6 @@
     persistRememberPreference(account, readPassword());
     showLoggedIn(account);
     setStatus("歡迎進入遊戲，正在背景同步雲端……", "ok");
-    runBackgroundCloudSync(account);
   }
 
   function httpJson(method, url, body) {
@@ -399,24 +432,14 @@
 
     const finishOk = function (acc) {
       saveAccount(acc || account, password);
-      claimIp().then(function (r) {
-        if (r && r.ok) {
-          validateAccountSession().then(function (sess) {
-            if (sess && (sess.ok || sess.offline)) {
-              enterGame(acc || account);
-              return;
-            }
-            setStatus((sess && sess.message) || "登入驗證失敗，請重新登入。", "err");
-          });
-          return;
-        }
-        const msg =
-          (r && r.message) ||
-          "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
-        setStatus(msg, "err");
-        try {
-          alert(msg);
-        } catch (e) {}
+      enterGame(acc || account);
+      verifySessionInBackground(acc || account, {
+        onFail: function (msg) {
+          kickToLogin(msg, "err");
+          try {
+            alert(msg);
+          } catch (e) {}
+        },
       });
     };
 
@@ -590,31 +613,16 @@
         setStatus("請重新登入以套用最新版本。", "ok");
         return;
       }
-      claimIp().then(function (r) {
-        if (r && r.ok) {
-          validateAccountSession().then(function (sess) {
-            if (!sess || !sess.ok) {
-              setSession("");
-              if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
-              showLoggedOut();
-              setStatus(
-                (sess && sess.message) || "登入已失效，請重新登入。",
-                "err"
-              );
-              return;
-            }
-            showLoggedIn(session);
-            setStatus("歡迎回來，正在背景同步雲端……", "ok");
-            runBackgroundCloudSync(session);
-          });
-        } else {
-          setSession("");
-          showLoggedOut();
-          setStatus(
-            (r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。",
-            "err"
-          );
-        }
+      showLoggedIn(session);
+      setStatus("歡迎回來，正在背景驗證連線……", "ok");
+      verifySessionInBackground(session, {
+        onOk: function () {
+          setStatus("歡迎回來，正在背景同步雲端……", "ok");
+          runBackgroundCloudSync(session);
+        },
+        onFail: function (msg) {
+          kickToLogin((msg && msg.message) || msg || "登入已失效，請重新登入。", "err");
+        },
       });
     } else {
       showLoggedOut();
