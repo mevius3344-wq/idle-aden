@@ -54,7 +54,7 @@ function computeBuildId() {
   }
 }
 const BUILD_ID = computeBuildId();
-const GAME_VERSION = "v3.8.139";
+const GAME_VERSION = "v3.8.141";
 const SERVER_STARTED_AT = Date.now();
 // Online (Render) keeps this off. Local Windows serve writes editable JSON to Desktop.
 const ENABLE_DESKTOP_SAVES =
@@ -3243,7 +3243,9 @@ async function handleAccountsApi(req, res, u) {
       return json(res, 401, { ok: false, error: auth.error || "bad_token", message: "登入已失效，請重新登入。" });
     }
     if (_accountSessions) {
-      const touch = await _accountSessions.touch(accountKey(auth.account), auth.sessionId);
+      const touch = await _accountSessions.touch(accountKey(auth.account), auth.sessionId, {
+        lastActivityMs: data.lastActivityMs,
+      });
       if (!touch.ok) return json(res, 401, touch);
     }
     return json(res, 200, { ok: true, account: auth.account });

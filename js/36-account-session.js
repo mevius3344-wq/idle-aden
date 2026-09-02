@@ -41,7 +41,13 @@
         clientId = window.IpSessionLimit.getClientId();
       }
     } catch (e3) {}
-    return { account: account, authToken: authToken, clientId: clientId };
+    var lastActivityMs = Date.now();
+    try {
+      if (window.IdleLogout && typeof window.IdleLogout.getLastActivityMs === "function") {
+        lastActivityMs = window.IdleLogout.getLastActivityMs();
+      }
+    } catch (e4) {}
+    return { account: account, authToken: authToken, clientId: clientId, lastActivityMs: lastActivityMs };
   }
 
   function stopHeartbeat() {

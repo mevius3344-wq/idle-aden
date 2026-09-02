@@ -226,6 +226,7 @@ function talentBuyPoint(weaponUid) {
 }
 
 function talentAllocate(nodeId) {
+    _talentSelectedId = nodeId;
     let t = talentState();
     if (talentAllocatedPoints(t) >= t.bought) { logSys('<span class="text-red-400">可用天賦點不足，請先購買天賦點。</span>'); return; }
     if (!talentMeetsReq(nodeId)) { logSys('<span class="text-red-400">屬性未達標，無法學習此天賦。</span>'); return; }
@@ -236,6 +237,7 @@ function talentAllocate(nodeId) {
 }
 
 function talentDeallocate(nodeId) {
+    _talentSelectedId = nodeId;
     let t = talentState();
     if (!talentCanDeallocate(t, nodeId)) { logSys('<span class="text-red-400">無法退點：下層已有配點或本節點為 0 級。</span>'); return; }
     t.ranks[nodeId] = talentNodeLevel(t, nodeId) - 1;
@@ -472,6 +474,295 @@ function _talentEsc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+var _talentSelectedId = null;
+
+function _talentAttrCn(key) {
+    return { str: '力量 STR', dex: '敏捷 DEX', con: '體質 CON', int: '智力 INT', wis: '精神 WIS', cha: '魅力 CHA' }[key] || key;
+}
+
+function _talentFmt(n, d) {
+    d = d == null ? 1 : d;
+    let v = Math.round(Number(n) * Math.pow(10, d)) / Math.pow(10, d);
+    return (v % 1 === 0 ? String(v) : v.toFixed(d));
+}
+
+function _talentPlayerAttr(key) {
+    if (!player || !player.d) return 0;
+    return talentEffAttr(player.d, key);
+}
+
+/** 依 applyTalentToStats 公式產生可讀的能力加成說明 */
+function talentDescribeNode(id, curLv) {
+    let meta = TALENT_NODE_META[id];
+    if (!meta) return null;
+    let maxLv = talentNodeMaxLv(id);
+    let lv = Math.max(0, Math.floor(Number(curLv) || 0));
+    let out = {
+        id: id,
+        name: meta.name,
+        short: meta.short,
+        desc: meta.desc,
+        path: TALENT_PATH_LABEL[meta.path] || meta.path,
+        tier: meta.tier,
+        lv: lv,
+        maxLv: maxLv,
+        tags: [],
+        perLevel: [],
+        current: [],
+        next: [],
+        max: [],
+        req: [],
+        equip: [],
+        note: [],
+    };
+
+    if (meta.req) {
+        let have = _talentPlayerAttr(meta.req.key);
+        let ok = have >= meta.req.min;
+        out.req.push({
+            ok: ok,
+            text: _talentAttrCn(meta.req.key) + ' ≥ ' + meta.req.min + '（目前 ' + have + '）',
+        });
+    }
+
+    let t = talentState();
+    if (talentIsNodeLocked(t, id) && lv <= 0) {
+        let active = talentPathTierNodes(meta.path, meta.tier).find(nid => talentNodeLevel(t, nid) > 0);
+        if (active && active !== id) {
+            let am = TALENT_NODE_META[active];
+            out.note.push('同層互斥：已選「' + (am ? am.name : active) + '」');
+        } else if (!talentTierUnlocked(t, meta.path, meta.tier)) {
+            out.note.push('需先在上一層投入 ' + TALENT_TIER_NEED + ' 點才能解鎖');
+        }
+    }
+
+    function addPer(s) { out.perLevel.push(s); }
+    function addCur(s) { if (lv > 0) out.current.push(s); }
+    function addNext(s) { if (lv < maxLv) out.next.push(s); }
+    function addMax(s) { out.max.push(s); }
+    function addTag(s) { if (out.tags.indexOf(s) < 0) out.tags.push(s); }
+
+    switch (id) {
+    case 'fury_t1_l':
+        addTag('物理攻擊'); addPer('每級：每 10 點 STR（上限35）→ 物理攻擊 +0.5%');
+        { let s = _talentPlayerAttr('str'), p = (s / 10) * 0.5 * lv, pm = (s / 10) * 0.5 * maxLv;
+          addCur('物理攻擊 +' + _talentFmt(p) + '%（STR ' + s + '）'); addNext('物理攻擊 +' + _talentFmt((s / 10) * 0.5 * (lv + 1)) + '%'); addMax('滿級：物理攻擊 +' + _talentFmt(pm) + '%'); }
+        break;
+    case 'fury_t1_c':
+        addTag('遠程傷害'); addTag('遠程命中'); addPer('每級：每 10 點 DEX（上限35）→ 遠程傷害 +0.5%、遠程命中 +1');
+        { let s = _talentPlayerAttr('dex'), p = (s / 10) * 0.5 * lv;
+          addCur('遠程傷害 +' + _talentFmt(p) + '%、遠程命中 +' + lv); addNext('遠程命中 +' + (lv + 1)); addMax('滿級：遠程傷害 +' + _talentFmt((s / 10) * 0.5 * maxLv) + '%、遠程命中 +' + maxLv); }
+        break;
+    case 'fury_t1_r':
+        addTag('魔法攻擊'); addPer('每級：每 10 點 INT（上限35）→ 魔法攻擊 +0.5%');
+        { let s = _talentPlayerAttr('int'), p = (s / 10) * 0.5 * lv;
+          addCur('魔法攻擊 +' + _talentFmt(p) + '%（INT ' + s + '）'); addMax('滿級：魔法攻擊 +' + _talentFmt((s / 10) * 0.5 * maxLv) + '%'); }
+        break;
+    case 'fury_t2_l':
+        addTag('攻擊速度'); addPer('每級：基礎物理攻速 +0.6%');
+        if (talentIs1hSwordOrDagger()) out.equip.push({ ok: true, text: '已裝備單手劍／匕首，攻速加成生效中' });
+        else out.equip.push({ ok: false, text: '需裝備單手劍或匕首才生效' });
+        addCur('攻擊速度 +' + _talentFmt(0.6 * lv) + '%'); addMax('滿級：攻擊速度 +' + _talentFmt(0.6 * maxLv) + '%');
+        break;
+    case 'fury_t2_c':
+        addTag('攻擊速度'); addPer('每級：基礎遠程攻速 +0.6%');
+        if (talentIsBow()) out.equip.push({ ok: true, text: '已裝備弓箭，遠程攻速加成生效中' });
+        else out.equip.push({ ok: false, text: '需裝備弓箭才生效' });
+        addCur('遠程攻速 +' + _talentFmt(0.6 * lv) + '%'); addMax('滿級：遠程攻速 +' + _talentFmt(0.6 * maxLv) + '%');
+        break;
+    case 'fury_t2_r':
+        addTag('攻擊速度'); addTag('施法速度'); addPer('每級：揮砍與施法速度 +0.6%');
+        if (talentIs2hSwordOrStaff()) out.equip.push({ ok: true, text: '已裝備雙手劍／法杖，加成生效中' });
+        else out.equip.push({ ok: false, text: '需裝備雙手劍或法杖才生效' });
+        addCur('攻速／施法 +' + _talentFmt(0.6 * lv) + '%'); addMax('滿級：攻速／施法 +' + _talentFmt(0.6 * maxLv) + '%');
+        break;
+    case 'fury_t3_l':
+        addTag('物理攻擊'); addPer('每級：武器強化每 +1 → 物理攻擊 +0.4（需 STR≥25）');
+        { let en = talentWeaponEn(), flat = en * 0.4 * lv;
+          addCur('物理攻擊 +' + _talentFmt(flat) + '（武器 +' + en + '）'); addMax('滿級：+' + _talentFmt(en * 0.4 * maxLv)); }
+        break;
+    case 'fury_t3_c':
+        addTag('物理爆擊傷害'); addPer('每級：物理爆擊傷害 +3%（需 DEX≥25）');
+        addCur('爆擊傷害 +' + _talentFmt(3 * lv) + '%'); addMax('滿級：爆擊傷害 +15%');
+        break;
+    case 'fury_t3_r':
+        addTag('魔法傷害'); addPer('每級：魔法傷害 +3%（需 INT≥25）');
+        addCur('魔法傷害 +' + _talentFmt(3 * lv) + '%'); addMax('滿級：魔法傷害 +15%');
+        break;
+    case 'fury_t4_l':
+        addTag('物理爆擊率'); addPer('核心天賦（1 點）'); addCur('物理爆擊率 +2%'); addMax('物理爆擊率 +2%');
+        break;
+    case 'fury_t4_c':
+        addTag('破甲'); addPer('核心天賦（1 點）'); addCur('無視目標 3% 有效 AC'); addMax('無視目標 3% 有效 AC');
+        break;
+    case 'fury_t4_r':
+        addTag('施法速度'); addPer('核心天賦（1 點）'); addCur('施法速度 +2.5%'); addMax('施法速度 +2.5%');
+        break;
+    case 'survival_t1_l':
+        addTag('最大 HP'); addPer('每級：每 10 點 CON（上限35）→ 最大 HP +0.6%');
+        { let s = _talentPlayerAttr('con'), p = (s / 10) * 0.6 * lv;
+          addCur('最大 HP +' + _talentFmt(p) + '%（CON ' + s + '）'); addMax('滿級：最大 HP +' + _talentFmt((s / 10) * 0.6 * maxLv) + '%'); }
+        break;
+    case 'survival_t1_c':
+        addTag('魔法防禦'); addPer('每級：每 10 點 WIS（上限35）→ 魔法防禦 +0.6%');
+        { let s = _talentPlayerAttr('wis'), p = (s / 10) * 0.6 * lv;
+          addCur('魔法防禦 +' + _talentFmt(p) + '%（WIS ' + s + '）'); addMax('滿級：魔法防禦 +' + _talentFmt((s / 10) * 0.6 * maxLv) + '%'); }
+        break;
+    case 'survival_t1_r':
+        addTag('AC'); addPer('每級：每 10 點 CHA（上限35）→ AC +1');
+        { let s = _talentPlayerAttr('cha'), flat = Math.floor((s / 10) * lv);
+          addCur('AC +' + flat + '（CHA ' + s + '）'); addMax('滿級：AC +' + Math.floor((s / 10) * maxLv)); }
+        break;
+    case 'survival_t2_l':
+        addTag('格擋率'); addPer('每級：格擋率 +0.5%（純格擋·無反傷）');
+        if (talentHasShield()) out.equip.push({ ok: true, text: '已持盾，格擋加成生效中' });
+        else out.equip.push({ ok: false, text: '需裝備盾牌才生效' });
+        addCur('格擋率 +' + _talentFmt(0.5 * lv) + '%'); addMax('滿級：格擋率 +' + _talentFmt(0.5 * maxLv) + '%');
+        break;
+    case 'survival_t2_c':
+        addTag('PVP 減傷'); addPer('每級：防具總強化每 +1 → 受玩家攻擊固定傷害 -0.1');
+        { let en = talentArmorEnSum(), red = en * 0.1 * lv;
+          addCur('PVP 固定減傷 -' + _talentFmt(red) + '（防具總 +' + en + '）'); addMax('滿級：-' + _talentFmt(en * 0.1 * maxLv)); }
+        break;
+    case 'survival_t2_r':
+        addTag('AC'); addTag('魔法防禦'); addPer('每級：AC +2、魔法防禦 +2');
+        addCur('AC +' + (2 * lv) + '、魔防 +' + (2 * lv)); addMax('滿級：AC +10、魔防 +10');
+        break;
+    case 'survival_t3_l':
+        addTag('抗控'); addPer('每級：PVP／攻城受控時間 -5%（需 WIS≥25）');
+        addCur('受控時間 -' + _talentFmt(5 * lv) + '%'); addMax('滿級：受控時間 -25%');
+        break;
+    case 'survival_t3_c':
+        addTag('最大 HP'); addTag('AC'); addPer('每級：最大 HP +20、AC +2（需 CON≥25）');
+        addCur('HP +' + (20 * lv) + '、AC +' + (2 * lv)); addMax('滿級：HP +100、AC +10');
+        break;
+    case 'survival_t3_r':
+        addTag('魔法防禦'); addPer('每級：魔法防禦 +2.5%（需 CHA≥20·無反傷）');
+        addCur('魔法防禦 +' + _talentFmt(2.5 * lv) + '%'); addMax('滿級：魔法防禦 +12.5%');
+        break;
+    case 'survival_t4_l':
+        addTag('保命'); addPer('核心天賦（1 點）');
+        addCur('致命傷且 MP>100：消耗 100 MP 留 1 HP（冷卻 90 秒）');
+        out.note.push('僅在受到致命傷害時觸發');
+        break;
+    case 'survival_t4_c':
+        addTag('AC'); addPer('核心天賦（1 點）'); addCur('AC +8'); addMax('AC +8');
+        break;
+    case 'survival_t4_r':
+        addTag('魔法防禦'); addPer('核心天賦（1 點）'); addCur('魔法防禦 +4%'); addMax('魔法防禦 +4%');
+        break;
+    case 'transcend_t1_l':
+        addTag('最大 MP'); addPer('每級：每 10 點 DEX（上限35）→ 最大 MP +5（零移速）');
+        { let s = _talentPlayerAttr('dex'), flat = Math.floor((s / 10) * 5 * lv);
+          addCur('最大 MP +' + flat + '（DEX ' + s + '）'); addMax('滿級：最大 MP +' + Math.floor((s / 10) * 5 * maxLv)); }
+        break;
+    case 'transcend_t1_c':
+        addTag('藥水恢復'); addPer('每級：每 10 點 INT（上限35）→ 藥水恢復 +0.8%');
+        { let s = _talentPlayerAttr('int'), p = (s / 10) * 0.8 * lv;
+          addCur('藥水恢復 +' + _talentFmt(p) + '%（INT ' + s + '）'); addMax('滿級：藥水恢復 +' + _talentFmt((s / 10) * 0.8 * maxLv) + '%'); }
+        break;
+    case 'transcend_t1_r':
+        addTag('HP 回復'); addPer('每級：每 10 點 CHA（上限35）→ HP 自然恢復 +1');
+        { let s = _talentPlayerAttr('cha'), flat = Math.floor((s / 10) * lv);
+          addCur('HP 自然恢復 +' + flat + '（CHA ' + s + '）'); addMax('滿級：HP 自然恢復 +' + Math.floor((s / 10) * maxLv)); }
+        break;
+    case 'transcend_t2_l':
+        addTag('喝藥冷卻'); addPer('每級：喝藥冷卻 -0.01 秒');
+        addCur('冷卻縮短 ' + _talentFmt(0.01 * lv, 2) + ' 秒'); addMax('滿級：冷卻縮短 0.05 秒');
+        break;
+    case 'transcend_t2_c':
+        addTag('HP 回復'); addPer('每級：HP 自然恢復 +1');
+        addCur('HP 自然恢復 +' + lv); addMax('滿級：HP 自然恢復 +5');
+        break;
+    case 'transcend_t2_r':
+        addTag('MP 回復'); addPer('每級：MP 自然恢復 +1');
+        addCur('MP 自然恢復 +' + lv); addMax('滿級：MP 自然恢復 +5');
+        break;
+    case 'transcend_t3_l':
+        addTag('AC'); addPer('每級：AC +2（需 CHA≥20）');
+        addCur('AC +' + (2 * lv)); addMax('滿級：AC +8');
+        break;
+    case 'transcend_t3_c':
+        addTag('攻擊速度'); addTag('施法速度'); addPer('每級：攻擊與施法速度 +1.5%（需 DEX≥25）');
+        addCur('攻速／施法 +' + _talentFmt(1.5 * lv) + '%'); addMax('滿級：攻速／施法 +7.5%');
+        break;
+    case 'transcend_t3_r':
+        addTag('召喚強化'); addPer('每級：召喚物攻擊與 HP +4%（需 WIS≥25）');
+        addCur('召喚物強化 +' + _talentFmt(4 * lv) + '%'); addMax('滿級：召喚物強化 +20%');
+        break;
+    case 'transcend_t4_l':
+        addTag('物理爆擊'); addTag('物理攻擊'); addPer('核心天賦（1 點）');
+        { let hk = player && player.d ? talentHighestAttrKey(player.d) : 'str';
+          out.note.push('條件：STR 為六維最高（目前最高：' + _talentAttrCn(hk) + '）');
+          addMax('物爆率 +2%、物理攻擊 +3（STR 須為六維最高）');
+          if (lv > 0) {
+              if (hk === 'str') out.current.push('物爆率 +2%、物理攻擊 +3');
+              else out.current.push('條件未滿足，加成未生效');
+          } }
+        break;
+    case 'transcend_t4_c':
+        addTag('命中'); addTag('物理爆擊傷害'); addPer('核心天賦（1 點）');
+        { let hk = player && player.d ? talentHighestAttrKey(player.d) : 'dex';
+          out.note.push('條件：DEX 為六維最高（目前最高：' + _talentAttrCn(hk) + '）');
+          addMax('命中 +3、物爆傷 +4%（DEX 須為六維最高）');
+          if (lv > 0) {
+              if (hk === 'dex') out.current.push('命中 +3、物爆傷 +4%');
+              else out.current.push('條件未滿足，加成未生效');
+          } }
+        break;
+    case 'transcend_t4_r':
+        addTag('吸血'); addPer('核心天賦（1 點）'); addCur('物理／魔法傷害 1% 轉為生命'); addMax('吸血 1%');
+        break;
+    default:
+        addPer(meta.desc);
+    }
+    return out;
+}
+
+function _talentDetailSection(title, lines, cls) {
+    if (!lines || !lines.length) return '';
+    let body = lines.map(function (line) {
+        if (line && typeof line === 'object' && line.text) {
+            return '<li class="' + (line.ok === false ? 'talent-detail-bad' : line.ok === true ? 'talent-detail-good' : '') + '">' + _talentEsc(line.text) + '</li>';
+        }
+        return '<li>' + _talentEsc(line) + '</li>';
+    }).join('');
+    return '<div class="talent-detail-block ' + (cls || '') + '"><div class="talent-detail-block-title">' + _talentEsc(title) + '</div><ul class="talent-detail-list">' + body + '</ul></div>';
+}
+
+function talentRenderDetailPanel(id) {
+    if (!id || !TALENT_NODE_META[id]) {
+        return '<div class="talent-detail-panel talent-detail-empty"><p class="text-slate-500 text-sm text-center m-0">點選上方天賦節點，查看能力加成說明</p></div>';
+    }
+    let t = talentState();
+    let lv = talentNodeLevel(t, id);
+    let info = talentDescribeNode(id, lv);
+    if (!info) return '';
+    let canAdd = talentCanAllocate(t, id);
+    let canSub = talentCanDeallocate(t, id);
+    let tags = info.tags.map(function (tg) { return '<span class="talent-detail-tag">' + _talentEsc(tg) + '</span>'; }).join('');
+    let pathCls = 'talent-detail-path-' + (TALENT_NODE_META[id].path || 'fury');
+    return '<div class="talent-detail-panel ' + pathCls + '" id="talent-detail-panel">' +
+        '<div class="talent-detail-head"><div><div class="talent-detail-path">' + _talentEsc(info.path) + ' · T' + info.tier + '</div>' +
+        '<div class="talent-detail-name">' + _talentEsc(info.name) + ' <span class="talent-detail-lv">Lv ' + lv + '/' + info.maxLv + '</span></div>' +
+        '<div class="talent-detail-short">' + _talentEsc(info.short) + '</div></div>' +
+        (tags ? '<div class="talent-detail-tags">' + tags + '</div>' : '') + '</div>' +
+        '<p class="talent-detail-desc">' + _talentEsc(info.desc) + '</p>' +
+        '<div class="talent-detail-grid">' +
+        _talentDetailSection('每級效果', info.perLevel, 'talent-detail-per') +
+        _talentDetailSection('目前加成', info.current, 'talent-detail-cur') +
+        _talentDetailSection('下一級預覽', info.next, 'talent-detail-next') +
+        _talentDetailSection('滿級效果', info.max, 'talent-detail-max') +
+        _talentDetailSection('屬性條件', info.req) +
+        _talentDetailSection('裝備條件', info.equip) +
+        _talentDetailSection('備註', info.note) +
+        '</div>' +
+        '<div class="talent-detail-actions">' +
+        '<button type="button" class="btn talent-detail-add-btn"' + (canAdd ? '' : ' disabled') + ' onclick="talentAllocate(\'' + id + '\')">配點 +1</button>' +
+        '<button type="button" class="btn talent-detail-sub-btn"' + (canSub ? '' : ' disabled') + ' onclick="talentDeallocate(\'' + id + '\')">退點 -1</button>' +
+        '</div></div>';
+}
+
 function renderTalentTab() {
     let root = document.getElementById('tab-talent');
     if (!root) return;
@@ -496,7 +787,8 @@ function renderTalentTab() {
                 let lv = talentNodeLevel(t, id);
                 let max = talentNodeMaxLv(id);
                 let locked = talentIsNodeLocked(t, id) && lv <= 0;
-                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}" ${locked ? 'disabled' : ''} title="${_talentEsc(m.desc)}" onclick="talentOnNodeClick('${id}')"><span class="talent-node-tier">T${tier}</span><span class="talent-node-name">${m.name}</span><span class="talent-node-lv">${lv}/${max}</span></button>`;
+                let selected = _talentSelectedId === id;
+                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}${selected ? ' talent-node-selected' : ''}" ${locked ? 'disabled' : ''} onclick="talentOnNodeClick('${id}')"><span class="talent-node-tier">T${tier}</span><span class="talent-node-name">${m.name}</span><span class="talent-node-short">${m.short}</span><span class="talent-node-lv">${lv}/${max}</span></button>`;
             }).join('');
             return `<div class="talent-tier-row" data-tier="${tier}"><div class="talent-tier-row-btns">${nodes}</div></div>`;
         }).join('');
@@ -510,13 +802,14 @@ function renderTalentTab() {
         <div class="talent-buy-row">${t.bought < TALENT_POINT_CAP && t.bought < slots ? (needWeapon ? '' : `<button type="button" class="btn talent-buy-btn" onclick="talentBuyPoint()">購買天賦點（${talentCostLabel(t.bought)}）</button>`) : '<span class="text-slate-500 text-sm">' + (t.bought >= TALENT_POINT_CAP ? '已達購買上限' : '等級不足') + '</span>'}<button type="button" class="btn talent-reset-btn" onclick="talentResetAll()">一鍵重置配點</button></div>
         ${weaponPick}
         <div class="talent-tree-wrap"><svg id="talent-svg-lines" class="talent-svg-lines" aria-hidden="true"></svg><div class="talent-tree-cols">${cols}</div></div>
-        <p class="talent-hint">各路徑內同層三選一互斥 · 上路徑滿 5 點解鎖下層 · 左鍵+1 Shift+左鍵-1</p></div>`;
+        ${talentRenderDetailPanel(_talentSelectedId)}
+        <p class="talent-hint">點選節點查看能力說明 · 面板內配點／退點 · 同層三選一互斥 · 上路徑滿 5 點解鎖下層</p></div>`;
     requestAnimationFrame(() => talentDrawLines());
 }
 
 function talentOnNodeClick(nodeId) {
-    if (window.event && window.event.shiftKey) talentDeallocate(nodeId);
-    else talentAllocate(nodeId);
+    _talentSelectedId = nodeId;
+    renderTalentTab();
 }
 
 function talentDrawLines() {

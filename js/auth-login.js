@@ -475,7 +475,7 @@
     });
   }
 
-  function logoutAccount() {
+  function logoutAccount(opts) {
     if (window.IpSessionLimit && typeof window.IpSessionLimit.release === "function") {
       try {
         window.IpSessionLimit.release();
@@ -496,7 +496,12 @@
     setSession("");
     if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
-    setStatus("已登出。", "ok");
+    var msg = opts && opts.message ? String(opts.message) : "已登出。";
+    var tone = opts && opts.tone ? opts.tone : opts && opts.message ? "err" : "ok";
+    setStatus(msg, tone);
+    try {
+      if (window.IdleLogout && typeof window.IdleLogout.resetActivity === "function") window.IdleLogout.resetActivity();
+    } catch (e3) {}
   }
 
   function onIpSessionLost() {
