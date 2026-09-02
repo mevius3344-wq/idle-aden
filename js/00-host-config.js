@@ -48,6 +48,8 @@
     if (p.indexOf('/api/') !== 0) return false;
     if (p === '/api/version' || p === '/api/build') return false;
     if (p.indexOf('/api/worldboss') === 0) return false;
+    // 登入頁「當前遊玩人數」需讀 Render 記憶體 presence（與組隊／地圖人數同源），不可走 Neon 帳號連線數
+    if (p === '/api/server/status' || p.indexOf('/api/server/status?') === 0) return false;
     if (p.indexOf('/api/party') === 0) return false;
     if (p.indexOf('/api/map/') === 0) return false;
     if (p.indexOf('/api/chat') === 0) return false;

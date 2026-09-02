@@ -275,11 +275,21 @@ async function handleServerStatusApi(req, res) {
   }
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "method" });
   const rates = _serverStatus.getServerRates();
+  // 當前遊玩人數＝Render 上活躍 presence（與地圖人數／組隊線上同一來源）。
+  // 帳號 session 在 Neon，含選角閒置；不可再拿來當「正在遊玩」。
   let onlinePlayers = 0;
-  if (_accountSessions && typeof _accountSessions.countOnline === "function") {
-    onlinePlayers = await _accountSessions.countOnline();
-  } else {
-    onlinePlayers = countIpSessionsOnline();
+  try {
+    if (typeof partyCleanupStale === "function") partyCleanupStale(Date.now());
+    if (typeof partyPresence !== "undefined" && partyPresence && typeof partyPresence.size === "number") {
+      onlinePlayers = partyPresence.size;
+    }
+  } catch (e) {}
+  if (!onlinePlayers) {
+    if (_accountSessions && typeof _accountSessions.countOnline === "function") {
+      onlinePlayers = await _accountSessions.countOnline();
+    } else {
+      onlinePlayers = countIpSessionsOnline();
+    }
   }
   return json(res, 200, {
     ok: true,

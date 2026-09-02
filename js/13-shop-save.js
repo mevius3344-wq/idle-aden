@@ -2302,16 +2302,30 @@ function loadGame() {
 
         if (player.eq && player.eq.ring3 === undefined) player.eq.ring3 = null;   // 🔧 舊存檔補上第三戒指欄
         if (player.eq && player.eq.ring4 === undefined) player.eq.ring4 = null;   // 🔧 舊存檔補上第四戒指欄
-        // 🔧 負重改版遷移：負重強化不再開放重甲，卸下現在無法裝備的裝備到背包
-        ['wpn','arrow','helm','armor','shin','shield','cloak','tshirt','gloves','boots','ring1','ring2','ring3','ring4','amulet','belt'].forEach(_sl => {
-            let _e = player.eq && player.eq[_sl]; if (!_e) return;
-            let _ok = true; try { _ok = checkCanEquip(_e); } catch(err) { _ok = true; }
-            if (!_ok) {
-                if (!invMergeBack(_e)) player.inv.push(_e);   // 🔒 v3.6.92 單一真相 invMergeBack（js/01）
-                player.eq[_sl] = null;
-                logSys(`<span class="text-amber-300">因負重強化改版，無法再裝備的 ${DB.items[_e.id] ? DB.items[_e.id].n : '裝備'} 已自動卸下至背包。</span>`);
-            }
-        });
+        // 🔧 負重改版遷移（一次性·loadUpEqMigV）：只卸「昔日負重強化白名單 LOAD_UP_EXTRA」且目前無法再裝的件。
+        //    ⚠️ 舊寫法每次讀檔對全身跑 checkCanEquip→合法裝被誤卸；未及時存檔時重登會反覆脫裝。
+        let _loadUpEqMigDone = false;
+        if ((player.loadUpEqMigV || 0) < 1) {
+            let _loadUpIds = new Set();
+            try {
+                if (typeof LOAD_UP_EXTRA === 'object' && LOAD_UP_EXTRA) {
+                    Object.keys(LOAD_UP_EXTRA).forEach(cls => {
+                        (LOAD_UP_EXTRA[cls] || []).forEach(id => { if (id) _loadUpIds.add(id); });
+                    });
+                }
+            } catch (_luE) {}
+            ['wpn','arrow','helm','armor','shin','shield','cloak','tshirt','gloves','boots','ring1','ring2','ring3','ring4','amulet','belt','ear1','ear2','offwpn'].forEach(_sl => {
+                let _e = player.eq && player.eq[_sl]; if (!_e || !_loadUpIds.has(_e.id)) return;
+                let _ok = true; try { _ok = checkCanEquip(_e); } catch (err) { _ok = true; }
+                if (!_ok) {
+                    if (!invMergeBack(_e)) player.inv.push(_e);   // 🔒 v3.6.92 單一真相 invMergeBack（js/01）
+                    player.eq[_sl] = null;
+                    logSys(`<span class="text-amber-300">因負重強化改版，無法再裝備的 ${DB.items[_e.id] ? DB.items[_e.id].n : '裝備'} 已自動卸下至背包。</span>`);
+                }
+            });
+            player.loadUpEqMigV = 1;
+            _loadUpEqMigDone = true;
+        }
         syncShahaArrow();   // 🏝️ 沙哈之弓：載入時校正無限箭狀態
         calcStats();
         try { if (typeof _petEnforceCarry === 'function') { _petEnforceCarry(); if (_petRosterDirty) petRosterSave(); } } catch (e) { console.warn('pet carry enforcement', e); }
@@ -2405,6 +2419,7 @@ function loadGame() {
         }
         if (_masteryRepair && _masteryRepair.changed) saveGame();   // 修復後立即固化，避免重載時再次遇到同一壞狀態
         if (_newbieEmbarkMigrated) try { saveGame(); } catch (_nbSaveE) {}
+        if (_loadUpEqMigDone) try { saveGame(); } catch (_luSaveE) {}   // 🔧 負重改版遷移戳記＋卸裝結果立刻固化，避免重登再跑／雲端舊檔覆寫後又脫一次
         try { if (typeof purgeReplacedAllies === 'function') purgeReplacedAllies(); } catch (e) {}   // 🤝 v3.4.23 載入後掃描：出戰傭兵的來源存檔位若已換成新角色（enSeed 不同）→ 自動解散
     }
 }

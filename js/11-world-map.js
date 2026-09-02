@@ -1531,8 +1531,14 @@ function chooseMastery(id) {
     // 🔧 詛咒鎖定優先於精通切換：若離開劍術精通會使「被詛咒的騎士武器」失去裝備資格，
     //    但詛咒裝備無法卸下，故直接擋下切換（避免繞過詛咒鎖定強制卸裝）。
     if (player.mastery === 'e_sword' && id !== 'e_sword' && player.eq.wpn && isEquipCursed('wpn')) {
-        let wd = DB.items[player.eq.wpn.id];
-        let stillOk = reqAllowsClass(wd, player.cls) || loadUpAllows(player.eq.wpn.id);
+        // 與 equipItem 同一來源（含劍術精通例外）；切換前暫以「失去精通後」判定——先清再測會誤傷，改用 req／負重白名單＋非 e_sword 的 check 路徑：
+        // 失去 e_sword 後是否仍可裝＝暫時假裝無劍術精通。
+        let _prevM = player.mastery;
+        player.mastery = id;
+        let stillOk = true;
+        try { stillOk = typeof checkCanEquip === 'function' ? checkCanEquip(player.eq.wpn) : (reqAllowsClass(DB.items[player.eq.wpn.id], player.cls) || loadUpAllows(player.eq.wpn.id)); }
+        catch (e) { stillOk = true; }
+        player.mastery = _prevM;
         if (!stillOk) { logSys('<span class="text-red-400 font-bold">手中被詛咒的騎士武器無法卸下，無法切換精通！</span><span class="text-red-300">請先至象牙塔『碧恩』處解除詛咒。</span>'); return; }
     }
     // 初次選擇免費；之後每次更換固定 300 萬金幣（不隨次數遞增）
@@ -1579,8 +1585,9 @@ function chooseMastery(id) {
         });
     }
     if (prev === 'e_sword' && player.eq.wpn) {
-        let wd = DB.items[player.eq.wpn.id];
-        let ok = reqAllowsClass(wd, player.cls) || loadUpAllows(player.eq.wpn.id);
+        let ok = true;
+        try { ok = typeof checkCanEquip === 'function' ? checkCanEquip(player.eq.wpn) : (reqAllowsClass(DB.items[player.eq.wpn.id], player.cls) || loadUpAllows(player.eq.wpn.id)); }
+        catch (e) { ok = true; }
         if (!ok) { returnEquipToInv('wpn'); logSys('失去劍術精通，無法再駕馭手中的騎士武器，已自動卸下。'); }
     }
     logSys(`<span class="text-amber-300 font-bold">【精通】</span>你領悟了 <span class="text-yellow-300 font-bold">${md.list[id].n}</span>——${md.list[id].msg}！`);
