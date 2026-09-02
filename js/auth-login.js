@@ -275,6 +275,42 @@
     });
   }
 
+  function resumeSession(account) {
+    showLoggedIn(account);
+    setStatus("歡迎回來，正在背景同步雲端……", "ok");
+    runBackgroundCloudSync(account);
+  }
+
+  function silentRelogin(account) {
+    var password = getStoredPassword(account);
+    if (password == null) return Promise.resolve({ ok: false });
+    return httpJson("POST", "/api/accounts/login", {
+      account: account,
+      password: password,
+      clientId: getClientId(),
+    }).then(function (r) {
+      if (r && r.data && r.data.ok) {
+        if (r.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+          window.anticheatSetAuthToken(r.data.authToken);
+        }
+        var acc = (r.data && r.data.account) || account;
+        try {
+          window.__fb5AuthAccount = acc;
+        } catch (e) {}
+        holdAccountSession();
+        return { ok: true, account: acc };
+      }
+      return {
+        ok: false,
+        message:
+          (r && r.data && r.data.message) ||
+          (r && r.data && r.data.error === "session_active"
+            ? "此帳號已在其他裝置登入。請先於該裝置登出後再試。"
+            : "登入已失效，請重新登入。"),
+      };
+    });
+  }
+
   function kickToLogin(message, tone) {
     setSession("");
     try {
@@ -438,13 +474,8 @@
           return;
         }
         enterGame(acc || account);
-        validateAccountSession().then(function (sess) {
-          if (!sess || !sess.ok) {
-            kickToLogin((sess && sess.message) || "登入驗證失敗，請重新登入。", "err");
-            return;
-          }
-          runBackgroundCloudSync(acc || account);
-        });
+        holdAccountSession();
+        runBackgroundCloudSync(acc || account);
       });
     };
 
@@ -482,8 +513,16 @@
               password: password,
             }).then(function (reg) {
               if (reg && reg.data && reg.data.ok) {
-                finishOk(account);
-                return;
+                return httpJson("POST", "/api/accounts/login", {
+                  account: account,
+                  password: password,
+                  clientId: getClientId(),
+                }).then(function (lr) {
+                  if (lr && lr.data && lr.data.ok && lr.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+                    window.anticheatSetAuthToken(lr.data.authToken);
+                  }
+                  finishOk(account);
+                });
               }
               if (reg && reg.status === 409) {
                 setStatus("此帳號已被他人註冊，請換帳號或確認密碼。", "err");
@@ -619,22 +658,24 @@
         return;
       }
       setStatus("正在驗證連線名額……", "ok");
-      var pendingClaim = claimIp();
-      var pendingAcct = validateAccountSession();
-      Promise.all([pendingClaim, pendingAcct]).then(function (results) {
-        var r = results[0];
-        var sess = results[1];
+      claimIp().then(function (r) {
         if (!r || !r.ok) {
           kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
           return;
         }
-        if (!sess || !sess.ok) {
-          kickToLogin((sess && sess.message) || "登入已失效，請重新登入。", "err");
-          return;
-        }
-        showLoggedIn(session);
-        setStatus("歡迎回來，正在背景同步雲端……", "ok");
-        runBackgroundCloudSync(session);
+        validateAccountSession().then(function (sess) {
+          if (sess && sess.ok) {
+            resumeSession(session);
+            return;
+          }
+          silentRelogin(session).then(function (rel) {
+            if (rel && rel.ok) {
+              resumeSession(rel.account || session);
+              return;
+            }
+            kickToLogin((rel && rel.message) || "登入已失效，請重新登入。", "err");
+          });
+        });
       });
     } else {
       showLoggedOut();

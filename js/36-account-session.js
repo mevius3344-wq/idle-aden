@@ -176,8 +176,4 @@
       return !!_held;
     },
   };
-
-  window.addEventListener("pagehide", function () {
-    release();
-  });
 })();
