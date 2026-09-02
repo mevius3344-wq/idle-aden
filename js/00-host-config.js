@@ -53,6 +53,8 @@
     if (p.indexOf('/api/chat') === 0) return false;
     if (p.indexOf('/api/clan') === 0) return false;
     if (p.indexOf('/api/auction') === 0) return false;
+    // 排行榜改走 Render 同源（Neon），避免 Vercel 舊部署無法查看裝備
+    if (p.indexOf('/api/leaderboard') === 0) return false;
     return true;
   }
 

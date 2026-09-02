@@ -5,9 +5,17 @@ const os = require("os");
 const crypto = require("crypto");
 
 let _pandoraApiHandler = null;
+let _neonLeaderboardHandler = null;
 try {
   if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
     _pandoraApiHandler = require("./lib/rt-pandora-market").handlePandoraApi;
+    // 排行榜／裝備檢視改走 Neon（與 Vercel 同源資料），避免 Vercel 部署落後時無法看裝備
+    const _apiRouter = require("./lib/api-router");
+    if (_apiRouter && typeof _apiRouter.routeRequest === "function") {
+      _neonLeaderboardHandler = async function (req, res, u) {
+        await _apiRouter.routeRequest(req, res, u);
+      };
+    }
   }
 } catch (e) {}
 
@@ -3834,6 +3842,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (u.startsWith("/api/leaderboard")) {
+      if (_neonLeaderboardHandler) {
+        await _neonLeaderboardHandler(req, res, u);
+        return;
+      }
       await handleLeaderboardApi(req, res, u);
       return;
     }
