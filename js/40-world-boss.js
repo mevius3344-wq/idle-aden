@@ -10,7 +10,7 @@
     var _wbLastState = null;
     var _wbDamaged = false;
     var _wbScheduleStates = {};
-    var _wbScheduleRespawnMs = 300000;
+    var _wbScheduleRespawnMs = 3600000;
     var _wbScheduleVisible = false;
     var _wbScheduleFetchAt = 0;
     var _wbScheduleTick = null;
@@ -177,14 +177,14 @@
         if (!force && now - _wbScheduleFetchAt < 8000) return Promise.resolve();
         _wbScheduleFetchAt = now;
         if (!wbIsHttp()) {
-            _wbScheduleRespawnMs = 300000;
+            _wbScheduleRespawnMs = 3600000;
             return Promise.resolve();
         }
         return fetch('/api/worldboss/status', { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (!data || !data.ok) return;
-                if (data.respawnMs) _wbScheduleRespawnMs = Math.max(30000, Number(data.respawnMs) || 300000);
+                if (data.respawnMs) _wbScheduleRespawnMs = Math.max(30000, Number(data.respawnMs) || 3600000);
                 var map = {};
                 (data.bosses || []).forEach(function (st) {
                     if (st && st.mapId) map[st.mapId] = st;
