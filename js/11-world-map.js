@@ -1006,10 +1006,10 @@ function ismaelCursedExchange(kind) {
     updateUI(); saveGame();
     let el = document.getElementById('interaction-content'); if (el) renderIsmaelExchange(el);
 }
-// ===== 🔥 碧恩：三詞玩法（v3.8.132+）— 祝福卷軸／屬性卷軸／古代卷軸 =====
+// ===== 🔥 碧恩：三詞玩法（v3.8.132+）— 祝福卷軸／屬性卷軸 =====
 //   祝福卷軸（武器／盔甲／飾品）：附魔祝福（7%）或詞條調整（隨機 取代/附加/消除 × 詛咒/遠古/祝福/屬性）。
 //   屬性：武器／防具／飾品皆可；每次 7% 獨立事件；第5階武器可 1% 附加／重抽屬性魔法。
-//   遠古：武器／防具／飾品皆可；消耗古代的卷軸、每次 7% 獨立事件（已有遠古詞綴則不可重複）。
+//   遠古詞綴僅能透過「詞條調整」隨機獲得（不再消耗古代的卷軸）。
 //   衝屬性第4階需 +10、第5階需 +11（🗡️ noEnhance 古老的劍／巨劍 豁免）；失敗僅消耗卷軸。
 const ATTR_SCROLLS = {
     fire:  { id: 'scroll_attr_fire',  n: '火之裝備強化卷軸', btn: 'bg-red-900 border-red-500 text-red-200 hover:bg-red-800' },
@@ -1017,7 +1017,6 @@ const ATTR_SCROLLS = {
     wind:  { id: 'scroll_attr_wind',  n: '風之裝備強化卷軸', btn: 'bg-green-900 border-green-500 text-green-200 hover:bg-green-800' },
     earth: { id: 'scroll_attr_earth', n: '地之裝備強化卷軸', btn: 'bg-amber-900 border-amber-600 text-amber-200 hover:bg-amber-800' },
 };
-const BIAN_ANC_SCROLL = 'item_ancient_scroll';
 const BIAN_BLESS_SCROLLS = { wpn: 'new_item_bless_wpn', arm: 'new_item_bless_arm', acc: 'new_item_bless_acc' };
 const BIAN_AFFIX_TYPES = ['curse', 'anc', 'bless', 'attr'];
 const BIAN_AFFIX_OPS = ['replace', 'add', 'remove'];
@@ -1036,19 +1035,13 @@ function bianAffixKind(d) {
     if (d.type === 'arm' || d.type === 'acc') return d.type;
     return null;
 }
+const BIAN_UI_SLOTS = [
+    { k: 'wpn', n: '武器' },
+    { k: 'armor', n: '盔甲' },
+    { k: 'amulet', n: '飾品' },
+];
 function bianAttrSlots() {
-    let out = [{ k: 'wpn', n: BIAN_SLOT_LABELS.wpn }];
-    let seen = new Set(['wpn']);
-    for (let k of BIAN_SLOT_ORDER) {
-        if (seen.has(k)) continue;
-        let it = player.eq && player.eq[k];
-        if (!it) continue;
-        let d = DB.items[it.id];
-        if (!bianAffixKind(d)) continue;
-        out.push({ k, n: BIAN_SLOT_LABELS[k] || k });
-        seen.add(k);
-    }
-    return out;
+    return BIAN_UI_SLOTS.slice();
 }
 function bianBlessScrollId(item) {
     let d = item && DB.items[item.id];
@@ -1239,26 +1232,6 @@ function doBianAttr(slotKey, ele) {
     calcStats(); updateUI(); renderTabs(true); saveGame();
     let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
 }
-function doBianAnc(slotKey) {
-    let item = player.eq[slotKey];
-    if (!item) { logSys('該欄位沒有裝備。'); return; }
-    let d = DB.items[item.id];
-    if (!bianAffixKind(d)) { logSys('只能對武器／防具／飾品賦予遠古之力。'); return; }
-    if (isRelic(d)) { logSys('<span class="c-relic">遺物無法賦予遠古之力。</span>'); return; }
-    if (item.anc) { logSys(`已有 <span class="${ancColorClass(item.anc)}">${ancName(item.anc)}</span> 詞綴，無法重複賦予。`); return; }
-    let sc = player.inv.find(i => i.id === BIAN_ANC_SCROLL);
-    if (!sc || sc.cnt < 1) { logSys('<span class="text-red-400">缺少 古代的卷軸。</span>'); return; }
-    sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
-    if (Math.random() < 0.07) {
-        let rolled = rollAncAffix();
-        item.anc = rolled;
-        logSys(`<span class="${ancColorClass(rolled)} font-bold">賦予${ancName(rolled)}成功！</span>碧恩將${ancName(rolled)}之力注入 → ${getItemFullName(item)}。`);
-    } else {
-        logSys('<span class="text-slate-400">碧恩：遠古之力潰散了……賦予失敗（僅消耗 1 張古代的卷軸，裝備安然無恙）。</span>');
-    }
-    calcStats(); updateUI(); renderTabs(true); saveGame();
-    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
-}
 // 解除詛咒（保留原功能）：優先消耗 解除詛咒的卷軸；沒有卷軸時可付 100 萬金幣（克里斯特已移除→金幣後備，避免詛咒裝備無解）
 function doBianUncurse(slotKey) {
     let item = player.eq[slotKey];
@@ -1281,10 +1254,9 @@ function doBianUncurse(slotKey) {
 function renderBianAttr(el) {
     let slots = bianAttrSlots();
     let cnt = id => { let it = player.inv.find(i => i.id === id); return it ? it.cnt : 0; };
-    let ancCnt = cnt(BIAN_ANC_SCROLL);
     let rows = slots.map(sl => {
         let it = player.eq[sl.k];
-        let name = it ? getItemFullName(it) : '<span class="text-slate-500">（未裝備）</span>';
+        let name = it ? getItemFullName(it) : '<span class="text-slate-500">（請先裝備）</span>';
         let cur = it && getAttrAffix(it.attr);
         let curTxt = cur ? `<span class="c-attr-${attrCanon(it.attr)}">${cur.n}（第${cur.tier}階）</span>` : '<span class="text-slate-500">無屬性</span>';
         let magic = it && getAttrMagicProc(it);
@@ -1298,11 +1270,6 @@ function renderBianAttr(el) {
                 ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 ${c.btn}" onclick="doBianAttr('${sl.k}','${e2}')">${c.n.slice(0, 2)}強化 (${have})</button>`
                 : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少 ${c.n}">${c.n.slice(0, 2)}強化 (0)</button>`;
         }).join('') : '';
-        if (it && !it.anc) {
-            btns += ancCnt > 0
-                ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-purple-900 border-purple-500 text-purple-200 hover:bg-purple-800" onclick="doBianAnc('${sl.k}')">遠古 (${ancCnt})</button>`
-                : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少古代的卷軸">遠古 (0)</button>`;
-        }
         if (it) {
             let blessScroll = bianBlessScrollId(it);
             let blessCnt = blessScroll ? cnt(blessScroll) : 0;
@@ -1316,7 +1283,7 @@ function renderBianAttr(el) {
         }
         return `<div class="flex flex-col gap-1 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
             <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}｜${curTxt}</span>
-            <div class="flex items-center gap-1 flex-wrap">${btns}</div>
+            <div class="flex items-center gap-1 flex-wrap">${btns || '<span class="text-slate-500 text-xs">請先裝備對應部位</span>'}</div>
         </div>`;
     }).join('');
     // 🔒 被詛咒的「已裝備」裝備仍可在此解除詛咒（任何部位·詛咒裝備無法卸下的唯一解）
@@ -1328,11 +1295,11 @@ function renderBianAttr(el) {
     }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-2 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">碧恩：三詞玩法—<b>祝福</b>可用對應祝福卷軸附魔，或隨機調整詛咒／遠古／祝福／屬性詞條；<b>屬性</b>與<b>遠古</b>另有專用卷軸。裝備中的武器／防具／飾品皆可操作（遺物除外）。成功率 <b>7%</b>；第5階武器附加／重抽魔法為 <b>1%</b>。失敗僅消耗卷軸。</div>
+            <div class="text-slate-300 text-sm leading-relaxed">碧恩：三詞玩法—<b>祝福</b>可用對應祝福卷軸附魔，或隨機調整詛咒／遠古／祝福／屬性詞條；<b>屬性</b>用四屬性卷軸強化。武器／盔甲／飾品三欄皆可操作（遺物除外）。成功率 <b>7%</b>；第5階武器附加／重抽魔法為 <b>1%</b>。失敗僅消耗卷軸。</div>
             <div class="text-xs text-slate-400">祝福卷軸：<b>附魔祝福</b>＝賦予「祝福的」；<b>詞條調整</b>＝隨機抽選「取代／附加／消除」之一，再隨機作用於詛咒、遠古、祝福或屬性（各 25% 均等）。</div>
             <div class="text-xs text-slate-400">屬性：無屬性成功→第1階；同屬性成功→提升1階（最高5階）；不同屬性成功→該屬性第1階。衝第4階需 +10、第5階需 +11（古老的劍／巨劍免門檻）。防具／飾品亦可帶屬性加成；一般攻擊轉屬性仍僅武器。</div>
-            <div class="text-xs text-slate-400">遠古：消耗古代的卷軸，成功後隨機獲得「遠古／永恆／不朽／太初」之一（每件限一次）。三詞齊全（祝福＋遠古＋屬性）時圖示為最高亮 tri-glow。</div>
-            <div class="text-xs text-slate-400">持有：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span>｜<span class="c-ancient">古代 ${ancCnt}</span>｜<span class="c-blessed">武祝 ${cnt('new_item_bless_wpn')}</span>｜<span class="c-blessed">甲祝 ${cnt('new_item_bless_arm')}</span>｜<span class="c-blessed">飾祝 ${cnt('new_item_bless_acc')}</span></div>
+            <div class="text-xs text-slate-400">遠古詞綴僅能透過「詞條調整」隨機獲得。三詞齊全（祝福＋遠古＋屬性）時圖示為最高亮 tri-glow。</div>
+            <div class="text-xs text-slate-400">持有：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span>｜<span class="c-blessed">武祝 ${cnt('new_item_bless_wpn')}</span>｜<span class="c-blessed">甲祝 ${cnt('new_item_bless_arm')}</span>｜<span class="c-blessed">飾祝 ${cnt('new_item_bless_acc')}</span></div>
             ${rows}
             ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
         </div>`;

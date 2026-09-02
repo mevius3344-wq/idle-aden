@@ -4,6 +4,7 @@
 
   var _ready = null;
   var _readyAt = 0;
+  var _readyPromise = null;
   var _pollBusy = false;
   var _pandoraLastLotSeq = 0;
 
@@ -25,23 +26,33 @@
     return "";
   }
 
+  function pandoraProbeServer() {
+    if (_readyPromise) return _readyPromise;
+    _readyAt = Date.now();
+    _readyPromise = fetch("/api/pandora/status?t=" + Date.now(), { cache: "no-store" })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        _ready = !!(data && data.ok && data.enabled);
+        return _ready;
+      })
+      .catch(function () {
+        _ready = false;
+        return false;
+      })
+      .finally(function () {
+        _readyPromise = null;
+      });
+    return _readyPromise;
+  }
+
   function pandoraServerEnabled() {
     if (!_httpOk()) return false;
     if (_ready === true) return true;
     if (_ready === false && Date.now() - _readyAt < 60000) return false;
-    _readyAt = Date.now();
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open("GET", "/api/pandora/status", false);
-      xhr.send();
-      if (xhr.status >= 200 && xhr.status < 300) {
-        var data = JSON.parse(xhr.responseText || "{}");
-        _ready = !!(data && data.ok && data.enabled);
-        return _ready;
-      }
-    } catch (e2) {}
-    _ready = false;
-    return false;
+    pandoraProbeServer();
+    return true;
   }
 
   function _charName() {

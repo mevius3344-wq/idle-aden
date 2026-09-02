@@ -60,15 +60,46 @@
     if (del) del.textContent = formatMult(data.dropMult);
   }
 
+  function serverStatsUrl() {
+    try {
+      if (window.GAME_HOST && typeof window.GAME_HOST.apiUrl === "function") {
+        return window.GAME_HOST.apiUrl("/api/server/status");
+      }
+    } catch (e) {}
+    return "/api/server/status";
+  }
+
   function refreshServerStats() {
-    fetch("/api/server/status?t=" + Date.now(), { method: "GET", cache: "no-store" })
+    var pel = $("auth-stat-players");
+    var gel = $("auth-stat-gold");
+    var del = $("auth-stat-drop");
+    if (pel && pel.textContent === "—") pel.textContent = "…";
+    if (gel && gel.textContent === "—") gel.textContent = "…";
+    if (del && del.textContent === "—") del.textContent = "…";
+    fetch(serverStatsUrl() + "?t=" + Date.now(), { method: "GET", cache: "no-store" })
       .then(function (res) {
         return res.json();
       })
       .then(function (data) {
-        if (data && data.ok) applyServerStats(data);
+        if (data && data.ok) {
+          applyServerStats(data);
+          return;
+        }
+        applyServerStats({ ok: true, onlinePlayers: 0, goldMult: 1, dropMult: 1 });
       })
-      .catch(function () {});
+      .catch(function () {
+        fetch("/api/server/status?t=" + Date.now(), { method: "GET", cache: "no-store" })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            if (data && data.ok) applyServerStats(data);
+            else applyServerStats({ ok: true, onlinePlayers: 0, goldMult: 1, dropMult: 1 });
+          })
+          .catch(function () {
+            applyServerStats({ ok: true, onlinePlayers: 0, goldMult: 1, dropMult: 1 });
+          });
+      });
   }
 
   function startServerStatsPolling() {

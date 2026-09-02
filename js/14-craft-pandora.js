@@ -1406,7 +1406,9 @@ function _pandoraLogLatest(slot) {
 // 黑市輪換（js/03 每 10 秒呼叫一次；force＝強制重置）。回傳本次是否有狀態變化。
 function refreshPandoraMarket(force) {
     if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
-        try { if (typeof pandoraSyncServerLot === 'function') pandoraSyncServerLot(); } catch (e) {}
+        try {
+            if (typeof pandoraSyncServerLot === 'function') pandoraSyncServerLot();
+        } catch (e) {}
         return false;
     }
     if (typeof player === 'undefined' || !player) return false;
@@ -1668,6 +1670,13 @@ function pandoraRenderMarket(div) {
     if (!div) return;
     _pandoraDiv = div;
     if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
+        if (!window._pandoraServerLot && typeof pandoraSyncServerLot === 'function') {
+            div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市競標載入中……</div>';
+            pandoraSyncServerLot().then(function () {
+                if (_pandoraDiv === div) pandoraRenderServerAuction(div, window._pandoraServerLot);
+            });
+            return;
+        }
         pandoraRenderServerAuction(div, window._pandoraServerLot);
         return;
     }
