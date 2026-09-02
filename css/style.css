@@ -4404,7 +4404,19 @@ button.classic-skill-cell { cursor:pointer; }
 .talent-node-fill > i { display: block; height: 100%; width: 0; background: #64748b; }
 
 .talent-node-idle { opacity: .88; }
-.talent-node-locked { opacity: .36; cursor: not-allowed; filter: grayscale(.9); }
+.talent-node-locked {
+    opacity: .55;
+    cursor: pointer;
+    filter: grayscale(.55);
+}
+.talent-node-locked:hover {
+    opacity: .78;
+    filter: grayscale(.25);
+}
+.talent-node-locked.talent-node-selected {
+    opacity: 1;
+    filter: none;
+}
 .talent-node-ready {
     border-color: #22d3ee;
     box-shadow: 0 0 0 1px rgba(34,211,238,.25), 0 0 12px rgba(34,211,238,.28);
@@ -4449,9 +4461,18 @@ button.classic-skill-cell { cursor:pointer; }
 .talent-hint { text-align: center; font-size: 10px; color: #64748b; margin: 0; padding-bottom: 6px; }
 
 .talent-detail-panel {
+    position: relative;
     border: 1px solid #334155; border-radius: 10px;
     background: linear-gradient(180deg, rgba(15,23,42,.96), rgba(2,6,23,.98));
     padding: 12px 14px; margin-top: 2px;
+}
+.talent-detail-close {
+    display: none;
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    width: 32px; height: 32px; padding: 0; line-height: 1;
+    border: 1px solid #64748b; border-radius: 8px;
+    background: rgba(30,41,59,.95); color: #e2e8f0;
+    font-size: 22px; font-weight: 700; cursor: pointer;
 }
 .talent-detail-empty { padding: 18px 12px; border-style: dashed; }
 .talent-detail-head { display: flex; flex-wrap: wrap; gap: 8px 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
@@ -4496,8 +4517,113 @@ button.classic-skill-cell { cursor:pointer; }
     .talent-node-name { font-size: 11px; }
     .talent-node-short { font-size: 9px; }
 }
-@media (max-width: 768px) {
-    .talent-tree-wrap { min-height: 0; overflow-x: auto; }
-    .talent-tree-cols { min-width: 720px; gap: 6px; }
-    .talent-node-btn { max-width: none; min-height: 64px; }
+/* 📱 直立手機：說明固定底部可捲，避免被技能樹蓋住／捲到看不見 */
+@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+    #tab-talent:not(.hidden),
+    #col-right.mobile-tab-open #tab-talent:not(.hidden) {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding: 8px !important;
+        box-sizing: border-box !important;
+    }
+    #tab-talent .talent-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        gap: 6px;
+    }
+    #tab-talent .talent-header,
+    #tab-talent .talent-status-bar,
+    #tab-talent .talent-buy-row,
+    #tab-talent .talent-sacrifice-box {
+        flex: 0 0 auto;
+    }
+    #tab-talent .talent-legend,
+    #tab-talent .talent-hint,
+    #tab-talent .talent-sub {
+        display: none;
+    }
+    #tab-talent .talent-title { font-size: 14px; }
+    #tab-talent .talent-status-bar {
+        gap: 4px 8px;
+        font-size: 11px;
+        padding: 5px 8px;
+    }
+    #tab-talent .talent-buy-row .btn {
+        min-height: 34px;
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+    #tab-talent .talent-tree-wrap {
+        flex: 1 1 auto;
+        min-height: 120px;
+        max-height: none;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+    #tab-talent .talent-panel.has-detail .talent-tree-wrap {
+        flex: 1 1 42%;
+        max-height: 42%;
+    }
+    #tab-talent .talent-tree-cols {
+        min-width: 640px;
+        gap: 6px;
+        padding: 6px 4px 10px;
+    }
+    #tab-talent .talent-node-btn {
+        max-width: none;
+        min-height: 58px;
+        padding: 8px 2px 10px;
+    }
+    #tab-talent .talent-detail-empty {
+        flex: 0 0 auto;
+        max-height: none;
+        margin: 0;
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+    #tab-talent .talent-detail-panel:not(.talent-detail-empty) {
+        flex: 0 1 52%;
+        max-height: 52%;
+        min-height: 160px;
+        margin: 0;
+        padding: 10px 12px 12px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        z-index: 6;
+        border-color: #475569;
+        box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.55);
+    }
+    #tab-talent .talent-detail-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #tab-talent .talent-detail-head { padding-right: 34px; margin-bottom: 6px; }
+    #tab-talent .talent-detail-name { font-size: 15px; }
+    #tab-talent .talent-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+    #tab-talent .talent-detail-block { min-height: 0; padding: 7px 8px; }
+    #tab-talent .talent-detail-actions {
+        position: sticky;
+        bottom: 0;
+        padding-top: 8px;
+        background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.96) 28%);
+    }
+    #tab-talent .talent-detail-add-btn,
+    #tab-talent .talent-detail-sub-btn {
+        min-height: 40px;
+        flex: 1 1 auto;
+    }
 }

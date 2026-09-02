@@ -750,7 +750,7 @@ function _talentDetailSection(title, lines, cls) {
 
 function talentRenderDetailPanel(id) {
     if (!id || !TALENT_NODE_META[id]) {
-        return '<div class="talent-detail-panel talent-detail-empty"><p class="text-slate-500 text-sm text-center m-0">點選上方天賦節點，查看能力加成說明</p></div>';
+        return '<div class="talent-detail-panel talent-detail-empty"><p class="text-slate-500 text-sm text-center m-0">點選任一天賦節點（含未解鎖）查看能力說明</p></div>';
     }
     let t = talentState();
     let lv = talentNodeLevel(t, id);
@@ -761,6 +761,7 @@ function talentRenderDetailPanel(id) {
     let tags = info.tags.map(function (tg) { return '<span class="talent-detail-tag">' + _talentEsc(tg) + '</span>'; }).join('');
     let pathCls = 'talent-detail-path-' + (TALENT_NODE_META[id].path || 'fury');
     return '<div class="talent-detail-panel ' + pathCls + '" id="talent-detail-panel">' +
+        '<button type="button" class="talent-detail-close" onclick="talentClearSelection()" aria-label="關閉說明" title="關閉">×</button>' +
         '<div class="talent-detail-head"><div><div class="talent-detail-path">' + _talentEsc(info.path) + ' · T' + info.tier + '</div>' +
         '<div class="talent-detail-name">' + _talentEsc(info.name) + ' <span class="talent-detail-lv">Lv ' + lv + '/' + info.maxLv + '</span></div>' +
         '<div class="talent-detail-short">' + _talentEsc(info.short) + '</div></div>' +
@@ -821,7 +822,8 @@ function renderTalentTab() {
                 let locked = talentIsNodeLocked(t, id) && lv <= 0;
                 let selected = _talentSelectedId === id;
                 let fill = max > 0 ? Math.min(100, Math.round((lv / max) * 100)) : 0;
-                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}${selected ? ' talent-node-selected' : ''}" data-path="${path}" data-tier="${tier}" data-slot="${slot}" ${locked ? 'disabled' : ''} onclick="talentOnNodeClick('${id}')">` +
+                // 🔒 未解鎖／互斥節點仍可點選查看說明（不用 disabled，否則手機／桌面都點不到敘述）
+                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}${selected ? ' talent-node-selected' : ''}" data-path="${path}" data-tier="${tier}" data-slot="${slot}" aria-disabled="${locked ? 'true' : 'false'}" onclick="talentOnNodeClick('${id}')">` +
                     `<span class="talent-node-slot">${_talentSlotLabel(slot)}</span>` +
                     `<span class="talent-node-name">${_talentEsc(m.name)}</span>` +
                     `<span class="talent-node-short">${_talentEsc(m.short)}</span>` +
@@ -843,7 +845,7 @@ function renderTalentTab() {
             `<div class="talent-path-spent">本路投入 <b>${spent}</b> 點</div></div>${body}</div>`;
     }).join('');
 
-    root.innerHTML = `<div class="talent-panel">
+    root.innerHTML = `<div class="talent-panel${_talentSelectedId ? ' has-detail' : ''}">
         <div class="talent-header"><h3 class="talent-title">九天星盤</h3>
         <p class="talent-sub">三路並行 · 每層三選一 · 上一層滿 ${TALENT_TIER_NEED} 點解鎖下一層 · 終身 ${TALENT_POINT_CAP} 點</p></div>
         <div class="talent-status-bar"><span>等級資格 <b class="text-cyan-300">${slots}</b></span><span>已購買 <b class="text-amber-300">${t.bought}</b>/${TALENT_POINT_CAP}</span><span>已分配 <b class="text-rose-300">${talentAllocatedPoints(t)}</b></span><span>可分配 <b class="text-emerald-300">${talentUnspentPoints(t)}</b></span></div>
@@ -857,8 +859,20 @@ function renderTalentTab() {
         ${weaponPick}
         <div class="talent-tree-wrap"><svg id="talent-svg-lines" class="talent-svg-lines" aria-hidden="true"></svg><div class="talent-tree-cols">${cols}</div></div>
         ${talentRenderDetailPanel(_talentSelectedId)}
-        <p class="talent-hint">點選節點查看說明 · 同層只能選一條分支 · 連線越亮代表你目前的成長路線</p></div>`;
-    requestAnimationFrame(() => talentDrawLines());
+        <p class="talent-hint">點選任一節點（含未解鎖）查看說明 · 同層只能選一條分支 · 連線越亮代表你目前的成長路線</p></div>`;
+    requestAnimationFrame(() => {
+        talentDrawLines();
+        let detail = document.getElementById('talent-detail-panel');
+        if (detail && _talentSelectedId) {
+            try { detail.scrollTop = 0; } catch (e) {}
+            try { detail.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) {}
+        }
+    });
+}
+
+function talentClearSelection() {
+    _talentSelectedId = null;
+    renderTalentTab();
 }
 
 function talentOnNodeClick(nodeId) {
