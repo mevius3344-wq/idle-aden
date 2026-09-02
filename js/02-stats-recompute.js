@@ -777,6 +777,8 @@ d.mr += (baseMr + bonusMr);
         let _mApm = atkSpdApm(p), _oApm = atkSpdApm(p, p.eq.offwpn.id);
         if (_mApm > 0 && _oApm > 0) d.aspdOff = d.aspd * (_mApm / _oApm);
     }
+    // 🌟 九天星盤天賦：純常駐面板加成（Tier1 屬性共鳴 effAttr≤35 防通膨）
+    if (typeof applyTalentToStats === 'function') applyTalentToStats(d, p);
     p.hp = Math.min(p.hp, p.mhp);
     p.mp = Math.min(p.mp, p.mmp);
 }

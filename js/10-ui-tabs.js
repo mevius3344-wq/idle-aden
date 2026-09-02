@@ -2674,6 +2674,7 @@ const MOBILE_TAB_GROUPS = {
     ability: [
         { key: 'stats', label: '能力', tab: 'stats' },
         { key: 'skill', label: '技能', tab: 'skill' },
+        { key: 'talent', label: '天賦', tab: 'talent' },
         { key: 'collection', label: '收藏', action: 'collection' },
         { key: 'pvp', label: '排行榜', tab: 'pvp' },
         { key: 'audit', label: '統計', tab: 'audit' }
@@ -2809,10 +2810,11 @@ function switchTab(t, btn, opts) {
     _syncDesktopTabButtons(t);
     if (btn) btn.classList.add('active');
     // 👇 更新陣列名單
-    ['stats', 'equip', 'weapons', 'skill', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'auction', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
+    ['stats', 'equip', 'weapons', 'skill', 'talent', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'auction', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
     let panel = document.getElementById(`tab-${t}`);
     if (panel) panel.classList.remove('hidden');
     if(typeof setEquipmentPanelEmbedded === 'function') setEquipmentPanelEmbedded(t === 'equip');
+    if(t === 'talent' && typeof renderTalentTab === 'function') { renderTalentTab(); if (typeof talentHookResize === 'function') talentHookResize(); }
     if(t === 'audit' && typeof renderAuditTab === 'function') renderAuditTab();
     if(t === 'pvp' && typeof renderPvpTab === 'function') renderPvpTab();
     if(t === 'clan' && typeof renderClanTab === 'function') renderClanTab();
