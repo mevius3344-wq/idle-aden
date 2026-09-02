@@ -1,7 +1,5 @@
-# push 到 main 時自動部署 Render（遊戲）與 Vercel（API）
-# 一次性設定（GitHub 倉庫 → Settings → Secrets and variables → Actions）：
-#   RENDER_DEPLOY_HOOK  → Render 服務 Settings → Deploy Hook 產生的 URL
-#   VERCEL_DEPLOY_HOOK  → Vercel 專案 Settings → Git → Deploy Hooks → Production URL
+# push 到 main → 自動部署 Render + Vercel
+# 首次設定：雙擊專案根目錄「幫我設定自動部署.bat」
 name: Deploy Production
 
 on:
@@ -16,44 +14,54 @@ concurrency:
 
 jobs:
   deploy:
-    name: Trigger Render + Vercel
+    name: Deploy Render + Vercel
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Render (idle-aden.onrender.com)
+      - name: Deploy Render (Deploy Hook)
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "::warning::RENDER_DEPLOY_HOOK 未設定，略過 Render 部署。請到 Render → idle-aden → Settings → Deploy Hook 建立後加入 GitHub Secrets。"
+            echo "RENDER_DEPLOY_HOOK 未設定，嘗試 API 方式..."
             exit 0
           fi
-          echo "Triggering Render deploy..."
           curl -fsS -X POST "$HOOK"
-          echo "Render deploy triggered."
+          echo "Render deploy hook triggered."
 
-      - name: Deploy to Vercel (idle-aden.vercel.app API)
+      - name: Deploy Render (API)
+        env:
+          API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "$API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "RENDER_API_KEY / RENDER_SERVICE_ID 未設定，略過 API 部署。"
+            exit 0
+          fi
+          curl -fsS -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+          echo "Render API deploy triggered."
+
+      - name: Deploy Vercel (Deploy Hook)
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "::warning::VERCEL_DEPLOY_HOOK 未設定，略過 Vercel 部署。請到 Vercel → idle-aden → Settings → Git → Deploy Hooks 建立後加入 GitHub Secrets。"
+            echo "VERCEL_DEPLOY_HOOK 未設定，略過。"
             exit 0
           fi
-          echo "Triggering Vercel deploy..."
           curl -fsS -X POST "$HOOK"
-          echo "Vercel deploy triggered."
+          echo "Vercel deploy hook triggered."
 
-      - name: Wait and verify Render version
-        env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+      - name: Verify Render version
         run: |
-          if [ -z "$HOOK" ]; then exit 0; fi
-          echo "Waiting 90s for Render to start..."
+          echo "等待 Render 啟動（90 秒）..."
           sleep 90
           for i in 1 2 3 4 5 6; do
-            BODY=$(curl -fsS "https://idle-aden.onrender.com/api/version?t=$RANDOM" || true)
-            echo "Attempt $i: $BODY"
-            echo "$BODY" | grep -q '"gameVersion"' && echo "✅ Render reports gameVersion" && exit 0
+            BODY=$(curl -fsS "https://idle-aden.onrender.com/api/version?t=$RANDOM" 2>/dev/null || echo "{}")
+            echo "檢查 $i: $BODY"
+            echo "$BODY" | grep -q '"gameVersion"' && echo "✅ 線上已更新" && exit 0
             sleep 30
           done
-          echo "::warning::Render 尚未回報 gameVersion，可能仍在部署或服務未更新程式碼。"
+          echo "::warning::尚未偵測到 gameVersion，可能仍在部署中。"
