@@ -243,6 +243,14 @@
     } catch (e) {}
   }
 
+  function _cloudPutBody(dataObj) {
+    var wrap = { save: dataObj };
+    if (typeof anticheatAuthExtras === 'function') {
+      try { Object.assign(wrap, anticheatAuthExtras()); } catch (e) {}
+    }
+    return JSON.stringify(wrap);
+  }
+
   function cloudPushSlot(slot, dataObj) {
     if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
@@ -251,7 +259,7 @@
       fetch(_base() + '/slot/' + slot, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataObj),
+        body: _cloudPutBody(dataObj),
       })
         .then(function (res) {
           if (res.status === 409) {
@@ -273,7 +281,7 @@
     if (!cloudCanSync()) return false;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return false;
-    var r = _xhrJson('PUT', _base() + '/slot/' + slot, JSON.stringify(dataObj), true);
+    var r = _xhrJson('PUT', _base() + '/slot/' + slot, _cloudPutBody(dataObj), true);
     if (r && r.status === 409 && r.data && r.data.error === 'identity_conflict') {
       cloudPullSlotIntoStorage(slot);
       _notifyConflict('此存檔位雲端為不同角色，已改載入雲端版本。');

@@ -16,6 +16,20 @@ try {
   _worldBossApiHandler = require("./lib/rt-world-boss").handleWorldBossApi;
 } catch (e) {}
 
+let _antiCheat = null;
+try {
+  _antiCheat = require("./lib/rt-anti-cheat");
+} catch (e) {}
+
+let _accountSessions = null;
+try {
+  const _accountSessionsFile = path.join(
+    process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(__dirname, "data"),
+    "account-sessions.json"
+  );
+  _accountSessions = require("./lib/rt-account-session").createFileAccountSessionStore(_accountSessionsFile);
+} catch (e) {}
+
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
 
@@ -40,6 +54,7 @@ function computeBuildId() {
   }
 }
 const BUILD_ID = computeBuildId();
+const GAME_VERSION = "v3.8.138";
 const SERVER_STARTED_AT = Date.now();
 // Online (Render) keeps this off. Local Windows serve writes editable JSON to Desktop.
 const ENABLE_DESKTOP_SAVES =
@@ -506,7 +521,41 @@ async function handleCloudApi(req, res, u) {
     }
     if (req.method === "PUT") {
       const body = await readBody(req);
-      const data = JSON.parse(body);
+      let parsed = JSON.parse(body);
+      let data = parsed && parsed.save ? parsed.save : parsed;
+      if (!cloudAccountIsGuest(account) && _antiCheat) {
+        const auth = _antiCheat.authFromBody(
+          { account: parsed.account || account, authToken: parsed.authToken },
+          ROOT
+        );
+        if (!auth.ok) {
+          return json(res, 401, {
+            ok: false,
+            error: auth.error || "auth_required",
+            message: "雲端存檔需要有效登入令牌，請重新登入。",
+          });
+        }
+        if (_accountSessions) {
+          const valid = await _accountSessions.verify(accountKey(auth.account), auth.sessionId);
+          if (!valid) {
+            return json(res, 401, {
+              ok: false,
+              error: "session_invalid",
+              message: "登入已失效（可能已在其他裝置登入）。請重新登入。",
+            });
+          }
+        }
+        const v = _antiCheat.validatePlayerSave(data && data.p);
+        if (v && !v.ok && v.severe) {
+          return json(res, 422, {
+            ok: false,
+            error: "save_invalid",
+            message: "存檔數值異常，已拒絕上傳。請勿使用修改器。",
+            issues: v.issues,
+          });
+        }
+        if (v && !v.ok && v.clamp) _antiCheat.applySaveClamp(data, v.clamp);
+      }
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
       }
@@ -1447,6 +1496,16 @@ async function handlePartyApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
+    if (_antiCheat) {
+      const auth = _antiCheat.authFromBody(data, ROOT);
+      if (!auth.ok) {
+        return json(res, 401, {
+          ok: false,
+          error: auth.error || "auth_required",
+          message: "線上組隊需要有效登入，請重新登入。",
+        });
+      }
+    }
     const up = partyUpsertPresence(data);
     if (!up) return json(res, 400, { ok: false, error: "need account" });
     const party = up.party;
@@ -1863,6 +1922,16 @@ async function handlePartyApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
+    if (_antiCheat) {
+      const auth = _antiCheat.authFromBody(data, ROOT);
+      if (!auth.ok) {
+        return json(res, 401, {
+          ok: false,
+          error: auth.error || "auth_required",
+          message: "組隊分享需要有效登入，請重新登入。",
+        });
+      }
+    }
     const up = partyUpsertPresence(data);
     if (!up || !up.party) return json(res, 400, { ok: false, error: "no party" });
     const party = up.party;
@@ -1873,8 +1942,8 @@ async function handlePartyApi(req, res, u) {
     }
     party.shareAtByKey[up.key] = now;
     party.lastShareAt = now;
-    const exp = Math.max(0, Math.min(500000, Math.floor(Number(data.exp) || 0)));
-    const gold = Math.max(0, Math.min(200000, Math.floor(Number(data.gold) || 0)));
+    const exp = Math.max(0, Math.min(50000, Math.floor(Number(data.exp) || 0)));
+    const gold = Math.max(0, Math.min(20000, Math.floor(Number(data.gold) || 0)));
     const mapId = String(data.mapId || "").slice(0, 64);
     const mobName = String(data.mobName || "")
       .replace(/[<>&"']/g, "")
@@ -3115,7 +3184,7 @@ async function handleAccountsApi(req, res, u) {
     }
     map[key] = {
       account: account,
-      password: password,
+      password: _antiCheat ? _antiCheat.hashPassword(password) : password,
       createdAt: Date.now(),
     };
     saveAccounts(map);
@@ -3138,10 +3207,63 @@ async function handleAccountsApi(req, res, u) {
     if (!row) {
       return json(res, 404, { ok: false, error: "missing", message: "帳號不存在，請先註冊。" });
     }
-    if (String(row.password) !== password) {
+    const pwOk = _antiCheat ? _antiCheat.verifyPassword(password, row.password) : String(row.password) === password;
+    if (!pwOk) {
       return json(res, 401, { ok: false, error: "bad password", message: "帳號或密碼錯誤。" });
     }
-    return json(res, 200, { ok: true, account: row.account || account });
+    if (_antiCheat && _antiCheat.needsPasswordUpgrade(row.password)) {
+      row.password = _antiCheat.hashPassword(password);
+      map[accountKey(account)] = row;
+      saveAccounts(map);
+    }
+    let clientId = String(data.clientId || "").trim().slice(0, 80);
+    let sessionId = "";
+    if (_accountSessions) {
+      const sess = await _accountSessions.claim(accountKey(account), clientId);
+      if (!sess.ok) return json(res, 409, sess);
+      sessionId = sess.sessionId;
+    } else {
+      sessionId = crypto.randomBytes(16).toString("hex");
+    }
+    const authToken = _antiCheat ? _antiCheat.issueAuthToken(row.account || account, ROOT, sessionId) : "";
+    return json(res, 200, { ok: true, account: row.account || account, authToken, sessionId });
+  }
+
+  if (u === "/api/accounts/session/heartbeat" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    if (!_antiCheat) return json(res, 200, { ok: true, disabled: true });
+    const auth = _antiCheat.authFromBody(data, ROOT);
+    if (!auth.ok) {
+      return json(res, 401, { ok: false, error: auth.error || "bad_token", message: "登入已失效，請重新登入。" });
+    }
+    if (_accountSessions) {
+      const touch = await _accountSessions.touch(accountKey(auth.account), auth.sessionId);
+      if (!touch.ok) return json(res, 401, touch);
+    }
+    return json(res, 200, { ok: true, account: auth.account });
+  }
+
+  if (u === "/api/accounts/logout" && req.method === "POST") {
+    const body = await readBody(req);
+    let data = {};
+    try {
+      data = JSON.parse(body || "{}");
+    } catch (e) {
+      return json(res, 400, { ok: false, error: "bad json" });
+    }
+    if (_antiCheat) {
+      const auth = _antiCheat.authFromBody(data, ROOT);
+      if (auth.ok && _accountSessions) {
+        await _accountSessions.release(accountKey(auth.account), auth.sessionId);
+      }
+    }
+    return json(res, 200, { ok: true });
   }
 
   return json(res, 404, { ok: false, error: "unknown accounts api" });
@@ -3341,6 +3463,59 @@ function leaderboardMergeKeepBest(a, b) {
   return a;
 }
 
+const LEADERBOARD_EQ_SLOTS = [
+  "wpn", "offwpn", "helm", "armor", "shin", "shield", "cloak", "tshirt", "gloves", "boots",
+  "amulet", "ear1", "ear2", "ring1", "ring2", "ring3", "ring4", "belt", "doll", "arrow",
+];
+
+function leaderboardSanitizeEquipItem(it) {
+  if (!it || !it.id || typeof it.id !== "string") return null;
+  const out = { id: it.id };
+  const en = Math.floor(Number(it.en) || 0);
+  if (en) out.en = en;
+  if (it.bless === "cursed") out.bless = "cursed";
+  else if (it.bless) out.bless = true;
+  if (it.anc) out.anc = it.anc === true ? true : String(it.anc);
+  if (it.attr) out.attr = String(it.attr);
+  if (it.attrMagic) out.attrMagic = String(it.attrMagic);
+  const star = Math.floor(Number(it.attrMagicStar) || 0);
+  if (star > 1) out.attrMagicStar = Math.max(1, Math.min(3, star));
+  return out;
+}
+
+function leaderboardSanitizeEquip(eq) {
+  const out = {};
+  if (!eq || typeof eq !== "object") return out;
+  for (const k of LEADERBOARD_EQ_SLOTS) {
+    const it = leaderboardSanitizeEquipItem(eq[k]);
+    if (it) out[k] = it;
+  }
+  return out;
+}
+
+function leaderboardLoadPlayerEquip(name) {
+  const key = charNameKey(normalizeCharName(name));
+  if (!key) return null;
+  const row = getLeaderboardEntries().find((r) => charNameKey(r.name) === key);
+  if (!row || !row.account || !row.slot) return null;
+  const file = path.join(CLOUD_ROOT, row.account, "slot-" + row.slot + ".json");
+  if (!fs.existsSync(file)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    const p = data && data.p;
+    if (!p || !p.cls) return null;
+    return {
+      name: row.name,
+      cls: row.cls,
+      clsName: row.clsName || leaderboardClassName(row.cls),
+      lv: row.lv,
+      eq: leaderboardSanitizeEquip(p.eq),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 function leaderboardFormatMs(ms) {
   const total = Math.max(0, Math.floor(Number(ms) || 0));
   const sec = Math.floor(total / 1000);
@@ -3382,6 +3557,7 @@ function collectLeaderboardEntries() {
           id: leaderboardIdentity(p, account, slot),
           name: display,
           account: safeAccount(account),
+          slot,
           cls: String(p.cls || ""),
           clsName: leaderboardClassName(p.cls),
           lv: Math.max(1, Math.floor(Number(p.lv) || 1)),
@@ -3446,6 +3622,26 @@ function getLeaderboardEntries() {
   return leaderboardCache.entries;
 }
 
+async function handleLeaderboardEquipApi(req, res, u) {
+  const q = new URL(req.url || "/", "http://localhost");
+  const name = normalizeCharName(q.searchParams.get("name") || "");
+  if (!name) {
+    return json(res, 400, { ok: false, error: "need_name", message: "請指定角色名稱。" });
+  }
+  if (!ENABLE_CLOUD_SAVE) {
+    return json(res, 503, { ok: false, error: "offline", message: "排行榜需要線上伺服器。" });
+  }
+  const data = leaderboardLoadPlayerEquip(name);
+  if (!data) {
+    return json(res, 404, {
+      ok: false,
+      error: "not_found",
+      message: "找不到該角色的公開裝備（可能尚未上傳雲端存檔）。",
+    });
+  }
+  return json(res, 200, { ok: true, ...data });
+}
+
 async function handleLeaderboardApi(req, res, u) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -3455,7 +3651,13 @@ async function handleLeaderboardApi(req, res, u) {
     });
     return res.end();
   }
-  if (u !== "/api/leaderboard" || req.method !== "GET") {
+  if (req.method !== "GET") {
+    return json(res, 404, { ok: false, error: "unknown leaderboard api" });
+  }
+  if (u.startsWith("/api/leaderboard/equip")) {
+    return handleLeaderboardEquipApi(req, res, u);
+  }
+  if (u !== "/api/leaderboard") {
     return json(res, 404, { ok: false, error: "unknown leaderboard api" });
   }
   const q = new URL(req.url || "/", "http://localhost");
@@ -3548,6 +3750,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok: true,
         buildId: BUILD_ID,
+        gameVersion: GAME_VERSION,
         startedAt: SERVER_STARTED_AT,
       });
     }
@@ -3568,10 +3771,21 @@ const server = http.createServer(async (req, res) => {
       return res.end("Not Found");
     }
     const ext = path.extname(full).toLowerCase();
-    res.writeHead(200, {
+    if (ext === ".html") {
+      try {
+        data = Buffer.from(
+          data.toString("utf8").replace(/__GAME_VERSION__/g, GAME_VERSION),
+          "utf8"
+        );
+      } catch (e) {}
+    }
+    const headers = {
       "Content-Type": MIME[ext] || "application/octet-stream",
-      "Cache-Control": "no-store",
-    });
+      "Cache-Control":
+        ext === ".html" || ext === ".js" || ext === ".css" ? "no-store, must-revalidate" : "no-store",
+    };
+    if (ext === ".html" || ext === ".js" || ext === ".css") headers.Pragma = "no-cache";
+    res.writeHead(200, headers);
     res.end(data);
   });
 });

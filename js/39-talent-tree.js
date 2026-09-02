@@ -468,9 +468,17 @@ function talentNodeBtnClass(t, id) {
     return cls;
 }
 
+function _talentEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 function renderTalentTab() {
     let root = document.getElementById('tab-talent');
-    if (!root || !player) return;
+    if (!root) return;
+    if (!player) {
+        root.innerHTML = '<div class="talent-panel"><p class="text-slate-400 text-sm text-center p-4">請先登入並選擇角色後再開啟天賦樹。</p></div>';
+        return;
+    }
     let t = talentState();
     let slots = talentEligibleBuySlots(player.lv);
     let needWeapon = t.bought >= 15 && t.bought < TALENT_POINT_CAP;
@@ -488,7 +496,7 @@ function renderTalentTab() {
                 let lv = talentNodeLevel(t, id);
                 let max = talentNodeMaxLv(id);
                 let locked = talentIsNodeLocked(t, id) && lv <= 0;
-                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}" ${locked ? 'disabled' : ''} title="${m.desc}" onclick="talentOnNodeClick('${id}')"><span class="talent-node-tier">T${tier}</span><span class="talent-node-name">${m.name}</span><span class="talent-node-lv">${lv}/${max}</span></button>`;
+                return `<button type="button" id="talent-btn-${id}" class="${talentNodeBtnClass(t, id)}" ${locked ? 'disabled' : ''} title="${_talentEsc(m.desc)}" onclick="talentOnNodeClick('${id}')"><span class="talent-node-tier">T${tier}</span><span class="talent-node-name">${m.name}</span><span class="talent-node-lv">${lv}/${max}</span></button>`;
             }).join('');
             return `<div class="talent-tier-row" data-tier="${tier}"><div class="talent-tier-row-btns">${nodes}</div></div>`;
         }).join('');

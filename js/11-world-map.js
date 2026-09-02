@@ -1004,23 +1004,48 @@ function ismaelCursedExchange(kind) {
     updateUI(); saveGame();
     let el = document.getElementById('interaction-content'); if (el) renderIsmaelExchange(el);
 }
-// ===== 🔥 碧恩：屬性強化卷軸「賦予屬性」（v3.0.77 屬性強化系統改版·取代舊「祝福裝備」功能；克里斯特已移除） =====
-//   規則：只能用在「裝備中武器／副手武器(戰士限定)」；每次使用皆為獨立事件，成功率 7%；
-//   無屬性成功→1階、同屬性成功→+1階（最高5階）、不同屬性成功→變成該屬性1階；
-//   第5階同屬性卷軸：原生無攻擊觸發技能的非遺物武器可用 1% 機率附加／重抽屬性魔法；同技能升星、不同技能回1星，最高3星；
-//   衝第4階需武器+10以上、第5階需+11以上（不符不消耗卷軸；🗡️ v3.7.29 noEnhance 非遺物武器＝古老的劍/巨劍 豁免門檻）；失敗僅消耗卷軸，武器不會消失。
-//   🎲 純機率 Math.random（與武器強化同政策·可 save/load 重抽）。經典/一般/傳統模式皆適用。
+// ===== 🔥 碧恩：三詞玩法（v3.8.132 恢復）— 祝福＝掉落／製作；屬性＋遠古＝碧恩 =====
+//   屬性：武器／防具／飾品皆可；每次 7% 獨立事件；第5階武器可 1% 附加／重抽屬性魔法。
+//   遠古：武器／防具／飾品皆可；消耗古代的卷軸、每次 7% 獨立事件（已有遠古詞綴則不可重複）。
+//   衝屬性第4階需 +10、第5階需 +11（🗡️ noEnhance 古老的劍／巨劍 豁免）；失敗僅消耗卷軸。
 const ATTR_SCROLLS = {
-    fire:  { id: 'scroll_attr_fire',  n: '火之武器強化卷軸', btn: 'bg-red-900 border-red-500 text-red-200 hover:bg-red-800' },
-    water: { id: 'scroll_attr_water', n: '水之武器強化卷軸', btn: 'bg-blue-900 border-blue-500 text-blue-200 hover:bg-blue-800' },
-    wind:  { id: 'scroll_attr_wind',  n: '風之武器強化卷軸', btn: 'bg-green-900 border-green-500 text-green-200 hover:bg-green-800' },
-    earth: { id: 'scroll_attr_earth', n: '地之武器強化卷軸', btn: 'bg-amber-900 border-amber-600 text-amber-200 hover:bg-amber-800' },
+    fire:  { id: 'scroll_attr_fire',  n: '火之裝備強化卷軸', btn: 'bg-red-900 border-red-500 text-red-200 hover:bg-red-800' },
+    water: { id: 'scroll_attr_water', n: '水之裝備強化卷軸', btn: 'bg-blue-900 border-blue-500 text-blue-200 hover:bg-blue-800' },
+    wind:  { id: 'scroll_attr_wind',  n: '風之裝備強化卷軸', btn: 'bg-green-900 border-green-500 text-green-200 hover:bg-green-800' },
+    earth: { id: 'scroll_attr_earth', n: '地之裝備強化卷軸', btn: 'bg-amber-900 border-amber-600 text-amber-200 hover:bg-amber-800' },
 };
+const BIAN_ANC_SCROLL = 'item_ancient_scroll';
+const BIAN_SLOT_LABELS = {
+    wpn: '武器', offwpn: '副手武器', helm: '頭盔', armor: '盔甲', shield: '盾牌', cloak: '斗篷', tshirt: '內衣',
+    gloves: '手套', boots: '靴子', shin: '脛甲', ring1: '戒指①', ring2: '戒指②', ring3: '戒指③', ring4: '戒指④',
+    amulet: '項鍊', ear1: '耳環①', ear2: '耳環②', belt: '腰帶'
+};
+const BIAN_SLOT_ORDER = ['wpn', 'offwpn', 'helm', 'armor', 'shield', 'cloak', 'tshirt', 'gloves', 'boots', 'shin', 'amulet', 'belt', 'ring1', 'ring2', 'ring3', 'ring4', 'ear1', 'ear2'];
+function bianAffixKind(d) {
+    if (!d || isRelic(d)) return null;
+    if (d.type === 'wpn' && !d.isArrow) return 'wpn';
+    if (d.type === 'arm' || d.type === 'acc') return d.type;
+    return null;
+}
+function bianAttrSlots() {
+    let out = [{ k: 'wpn', n: BIAN_SLOT_LABELS.wpn }];
+    let seen = new Set(['wpn']);
+    for (let k of BIAN_SLOT_ORDER) {
+        if (seen.has(k)) continue;
+        let it = player.eq && player.eq[k];
+        if (!it) continue;
+        let d = DB.items[it.id];
+        if (!bianAffixKind(d)) continue;
+        out.push({ k, n: BIAN_SLOT_LABELS[k] || k });
+        seen.add(k);
+    }
+    return out;
+}
 function doBianAttr(slotKey, ele) {
     let item = player.eq[slotKey];
-    if (!item) { logSys('該欄位沒有裝備武器。'); return; }
+    if (!item) { logSys('該欄位沒有裝備。'); return; }
     let d = DB.items[item.id];
-    if (!d || d.type !== 'wpn') { logSys('只能對武器賦予屬性。'); return; }
+    if (!bianAffixKind(d)) { logSys('只能對武器／防具／飾品賦予屬性。'); return; }
     if (isRelic(d)) { logSys('<span class="c-relic">遺物無法賦予屬性。</span>'); return; }   // 🏺 遺物：無法賦予屬性
     let cfg = ATTR_SCROLLS[ele]; if (!cfg) return;
     let sc = player.inv.find(i => i.id === cfg.id);
@@ -1029,6 +1054,7 @@ function doBianAttr(slotKey, ele) {
     let same = !!(cur && cur.ele === ele);
     let nextTier = same ? cur.tier + 1 : 1;   // 同屬性→下一階；無屬性/不同屬性→該屬性1階
     if (same && cur.tier >= 5) {
+        if (d.type !== 'wpn') { logSys('<span class="text-amber-300">防具／飾品屬性已達第五階，無法附加魔法。</span>'); return; }
         if (weaponHasBaseTriggeredSkill(d, item.id)) { logSys('<span class="text-amber-300">此武器無法附加魔法。</span>'); return; }   // 原生已有攻擊／命中觸發技能，不消耗
         let pool = ATTR_MAGIC_SKILLS[ele] || [];
         if (!pool.length) return;
@@ -1057,17 +1083,38 @@ function doBianAttr(slotKey, ele) {
     let en = Number(item.en) || 0;
     // 🗡️ v3.7.29 無法強化的非遺物武器（古老的劍／古老的巨劍）豁免 +10/+11 門檻：noEnhance 永遠 +0，不豁免＝永遠封頂第3階（用戶指示：維持不能強化、但賦予屬性可用到滿）
     let noEnhFree = !!d.noEnhance;   // 遺物已在上方 isRelic 擋掉，走到這裡的 noEnhance 只剩古老的系列
-    if (nextTier === 4 && en < 10 && !noEnhFree) { logSys('<span class="text-amber-300">武器需 +10 以上才能衝屬性第四階。</span>'); return; }   // 不消耗
-    if (nextTier === 5 && en < 11 && !noEnhFree) { logSys('<span class="text-amber-300">武器需 +11 以上才能衝屬性第五階。</span>'); return; }   // 不消耗
+    let _kindLbl = d.type === 'wpn' ? '武器' : '裝備';
+    if (nextTier === 4 && en < 10 && !noEnhFree) { logSys(`<span class="text-amber-300">${_kindLbl}需 +10 以上才能衝屬性第四階。</span>`); return; }   // 不消耗
+    if (nextTier === 5 && en < 11 && !noEnhFree) { logSys(`<span class="text-amber-300">${_kindLbl}需 +11 以上才能衝屬性第五階。</span>`); return; }   // 不消耗
     sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
     if (Math.random() < 0.07) {   // 🎲 7% 獨立事件（純機率·可 save/load 重抽·同強化政策）
         let oldMagic = getAttrMagicProc(item);
         item.attr = ATTR_ELE_PREFIX[ele] + nextTier;
         if (!same && (item.attrMagic || item.attrMagicStar)) { delete item.attrMagic; delete item.attrMagicStar; }   // 不同屬性成功→原屬性附加魔法與星級一併消失
         let aff = getAttrAffix(item.attr);
-        logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於武器 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。${!same && oldMagic ? '<span class="text-slate-400"> 原有附加魔法已隨屬性轉換消失。</span>' : ''}`);
+        logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於裝備 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。${!same && oldMagic ? '<span class="text-slate-400"> 原有附加魔法已隨屬性轉換消失。</span>' : ''}`);
     } else {
-        logSys(`<span class="text-slate-400">碧恩：元素之力潰散了……賦予屬性失敗（僅消耗 1 張 ${cfg.n}，武器安然無恙）。</span>`);
+        logSys(`<span class="text-slate-400">碧恩：元素之力潰散了……賦予屬性失敗（僅消耗 1 張 ${cfg.n}，裝備安然無恙）。</span>`);
+    }
+    calcStats(); updateUI(); renderTabs(true); saveGame();
+    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
+}
+function doBianAnc(slotKey) {
+    let item = player.eq[slotKey];
+    if (!item) { logSys('該欄位沒有裝備。'); return; }
+    let d = DB.items[item.id];
+    if (!bianAffixKind(d)) { logSys('只能對武器／防具／飾品賦予遠古之力。'); return; }
+    if (isRelic(d)) { logSys('<span class="c-relic">遺物無法賦予遠古之力。</span>'); return; }
+    if (item.anc) { logSys(`已有 <span class="${ancColorClass(item.anc)}">${ancName(item.anc)}</span> 詞綴，無法重複賦予。`); return; }
+    let sc = player.inv.find(i => i.id === BIAN_ANC_SCROLL);
+    if (!sc || sc.cnt < 1) { logSys('<span class="text-red-400">缺少 古代的卷軸。</span>'); return; }
+    sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
+    if (Math.random() < 0.07) {
+        let rolled = rollAncAffix();
+        item.anc = rolled;
+        logSys(`<span class="${ancColorClass(rolled)} font-bold">賦予${ancName(rolled)}成功！</span>碧恩將${ancName(rolled)}之力注入 → ${getItemFullName(item)}。`);
+    } else {
+        logSys('<span class="text-slate-400">碧恩：遠古之力潰散了……賦予失敗（僅消耗 1 張古代的卷軸，裝備安然無恙）。</span>');
     }
     calcStats(); updateUI(); renderTabs(true); saveGame();
     let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
@@ -1092,10 +1139,9 @@ function doBianUncurse(slotKey) {
     let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
 }
 function renderBianAttr(el) {
-    // 只列出 裝備中武器 與 副手武器（戰士雙持時才有 offwpn）
-    let slots = [{ k: 'wpn', n: '武器' }];
-    if (player.eq && player.eq.offwpn) slots.push({ k: 'offwpn', n: '副手武器' });
+    let slots = bianAttrSlots();
     let cnt = id => { let it = player.inv.find(i => i.id === id); return it ? it.cnt : 0; };
+    let ancCnt = cnt(BIAN_ANC_SCROLL);
     let rows = slots.map(sl => {
         let it = player.eq[sl.k];
         let name = it ? getItemFullName(it) : '<span class="text-slate-500">（未裝備）</span>';
@@ -1103,12 +1149,18 @@ function renderBianAttr(el) {
         let curTxt = cur ? `<span class="c-attr-${attrCanon(it.attr)}">${cur.n}（第${cur.tier}階）</span>` : '<span class="text-slate-500">無屬性</span>';
         let magic = it && getAttrMagicProc(it);
         if (magic) curTxt += `｜<span class="text-yellow-300">${'★'.repeat(magic.star)} ${(DB.skills[magic.skId] && DB.skills[magic.skId].n) || magic.skId} ${magic.rate}%</span>`;
+        if (it && it.anc) curTxt += `｜<span class="${ancColorClass(it.anc)}">${ancName(it.anc)}</span>`;
         let btns = it ? Object.keys(ATTR_SCROLLS).map(e2 => {
             let c = ATTR_SCROLLS[e2], have = cnt(c.id);
             return have > 0
                 ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 ${c.btn}" onclick="doBianAttr('${sl.k}','${e2}')">${c.n.slice(0, 2)}強化 (${have})</button>`
                 : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少 ${c.n}">${c.n.slice(0, 2)}強化 (0)</button>`;
         }).join('') : '';
+        if (it && !it.anc) {
+            btns += ancCnt > 0
+                ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-purple-900 border-purple-500 text-purple-200 hover:bg-purple-800" onclick="doBianAnc('${sl.k}')">遠古 (${ancCnt})</button>`
+                : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少古代的卷軸">遠古 (0)</button>`;
+        }
         return `<div class="flex flex-col gap-1 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
             <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}｜${curTxt}</span>
             <div class="flex items-center gap-1 flex-wrap">${btns}</div>
@@ -1123,10 +1175,10 @@ function renderBianAttr(el) {
     }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-2 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能將四大元素之力銘刻於你手中的武器。屬性提升成功率為 <b>7%</b>；第5階使用同屬性卷軸附加／重抽魔法的成功率為 <b>1%</b>。失敗僅消耗卷軸，武器不會消失。</div>
-            <div class="text-xs text-slate-400">無屬性成功→第1階；同屬性成功→提升1階（最高5階）；<b>不同屬性成功→變成該屬性第1階</b>。衝第4階需武器+10以上、第5階需+11以上（<b>無法強化的武器如古老的劍／古老的巨劍免此門檻</b>）。第1~5階：額外傷害/額外魔法點數 +1/+3/+5/+7/+9，一般攻擊轉為該屬性。</div>
-            <div class="text-xs text-slate-400">只有本身沒有攻擊／命中觸發技能的非遺物武器可附加魔法；成功時從該屬性5種魔法中抽選。同技能升1星並使觸發率乘上星數，最高3星；抽到不同技能則改為新技能1星。</div>
-            <div class="text-xs text-slate-400">持有卷軸：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span></div>
+            <div class="text-slate-300 text-sm leading-relaxed">碧恩：三詞玩法—<b>祝福</b>靠掉落／製作驚喜；<b>屬性</b>與<b>遠古</b>請交給我。裝備中的武器／防具／飾品皆可賦予（遺物除外）。屬性與遠古成功率皆為 <b>7%</b>；第5階武器附加／重抽魔法為 <b>1%</b>。失敗僅消耗卷軸。</div>
+            <div class="text-xs text-slate-400">屬性：無屬性成功→第1階；同屬性成功→提升1階（最高5階）；不同屬性成功→該屬性第1階。衝第4階需 +10、第5階需 +11（古老的劍／巨劍免門檻）。防具／飾品亦可帶屬性加成；一般攻擊轉屬性仍僅武器。</div>
+            <div class="text-xs text-slate-400">遠古：消耗古代的卷軸，成功後隨機獲得「遠古／永恆／不朽／太初」之一（每件限一次）。三詞齊全（祝福＋遠古＋屬性）時圖示為最高亮 tri-glow。</div>
+            <div class="text-xs text-slate-400">持有：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span>｜<span class="c-ancient">古代 ${ancCnt}</span></div>
             ${rows}
             ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
         </div>`;

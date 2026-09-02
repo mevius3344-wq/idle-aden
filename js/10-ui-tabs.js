@@ -2420,18 +2420,116 @@ function _leaderboardNavHtml() {
 function _leaderboardRowHtml(row, selfName) {
     let isSelf = !!(selfName && row.name && row.name === selfName);
     let medal = row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : ('#' + row.rank);
+    let _nameEsc = _pvpTabEsc(row.name);
     return `<div class="bg-slate-900/80 border ${isSelf ? 'border-amber-500/80 ring-1 ring-amber-500/30' : 'border-slate-700'} rounded p-3 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
             <div class="w-10 text-center shrink-0 text-lg font-bold text-amber-200">${medal}</div>
-            <div class="min-w-0">
-                <div class="truncate font-bold ${isSelf ? 'text-amber-200' : 'text-slate-100'}">${_pvpTabEsc(row.name)}${isSelf ? ' <span class="text-xs text-amber-300">（你）</span>' : ''}</div>
+            <div class="min-w-0 flex-1">
+                <div class="truncate font-bold ${isSelf ? 'text-amber-200' : 'text-slate-100'}">${_nameEsc}${isSelf ? ' <span class="text-xs text-amber-300">（你）</span>' : ''}</div>
                 <div class="text-xs text-slate-500 mt-0.5 truncate">${_pvpTabEsc(row.clsName || row.cls || '')} · Lv.${Math.max(1, Number(row.lv) || 1)}</div>
             </div>
         </div>
-        <div class="text-right shrink-0">
-            <div class="text-amber-200 font-bold">${_pvpTabEsc(row.valueLabel || '')}</div>
+        <div class="flex flex-col items-end gap-1 shrink-0">
+            <div class="text-amber-200 font-bold text-right">${_pvpTabEsc(row.valueLabel || '')}</div>
+            <button type="button" class="btn px-2 py-0.5 text-[11px] font-bold bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700" onclick="viewLeaderboardEquip(${JSON.stringify(row.name || '')})">查看裝備</button>
         </div>
     </div>`;
+}
+const LB_EQ_SLOT_LABELS = {
+    wpn: '武器', offwpn: '副手武器', helm: '頭盔', armor: '盔甲', shin: '脛甲', shield: '副手', cloak: '斗篷', tshirt: 'T恤',
+    gloves: '手套', boots: '長靴', amulet: '項鍊', ear1: '耳環①', ear2: '耳環②', ring1: '戒指①', ring2: '戒指②',
+    ring3: '戒指③', ring4: '戒指④', belt: '腰帶', doll: '魔法娃娃', arrow: '箭矢'
+};
+const LB_EQ_SLOT_ORDER = ['wpn', 'offwpn', 'helm', 'armor', 'shin', 'shield', 'cloak', 'tshirt', 'gloves', 'boots', 'amulet', 'ear1', 'ear2', 'ring1', 'ring2', 'ring3', 'ring4', 'belt', 'doll', 'arrow'];
+let _lbEquipState = null;
+function closeLeaderboardEquipModal() {
+    _lbEquipState = null;
+    let host = document.getElementById('lb-equip-modal');
+    if (host) host.remove();
+}
+function _lbEquipRowHtml(slotKey, item) {
+    let d = DB.items[item.id];
+    if (!d) return '';
+    let glow = getGlowClass(item, d);
+    let img = `<img src="${getIconUrl(d)}" onerror="this.style.opacity='0';" class="w-9 h-9 object-contain shrink-0 ${glow}">`;
+    let desc = typeof buildItemDescHTML === 'function' ? buildItemDescHTML(item) : '';
+    return `<details class="bg-slate-800/70 border border-slate-700 rounded p-2">
+        <summary class="flex items-center gap-2 cursor-pointer list-none">
+            ${img}
+            <div class="min-w-0 flex-1">
+                <div class="text-[11px] text-slate-500">${LB_EQ_SLOT_LABELS[slotKey] || slotKey}</div>
+                <div class="truncate font-bold ${getItemColor(item)}">${getItemFullName(item)}</div>
+            </div>
+        </summary>
+        <div class="text-xs text-slate-300 mt-2 pt-2 border-t border-slate-700 leading-relaxed">${desc}</div>
+    </details>`;
+}
+function renderLeaderboardEquipModal() {
+    let host = document.getElementById('lb-equip-modal');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'lb-equip-modal';
+        host.className = 'fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-3 sm:p-6';
+        host.onclick = (e) => { if (e.target === host) closeLeaderboardEquipModal(); };
+        document.body.appendChild(host);
+    }
+    let st = _lbEquipState || {};
+    let body = '';
+    if (st.loading) {
+        body = '<div class="text-slate-400 text-sm text-center py-10">載入裝備中…</div>';
+    } else if (st.error) {
+        body = `<div class="text-amber-200 text-sm text-center py-8 leading-relaxed">${_pvpTabEsc(st.error)}</div>`;
+    } else if (st.data) {
+        let eq = st.data.eq || {};
+        let rows = LB_EQ_SLOT_ORDER.map(k => eq[k] ? _lbEquipRowHtml(k, eq[k]) : '').filter(Boolean).join('');
+        body = rows
+            ? `<div class="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">${rows}</div>`
+            : '<div class="text-slate-500 text-sm text-center py-8">此角色目前沒有穿戴任何裝備。</div>';
+    }
+    host.innerHTML = `<div class="w-full max-w-lg bg-slate-900 border border-slate-600 rounded-lg shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-700 bg-slate-800/80">
+            <div class="min-w-0">
+                <div class="font-bold text-amber-200 truncate">${_pvpTabEsc(st.name || '')} 的裝備</div>
+                <div class="text-xs text-slate-500 mt-0.5">${st.data ? (_pvpTabEsc(st.data.clsName || st.data.cls || '') + ' · Lv.' + Math.max(1, Number(st.data.lv) || 1)) : '排行榜公開資料'}</div>
+            </div>
+            <button type="button" class="btn px-3 py-1 text-sm font-bold bg-slate-700 border-slate-600 text-slate-200 shrink-0" onclick="closeLeaderboardEquipModal()">關閉</button>
+        </div>
+        <div class="p-4">${body}</div>
+    </div>`;
+}
+function viewLeaderboardEquip(name) {
+    name = String(name || '').trim();
+    if (!name) return;
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+        alert('查看排行榜裝備需要連線至伺服器遊玩。');
+        return;
+    }
+    _lbEquipState = { name: name, loading: true, error: '', data: null };
+    renderLeaderboardEquipModal();
+    try {
+        let xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/leaderboard/equip?name=' + encodeURIComponent(name), true);
+        xhr.onload = function () {
+            let data = null;
+            try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { data = null; }
+            if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+                _lbEquipState = { name: name, loading: false, error: '', data: data };
+            } else {
+                _lbEquipState = {
+                    name: name, loading: false, error: (data && data.message) || '無法載入該角色裝備。', data: null
+                };
+            }
+            renderLeaderboardEquipModal();
+        };
+        xhr.onerror = function () {
+            _lbEquipState = { name: name, loading: false, error: '無法連線至排行榜伺服器。', data: null };
+            renderLeaderboardEquipModal();
+        };
+        xhr.send(null);
+    } catch (e) {
+        _lbEquipState = { name: name, loading: false, error: '無法載入裝備。', data: null };
+        renderLeaderboardEquipModal();
+    }
 }
 function loadLeaderboard(force) {
     if (_leaderboardLoading && !force) return;
@@ -2812,9 +2910,18 @@ function switchTab(t, btn, opts) {
     // 👇 更新陣列名單
     ['stats', 'equip', 'weapons', 'skill', 'talent', 'armors', 'items', 'audit', 'pvp', 'clan', 'party', 'auction', 'automation'].forEach(id => { let _e = document.getElementById(`tab-${id}`); if(_e) _e.classList.add('hidden'); });   // 🔧 v2.6.74 自動化設定改分頁內嵌（tab-automation）
     let panel = document.getElementById(`tab-${t}`);
-    if (panel) panel.classList.remove('hidden');
+    if (panel) {
+        panel.classList.remove('hidden');
+        if (t === 'talent') panel.classList.add('flex');
+    }
     if(typeof setEquipmentPanelEmbedded === 'function') setEquipmentPanelEmbedded(t === 'equip');
-    if(t === 'talent' && typeof renderTalentTab === 'function') { renderTalentTab(); if (typeof talentHookResize === 'function') talentHookResize(); }
+    if(t === 'talent') {
+        if (typeof renderTalentTab === 'function') { renderTalentTab(); if (typeof talentHookResize === 'function') talentHookResize(); }
+        else {
+            let tr = document.getElementById('tab-talent');
+            if (tr) tr.innerHTML = '<div class="p-4 text-red-400 text-sm">天賦模組未載入，請 Ctrl+F5 強制重新整理（確認 js/39-talent-tree.js 已更新）。</div>';
+        }
+    }
     if(t === 'audit' && typeof renderAuditTab === 'function') renderAuditTab();
     if(t === 'pvp' && typeof renderPvpTab === 'function') renderPvpTab();
     if(t === 'clan' && typeof renderClanTab === 'function') renderClanTab();

@@ -3,7 +3,7 @@
 /**
  * 登入閘門：帳號／密碼預設空白（不再固定為「天堂」）。
  * 線上：帳號全站唯一（/api/accounts）；本機快取密碼以便同瀏覽器自動續登。
- * 登入時佔用 IP 連線名額（同 IP 最多雙開）。
+ * 登入時佔用 IP 連線名額（同 IP 最多雙開）·帳號單一裝置登入。
  */
 (function () {
   const ACC_PREFIX = "fb5_account_";
@@ -190,6 +190,36 @@
     } catch (e) {}
   }
 
+  function getClientId() {
+    try {
+      if (window.IpSessionLimit && typeof window.IpSessionLimit.getClientId === "function") {
+        return window.IpSessionLimit.getClientId();
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  function holdAccountSession() {
+    if (window.AccountSessionLimit && typeof window.AccountSessionLimit.hold === "function") {
+      return window.AccountSessionLimit.hold();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
+  function validateAccountSession() {
+    if (window.AccountSessionLimit && typeof window.AccountSessionLimit.validate === "function") {
+      return window.AccountSessionLimit.validate();
+    }
+    return Promise.resolve({ ok: true, offline: true });
+  }
+
+  function releaseAccountSession() {
+    if (window.AccountSessionLimit && typeof window.AccountSessionLimit.release === "function") {
+      return window.AccountSessionLimit.release();
+    }
+    return Promise.resolve({ ok: true });
+  }
+
   function claimIp() {
     if (window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function") {
       return window.IpSessionLimit.claim();
@@ -365,7 +395,9 @@
         saveAccount(acc || account, password);
         claimIp().then(function (r) {
           if (r && r.ok) {
-            enterGame(acc || account);
+            holdAccountSession().then(function () {
+              enterGame(acc || account);
+            });
             return;
           }
           const msg =
@@ -392,9 +424,16 @@
         return;
       }
 
-      httpJson("POST", "/api/accounts/login", { account: account, password: password })
+      httpJson("POST", "/api/accounts/login", {
+        account: account,
+        password: password,
+        clientId: getClientId(),
+      })
         .then(function (r) {
           if (r && r.data && r.data.ok) {
+            if (r.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+              window.anticheatSetAuthToken(r.data.authToken);
+            }
             finishOk((r.data && r.data.account) || account);
             return;
           }
@@ -425,7 +464,9 @@
           }
           const msg =
             (r && r.data && r.data.message) ||
-            "帳號或密碼錯誤。";
+            (r && r.data && r.data.error === "session_active"
+              ? "此帳號已在其他裝置登入。請先於該裝置登出後再試。"
+              : "帳號或密碼錯誤。");
           setStatus(msg, "err");
         })
         .catch(function () {
@@ -440,6 +481,7 @@
         window.IpSessionLimit.release();
       } catch (e) {}
     }
+    releaseAccountSession();
     // 先把本機存檔刷上雲端，再清快取（避免雲端空／部署後登出把角色洗掉）
     try {
       if (window.cloudFlushLocalToCloud && typeof window.cloudFlushLocalToCloud === "function") {
@@ -452,14 +494,29 @@
       }
     } catch (e2) {}
     setSession("");
+    if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
     setStatus("已登出。", "ok");
   }
 
   function onIpSessionLost() {
     setSession("");
+    if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
     setStatus("連線名額已失效（IP 雙開限制）。請重新登入。", "err");
+  }
+
+  function onAccountSessionLost(payload) {
+    setSession("");
+    if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+    showLoggedOut();
+    var msg =
+      (payload && payload.message) ||
+      "此帳號已在其他裝置登入，本裝置已自動登出。";
+    setStatus(msg, "err");
+    try {
+      alert(msg);
+    } catch (e) {}
   }
 
   function boot() {
@@ -508,21 +565,46 @@
       try {
         window.__fb5AuthAccount = session;
       } catch (e) {}
+      var hasToken = false;
+      try {
+        hasToken = !!(typeof window.anticheatGetAuthToken === "function" && window.anticheatGetAuthToken());
+      } catch (e0) {}
+      if (!hasToken) {
+        setSession("");
+        try {
+          window.__fb5AuthAccount = "";
+        } catch (e1) {}
+        showLoggedOut();
+        setStatus("請重新登入以套用最新版本。", "ok");
+        return;
+      }
       claimIp().then(function (r) {
         if (r && r.ok) {
-          ensureLocalAccountsOnServer()
-            .catch(function () {
-              return false;
-            })
-            .then(function () {
-              try {
-                if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
-              } catch (e) {}
-              return syncCloud();
-            })
-            .finally(function () {
-              showLoggedIn(session);
-            });
+          validateAccountSession().then(function (sess) {
+            if (!sess || !sess.ok) {
+              setSession("");
+              if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+              showLoggedOut();
+              setStatus(
+                (sess && sess.message) || "登入已失效，請重新登入。",
+                "err"
+              );
+              return;
+            }
+            ensureLocalAccountsOnServer()
+              .catch(function () {
+                return false;
+              })
+              .then(function () {
+                try {
+                  if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
+                } catch (e) {}
+                return syncCloud();
+              })
+              .finally(function () {
+                showLoggedIn(session);
+              });
+          });
         } else {
           setSession("");
           showLoggedOut();
@@ -553,5 +635,6 @@
     logoutAccount: logoutAccount,
     currentAccount: currentSession,
     onIpSessionLost: onIpSessionLost,
+    onAccountSessionLost: onAccountSessionLost,
   };
 })();

@@ -1,6 +1,6 @@
 ﻿/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.8.34';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.8.138';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '躺著變強';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1287,10 +1287,10 @@ const DB = {
         "scroll_armor_c": { n: "詛咒的 對盔甲施法的卷軸", p: 33334, c: "c-cursed", d: "纏繞格蘭肯氣息的卷軸，會削弱防具上既有的強化魔力。", isC: true, gachaWeight: 20 },
         "scroll_acc": { n: "對飾品施法的卷軸", p: 50000, c: "text-white", d: "專為飾品刻寫的強化卷軸，細小的器物難以承受失控的魔力。", gachaWeight: 10 },
         // ===== 🔥 屬性強化卷軸（v3.0.77 屬性強化系統）：怪物掉落·於象牙塔『碧恩』對裝備中武器使用·7% 獨立事件·失敗僅消耗卷軸 =====
-        "scroll_attr_fire":  { n: "火之武器強化卷軸", type: "misc", p: 100000, c: "c-attr-fr3", noUse: true, gachaWeight: 0, d: "封存帕格里奧烈焰的卷軸，可交由象牙塔的碧恩嘗試將火之力灌入武器。" },
-        "scroll_attr_water": { n: "水之武器強化卷軸", type: "misc", p: 100000, c: "c-attr-wa3", noUse: true, gachaWeight: 0, d: "封存伊娃潮汐的卷軸，可交由象牙塔的碧恩嘗試將水之力灌入武器。" },
-        "scroll_attr_wind":  { n: "風之武器強化卷軸", type: "misc", p: 100000, c: "c-attr-wi3", noUse: true, gachaWeight: 0, d: "封存沙哈疾風的卷軸，可交由象牙塔的碧恩嘗試將風之力灌入武器。" },
-        "scroll_attr_earth": { n: "地之武器強化卷軸", type: "misc", p: 100000, c: "c-attr-ea3", noUse: true, gachaWeight: 0, d: "封存馬普勒大地之力的卷軸，可交由象牙塔的碧恩嘗試將地之力灌入武器。" },
+        "scroll_attr_fire":  { n: "火之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-fr3", noUse: true, gachaWeight: 0, d: "封存帕格里奧烈焰的卷軸，可交由象牙塔的碧恩嘗試將火之力灌入裝備中的武器／防具／飾品。" },
+        "scroll_attr_water": { n: "水之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-wa3", noUse: true, gachaWeight: 0, d: "封存伊娃潮汐的卷軸，可交由象牙塔的碧恩嘗試將水之力灌入裝備中的武器／防具／飾品。" },
+        "scroll_attr_wind":  { n: "風之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-wi3", noUse: true, gachaWeight: 0, d: "封存沙哈疾風的卷軸，可交由象牙塔的碧恩嘗試將風之力灌入裝備中的武器／防具／飾品。" },
+        "scroll_attr_earth": { n: "地之裝備強化卷軸", type: "misc", p: 100000, c: "c-attr-ea3", noUse: true, gachaWeight: 0, d: "封存馬普勒大地之力的卷軸，可交由象牙塔的碧恩嘗試將地之力灌入裝備中的武器／防具／飾品。" },
         "new_item_bless_wpn": { n: "賦予武器祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },   // 🔥 v3.0.77 停用（碧恩改賦予屬性·克里斯特移除）
         "new_item_bless_arm": { n: "賦予盔甲祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },
         "new_item_bless_acc": { n: "賦予飾品祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "舊時代的祝福卷軸（祝福裝備功能已由『賦予屬性』取代，此卷軸已無用途）。", isAnc: true, noUse: true, gachaWeight: 0 },
@@ -1594,7 +1594,7 @@ const DB = {
         // ===== 🏝️ 遺忘之島：飾品 =====
         "rng_harpy": { n: "哈維戒指", type: "acc", slot: "ring", ac: 0, resWind: 10, mpR: 1, req: "all", safe: 0, p: 100000, gachaWeight: 1, d: "鑲嵌哈維羽風的戒指，戴上時指間隱隱有微風盤旋。" },
         // ===== 🏝️ 遺忘之島：製作材料 =====
-        "item_ancient_scroll": { n: "古代的卷軸", type: "etc", p: 1, c: "text-amber-300", noUse: true, gachaWeight: 0, d: "製作材料。" },
+        "item_ancient_scroll": { n: "古代的卷軸", type: "etc", p: 1, c: "text-amber-300", noUse: true, gachaWeight: 0, d: "製作材料；亦可交由象牙塔的碧恩嘗試為裝備中的武器／防具／飾品隨機賦予「遠古／永恆／不朽／太初」詞綴（成功率 7%）。" },
         "item_wind_tear": { n: "風之淚", type: "etc", p: 1, c: "text-cyan-300", noUse: true, gachaWeight: 0, d: "製作材料。沙哈之弓的材料之一。" },
         "item_unknown_spear": { n: "不為人知的矛", type: "etc", p: 1, c: "text-blue-300", noUse: true, gachaWeight: 0, d: "製作材料。" },
         "mat_unknown_axe": { n: "不為人知的斧", type: "etc", p: 1, c: "text-blue-300", noUse: true, gachaWeight: 0, d: "製作材料。" },
@@ -1608,8 +1608,8 @@ const DB = {
         // ===== 🏛️ 古代/古老裝備（威頓村 客盧亞 製作）=====
         "armguard_archer": { n: "古代神射臂甲", type: "arm", slot: "shield", ac: 0, mhp: 80, req: "all", safe: 0, p: 100000, gachaWeight: 0, armguard: { stat: "rangedDmg", base: 1, th: [1, 2, 3] }, d: "古代神射手綁縛拉弦之臂的護甲，仍留有他百步穿楊的氣度（裝於副手，可與雙手武器並用）。" },
         "armguard_fighter": { n: "古代鬥士臂甲", type: "arm", slot: "shield", ac: 0, resFire: 5, resWater: 5, resEarth: 5, resWind: 5, req: "all", safe: 0, p: 100000, gachaWeight: 0, armguard: { stat: "meleeDmg", base: 1, th: [1, 2, 3] }, d: "古代競技場鬥士磨礪近身搏殺的臂甲，刻滿了無數場生死搏鬥的痕跡（裝於副手，可與雙手武器並用）。" },
-        "wpn_old_sword": { n: "古老的劍", type: "wpn", dmgS: 35, dmgL: 20, hit: 5, dmgBonus: 0, spd: 0.8, req: "knight,elf,dark", safe: 0, p: 15000, gachaWeight: 0, noEnhance: true, d: "塵封已久的古代單手劍，劍身雖舊，鋒芒卻不減當年。反擊、居合；無法強化，但可請象牙塔的碧恩賦予屬性（免 +10/+11 門檻，可直上第五階）。" },
-        "wpn_old_greatsword": { n: "古老的巨劍", type: "wpn", w2h: true, dmgS: 27, dmgL: 45, hit: 3, dmgBonus: 3, spd: 0.9, req: "knight", safe: 0, p: 15000, gachaWeight: 0, eff: "cleave", noEnhance: true, d: "古老戰場上遺落的雙手巨劍，沉甸甸的劍身仍能一掃千軍。切割；無法強化，但可請象牙塔的碧恩賦予屬性（免 +10/+11 門檻，可直上第五階）。" },
+        "wpn_old_sword": { n: "古老的劍", type: "wpn", dmgS: 35, dmgL: 20, hit: 5, dmgBonus: 0, spd: 0.8, req: "knight,elf,dark", safe: 0, p: 15000, gachaWeight: 0, noEnhance: true, d: "塵封已久的古代單手劍，劍身雖舊，鋒芒卻不減當年。反擊、居合；無法強化，但可請象牙塔的碧恩賦予屬性與遠古（免 +10/+11 門檻，可直上第五階）。" },
+        "wpn_old_greatsword": { n: "古老的巨劍", type: "wpn", w2h: true, dmgS: 27, dmgL: 45, hit: 3, dmgBonus: 3, spd: 0.9, req: "knight", safe: 0, p: 15000, gachaWeight: 0, eff: "cleave", noEnhance: true, d: "古老戰場上遺落的雙手巨劍，沉甸甸的劍身仍能一掃千軍。切割；無法強化，但可請象牙塔的碧恩賦予屬性與遠古（免 +10/+11 門檻，可直上第五階）。" },
         "wpn_old_xbow": { n: "古老的弩槍", type: "wpn", isBow: true, ranged: true, oneHand: true, rapidfire: 90, dmgS: 3, dmgL: 3, hit: 5, dmgBonus: 2, spd: 0.9, req: "elf,dark", safe: 6, p: 15000, gachaWeight: 0, d: "古代工匠巧製的單手弩槍，是有史以來第一把可單手持握的弓。" },
         "wpn_ancient_spear": { n: "古代神之槍", type: "wpn", w2h: true, legend: true, dmgS: 27, dmgL: 30, hit: 3, dmgBonus: 5, spd: 1.1, req: "knight", safe: 6, p: 465000, gachaWeight: 0, eff: "pierce", pierceChance: 90, d: "傳說由古代神祇親手持握的雙手神槍，槍尖所向無可阻擋。" },
         "wpn_ancient_axe": { n: "古代神之斧", type: "wpn", legend: true, dmgS: 25, dmgL: 28, hit: 3, dmgBonus: 8, spd: 1, req: "warrior", safe: 6, p: 465000, gachaWeight: 0, d: "古代神祇腰間配掛的單手神斧，劈下時連神明也為之低首。鈍擊。" },
@@ -2524,7 +2524,7 @@ const DB = {
                 { id: "npc_nikki", n: "尼奇", title: "雜貨商人", type: "shop", d: "硝煙散去後，尼奇在新得的城裡擺起攤子——攻城獲勝後開放的肯特城雜貨商。" },
                 { id: "npc_wh_kent", n: "巴歐", title: "倉庫", type: "warehouse", d: "巴歐替占領者看管著肯特城的庫房，存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ismael", n: "伊賽馬利", title: "交換物品", type: "exchange", d: "伊賽馬利精於以物易物，以卷軸或金幣交換稀有的祝福卷軸與飾品卷軸。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服上架一件寶物，以競標方式出售，價高者得。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服隨機上架一件寶物競標，結束後間歇 60 分鐘再出下一件，價高者得。" },
                 { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長統領藍色鯊魚部隊，招募血厚耐打的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
@@ -2559,7 +2559,7 @@ const DB = {
                 { id: "npc_gilen", n: "吉倫", title: "魔法傳授者", type: "skill", d: "吉倫是位循循善誘的魔法導師，提供玩家學習1~3級一般魔法。" },
                 { id: "npc_basin", n: "巴辛", title: "妖魔商人", type: "shop", d: "巴辛是混跡市集的妖魔商人，販賣各種日常消耗品。" },
                 { id: "npc_wh_talking", n: "朵琳", title: "倉庫", type: "warehouse", d: "朵琳細心地替旅人看管行囊，存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服上架一件寶物，以競標方式出售，價高者得。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服隨機上架一件寶物競標，結束後間歇 60 分鐘再出下一件，價高者得。" },
                 { id: "npc_ladal", n: "拉達爾", title: "製作", type: "craft", d: "拉達爾揉皮裁料樣樣精通，能為冒險者製作皮革裝備。" },
 				{ id: "npc_falin", n: "法林", title: "製作", type: "craft", d: "法林手藝獨到，能製作銀釘皮裝備。" },
                 { id: "npc_ryan", n: "萊恩", title: "製作", type: "craft", d: "萊恩在爐火旁默默打磨成品，提供物品製作服務。" },
@@ -2676,7 +2676,7 @@ const DB = {
                 { id: "npc_taras", n: "塔拉斯", title: "試煉", type: "quest", d: "鑽研亡者學識的塔拉斯。主持法師的 30、45 級試煉：達等級後接取任務，收集不死族遺物，一次完成領取全部獎勵。" },
                 { id: "npc_tas", n: "塔斯", title: "製作", type: "craft", d: "煉藥師塔斯能將純白之力調和成各色靈藥。以 3 個純白的萬能藥，製作任一屬性的萬能藥。" },
                 { id: "npc_bayes", n: "巴耶斯", title: "魔法商人", type: "shop", d: "博覽群書的巴耶斯，書架上盡是深奧的咒文。販售各種高階魔法書。" },
-                { id: "npc_bian", n: "碧恩", title: "賦予屬性", type: "bless", d: "屬性強化師碧恩，能將四大元素之力銘刻於武器。使用屬性強化卷軸為裝備中的武器（與副手武器）賦予或提升屬性（成功率 7%，失敗僅消耗卷軸）。" },
+                { id: "npc_bian", n: "碧恩", title: "三詞強化", type: "bless", d: "屬性強化師碧恩：使用四屬性強化卷軸為裝備中的武器／防具／飾品賦予或提升屬性（7%）；使用古代的卷軸隨機賦予遠古／永恆／不朽／太初詞綴（7%）。祝福詞綴仍靠掉落／製作。" },
                 { id: "npc_digallatin", n: "迪嘉勒廷", title: "試煉", type: "quest", d: "嚴苛的試煉主持者迪嘉勒廷，只認可真正的強者。主持騎士、妖精、法師與王族的 50 級試煉（需等級 50 接取；完成階段任務後開啟魔族神殿）。" },
                 { id: "npc_dytite", n: "迪泰特", title: "解除封印", type: "craft", d: "通曉古法的迪泰特，能讀懂被歲月遺忘的封印。以古代的卷軸解除被遺忘裝備的封印，還原成古老的武器與防具。" },
                 { id: "npc_mystic_mage", n: "神秘的魔法師", title: "魔杖改造", type: "craft", d: "不願透露姓名的魔法師，擅長以鋼鐵重鑄法器。以 +7 以上的瑪那魔杖或力量魔法杖，加上魔法寶石與金屬塊，鍛造出鋼鐵瑪那魔杖（成品為 +0）。" }

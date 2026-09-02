@@ -395,6 +395,10 @@ function getGlowClass(item, d) {
 
 // 物品全名（HTML：各詞綴分段各自上色；順序 屬性→遠古→祝福的→[+N]名字；名字顏色＝最靠近的詞綴）
 // 遠古系詞綴變體：遠古(基礎,anc=true) / 永恆(eternal) / 不朽(immortal) / 太初(primordial)
+const ANC_AFFIX_POOL = [true, 'eternal', 'immortal', 'primordial'];
+function rollAncAffix() {
+    return ANC_AFFIX_POOL[Math.floor(Math.random() * ANC_AFFIX_POOL.length)];
+}
 function ancName(anc) {
     if (!anc) return '';
     return ({ eternal: '永恆', immortal: '不朽', primordial: '太初' })[anc] || '遠古';

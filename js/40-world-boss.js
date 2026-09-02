@@ -267,7 +267,7 @@
             account: id.account,
             slot: id.slot,
             name: id.name || ''
-        }, extra || {});
+        }, (typeof anticheatAuthExtras === 'function' ? anticheatAuthExtras() : {}), extra || {});
         return fetch('/api/worldboss/heartbeat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

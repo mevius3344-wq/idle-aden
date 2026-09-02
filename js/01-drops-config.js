@@ -2563,9 +2563,8 @@ function blessEnhanceGain(en) {
     return blessEnhanceGainFromRoll(en, en <= 5 ? Math.random() : 0);
 }
 // 🛡️ runtime 合理性檢查：把「遊戲規則上不可能」的玩家數值夾回合法範圍，抓「隨手用 DevTools Console / 改存檔」調參數的笨外掛。
-//    只夾「有硬性上限、超過即證明不可能」者：等級≤100（checkLvUp 硬上限）、裝備強化值≤各類上限、經驗/金幣為非負有限數。
-//    ⚠️金幣的「高但合法」值與屬性點(player.base/bonus)無乾淨上限 → 刻意不夾，避免誤傷合法玩家（純客戶端分辨不出高額合法 vs 作弊）。
-//    掛點：saveGame(寫檔前) + loadGame(讀檔後)；recomputeStats 另即時夾等級。失敗即爆裝/重算 hp/mp 等已由既有機制處理。
+//    等級≤100、裝備強化≤上限、金幣/經驗依等級上限（anticheatClampPlayer）、萬能藥≤30瓶。
+//    掛點：saveGame(寫檔前) + loadGame(讀檔後)；recomputeStats 另即時夾等級。
 /** 正規化金幣為非負有限整數（字串數字可轉回；NaN/Infinity → 0） */
 function normalizePlayerGold(v) {
     let n = Number(v);
@@ -2591,6 +2590,7 @@ function sanitizeState() {
     player.lv   = Math.max(1, Math.min(100, Math.floor(fin(player.lv, 1)) || 1));   // 等級 [1,100]
     player.exp  = Math.max(0, fin(player.exp, 0));                                   // 經驗非負有限
     player.gold = normalizePlayerGold(player.gold);   // 金幣：擋負值/NaN/Infinity／字串拼接殘骸
+    if (typeof anticheatClampPlayer === 'function') anticheatClampPlayer();   // 🛡️ 依等級夾限金幣/經驗/萬能藥/背包
     let clampEn = it => { let dd = it && DB.items[it.id]; if (dd && (dd.type === 'wpn' || dd.type === 'arm' || dd.type === 'acc')) it.en = Math.min(Math.max(-1, Number(it.en) || 0), enhanceCap(dd)); };   // 只夾裝備類（素材/消耗品不碰）；🏰 下限 -1（詛咒卷軸紅變，見 executeCurseDeEnhance）
     if (Array.isArray(player.inv)) player.inv.forEach(clampEn);
     if (player.eq) for (let k in player.eq) clampEn(player.eq[k]);

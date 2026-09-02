@@ -95,7 +95,7 @@
         if (!rtPartyIsHttp()) return Promise.resolve(null);
         var base = rtPartyBodyExtras();
         if (!base) return Promise.resolve({ ok: false, error: 'need account', message: '請先登入帳號再組隊。' });
-        var body = Object.assign({}, base, extra || {});
+        var body = Object.assign({}, base, (typeof anticheatAuthExtras === 'function' ? anticheatAuthExtras() : {}), extra || {});
         return fetch('/api/party/' + path, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

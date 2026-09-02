@@ -1,10 +1,11 @@
-// 潘朵拉黑市：全服單件競標（每 20 分鐘一件）·需連線 API
+// 潘朵拉黑市：全服單件競標（競標 20 分鐘 · 間歇 60 分鐘）·需連線 API
 (function () {
   "use strict";
 
   var _ready = null;
   var _readyAt = 0;
   var _pollBusy = false;
+  var _pandoraLastLotSeq = 0;
 
   function _httpOk() {
     try {
@@ -57,6 +58,46 @@
     return 1;
   }
 
+  function pandoraAnnounceServerLot(lot) {
+    if (!lot || lot.phase !== "active" || !lot.itemId) return;
+    var d;
+    try {
+      d = DB.items[lot.itemId];
+    } catch (e) {
+      d = null;
+    }
+    if (!d) return;
+    var inst = { id: lot.itemId, bless: !!lot.bless };
+    var rare = lot.weight === 1;
+    try {
+      if (typeof player !== "undefined" && player) {
+        player.pandoraAnnounce = lot.itemId;
+        player.pandoraAnnounceBless = !!lot.bless;
+      }
+    } catch (e2) {}
+    try {
+      if (typeof logSys === "function") {
+        logSys(
+          '<span class="pandora-stock-log"><span class="text-purple-300 font-bold">📢【潘朵拉黑市】</span>新商品上架競標！<span class="' +
+            getItemColor(inst) +
+            ' font-bold">' +
+            getItemFullName(inst) +
+            "</span>，起標 <span class=\"text-yellow-300\">" +
+            Number(lot.startPrice || 0).toLocaleString() +
+            "</span> 金，競標 20 分鐘！" +
+            (rare ? '<span class="text-purple-300">（珍稀）</span>' : "") +
+            "</span>"
+        );
+      }
+    } catch (e3) {}
+    try {
+      if (typeof renderPandoraBanner === "function") renderPandoraBanner();
+    } catch (e4) {}
+    try {
+      if (typeof renderSyslogPandora === "function") renderSyslogPandora();
+    } catch (e5) {}
+  }
+
   function pandoraSyncServerLot() {
     if (!pandoraServerEnabled()) return Promise.resolve(false);
     var acc = _account();
@@ -67,15 +108,26 @@
       })
       .then(function (data) {
         if (!data || !data.ok) return false;
-        window._pandoraServerLot = data.lot || null;
-        window._pandoraMyBuyOrders = data.myBuyOrders || [];
+        var lot = data.lot || null;
+        if (lot && lot.phase === "active" && lot.seq && lot.seq !== _pandoraLastLotSeq) {
+          _pandoraLastLotSeq = lot.seq;
+          pandoraAnnounceServerLot(lot);
+        } else if (lot && lot.phase === "gap") {
+          try {
+            if (typeof player !== "undefined" && player) {
+              player.pandoraAnnounce = null;
+              player.pandoraAnnounceBless = false;
+            }
+          } catch (e) {}
+        }
+        window._pandoraServerLot = lot;
         try {
           if (typeof renderSyslogPandora === "function") renderSyslogPandora();
-        } catch (e) {}
+        } catch (e6) {}
         if (_pandoraDiv && document.body.contains(_pandoraDiv) && _pandoraDiv.querySelector("#pandora-msg")) {
           try {
             if (typeof pandoraRenderMarket === "function") pandoraRenderMarket(_pandoraDiv);
-          } catch (e2) {}
+          } catch (e7) {}
         }
         return true;
       })
@@ -189,6 +241,10 @@
     amount = Math.floor(Number(amount));
     if (!Number.isFinite(amount) || amount <= 0) return Promise.resolve(false);
     var prevLot = window._pandoraServerLot || {};
+    if (prevLot.phase === "gap") {
+      alert("本輪競標已結束，請等待下一件商品上架。");
+      return Promise.resolve(false);
+    }
     var wasLeader = !!prevLot.isLeader;
     var prevBid = wasLeader ? Math.max(0, Number(prevLot.highBid) || 0) : 0;
     var pay = wasLeader ? Math.max(0, amount - prevBid) : amount;
@@ -222,7 +278,7 @@
           var msg =
             data.error === "bid_too_low"
               ? "出價過低，至少需要 " + (data.minBid || 0).toLocaleString() + " 金幣。"
-              : data.error === "lot_ended"
+              : data.error === "lot_ended" || data.error === "lot_gap"
                 ? "本輪競標已結束，請稍候新商品。"
                 : "出價失敗。";
           alert(msg);
@@ -258,50 +314,6 @@
       });
   }
 
-  function pandoraSubmitServerBuyOrder(itemId, maxPrice) {
-    var acc = _account();
-    if (!acc) {
-      alert("請先登入帳號再登記收購。");
-      return Promise.resolve(false);
-    }
-    return fetch("/api/pandora/buy-order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account: acc,
-        slot: _slot(),
-        charName: _charName(),
-        itemId: itemId,
-        maxPrice: maxPrice,
-      }),
-    })
-      .then(function (res) {
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data || !data.ok) {
-          alert("收購登記失敗。");
-          return false;
-        }
-        return pandoraSyncServerLot();
-      });
-  }
-
-  function pandoraCancelServerBuyOrder(itemId) {
-    var acc = _account();
-    if (!acc) return Promise.resolve(false);
-    return fetch(
-      "/api/pandora/buy-order?account=" + encodeURIComponent(acc) + "&itemId=" + encodeURIComponent(itemId),
-      { method: "DELETE" }
-    )
-      .then(function (res) {
-        return res.json();
-      })
-      .then(function () {
-        return pandoraSyncServerLot();
-      });
-  }
-
   function pandoraServerTick() {
     if (!pandoraServerEnabled()) return;
     pandoraSyncServerLot();
@@ -312,8 +324,6 @@
   window.pandoraSyncServerLot = pandoraSyncServerLot;
   window.pandoraPollClaims = pandoraPollClaims;
   window.pandoraPlaceServerBid = pandoraPlaceServerBid;
-  window.pandoraSubmitServerBuyOrder = pandoraSubmitServerBuyOrder;
-  window.pandoraCancelServerBuyOrder = pandoraCancelServerBuyOrder;
   window.pandoraServerTick = pandoraServerTick;
 
   if (typeof document !== "undefined" && document.addEventListener) {

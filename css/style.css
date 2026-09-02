@@ -21,6 +21,7 @@
     background:#08090d;
     font-family:"Microsoft JhengHei",Arial,sans-serif;
 }
+#tab-stats.ability-window-tab.hidden { display: none !important; }
 .ability-window-shell {
     position:relative;
     flex:0 0 auto;
@@ -2378,7 +2379,8 @@ button.classic-skill-cell { cursor:pointer; }
     #col-right.mobile-tab-open #tab-items.classic-inventory-tab,
     #col-right.mobile-tab-open #tab-weapons.classic-inventory-tab,
     #col-right.mobile-tab-open #tab-armors.classic-inventory-tab,
-    #col-right.mobile-tab-open #tab-equip.classic-inventory-tab {
+    #col-right.mobile-tab-open #tab-equip.classic-inventory-tab,
+    #col-right.mobile-tab-open #tab-talent:not(.hidden) {
         height: 100% !important;
         max-height: 100% !important;
     }
@@ -4114,6 +4116,8 @@ button.classic-skill-cell { cursor:pointer; }
 }
 
 /* ===== 🌟 九天星盤 · 天賦樹分頁 ===== */
+#tab-talent { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+#tab-talent.hidden { display: none !important; }
 .talent-tab { background: #0b1220; }
 .talent-panel { display: flex; flex-direction: column; gap: 10px; min-height: 100%; }
 .talent-header { text-align: center; }

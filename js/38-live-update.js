@@ -1,13 +1,22 @@
-/* 🔄 線上即時偵測伺服器部署：buildId 變更時自動存檔並重新載入，免玩家手動重製／硬重載 */
+/* 🔄 強制即時同步：伺服器 gameVersion / buildId 變更 → 存檔並強制重載（含手機） */
 (function () {
     'use strict';
 
-    var POLL_MS = 45000;
-    var RELOAD_DELAY_MS = 2500;
+    var POLL_MS = 5000;
+    var RELOAD_DELAY_MS = 800;
     var _bootBuildId = null;
     var _reloading = false;
     var _timer = null;
-    var _failStreak = 0;
+
+    function _clientVer() {
+        try {
+            if (window.__CLIENT_GAME_VERSION) return String(window.__CLIENT_GAME_VERSION);
+        } catch (e) {}
+        try {
+            if (typeof GAME_VERSION !== 'undefined') return String(GAME_VERSION);
+        } catch (e2) {}
+        return '';
+    }
 
     function _isHttp() {
         try {
@@ -53,46 +62,75 @@
         try {
             if (typeof _flushSaveNow === 'function') _flushSaveNow();
         } catch (e2) {}
+        try {
+            if (typeof window.cloudFlushLocalToCloud === 'function') window.cloudFlushLocalToCloud();
+        } catch (e3) {}
     }
 
-    function _doReload() {
+    function _reloadUrl(targetVer) {
+        var url = location.href.split('#')[0];
+        url = url.replace(/([?&])_v=[^&]*/g, '').replace(/([?&])_build=[^&]*/g, '').replace(/[?&]$/, '');
+        var join = url.indexOf('?') >= 0 ? '&' : '?';
+        var v = targetVer || _clientVer() || Date.now();
+        return url + join + '_v=' + encodeURIComponent(String(v)) + '&_t=' + Date.now();
+    }
+
+    function _doReload(reason, targetVer) {
         if (_reloading) return;
         _reloading = true;
-        _banner('伺服器已更新，正在同步新版本…');
+        _banner(reason || '偵測到新版本，正在強制更新…');
         _flushSave();
         setTimeout(function () {
             try {
-                var url = location.href.split('#')[0];
-                var join = url.indexOf('?') >= 0 ? '&' : '?';
-                // 強制繞過快取重載
-                location.replace(url.replace(/([?&])_build=\w+/g, '').replace(/[?&]$/, '') + join + '_build=' + Date.now());
+                location.replace(_reloadUrl(targetVer));
             } catch (e) {
-                try { location.reload(); } catch (e2) {}
+                try { location.reload(true); } catch (e2) {
+                    try { location.reload(); } catch (e3) {}
+                }
             }
         }, RELOAD_DELAY_MS);
     }
 
+    function _versionUrl() {
+        try {
+            if (window.GAME_HOST && typeof window.GAME_HOST.apiUrl === 'function') {
+                return window.GAME_HOST.apiUrl('/api/version?t=' + Date.now());
+            }
+        } catch (e) {}
+        return '/api/version?t=' + Date.now();
+    }
+
+    function _needsReload(data) {
+        if (!data || !data.ok) return false;
+        var client = _clientVer();
+        var serverVer = data.gameVersion ? String(data.gameVersion) : '';
+        var buildId = data.buildId ? String(data.buildId) : '';
+        if (serverVer && client && serverVer !== client) {
+            return { reload: true, reason: '新版本 ' + serverVer + ' 已上線，正在更新…', ver: serverVer };
+        }
+        if (buildId) {
+            if (!_bootBuildId) {
+                _bootBuildId = buildId;
+                try { window.__fb5BootBuildId = buildId; } catch (e) {}
+            } else if (buildId !== _bootBuildId) {
+                return { reload: true, reason: '伺服器已更新，正在同步…', ver: serverVer || buildId };
+            }
+        }
+        if (typeof GAME_VERSION !== 'undefined' && client && String(GAME_VERSION) !== client) {
+            return { reload: true, reason: '資源快取過期，正在更新…', ver: client };
+        }
+        return false;
+    }
+
     function _poll() {
         if (!_isHttp() || _reloading) return;
-        if (typeof document !== 'undefined' && document.hidden) return;
-        fetch('/api/version?t=' + Date.now(), { method: 'GET', cache: 'no-store' })
+        fetch(_versionUrl(), { method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
-                _failStreak = 0;
-                if (!data || !data.ok || !data.buildId) return;
-                if (!_bootBuildId) {
-                    _bootBuildId = String(data.buildId);
-                    try { window.__fb5BuildId = _bootBuildId; } catch (e) {}
-                    return;
-                }
-                if (String(data.buildId) !== String(_bootBuildId)) {
-                    _doReload();
-                }
+                var need = _needsReload(data);
+                if (need && need.reload) _doReload(need.reason, need.ver);
             })
-            .catch(function () {
-                _failStreak += 1;
-                // 連續失敗不重載，避免部署中瞬間 502 誤觸
-            });
+            .catch(function () {});
     }
 
     function _start() {
@@ -105,7 +143,20 @@
                 if (!document.hidden) _poll();
             });
         } catch (e) {}
+        try {
+            window.addEventListener('focus', function () { _poll(); });
+        } catch (e) {}
+        try {
+            window.addEventListener('pageshow', function (ev) {
+                if (ev && ev.persisted) _poll();
+            });
+        } catch (e2) {}
     }
+
+    window.LiveUpdate = {
+        poll: _poll,
+        forceReload: function (reason, ver) { _doReload(reason, ver); },
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', _start);
