@@ -619,20 +619,22 @@
         return;
       }
       setStatus("正在驗證連線名額……", "ok");
-      claimIp().then(function (r) {
+      var pendingClaim = claimIp();
+      var pendingAcct = validateAccountSession();
+      Promise.all([pendingClaim, pendingAcct]).then(function (results) {
+        var r = results[0];
+        var sess = results[1];
         if (!r || !r.ok) {
           kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
           return;
         }
-        validateAccountSession().then(function (sess) {
-          if (!sess || !sess.ok) {
-            kickToLogin((sess && sess.message) || "登入已失效，請重新登入。", "err");
-            return;
-          }
-          showLoggedIn(session);
-          setStatus("歡迎回來，正在背景同步雲端……", "ok");
-          runBackgroundCloudSync(session);
-        });
+        if (!sess || !sess.ok) {
+          kickToLogin((sess && sess.message) || "登入已失效，請重新登入。", "err");
+          return;
+        }
+        showLoggedIn(session);
+        setStatus("歡迎回來，正在背景同步雲端……", "ok");
+        runBackgroundCloudSync(session);
       });
     } else {
       showLoggedOut();

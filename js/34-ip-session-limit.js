@@ -7,6 +7,7 @@
 (function () {
   var CLIENT_KEY = "fb5_ip_client_id";
   var HEARTBEAT_MS = 10000;
+  var FETCH_TIMEOUT_MS = 15000;
   var _clientId = "";
   var _held = false;
   var _timer = null;
@@ -60,16 +61,39 @@
   }
 
   function postJson(url, body) {
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller
+      ? setTimeout(function () {
+          try {
+            controller.abort();
+          } catch (e) {}
+        }, FETCH_TIMEOUT_MS)
+      : null;
     return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
       keepalive: true,
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        return { status: res.status, data: data };
+      cache: "no-store",
+      signal: controller ? controller.signal : undefined,
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") {
+          return {
+            status: 0,
+            data: { ok: false, error: "timeout", message: "連線逾時，請稍後再試。" },
+          };
+        }
+        throw err;
+      })
+      .finally(function () {
+        if (timer) clearTimeout(timer);
       });
-    });
   }
 
   function stopHeartbeat() {

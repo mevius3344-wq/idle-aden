@@ -41,12 +41,11 @@
   apiBase = apiBase.replace(/\/$/, '');
   assetBase = assetBase.replace(/\/$/, '');
 
-  /** 需 Neon 持久化的 API 走 Vercel；其餘走 Render 同源（較快、免冷啟動） */
+  /** 需 Neon 持久化的 API 走 Vercel（含 IP session，避免 Render 冷啟動卡住登入） */
   function useVercelApi(path) {
     if (!apiBase) return false;
     var p = String(path || '');
     if (p.indexOf('/api/') !== 0) return false;
-    if (p.indexOf('/api/session') === 0) return false;
     if (p === '/api/version' || p === '/api/build') return false;
     if (p.indexOf('/api/pandora') === 0) return false;
     if (p.indexOf('/api/worldboss') === 0) return false;
