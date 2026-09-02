@@ -54,7 +54,7 @@ function computeBuildId() {
   }
 }
 const BUILD_ID = computeBuildId();
-const GAME_VERSION = "v3.8.141";
+const GAME_VERSION = "v3.8.142";
 const SERVER_STARTED_AT = Date.now();
 // Online (Render) keeps this off. Local Windows serve writes editable JSON to Desktop.
 const ENABLE_DESKTOP_SAVES =

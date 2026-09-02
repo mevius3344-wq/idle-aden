@@ -41,11 +41,29 @@
   apiBase = apiBase.replace(/\/$/, '');
   assetBase = assetBase.replace(/\/$/, '');
 
+  /** 需 Neon 持久化的 API 走 Vercel；其餘走 Render 同源（較快、免冷啟動） */
+  function useVercelApi(path) {
+    if (!apiBase) return false;
+    var p = String(path || '');
+    if (p.indexOf('/api/') !== 0) return false;
+    if (p.indexOf('/api/session') === 0) return false;
+    if (p === '/api/version' || p === '/api/build') return false;
+    if (p.indexOf('/api/pandora') === 0) return false;
+    if (p.indexOf('/api/worldboss') === 0) return false;
+    if (p.indexOf('/api/party') === 0) return false;
+    if (p.indexOf('/api/map/') === 0) return false;
+    if (p.indexOf('/api/chat') === 0) return false;
+    if (p.indexOf('/api/clan') === 0) return false;
+    if (p.indexOf('/api/auction') === 0) return false;
+    return true;
+  }
+
   function apiUrl(path) {
     var p = String(path || '');
     if (!p) return apiBase || '/';
     if (/^https?:\/\//i.test(p)) return p;
     if (p.charAt(0) !== '/') p = '/' + p;
+    if (!useVercelApi(p)) return p;
     return apiBase ? apiBase + p : p;
   }
 
@@ -71,7 +89,7 @@
     var origFetch = window.fetch;
     window.fetch = function (input, init) {
       if (typeof input === 'string' && input.indexOf('/api/') === 0) {
-        input = apiUrl(input);
+        input = useVercelApi(input) ? apiUrl(input) : input;
       }
       return origFetch.call(this, input, init);
     };
@@ -81,7 +99,7 @@
     var origOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function (method, url) {
       var args = Array.prototype.slice.call(arguments);
-      if (typeof url === 'string' && url.indexOf('/api/') === 0) {
+      if (typeof url === 'string' && url.indexOf('/api/') === 0 && useVercelApi(url)) {
         args[1] = apiUrl(url);
       }
       return origOpen.apply(this, args);
@@ -91,7 +109,7 @@
   if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
     var origBeacon = navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon = function (url, data) {
-      if (typeof url === 'string' && url.indexOf('/api/') === 0) {
+      if (typeof url === 'string' && url.indexOf('/api/') === 0 && useVercelApi(url)) {
         url = apiUrl(url);
       }
       return origBeacon(url, data);

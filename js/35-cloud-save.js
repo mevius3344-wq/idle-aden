@@ -69,20 +69,42 @@
     else if (_ready === false && Date.now() - _readyCheckedAt >= 60000) _ready = null;
     if (_ready === true) return true;
     if (_ready === false) return false;
-    _readyCheckedAt = Date.now();
-    var r = _xhrJson('GET', '/api/cloud/status', null, true);
-    if (r && r.ok && r.data && r.data.ok) {
-      _ready = true;
-      try {
-        console.info('[cloud-save] 已啟用雲端存檔', r.data.dir || '');
-        if (r.data.ephemeralHint) {
-          console.warn('[cloud-save] Render 免費碟為暫存：重新部署可能清空，建議設定 CLOUD_SAVE_DIR 持久碟');
-        }
-      } catch (e) {}
-      return true;
+    // 未知狀態：不阻塞主執行緒，背景探測後再同步
+    if (_ready === null) {
+      cloudReadyAsync(true);
+      return false;
     }
-    _ready = false;
     return false;
+  }
+
+  function cloudReadyAsync(forceRecheck) {
+    if (!_httpOk()) {
+      _ready = false;
+      return Promise.resolve(false);
+    }
+    if (!forceRecheck && _ready === true) return Promise.resolve(true);
+    if (!forceRecheck && _ready === false && Date.now() - _readyCheckedAt < 60000) {
+      return Promise.resolve(false);
+    }
+    _readyCheckedAt = Date.now();
+    return fetch('/api/cloud/status', { method: 'GET', cache: 'no-store' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (res.ok && data && data.ok) {
+            _ready = true;
+            try {
+              console.info('[cloud-save] 已啟用雲端存檔', data.dir || '');
+            } catch (e) {}
+            return true;
+          }
+          _ready = false;
+          return false;
+        });
+      })
+      .catch(function () {
+        _ready = false;
+        return false;
+      });
   }
 
   function _base() {
@@ -729,53 +751,62 @@
    * 改為逐槽合併：雲端較佳→寫本機；本機較佳→保留並回填雲端；他帳殘留→丟棄或改用本帳雲端。
    */
   function cloudSyncOnLogin() {
-    if (!cloudCanSync()) return Promise.resolve(false);
-    _conflictNotified = false;
-    return fetch(_base() + '/bundle')
-      .then(function (res) {
-        return res.json().then(function (data) {
-          // 只清「明確標了其他帳號」的本機槽；無標記舊檔保留（供雲端空洞時種子）
-          for (var i = 1; i <= 8; i++) {
-            var loc = _readSlotLocal(i);
-            if (loc && loc.p && _isForeignAccountSave(loc)) _removeSlotLocal(i);
-          }
-
-          if (_bundleHasPlayableSlots(data)) {
-            try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
-            _stripClosedSlotsFromBundle(data);
-            cloudApplyBundle(data);
-            try { purgeClosedClassCharacterSlots({ silent: true }); } catch (ePurge2) {}
-            // 本機有、雲端沒有的本帳槽 → 補上傳
-            for (var s = 1; s <= 8; s++) {
-              var local = _readSlotLocal(s);
-              var cloud = data.slots && data.slots[s];
-              if (local && local.p && _localBelongsToCurrent(local) && !(cloud && cloud.p)) {
-                cloudPushSlotSync(s, local);
-              }
+    return cloudReadyAsync(true).then(function (ready) {
+      if (!ready || !cloudLoggedIn()) return false;
+      _conflictNotified = false;
+      return fetch(_base() + '/bundle', { cache: 'no-store' })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            for (var i = 1; i <= 8; i++) {
+              var loc = _readSlotLocal(i);
+              if (loc && loc.p && _isForeignAccountSave(loc)) _removeSlotLocal(i);
             }
-            return true;
-          }
-          // 雲端無角色：綁定無標記本機檔後回填（修部署洗雲端後的空洞）
-          try {
-            _stampOwnerlessLocalAsCurrent();
-            cloudFlushLocalToCloud();
-          } catch (e) {
+
+            if (_bundleHasPlayableSlots(data)) {
+              try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
+              _stripClosedSlotsFromBundle(data);
+              cloudApplyBundle(data);
+              try { purgeClosedClassCharacterSlots({ silent: true }); } catch (ePurge2) {}
+              for (var s = 1; s <= 8; s++) {
+                var local = _readSlotLocal(s);
+                var cloud = data.slots && data.slots[s];
+                if (local && local.p && _localBelongsToCurrent(local) && !(cloud && cloud.p)) {
+                  cloudPushSlotSync(s, local);
+                }
+              }
+              return true;
+            }
             try {
-              cloudBootstrapFromLocal();
-            } catch (e2) {}
-          }
+              _stampOwnerlessLocalAsCurrent();
+              cloudFlushLocalToCloud();
+            } catch (e) {
+              try {
+                cloudBootstrapFromLocal();
+              } catch (e2) {}
+            }
+            return false;
+          });
+        })
+        .catch(function () {
           return false;
         });
-      })
-      .catch(function () {
-        // 網路失敗：絕對不清本機
-        return false;
-      });
+    });
+  }
+
+  function cloudSyncOnLoginWithTimeout(ms) {
+    var limit = Math.max(3000, Number(ms) || 12000);
+    return Promise.race([
+      cloudSyncOnLogin(),
+      new Promise(function (resolve) {
+        setTimeout(function () { resolve(false); }, limit);
+      }),
+    ]);
   }
 
   window.cloudLoggedIn = cloudLoggedIn;
   window.cloudCanSync = cloudCanSync;
   window.cloudReady = cloudReady;
+  window.cloudReadyAsync = cloudReadyAsync;
   window.cloudPushSlot = cloudPushSlot;
   window.cloudPullSlotIntoStorage = cloudPullSlotIntoStorage;
   window.cloudDeleteSlot = cloudDeleteSlot;
@@ -786,7 +817,16 @@
   window.cloudFlushLocalToCloud = cloudFlushLocalToCloud;
   window.cloudClearLocalCache = cloudClearLocalCache;
   window.cloudSyncOnLogin = cloudSyncOnLogin;
+  window.cloudSyncOnLoginWithTimeout = cloudSyncOnLoginWithTimeout;
   window.purgeClosedClassCloudSlots = purgeClosedClassCloudSlots;
   window.cloudSaveProgressScore = cloudSaveProgressScore;
   window.cloudSaveBeats = cloudSaveBeats;
+
+  try {
+    var _kickCloudProbe = function () {
+      if (_httpOk()) cloudReadyAsync(false);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _kickCloudProbe);
+    else _kickCloudProbe();
+  } catch (eBoot) {}
 })();

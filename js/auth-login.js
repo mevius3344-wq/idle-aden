@@ -228,10 +228,27 @@
   }
 
   function syncCloud() {
+    if (window.cloudSyncOnLoginWithTimeout && typeof window.cloudSyncOnLoginWithTimeout === "function") {
+      return window.cloudSyncOnLoginWithTimeout(12000);
+    }
     if (window.cloudSyncOnLogin && typeof window.cloudSyncOnLogin === "function") {
       return window.cloudSyncOnLogin();
     }
     return Promise.resolve(false);
+  }
+
+  function runBackgroundCloudSync(account) {
+    return ensureLocalAccountsOnServer()
+      .catch(function () {
+        return false;
+      })
+      .then(function () {
+        return syncCloud();
+      })
+      .then(function (synced) {
+        if (synced) setStatus("雲端存檔已同步。", "ok");
+      })
+      .catch(function () {});
   }
 
   function listLocalAccounts() {
@@ -282,20 +299,9 @@
       window.__fb5AuthAccount = account;
     } catch (e) {}
     persistRememberPreference(account, readPassword());
-    setStatus("驗證成功，正在進入……", "ok");
-    return ensureLocalAccountsOnServer()
-      .catch(function () {
-        return false;
-      })
-      .then(function () {
-        try {
-          if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
-        } catch (e) {}
-        return syncCloud();
-      })
-      .finally(function () {
-        showLoggedIn(account);
-      });
+    showLoggedIn(account);
+    setStatus("歡迎進入遊戲，正在背景同步雲端……", "ok");
+    runBackgroundCloudSync(account);
   }
 
   function httpJson(method, url, body) {
@@ -390,89 +396,90 @@
       return;
     }
     setStatus("驗證中……", "ok");
-    accountsApiReady().then(function (online) {
-      const finishOk = function (acc) {
-        saveAccount(acc || account, password);
-        claimIp().then(function (r) {
-          if (r && r.ok) {
-            holdAccountSession().then(function () {
-              enterGame(acc || account);
-            });
-            return;
-          }
-          const msg =
-            (r && r.message) ||
-            "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
-          setStatus(msg, "err");
-          try {
-            alert(msg);
-          } catch (e) {}
-        });
-      };
 
-      if (!online) {
-        const stored = getStoredPassword(account);
-        if (stored === null) {
-          setStatus("帳號不存在，請先註冊（需連線伺服器）。", "err");
+    const finishOk = function (acc) {
+      saveAccount(acc || account, password);
+      claimIp().then(function (r) {
+        if (r && r.ok) {
+          validateAccountSession().then(function (sess) {
+            if (sess && (sess.ok || sess.offline)) {
+              enterGame(acc || account);
+              return;
+            }
+            setStatus((sess && sess.message) || "登入驗證失敗，請重新登入。", "err");
+          });
           return;
         }
-        if (stored !== password) {
-          setStatus("帳號或密碼錯誤。", "err");
-          return;
-        }
-        finishOk(account);
+        const msg =
+          (r && r.message) ||
+          "此 IP 已達雙開上限（最多 2 個連線）。請先關閉其他視窗後再試。";
+        setStatus(msg, "err");
+        try {
+          alert(msg);
+        } catch (e) {}
+      });
+    };
+
+    const tryOffline = function () {
+      const stored = getStoredPassword(account);
+      if (stored === null) {
+        setStatus("帳號不存在，請先註冊（需連線伺服器）。", "err");
         return;
       }
+      if (stored !== password) {
+        setStatus("帳號或密碼錯誤。", "err");
+        return;
+      }
+      finishOk(account);
+    };
 
-      httpJson("POST", "/api/accounts/login", {
-        account: account,
-        password: password,
-        clientId: getClientId(),
+    httpJson("POST", "/api/accounts/login", {
+      account: account,
+      password: password,
+      clientId: getClientId(),
+    })
+      .then(function (r) {
+        if (r && r.data && r.data.ok) {
+          if (r.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+            window.anticheatSetAuthToken(r.data.authToken);
+          }
+          finishOk((r.data && r.data.account) || account);
+          return;
+        }
+        if (r && r.status === 404) {
+          const stored = getStoredPassword(account);
+          if (stored !== null && stored === password) {
+            return httpJson("POST", "/api/accounts/register", {
+              account: account,
+              password: password,
+            }).then(function (reg) {
+              if (reg && reg.data && reg.data.ok) {
+                finishOk(account);
+                return;
+              }
+              if (reg && reg.status === 409) {
+                setStatus("此帳號已被他人註冊，請換帳號或確認密碼。", "err");
+                return;
+              }
+              setStatus((reg && reg.data && reg.data.message) || "帳號同步失敗。", "err");
+            });
+          }
+          setStatus(
+            "帳號不存在於伺服器。請確認帳密，或回原手機連線登入一次以同步帳號；勿在乙機重新註冊同名以免蓋掉進度。",
+            "err"
+          );
+          return;
+        }
+        const msg =
+          (r && r.data && r.data.message) ||
+          (r && r.data && r.data.error === "session_active"
+            ? "此帳號已在其他裝置登入。請先於該裝置登出後再試。"
+            : "帳號或密碼錯誤。");
+        setStatus(msg, "err");
       })
-        .then(function (r) {
-          if (r && r.data && r.data.ok) {
-            if (r.data.authToken && typeof window.anticheatSetAuthToken === "function") {
-              window.anticheatSetAuthToken(r.data.authToken);
-            }
-            finishOk((r.data && r.data.account) || account);
-            return;
-          }
-          // 相容：伺服器尚無此帳號時，若本機已有且密碼正確，自動補註冊一次
-          if (r && r.status === 404) {
-            const stored = getStoredPassword(account);
-            if (stored !== null && stored === password) {
-              return httpJson("POST", "/api/accounts/register", {
-                account: account,
-                password: password,
-              }).then(function (reg) {
-                if (reg && reg.data && reg.data.ok) {
-                  finishOk(account);
-                  return;
-                }
-                if (reg && reg.status === 409) {
-                  setStatus("此帳號已被他人註冊，請換帳號或確認密碼。", "err");
-                  return;
-                }
-                setStatus((reg && reg.data && reg.data.message) || "帳號同步失敗。", "err");
-              });
-            }
-            setStatus(
-              "帳號不存在於伺服器。請確認帳密，或回原手機連線登入一次以同步帳號；勿在乙機重新註冊同名以免蓋掉進度。",
-              "err"
-            );
-            return;
-          }
-          const msg =
-            (r && r.data && r.data.message) ||
-            (r && r.data && r.data.error === "session_active"
-              ? "此帳號已在其他裝置登入。請先於該裝置登出後再試。"
-              : "帳號或密碼錯誤。");
-          setStatus(msg, "err");
-        })
-        .catch(function () {
-          setStatus("無法連線伺服器登入，請稍後再試。", "err");
-        });
-    });
+      .catch(function () {
+        tryOffline();
+      });
   }
 
   function logoutAccount(opts) {
@@ -596,19 +603,9 @@
               );
               return;
             }
-            ensureLocalAccountsOnServer()
-              .catch(function () {
-                return false;
-              })
-              .then(function () {
-                try {
-                  if (window.cloudReady && typeof window.cloudReady === "function") window.cloudReady(true);
-                } catch (e) {}
-                return syncCloud();
-              })
-              .finally(function () {
-                showLoggedIn(session);
-              });
+            showLoggedIn(session);
+            setStatus("歡迎回來，正在背景同步雲端……", "ok");
+            runBackgroundCloudSync(session);
           });
         } else {
           setSession("");
