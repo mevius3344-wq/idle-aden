@@ -2,9 +2,6 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
-  ],
   "headers": [
     {
       "source": "/(.*\\.(html|js|css))",

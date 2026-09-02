@@ -3741,8 +3741,12 @@ async function handleLeaderboardApi(req, res, u) {
   if (req.method !== "GET") {
     return json(res, 404, { ok: false, error: "unknown leaderboard api" });
   }
-  if (u.startsWith("/api/leaderboard/equip")) {
-    return handleLeaderboardEquipApi(req, res, u);
+  {
+    const q0 = new URL(req.url || "/", "http://localhost");
+    const view0 = String(q0.searchParams.get("view") || "").toLowerCase();
+    if (u.startsWith("/api/leaderboard/equip") || (u === "/api/leaderboard" && view0 === "equip")) {
+      return handleLeaderboardEquipApi(req, res, u);
+    }
   }
   if (u !== "/api/leaderboard") {
     return json(res, 404, { ok: false, error: "unknown leaderboard api" });

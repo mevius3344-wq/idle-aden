@@ -2532,30 +2532,33 @@ function viewLeaderboardEquip(name) {
     }
     _lbEquipState = { name: name, loading: true, error: '', data: null };
     renderLeaderboardEquipModal();
-    try {
-        let xhr = new XMLHttpRequest();
-        xhr.open('GET', '/api/leaderboard/equip?name=' + encodeURIComponent(name), true);
-        xhr.onload = function () {
-            let data = null;
-            try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { data = null; }
-            if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
-                _lbEquipState = { name: name, loading: false, error: '', data: data };
+    // 使用 ?view=equip（同源列表 API）避免 /api/leaderboard/equip 巢狀路徑在部分主機被改寫掉
+    let url = '/api/leaderboard?view=equip&name=' + encodeURIComponent(name) + '&t=' + Date.now();
+    fetch(url, { method: 'GET', cache: 'no-store' })
+        .then(function (res) {
+            return res.json().then(function (data) {
+                return { status: res.status, data: data };
+            }, function () {
+                return { status: res.status, data: null };
+            });
+        })
+        .then(function (r) {
+            if (r && r.status >= 200 && r.status < 300 && r.data && r.data.ok) {
+                _lbEquipState = { name: name, loading: false, error: '', data: r.data };
             } else {
                 _lbEquipState = {
-                    name: name, loading: false, error: (data && data.message) || '無法載入該角色裝備。', data: null
+                    name: name,
+                    loading: false,
+                    error: (r && r.data && r.data.message) || '無法載入該角色裝備。',
+                    data: null
                 };
             }
             renderLeaderboardEquipModal();
-        };
-        xhr.onerror = function () {
+        })
+        .catch(function () {
             _lbEquipState = { name: name, loading: false, error: '無法連線至排行榜伺服器。', data: null };
             renderLeaderboardEquipModal();
-        };
-        xhr.send(null);
-    } catch (e) {
-        _lbEquipState = { name: name, loading: false, error: '無法載入裝備。', data: null };
-        renderLeaderboardEquipModal();
-    }
+        });
 }
 function loadLeaderboard(force) {
     if (_leaderboardLoading && !force) return;
