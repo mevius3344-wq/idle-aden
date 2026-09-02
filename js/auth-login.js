@@ -263,7 +263,7 @@
         return;
       }
       validateAccountSession().then(function (sess) {
-        if (sess && (sess.ok || sess.offline)) {
+        if (sess && sess.ok) {
           if (opts.onOk) opts.onOk(sess);
           else runBackgroundCloudSync(account);
           return;
@@ -432,14 +432,19 @@
 
     const finishOk = function (acc) {
       saveAccount(acc || account, password);
-      enterGame(acc || account);
-      verifySessionInBackground(acc || account, {
-        onFail: function (msg) {
-          kickToLogin(msg, "err");
-          try {
-            alert(msg);
-          } catch (e) {}
-        },
+      claimIp().then(function (r) {
+        if (!r || !r.ok) {
+          setStatus((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。", "err");
+          return;
+        }
+        enterGame(acc || account);
+        validateAccountSession().then(function (sess) {
+          if (!sess || !sess.ok) {
+            kickToLogin((sess && sess.message) || "登入驗證失敗，請重新登入。", "err");
+            return;
+          }
+          runBackgroundCloudSync(acc || account);
+        });
       });
     };
 
@@ -613,16 +618,21 @@
         setStatus("請重新登入以套用最新版本。", "ok");
         return;
       }
-      showLoggedIn(session);
-      setStatus("歡迎回來，正在背景驗證連線……", "ok");
-      verifySessionInBackground(session, {
-        onOk: function () {
+      setStatus("正在驗證連線名額……", "ok");
+      claimIp().then(function (r) {
+        if (!r || !r.ok) {
+          kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
+          return;
+        }
+        validateAccountSession().then(function (sess) {
+          if (!sess || !sess.ok) {
+            kickToLogin((sess && sess.message) || "登入已失效，請重新登入。", "err");
+            return;
+          }
+          showLoggedIn(session);
           setStatus("歡迎回來，正在背景同步雲端……", "ok");
           runBackgroundCloudSync(session);
-        },
-        onFail: function (msg) {
-          kickToLogin((msg && msg.message) || msg || "登入已失效，請重新登入。", "err");
-        },
+        });
       });
     } else {
       showLoggedOut();

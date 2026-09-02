@@ -5,9 +5,17 @@
  * 需搭配 /api/accounts/session/heartbeat 與登入時回傳的 authToken。
  */
 (function () {
-  var HEARTBEAT_MS = 20000;
+  var HEARTBEAT_MS = 10000;
   var _held = false;
   var _timer = null;
+
+  function isOnlineHost() {
+    try {
+      return location.protocol === "http:" || location.protocol === "https:";
+    } catch (e) {
+      return false;
+    }
+  }
 
   function postJson(url, body) {
     return fetch(url, {
@@ -82,7 +90,9 @@
             onSessionLost(r && r.data);
           }
         })
-        .catch(function () {});
+        .catch(function () {
+          if (isOnlineHost()) onSessionLost({ ok: false, error: "network" });
+        });
     }, HEARTBEAT_MS);
   }
 
@@ -100,8 +110,11 @@
         return r && r.data ? r.data : { ok: false, error: "offline" };
       })
       .catch(function () {
-        _held = true;
-        return { ok: true, offline: true };
+        if (!isOnlineHost()) {
+          _held = true;
+          return { ok: true, offline: true };
+        }
+        return { ok: false, error: "network", message: "無法連線伺服器驗證帳號連線。" };
       });
   }
 

@@ -2,11 +2,11 @@
 
 /**
  * IP 雙開限制：同一 IP 最多 2 個瀏覽器分頁／視窗同時佔位。
- * 需搭配 node _serve.js（含 /api/session/*）；file:// 或 API 不可用時放行。
+ * 線上環境必須成功 claim／heartbeat；僅 file:// 本機測試可離線放行。
  */
 (function () {
   var CLIENT_KEY = "fb5_ip_client_id";
-  var HEARTBEAT_MS = 20000;
+  var HEARTBEAT_MS = 10000;
   var _clientId = "";
   var _held = false;
   var _timer = null;
@@ -23,6 +23,24 @@
       }
     } catch (e) {}
     return "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  function isOnlineHost() {
+    try {
+      return location.protocol === "http:" || location.protocol === "https:";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function notifyIpSessionLost(payload) {
+    _held = false;
+    stopHeartbeat();
+    try {
+      if (typeof window.GameAccountAuth === "object" && window.GameAccountAuth.onIpSessionLost) {
+        window.GameAccountAuth.onIpSessionLost(payload);
+      }
+    } catch (e) {}
   }
 
   function getClientId() {
@@ -68,16 +86,12 @@
       postJson("/api/session/heartbeat", { clientId: getClientId() })
         .then(function (r) {
           if (!r || !r.data || !r.data.ok) {
-            _held = false;
-            stopHeartbeat();
-            try {
-              if (typeof window.GameAccountAuth === "object" && window.GameAccountAuth.onIpSessionLost) {
-                window.GameAccountAuth.onIpSessionLost(r && r.data);
-              }
-            } catch (e) {}
+            notifyIpSessionLost(r && r.data);
           }
         })
-        .catch(function () {});
+        .catch(function () {
+          if (isOnlineHost()) notifyIpSessionLost({ ok: false, error: "network" });
+        });
     }, HEARTBEAT_MS);
   }
 
@@ -128,10 +142,17 @@
           : { ok: false, error: "ip_limit", message: "此 IP 已達雙開上限。" };
       })
       .catch(function () {
-        // file:// or static host without API → allow play
         _apiOk = false;
-        _held = true;
-        return { ok: true, offline: true };
+        if (!isOnlineHost()) {
+          _held = true;
+          return { ok: true, offline: true };
+        }
+        _held = false;
+        return {
+          ok: false,
+          error: "network",
+          message: "無法連線伺服器驗證 IP 連線名額，請稍後再試。",
+        };
       });
   }
 
@@ -145,6 +166,20 @@
     isHeld: isHeld,
     getClientId: getClientId,
   };
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || !_held) return;
+    postJson("/api/session/heartbeat", { clientId: getClientId() })
+      .then(function (r) {
+        if (r && r.data && r.data.ok) return;
+        return claim().then(function (cr) {
+          if (!cr || !cr.ok) notifyIpSessionLost(cr || r && r.data);
+        });
+      })
+      .catch(function () {
+        if (isOnlineHost()) notifyIpSessionLost({ ok: false, error: "network" });
+      });
+  });
 
   window.addEventListener("pagehide", function () {
     release();

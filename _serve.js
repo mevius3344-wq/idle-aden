@@ -63,7 +63,7 @@ const ENABLE_DESKTOP_SAVES =
 
 // Same IP may keep at most 2 live clients (dual-open). Heartbeat refreshes; TTL drops dead tabs.
 const IP_SESSION_MAX = Math.max(1, Number(process.env.IP_SESSION_MAX || 2));
-const IP_SESSION_TTL_MS = Math.max(15000, Number(process.env.IP_SESSION_TTL_MS || 90000));
+const IP_SESSION_TTL_MS = Math.max(15000, Number(process.env.IP_SESSION_TTL_MS || 45000));
 const IP_SESSION_ENABLED = process.env.IP_SESSION_LIMIT !== "0";
 
 const MIME = {
