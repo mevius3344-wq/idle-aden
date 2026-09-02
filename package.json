@@ -1,11 +1,13 @@
 {
   "name": "idle-aden",
-  "version": "3.8.138",
+  "version": "3.8.139",
   "private": true,
   "description": "躺著變強 — idle web RPG",
   "scripts": {
     "start": "node server/index.js",
     "serve": "node _serve.js",
+    "build": "node scripts/inject-version.js",
+    "vercel-build": "node scripts/inject-version.js",
     "db:migrate": "node scripts/migrate-neon.js",
     "db:import": "node scripts/import-files-to-neon.js",
     "db:purge-closed-classes": "node scripts/purge-closed-class-saves.js"

@@ -7,11 +7,10 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <!-- 🔄 開頁強制版本閘門：與伺服器 /api/version 比對，不符立即重載（須與 GAME_VERSION / _serve.js 同步） -->
+    <!-- 版本號（_serve.js 部署時替換 __GAME_VERSION__） -->
+    <meta name="game-version" content="__GAME_VERSION__">
     <script>
     (function () {
-      var CLIENT_VER = '__GAME_VERSION__';
-      window.__CLIENT_GAME_VERSION = CLIENT_VER;
       try {
         if (/\.vercel\.app$/i.test(String(location.hostname || ''))) {
           var b = document.createElement('base');
@@ -20,35 +19,9 @@
           document.head.appendChild(b);
         }
       } catch (e0) {}
-      var p = '';
-      try { p = String(location.protocol || ''); } catch (e1) {}
-      if (p !== 'http:' && p !== 'https:') return;
-      var host = '';
-      try { host = String(location.hostname || '').toLowerCase(); } catch (e2) {}
-      var api = '/api/version?t=' + Date.now();
-      if (/\.vercel\.app$/i.test(host)) api = 'https://idle-aden.vercel.app/api/version?t=' + Date.now();
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', api, false);
-        try { xhr.setRequestHeader('Cache-Control', 'no-cache'); } catch (e3) {}
-        xhr.send(null);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          var data = JSON.parse(xhr.responseText || '{}');
-          if (data && data.ok) {
-            if (data.buildId) window.__fb5BootBuildId = String(data.buildId);
-            if (data.gameVersion && String(data.gameVersion) !== CLIENT_VER) {
-              var url = location.href.split('#')[0]
-                .replace(/([?&])_v=[^&]*/g, '').replace(/([?&])_build=[^&]*/g, '').replace(/[?&]$/, '');
-              var join = url.indexOf('?') >= 0 ? '&' : '?';
-              location.replace(url + join + '_v=' + encodeURIComponent(String(data.gameVersion)) + '&_t=' + Date.now());
-            }
-          }
-        }
-      } catch (e4) {}
     })();
     </script>
     <script src="js/00-host-config.js?v=__GAME_VERSION__"></script>
-    <script src="js/38-live-update.js?v=__GAME_VERSION__"></script>
     <!-- 🗑️ v3.5.87 移除死的行動裝置偵測 IIFE：applyViewport 無任何分支（mobile 變數算了沒用）、
          DESIGN_W/isMobileDevice/window.__mobileScaling 全專案零呼叫；唯一實際效果 viewport-fit=cover 直接併入上方 meta。
          （width=1180 手機縮放已於桌機專注決策時移除·本作 desktop-only） -->
@@ -689,5 +662,7 @@
 <script src="js/31-castle-guards.js?v=__GAME_VERSION__"></script>
 <script src="js/32-threat.js?v=__GAME_VERSION__"></script>
 <script src="js/33-desktop-player-files.js?v=__GAME_VERSION__"></script>
-    <script src="js/38-pandora-global-auction.js?v=__GAME_VERSION__"></script></body>
+    <script src="js/38-pandora-global-auction.js?v=__GAME_VERSION__"></script>
+    <script src="js/38-live-update.js?v=__GAME_VERSION__"></script>
+</body>
 </html>
