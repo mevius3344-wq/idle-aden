@@ -36,6 +36,54 @@
     else if (tone === false || tone === "err") el.classList.add("err");
   }
 
+  var _serverStatsTimer = null;
+
+  function formatMult(n) {
+    var v = Math.max(1, Number(n) || 1);
+    return "×" + (Math.abs(v - Math.round(v)) < 0.001 ? String(Math.round(v)) : v.toFixed(1));
+  }
+
+  function applyServerStats(data) {
+    if (!data) return;
+    try {
+      window.__serverStats = {
+        onlinePlayers: Number(data.onlinePlayers) || 0,
+        goldMult: Math.max(1, Number(data.goldMult) || 1),
+        dropMult: Math.max(1, Number(data.dropMult) || 1),
+      };
+    } catch (e) {}
+    var pel = $("auth-stat-players");
+    var gel = $("auth-stat-gold");
+    var del = $("auth-stat-drop");
+    if (pel) pel.textContent = String(data.onlinePlayers != null ? data.onlinePlayers : "—");
+    if (gel) gel.textContent = formatMult(data.goldMult);
+    if (del) del.textContent = formatMult(data.dropMult);
+  }
+
+  function refreshServerStats() {
+    fetch("/api/server/status?t=" + Date.now(), { method: "GET", cache: "no-store" })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.ok) applyServerStats(data);
+      })
+      .catch(function () {});
+  }
+
+  function startServerStatsPolling() {
+    refreshServerStats();
+    if (_serverStatsTimer) clearInterval(_serverStatsTimer);
+    _serverStatsTimer = setInterval(refreshServerStats, 30000);
+  }
+
+  function stopServerStatsPolling() {
+    if (_serverStatsTimer) {
+      clearInterval(_serverStatsTimer);
+      _serverStatsTimer = null;
+    }
+  }
+
   function clearCredFields() {
     const acc = $("auth-account");
     const pass = $("auth-password");
@@ -163,6 +211,7 @@
   }
 
   function showLoggedIn(account) {
+    stopServerStatsPolling();
     const auth = $("account-auth-panel");
     if (auth) auth.classList.add("hidden");
     document.querySelectorAll(".account-gated").forEach((el) => {
@@ -185,6 +234,7 @@
     if (welcome) welcome.textContent = "";
     if (!applyRememberedCreds()) clearCredFields();
     setStatus("請輸入帳號與密碼。");
+    startServerStatsPolling();
     try {
       window.__fb5AuthAccount = "";
     } catch (e) {}
@@ -658,6 +708,7 @@
         return;
       }
       setStatus("正在驗證連線名額……", "ok");
+      startServerStatsPolling();
       claimIp().then(function (r) {
         if (!r || !r.ok) {
           kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");

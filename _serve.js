@@ -30,6 +30,8 @@ try {
   _accountSessions = require("./lib/rt-account-session").createFileAccountSessionStore(_accountSessionsFile);
 } catch (e) {}
 
+const _serverStatus = require("./lib/rt-server-status");
+
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
 
@@ -241,6 +243,41 @@ function parseClientId(raw) {
   const id = String(raw || "").trim();
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) return null;
   return id;
+}
+
+function countIpSessionsOnline() {
+  const now = Date.now();
+  let total = 0;
+  for (const bucket of ipSessions.values()) {
+    pruneIpBucket(bucket, now);
+    total += bucket.size;
+  }
+  return total;
+}
+
+async function handleServerStatusApi(req, res) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    return res.end();
+  }
+  if (req.method !== "GET") return json(res, 405, { ok: false, error: "method" });
+  const rates = _serverStatus.getServerRates();
+  let onlinePlayers = 0;
+  if (_accountSessions && typeof _accountSessions.countOnline === "function") {
+    onlinePlayers = await _accountSessions.countOnline();
+  } else {
+    onlinePlayers = countIpSessionsOnline();
+  }
+  return json(res, 200, {
+    ok: true,
+    onlinePlayers,
+    goldMult: rates.goldMult,
+    dropMult: rates.dropMult,
+  });
 }
 
 async function handleSessionApi(req, res, u) {
@@ -3692,6 +3729,10 @@ async function handleLeaderboardApi(req, res, u) {
 const server = http.createServer(async (req, res) => {
   let u = decodeURIComponent((req.url || "/").split("?")[0]);
   try {
+    if (u === "/api/server/status") {
+      await handleServerStatusApi(req, res);
+      return;
+    }
     if (u.startsWith("/api/session")) {
       await handleSessionApi(req, res, u);
       return;

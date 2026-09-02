@@ -1114,6 +1114,24 @@ function serverExpEventRemainLabel(now) {
     return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
 }
 
+// ===== 全服金幣／掉寶倍率（登入頁由 /api/server/status 同步；預設 ×1）=====
+function serverGoldEventMult() {
+    try {
+        if (typeof window !== 'undefined' && window.__serverStats && window.__serverStats.goldMult > 0) {
+            return window.__serverStats.goldMult;
+        }
+    } catch (e) {}
+    return 1;
+}
+function serverDropEventMult() {
+    try {
+        if (typeof window !== 'undefined' && window.__serverStats && window.__serverStats.dropMult > 0) {
+            return window.__serverStats.dropMult;
+        }
+    } catch (e) {}
+    return 1;
+}
+
 // ===== 🔧 架構#6：存檔版本與集中式預設值 =====
 // 存檔寫入 v 欄位（SAVE_VERSION）；loadGame 在跑完「轉換型」舊檔遷移後呼叫 applySaveDefaults()
 // 統一補齊缺漏欄位（含巢狀物件的個別 key），不覆蓋既有值。
