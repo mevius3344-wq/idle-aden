@@ -3,10 +3,12 @@
     'use strict';
 
     var POLL_MS = 60000;
+    var RENDER_WAKE_MS = 8 * 60 * 1000;   // Vercel 入口時順便喚醒 Render 素材／世界王 API
     var RELOAD_DELAY_MS = 800;
     var _bootGameVersion = null;
     var _reloading = false;
     var _timer = null;
+    var _renderWakeTimer = null;
 
     function _clientVer() {
         try {
@@ -95,6 +97,35 @@
         try {
             document.addEventListener('visibilitychange', function () { if (!document.hidden) _poll(); });
             window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) _poll(); });
+        } catch (e) {}
+        _startRenderWake();
+    }
+
+    function _renderWakeUrl() {
+        try {
+            if (window.GAME_HOST && GAME_HOST.assetBase) {
+                return String(GAME_HOST.assetBase).replace(/\/$/, '') + '/api/version';
+            }
+            if (window.GAME_HOST && typeof GAME_HOST.isVercel === 'function' && GAME_HOST.isVercel()) {
+                return 'https://idle-aden.onrender.com/api/version';
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function _wakeRender() {
+        if (document.hidden || _reloading) return;
+        var base = _renderWakeUrl();
+        if (!base) return;
+        fetch(base + '?wake=' + Date.now(), { method: 'GET', cache: 'no-store' }).catch(function () {});
+    }
+
+    function _startRenderWake() {
+        if (_renderWakeTimer || !_renderWakeUrl()) return;
+        setTimeout(_wakeRender, 5000);
+        _renderWakeTimer = setInterval(_wakeRender, RENDER_WAKE_MS);
+        try {
+            document.addEventListener('visibilitychange', function () { if (!document.hidden) _wakeRender(); });
         } catch (e) {}
     }
 

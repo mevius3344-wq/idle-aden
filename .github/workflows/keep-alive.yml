@@ -1,0 +1,35 @@
+# Render 免費方案約 15 分鐘無流量會休眠；每 10 分鐘 ping 一次保持喚醒。
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keep-render-awake
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Render /api/version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake Render service
+        env:
+          RENDER_URL: ${{ secrets.RENDER_PUBLIC_URL }}
+        run: |
+          URL="${RENDER_URL:-https://idle-aden.onrender.com}"
+          URL="${URL%/}"
+          echo "Pinging ${URL}/api/version ..."
+          for i in 1 2 3; do
+            if curl -fsS --max-time 120 "${URL}/api/version?t=$(date +%s)"; then
+              echo ""
+              echo "Render is awake."
+              exit 0
+            fi
+            echo "Attempt ${i} failed, retrying in 15s..."
+            sleep 15
+          done
+          echo "::warning::Render ping failed after 3 attempts (cold start may still be in progress)."
