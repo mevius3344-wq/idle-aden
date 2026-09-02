@@ -325,6 +325,72 @@
     });
   }
 
+  function resetAuthActivity() {
+    try {
+      if (window.IdleLogout && typeof window.IdleLogout.resetActivity === "function") {
+        window.IdleLogout.resetActivity();
+      }
+    } catch (e) {}
+  }
+
+  function finishAuthSession(acc) {
+    var name = acc || "";
+    try {
+      window.__fb5AuthAccount = name;
+    } catch (e) {}
+    setSession(name);
+    resetAuthActivity();
+    holdAccountSession();
+  }
+
+  function restoreSession(account) {
+    setStatus("正在恢復連線……", "ok");
+    startServerStatsPolling();
+    claimIp().then(function (r) {
+      if (!r || !r.ok) {
+        kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
+        return;
+      }
+      var password = getStoredPassword(account);
+      if (password == null) {
+        validateAccountSession().then(function (sess) {
+          if (sess && sess.ok) {
+            finishAuthSession(account);
+            resumeSession(account);
+            return;
+          }
+          kickToLogin((sess && sess.message) || "請重新登入。", "err");
+        });
+        return;
+      }
+      httpJson("POST", "/api/accounts/login", {
+        account: account,
+        password: password,
+        clientId: getClientId(),
+      })
+        .then(function (lr) {
+          if (lr && lr.data && lr.data.ok) {
+            if (lr.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+              window.anticheatSetAuthToken(lr.data.authToken);
+            }
+            var acc = (lr.data && lr.data.account) || account;
+            finishAuthSession(acc);
+            resumeSession(acc);
+            return;
+          }
+          var msg =
+            (lr && lr.data && lr.data.message) ||
+            (lr && lr.data && lr.data.error === "session_active"
+              ? "此帳號已在其他裝置登入。請先於該裝置登出後再試。"
+              : "登入已失效，請重新登入。");
+          kickToLogin(msg, "err");
+        })
+        .catch(function () {
+          kickToLogin("無法連線伺服器，請重新登入。", "err");
+        });
+    });
+  }
+
   function resumeSession(account) {
     showLoggedIn(account);
     setStatus("歡迎回來，正在背景同步雲端……", "ok");
@@ -524,7 +590,7 @@
           return;
         }
         enterGame(acc || account);
-        holdAccountSession();
+        finishAuthSession(acc || account);
         runBackgroundCloudSync(acc || account);
       });
     };
@@ -635,7 +701,49 @@
     setStatus("連線名額已失效（IP 雙開限制）。請重新登入。", "err");
   }
 
+  var _sessionRecovering = false;
+
   function onAccountSessionLost(payload) {
+    if (_sessionRecovering) return;
+    var account = "";
+    try {
+      account = currentSession() || String(window.__fb5AuthAccount || "").trim();
+    } catch (e0) {}
+    var password = account ? getStoredPassword(account) : null;
+    if (account && password != null) {
+      _sessionRecovering = true;
+      httpJson("POST", "/api/accounts/login", {
+        account: account,
+        password: password,
+        clientId: getClientId(),
+      })
+        .then(function (lr) {
+          _sessionRecovering = false;
+          if (lr && lr.data && lr.data.ok) {
+            if (lr.data.authToken && typeof window.anticheatSetAuthToken === "function") {
+              window.anticheatSetAuthToken(lr.data.authToken);
+            }
+            finishAuthSession((lr.data && lr.data.account) || account);
+            return;
+          }
+          setSession("");
+          if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+          showLoggedOut();
+          var msg2 =
+            (lr && lr.data && lr.data.message) ||
+            (payload && payload.message) ||
+            "此帳號已在其他裝置登入，本裝置已自動登出。";
+          setStatus(msg2, "err");
+        })
+        .catch(function () {
+          _sessionRecovering = false;
+          setSession("");
+          if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+          showLoggedOut();
+          setStatus((payload && payload.message) || "連線中斷，請重新登入。", "err");
+        });
+      return;
+    }
     setSession("");
     if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
@@ -707,27 +815,7 @@
         setStatus("請重新登入以套用最新版本。", "ok");
         return;
       }
-      setStatus("正在驗證連線名額……", "ok");
-      startServerStatsPolling();
-      claimIp().then(function (r) {
-        if (!r || !r.ok) {
-          kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
-          return;
-        }
-        validateAccountSession().then(function (sess) {
-          if (sess && sess.ok) {
-            resumeSession(session);
-            return;
-          }
-          silentRelogin(session).then(function (rel) {
-            if (rel && rel.ok) {
-              resumeSession(rel.account || session);
-              return;
-            }
-            kickToLogin((rel && rel.message) || "登入已失效，請重新登入。", "err");
-          });
-        });
-      });
+      restoreSession(session);
     } else {
       showLoggedOut();
       // 未登入也嘗試把本機帳號補上伺服器，方便稍後乙機登入

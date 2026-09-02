@@ -17,6 +17,10 @@
 
   function isLoggedIn() {
     try {
+      var auth = document.getElementById("account-auth-panel");
+      if (auth && !auth.classList.contains("hidden")) return false;
+    } catch (e0) {}
+    try {
       if (window.GameAccountAuth && typeof window.GameAccountAuth.currentAccount === "function") {
         return !!String(window.GameAccountAuth.currentAccount() || "").trim();
       }

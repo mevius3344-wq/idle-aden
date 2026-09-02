@@ -61,6 +61,9 @@
         account = String(window.GameAccountAuth.currentAccount() || "").trim();
       }
     } catch (e) {}
+    try {
+      if (typeof account.normalize === "function") account = account.normalize("NFC");
+    } catch (e1) {}
     var authToken = "";
     try {
       if (typeof window.anticheatGetAuthToken === "function") authToken = window.anticheatGetAuthToken();
@@ -114,9 +117,17 @@
           }
         })
         .catch(function () {
-          if (isOnlineHost()) onSessionLost({ ok: false, error: "network" });
+          // 網路瞬斷不踢出，下一輪心跳再試
         });
     }, HEARTBEAT_MS);
+    var bodyNow = authPayload();
+    if (bodyNow) {
+      postJson("/api/accounts/session/heartbeat", bodyNow)
+        .then(function (r) {
+          if (!r || !r.data || !r.data.ok) onSessionLost(r && r.data);
+        })
+        .catch(function () {});
+    }
   }
 
   function validate() {

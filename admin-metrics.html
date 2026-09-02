@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>伺服器監控 · 躺著變強</title>
+  <link rel="stylesheet" href="css/admin-metrics.css?v=__GAME_VERSION__">
+</head>
+<body>
+  <div class="am-wrap">
+    <header class="am-header">
+      <h1>伺服器監控</h1>
+      <p class="am-sub">Neon／Vercel API 與 Render 遊戲節點即時狀態</p>
+    </header>
+
+    <section id="am-auth" class="am-card am-auth">
+      <h2>驗證</h2>
+      <p class="am-hint">請輸入部署環境變數 <code>METRICS_TOKEN</code>（至少 8 字元）。</p>
+      <div class="am-auth-row">
+        <input id="am-token" type="password" placeholder="METRICS_TOKEN" autocomplete="off">
+        <button type="button" id="am-token-save" class="am-btn">連線</button>
+      </div>
+      <p id="am-auth-err" class="am-err hidden"></p>
+    </section>
+
+    <section id="am-dashboard" class="hidden">
+      <div class="am-toolbar">
+        <span id="am-updated" class="am-updated">尚未更新</span>
+        <button type="button" id="am-refresh" class="am-btn am-btn-ghost">立即重新整理</button>
+        <button type="button" id="am-logout" class="am-btn am-btn-ghost">清除 Token</button>
+      </div>
+
+      <div class="am-grid am-grid-3">
+        <div class="am-card am-kpi" id="am-kpi-ccu">
+          <div class="am-kpi-label">同時在線（帳號）</div>
+          <div class="am-kpi-value" id="am-val-ccu">—</div>
+          <div class="am-kpi-sub" id="am-sub-ccu">建議 ≤ 50</div>
+        </div>
+        <div class="am-card am-kpi" id="am-kpi-ip">
+          <div class="am-kpi-label">IP 連線數</div>
+          <div class="am-kpi-value" id="am-val-ip">—</div>
+          <div class="am-kpi-sub">每 IP 最多雙開</div>
+        </div>
+        <div class="am-card am-kpi" id="am-kpi-db">
+          <div class="am-kpi-label">Neon 資料庫</div>
+          <div class="am-kpi-value" id="am-val-db">—</div>
+          <div class="am-kpi-sub" id="am-sub-db">免費額度 512 MB</div>
+        </div>
+      </div>
+
+      <div class="am-grid am-grid-2">
+        <article class="am-card" id="am-panel-neon">
+          <h2>Vercel + Neon</h2>
+          <dl class="am-dl" id="am-neon-body"></dl>
+        </article>
+        <article class="am-card" id="am-panel-render">
+          <h2>Render 遊戲節點</h2>
+          <dl class="am-dl" id="am-render-body"></dl>
+        </article>
+      </div>
+
+      <article class="am-card">
+        <h2>容量評估</h2>
+        <ul class="am-capacity" id="am-capacity"></ul>
+      </article>
+    </section>
+  </div>
+  <script src="js/00-host-config.js?v=__GAME_VERSION__"></script>
+  <script src="js/admin-metrics.js?v=__GAME_VERSION__"></script>
+</body>
+</html>

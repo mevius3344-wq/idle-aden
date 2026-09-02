@@ -31,6 +31,7 @@ try {
 } catch (e) {}
 
 const _serverStatus = require("./lib/rt-server-status");
+const _serverMetrics = require("./lib/rt-server-metrics");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
@@ -278,6 +279,53 @@ async function handleServerStatusApi(req, res) {
     goldMult: rates.goldMult,
     dropMult: rates.dropMult,
   });
+}
+
+async function handleServerMetricsApi(req, res) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+    return res.end();
+  }
+  if (req.method !== "GET") return json(res, 405, { ok: false, error: "method" });
+  if (!String(process.env.METRICS_TOKEN || "").trim()) {
+    return json(res, 503, {
+      ok: false,
+      error: "not_configured",
+      message: "伺服器未設定 METRICS_TOKEN 環境變數。",
+    });
+  }
+  if (!_serverMetrics.metricsAuthOk(req)) {
+    return json(res, 401, {
+      ok: false,
+      error: "unauthorized",
+      message: "請提供有效的 METRICS_TOKEN。",
+    });
+  }
+  const t0 = Date.now();
+  let onlinePlayers = 0;
+  if (_accountSessions && typeof _accountSessions.countOnline === "function") {
+    onlinePlayers = await _accountSessions.countOnline();
+  }
+  const rates = _serverStatus.getServerRates();
+  const payload = {
+    ok: true,
+    at: Date.now(),
+    backend: "render",
+    uptimeSec: Math.floor((Date.now() - SERVER_STARTED_AT) / 1000),
+    memory: _serverMetrics.processMemory(),
+    rates,
+    online: {
+      accountSessions: onlinePlayers,
+      ipSessions: countIpSessionsOnline(),
+    },
+    latency: { totalMs: Date.now() - t0 },
+  };
+  payload.capacity = _serverMetrics.capacityHints(payload);
+  return json(res, 200, payload);
 }
 
 async function handleSessionApi(req, res, u) {
@@ -3731,6 +3779,10 @@ const server = http.createServer(async (req, res) => {
   try {
     if (u === "/api/server/status") {
       await handleServerStatusApi(req, res);
+      return;
+    }
+    if (u === "/api/server/metrics") {
+      await handleServerMetricsApi(req, res);
       return;
     }
     if (u.startsWith("/api/session")) {
