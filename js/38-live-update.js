@@ -3,7 +3,7 @@
     'use strict';
 
     var POLL_MS = 60000;
-    var RENDER_WAKE_MS = 8 * 60 * 1000;   // Vercel 入口時順便喚醒 Render 素材／世界王 API
+    var RENDER_WAKE_MS = 4 * 60 * 1000;   // Render 約 15 分鐘無流量休眠；4 分鐘 ping 一次
     var RELOAD_DELAY_MS = 800;
     var _bootGameVersion = null;
     var _reloading = false;
@@ -105,6 +105,9 @@
         try {
             if (window.GAME_HOST && GAME_HOST.assetBase) {
                 return String(GAME_HOST.assetBase).replace(/\/$/, '') + '/api/version';
+            }
+            if (window.GAME_HOST && typeof GAME_HOST.isRender === 'function' && GAME_HOST.isRender()) {
+                return '/api/version';
             }
             if (window.GAME_HOST && typeof GAME_HOST.isVercel === 'function' && GAME_HOST.isVercel()) {
                 return 'https://idle-aden.onrender.com/api/version';

@@ -569,6 +569,13 @@
     });
   }
 
+  function wakeServerBeforeAuth() {
+    if (window.GameServerWake && typeof window.GameServerWake.ensureAwake === "function") {
+      return window.GameServerWake.ensureAwake(90000);
+    }
+    return Promise.resolve({ ok: true });
+  }
+
   function loginAccount() {
     const account = readAccount();
     const password = readPassword();
@@ -580,6 +587,18 @@
       setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
       return;
     }
+    setStatus("伺服器喚醒中……", "ok");
+
+    wakeServerBeforeAuth().then(function (wake) {
+      if (!wake || !wake.ok) {
+        setStatus("伺服器喚醒逾時，請稍後再試。", "err");
+        return;
+      }
+      doLoginAccount(account, password);
+    });
+  }
+
+  function doLoginAccount(account, password) {
     setStatus("驗證中……", "ok");
 
     const finishOk = function (acc) {

@@ -1,9 +1,9 @@
-# Render 免費方案約 15 分鐘無流量會休眠；每 10 分鐘 ping 一次保持喚醒。
+# Render 免費方案約 15 分鐘無流量會休眠；每 5 分鐘 ping 保持喚醒。
 name: Keep Render Awake
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -22,10 +22,12 @@ jobs:
         run: |
           URL="${RENDER_URL:-https://idle-aden.onrender.com}"
           URL="${URL%/}"
-          echo "Pinging ${URL}/api/version ..."
+          echo "Pinging ${URL} ..."
           for i in 1 2 3; do
             if curl -fsS --max-time 120 "${URL}/api/version?t=$(date +%s)"; then
               echo ""
+              echo "Render /api/version OK."
+              curl -fsS --max-time 60 "${URL}/api/pandora/status?t=$(date +%s)" >/dev/null 2>&1 || true
               echo "Render is awake."
               exit 0
             fi

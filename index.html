@@ -12,16 +12,22 @@
     <script>
     (function () {
       try {
-        if (/\.vercel\.app$/i.test(String(location.hostname || ''))) {
+        var h = String(location.hostname || '').toLowerCase();
+        if (/\.vercel\.app$/i.test(h)) {
           var b = document.createElement('base');
           b.href = 'https://idle-aden.onrender.com/';
           b.setAttribute('data-game-host', '1');
           document.head.appendChild(b);
         }
+        var url = '';
+        if (/\.onrender\.com$/i.test(h)) url = '/api/version?boot=' + Date.now();
+        else if (/\.vercel\.app$/i.test(h)) url = 'https://idle-aden.onrender.com/api/version?boot=' + Date.now();
+        if (url) fetch(url, { method: 'GET', cache: 'no-store' }).catch(function () {});
       } catch (e0) {}
     })();
     </script>
     <script src="js/00-host-config.js?v=v3.8.157"></script>
+    <script src="js/00-server-wake.js?v=v3.8.157"></script>
     <!-- 🗑️ v3.5.87 移除死的行動裝置偵測 IIFE：applyViewport 無任何分支（mobile 變數算了沒用）、
          DESIGN_W/isMobileDevice/window.__mobileScaling 全專案零呼叫；唯一實際效果 viewport-fit=cover 直接併入上方 meta。
          （width=1180 手機縮放已於桌機專注決策時移除·本作 desktop-only） -->
