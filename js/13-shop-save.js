@@ -525,29 +525,11 @@ function _migrateAllSavesToClassicMode(){
         } catch (e) {}
     }
 }
-/** 🎁 已領取舊版新手啟程禮包的存檔位：刪除舊限時裝並改發隱藏魔族專武（7 天） */
-function _migrateAllSavesNewbieEmbark(){
-    if (typeof applyNewbieEmbarkRevToPlayerObj !== 'function') return;
-    for (let n = 1; n <= 8; n++) {
-        let key = 'lineage_idle_save_' + n;
-        let raw; try { raw = _lzGet(key); } catch (e) { continue; }
-        if (raw == null || raw === '') continue;
-        try {
-            let un = (typeof _saveUnwrap === 'function') ? _saveUnwrap(raw) : { ok:true, payload:raw };
-            if (un && un.signed && !un.ok) continue;
-            let text = (un && un.payload != null) ? un.payload : raw;
-            let d = JSON.parse(text);
-            if (!d || !d.p || !d.p.newbiePackClaimed) continue;
-            if (!applyNewbieEmbarkRevToPlayerObj(d.p, { equipIfEmpty: true })) continue;
-            let out = JSON.stringify(d);
-            if (typeof _saveWrap === 'function') out = _saveWrap(out);
-            _lzSet(key, out);
-        } catch (e) {}
-    }
-}
+/** 🎁 新手啟程禮包已移除（v3.8.170）：不再對舊存檔重發限時裝 */
+function _migrateAllSavesNewbieEmbark(){ /* no-op */ }
 if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){
     try { _migrateAllSavesToClassicMode(); } catch (e) {}
-    try { _migrateAllSavesNewbieEmbark(); } catch (e2) {}
+    // 新手啟程禮包遷移已停用
 });
 
 // ===== 角色多開／刪除保護 =====
@@ -1766,12 +1748,11 @@ function startGame() {
     updateClassPotionRows();
     renderSkillSelects();
     
-    // 🎁 新手啟程禮包：創角時自動開啟（職業專武 +12、裝備 +8，限時 7 天）
-    try {
-        if (typeof claimNewbieEmbarkPack === 'function') {
-            claimNewbieEmbarkPack({ equip: true, silent: false });
-        }
-    } catch (e) {}
+    // 🎁 v3.8.170：新手啟程禮包已移除——創角不再發放限時裝／×3 加成；標記已領以免舊道具或遷移再發
+    player.newbiePackClaimed = true;
+    player.newbieEmbarkRev = (typeof NEWBIE_EMBARK_REV === 'number') ? NEWBIE_EMBARK_REV : 2;
+    player.newbiePackExpireAt = null;
+    player.newbieBoostExpireAt = null;
 
     // 👇 正確的新版起點邏輯
     let startMap = 'town_silver_knight';

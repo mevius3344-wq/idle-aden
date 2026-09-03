@@ -947,57 +947,12 @@ function grantRentalItem(id, en, expireAt, opts) {
  * 回傳 true 表示有執行遷移。
  */
 function applyNewbieEmbarkRevToPlayerObj(p, opts) {
-    opts = opts || {};
-    if (!p || !p.cls || !p.newbiePackClaimed) return false;
-    if ((Number(p.newbieEmbarkRev) || 0) >= NEWBIE_EMBARK_REV) return false;
-    let wpnId = NEWBIE_EMBARK_WEAPONS[p.cls];
-    if (!wpnId || !DB.items[wpnId]) return false;
-    stripRentalGearFromPlayer(p);
-    let expireAt = Date.now() + NEWBIE_EMBARK_MS;
-    let wpnDef = DB.items[wpnId];
-    let skipShield = !!(wpnDef && (wpnDef.w2h || wpnDef.isBow));
-    if (!Array.isArray(p.inv)) p.inv = [];
-    if (!p.eq || typeof p.eq !== 'object') p.eq = {};
-    let wpn = makeRentalItem(wpnId, 12, expireAt);
-    if (wpn) {
-        p.inv.push(wpn);
-        if (opts.equipIfEmpty !== false) equipRentalIfSlotEmpty(wpn, p);
-        if (typeof registerEquipObtained === 'function') try { registerEquipObtained(wpnId); } catch (e) {}
-    }
-    NEWBIE_EMBARK_ARMOR.forEach(function (row) {
-        if (skipShield && row.id === 'arm_103') return;
-        let arm = makeRentalItem(row.id, row.en, expireAt);
-        if (!arm) return;
-        p.inv.push(arm);
-        if (opts.equipIfEmpty !== false) equipRentalIfSlotEmpty(arm, p);
-        if (typeof registerEquipObtained === 'function') try { registerEquipObtained(row.id); } catch (e2) {}
-    });
-    p.newbiePackClaimed = true;
-    p.newbiePackExpireAt = expireAt;
-    p.newbieBoostExpireAt = expireAt;
-    p.newbieEmbarkRev = NEWBIE_EMBARK_REV;
-    return true;
+    // 🎁 v3.8.170：啟程禮包已移除——不再刪舊重發
+    return false;
 }
 /** 目前登入角色：若已領過舊版禮包則刪舊重發 */
 function migrateNewbieEmbarkIfNeeded(opts) {
-    opts = opts || {};
-    if (!player || !player.cls) return false;
-    let ok = applyNewbieEmbarkRevToPlayerObj(player, { equipIfEmpty: opts.equipIfEmpty !== false });
-    if (!ok) return false;
-    try {
-        if (typeof syncShahaArrow === 'function') syncShahaArrow();
-        if (typeof syncDualWield === 'function') syncDualWield();
-        if (typeof calcStats === 'function') calcStats();
-        if (typeof updateUI === 'function') updateUI();
-        if (typeof renderTabs === 'function') renderTabs(true);
-        if (typeof renderStatusEffects === 'function') renderStatusEffects();
-    } catch (e) {}
-    if (!opts.silent && typeof logSys === 'function') {
-        let wpnId = NEWBIE_EMBARK_WEAPONS[player.cls];
-        let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
-        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已更新！</span>舊限時裝備已回收，改發限時 7 天的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。');
-    }
-    return true;
+    return false;
 }
 function purgeExpiredRentalGear(silent) {
     if (!player || typeof player !== 'object') return 0;
@@ -1042,40 +997,8 @@ function purgeExpiredRentalGear(silent) {
     return names.length;
 }
 function claimNewbieEmbarkPack(opts) {
-    opts = opts || {};
-    if (!player || !player.cls) return { ok: false, reason: 'noplayer' };
-    if (player.newbiePackClaimed) return { ok: false, reason: 'claimed' };
-    let wpnId = NEWBIE_EMBARK_WEAPONS[player.cls];
-    if (!wpnId || !DB.items[wpnId]) return { ok: false, reason: 'nowpn' };
-    let expireAt = Date.now() + NEWBIE_EMBARK_MS;
-    let granted = [];
-    let wpnDef = DB.items[wpnId];
-    let skipShield = !!(wpnDef && (wpnDef.w2h || wpnDef.isBow));
-    let wpn = grantRentalItem(wpnId, 12, expireAt, { equip: !!opts.equip });
-    if (wpn) granted.push(wpn);
-    NEWBIE_EMBARK_ARMOR.forEach(function (row) {
-        if (skipShield && row.id === 'arm_103') return;
-        let arm = grantRentalItem(row.id, row.en, expireAt, { equip: !!opts.equip });
-        if (arm) granted.push(arm);
-    });
-    if (player.cls === 'elf') {
-        try { if (typeof gainItem === 'function') gainItem('wpn_5', 3000, true, true); } catch (e) {}
-    }
-    player.newbiePackClaimed = true;
-    player.newbiePackExpireAt = expireAt;
-    player.newbieBoostExpireAt = expireAt;   // 🎁 7 天：掉寶／金幣／卡片 ×3
-    player.newbieEmbarkRev = NEWBIE_EMBARK_REV;
-    try {
-        if (typeof calcStats === 'function') calcStats();
-        if (typeof updateUI === 'function') updateUI();
-        if (typeof renderTabs === 'function') renderTabs(true);
-        if (typeof renderStatusEffects === 'function') renderStatusEffects();
-    } catch (e2) {}
-    if (!opts.silent && typeof logSys === 'function') {
-        let wpnName = (DB.items[wpnId] && DB.items[wpnId].n) || wpnId;
-        logSys('<span class="text-amber-200 font-bold">🎁 新手啟程禮包已開啟！</span>獲得限時 7 天的 <span class="text-sky-300 font-bold">+12 ' + wpnName + '</span>、<span class="text-sky-300 font-bold">+8 裝備套組</span>，以及 <span class="text-yellow-300 font-bold">掉寶／金幣／卡片 ×3</span>。時效結束後裝備與加成會一併結束。');
-    }
-    return { ok: true, granted: granted, expireAt: expireAt };
+    // 🎁 v3.8.170：新手啟程禮包已移除——創角／使用道具皆不再發放
+    return { ok: false, reason: 'removed' };
 }
 
 /** 新手啟程加成結束時間（優先專用欄位；舊存檔沿用禮包時效） */

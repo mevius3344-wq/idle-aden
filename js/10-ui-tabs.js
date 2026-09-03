@@ -2219,7 +2219,9 @@ function openAutoSellRules() {
     let r = getAutoSellRules();
     if (!_asBackup) _asBackup = { rules: JSON.parse(JSON.stringify(r)), on: player.autoSellOn, global:!!player.autoSellGlobal };
     let old = document.getElementById('autosell-rule-modal'); if (old) old.remove();
-    let heldIds = [...new Set((player.inv || []).map(i => i.id).filter(id => DB.items[id]))]
+    // 已設例外（永遠保留／賣掉）的物品只顯示在下方清單，不再進下拉選項
+    let _ovIds = r.overrides || {};
+    let heldIds = [...new Set((player.inv || []).map(i => i.id).filter(id => DB.items[id] && !_ovIds[id]))]
         .sort((a,b) => (DB.items[a]?.n || a).localeCompare(DB.items[b]?.n || b, 'zh-Hant'));
     let itemRows = heldIds.map(id => `<option value="${id}">${DB.items[id]?.n || id}</option>`).join('')
         || '<option value="">背包目前沒有可選物品</option>';
@@ -2309,7 +2311,7 @@ function _readAutoSellForm(ruleSnapshot){
     if (!ruleSnapshot && globalEl) player.autoSellGlobal = globalEl.checked;
     return r;
 }
-function saveAutoSellRules(){_readAutoSellForm();(player.inv||[]).forEach(i=>{delete i._userKeep;});_saveGlobalAutoSellSettings(player.autoSellGlobal);_asBackup=null;applyAutoSellRules();_renderAutoSellBtn();saveGame();renderTabs();closeAutoSellRules();logSys('<span class="text-amber-300">已儲存自動販賣規則；符合的物品會先進入防呆等待期。</span>')}   // 🔧 v2.6.91 功能5：儲存時把設定寫入/移除全域桶   // 🛡️ 審計#10/#11：儲存＝清除 _userKeep 豁免（規則重編→重新評估）＋捨棄草稿快照（此後 Close 不再還原）
+function saveAutoSellRules(){_readAutoSellForm();(player.inv||[]).forEach(i=>{delete i._userKeep;});_saveGlobalAutoSellSettings(player.autoSellGlobal);_asBackup=null;applyAutoSellRules(true);_renderAutoSellBtn();closeAutoSellRules();autoSellJunk(true);logSys('<span class="text-amber-300">已儲存自動販賣規則，並立即賣出符合的物品。</span>')}   // 🔧 v3.8.169：儲存＝立即販賣（不再先進防呆等待）；全域桶／_userKeep／草稿快照行為同前
 // 🔧 v2.6.77 立即賣出：以目前表單規則「提交生效」（比照儲存規則·但不清 _userKeep 豁免——玩家單件取消仍受保護）→ 關窗 → 走手動一鍵賣出（跳過等待秒數·autoSellJunk(true) 內含 saveGame）
 function sellAutoSellItemsNow(){_readAutoSellForm();_asBackup=null;applyAutoSellRules(true);_renderAutoSellBtn();closeAutoSellRules();autoSellJunk(true)}   // 🔧 v2.6.91 force=true：即使開關關閉也強制依規則標記後立即賣
 function _autoSellPlainItemName(item) {   // 🔧 v2.6.77 預覽清單去 HTML：getItemFullName 回傳含 <span> 上色 → 轉純文字
@@ -2346,7 +2348,8 @@ function previewAutoSellRules(){
 function refreshAutoSellItemOptions(){
     let select = document.getElementById('as-item'); if (!select) return;
     let q = (document.getElementById('as-item-search')?.value || '').trim().toLowerCase();
-    let held = [...new Set((player.inv || []).map(i => i.id).filter(id => DB.items[id]))];
+    let ov = (getAutoSellRules().overrides) || {};
+    let held = [...new Set((player.inv || []).map(i => i.id).filter(id => DB.items[id] && !ov[id]))];
     let ids = held.filter(id => {
         let d = DB.items[id];
         return !q || ((d.n || id) + ' ' + id).toLowerCase().includes(q);
@@ -2354,8 +2357,46 @@ function refreshAutoSellItemOptions(){
     select.innerHTML = ids.map(id => `<option value="${id}">${DB.items[id]?.n || id}</option>`).join('')
         || '<option value="">沒有符合的物品</option>';
 }
-function setAutoSellOverride(v){let id=document.getElementById('as-item').value;if(!id)return;_readAutoSellForm();getAutoSellRules().overrides[id]=v;openAutoSellRules()}
-function deleteAutoSellOverride(id){_readAutoSellForm();delete getAutoSellRules().overrides[id];openAutoSellRules()}
+function setAutoSellOverride(v){
+    let id = document.getElementById('as-item').value; if (!id) return;
+    _readAutoSellForm();
+    getAutoSellRules().overrides[id] = v;
+    // 例外一設即生效：寫進草稿備份，關閉視窗也不還原這筆
+    if (_asBackup) {
+        if (!_asBackup.rules.overrides) _asBackup.rules.overrides = {};
+        _asBackup.rules.overrides[id] = v;
+    }
+    let nm = (DB.items[id] && DB.items[id].n) || id;
+    if (v === 'sell') {
+        let now = Date.now();
+        (player.inv || []).forEach(i => {
+            if (!i || i.id !== id || i.lock) return;
+            let d = DB.items[i.id];
+            if (!d || d.noSell || d.noJunk) return;
+            if (typeof isRentalItem === 'function' && isRentalItem(i)) return;
+            i.junk = true;
+            i._ruleJunk = true;
+            i._autoSellQty = Math.max(1, Math.floor(Number(i.cnt) || 1));
+            if (!i.junkSince) i.junkSince = now;
+            delete i._userKeep;
+        });
+        autoSellJunk(true);
+        logSys(`<span class="text-amber-300">已設定永遠賣掉並立即賣出：${nm}</span>`);
+    } else {
+        logSys(`<span class="text-emerald-300">已設定永遠保留：${nm}</span>`);
+    }
+    if (player.autoSellGlobal) _saveGlobalAutoSellSettings(true);
+    else if (v !== 'sell') saveGame();
+    openAutoSellRules();
+}
+function deleteAutoSellOverride(id){
+    _readAutoSellForm();
+    delete getAutoSellRules().overrides[id];
+    if (_asBackup && _asBackup.rules && _asBackup.rules.overrides) delete _asBackup.rules.overrides[id];
+    if (player.autoSellGlobal) _saveGlobalAutoSellSettings(true);
+    else saveGame();
+    openAutoSellRules();
+}
 function toggleLock(uid) {
     let item = player.inv.find(i => i.uid === uid);
     if (item) {

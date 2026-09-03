@@ -1,6 +1,6 @@
 ﻿/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.8.168';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.8.172';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '躺著變強';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1177,7 +1177,7 @@ const DB = {
         "item_ancientkey": { n: "古代鑰匙", p: 1, c: "text-blue-300", d: "試煉所需的材料。", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
         "item_nightvision": { n: "夜之視野", p: 1, c: "text-blue-300", d: "凝視黑暗也不失方向的祕術之眼，試煉所需的材料。", gachaWeight: 0 },
         "candle": { n: "回憶蠟燭", type: "misc", req: "all", p: 100000, c: "text-red-500", d: "點擊使用：六大屬性回到 Lv1，於資訊面板以 +／- 重新分配能力點數，按「確認」才生效（按「取消」則不消耗蠟燭）。同時退還已使用的萬能藥；若重置後魅力不足，超出上限的出戰寵物會自動返回保管。", eff: "reset", gachaWeight: 0 },
-        "item_newbie_embark": { n: "新手啟程禮包", type: "misc", req: "all", p: 0, c: "text-amber-300", eff: "newbie_pack", noSell: true, noJunk: true, gachaWeight: 0, d: "贈予初入冒險世界的旅人。開啟後依職業獲得限時 7 天的 +12 隱藏魔族專武與 +8 裝備套組，並獲得同期 掉寶／金幣／卡片 ×3 加成；時效結束後裝備與加成一併結束。每個角色僅能領取一次。" },
+        "item_newbie_embark": { n: "新手啟程禮包", type: "misc", req: "all", p: 0, c: "text-slate-400", eff: "newbie_pack", noSell: true, noJunk: true, gachaWeight: 0, d: "（已停用）舊版新手啟程禮包，無法再開啟。" },
         "panacea_str": { n: "萬能藥(STR)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "傳說中能重塑筋骨的靈藥。", eff: "panacea", batchUse: true, pstat: "str", gachaWeight: 5 },
         "panacea_dex": { n: "萬能藥(DEX)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "飲下後身手如風的靈藥。", eff: "panacea", batchUse: true, pstat: "dex", gachaWeight: 5 },
         "panacea_con": { n: "萬能藥(CON)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "淬鍊體魄、固本培元的靈藥。", eff: "panacea", batchUse: true, pstat: "con", gachaWeight: 5 },

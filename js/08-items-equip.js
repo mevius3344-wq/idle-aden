@@ -542,20 +542,10 @@ function useItem(u, silent = false) {
         if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
         return;
     }
-    // 🎁 新手啟程禮包：開啟後發放限時 7 天 +12 專武與 +8 裝備
+    // 🎁 v3.8.170：新手啟程禮包已移除
     if (d.eff === 'newbie_pack') {
         if (silent) return;
-        if (typeof claimNewbieEmbarkPack !== 'function') return;
-        let r = claimNewbieEmbarkPack({ equip: true });
-        if (!r || !r.ok) {
-            if (r && r.reason === 'claimed') logSys('<span class="text-amber-300">此角色已領取過新手啟程禮包。</span>');
-            else logSys('<span class="text-red-400">無法開啟新手啟程禮包。</span>');
-            return;
-        }
-        item.cnt--;
-        if (item.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== item.uid);
-        if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
-        saveGame();
+        logSys('<span class="text-slate-400">新手啟程禮包已停用，無法開啟。</span>');
         return;
     }
 
