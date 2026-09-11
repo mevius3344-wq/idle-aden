@@ -563,6 +563,30 @@
             color: #fecaca;
             border-color: #ef4444;
         }
+        .explore-portal {
+            position: absolute; top: 42%; z-index: 40;
+            transform: translateY(-50%);
+            padding: 0.45rem 0.7rem; font-size: 0.75rem; font-weight: 700;
+            border-radius: 0.4rem; border: 1px solid rgba(125, 211, 252, 0.55);
+            background: rgba(8, 30, 48, 0.82); color: #bae6fd;
+            text-shadow: 0 1px 2px #000; cursor: pointer;
+            max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .explore-portal-left { left: 0.5rem; }
+        .explore-portal-right { right: 0.5rem; }
+        .explore-portal.is-ready {
+            border-color: #fde68a; color: #fef3c7; background: rgba(60, 40, 8, 0.88);
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.35);
+        }
+        .explore-hint {
+            position: absolute; top: 0.45rem; left: 50%; transform: translateX(-50%);
+            z-index: 39; font-size: 0.7rem; color: #94a3b8;
+            background: rgba(15, 23, 42, 0.72); padding: 0.15rem 0.55rem; border-radius: 999px;
+            pointer-events: none; white-space: nowrap;
+        }
+        #battle-view.is-exploring.has-bg {
+            transition: background-position 0.08s linear;
+        }
         .party-sprite.remote-party.is-party .remote-party-tag {
             color: #bbf7d0; border-color: rgba(74, 222, 128, 0.5); background: rgba(8, 28, 16, 0.78);
         }
