@@ -7,6 +7,7 @@
   var _readyPromise = null;
   var _pollBusy = false;
   var _pandoraLastLotSeq = 0;
+  var _appliedClaimIds = Object.create(null);
 
   function _httpOk() {
     try {
@@ -189,6 +190,11 @@
 
   function pandoraApplyClaim(claim) {
     if (!claim || typeof player === "undefined" || !player) return;
+    var cid = String(claim.id || "");
+    if (cid) {
+      if (_appliedClaimIds[cid]) return;
+      _appliedClaimIds[cid] = 1;
+    }
     if (claim.type === "gold_refund") {
       var amt = Math.max(0, Math.floor(Number(claim.amount) || 0));
       if (amt > 0) {

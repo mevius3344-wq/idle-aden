@@ -158,7 +158,7 @@
     return owner.toLowerCase() !== acc.toLowerCase();
   }
 
-  /** 進度分數：等級／經驗／金幣／背包量；同進度再比 savedAt */
+  /** 進度分數（顯示／除錯用）：等級／經驗為主，金幣／背包僅作次要參考 */
   function cloudSaveProgressScore(data) {
     var p = data && data.p;
     if (!p || !p.cls) return -1;
@@ -173,6 +173,14 @@
       }
     }
     return lv * 1e12 + exp * 1e3 + Math.min(gold, 1e11) + invN;
+  }
+  /** 角色衝突比對用：只看等級＋經驗，避免消費金幣／賣裝被誤判「雲端較富」而回朔 */
+  function cloudSaveCombatScore(data) {
+    var p = data && data.p;
+    if (!p || !p.cls) return -1;
+    var lv = Math.max(1, Math.floor(Number(p.lv) || 1));
+    var exp = Math.max(0, Math.floor(Number(p.exp) || 0));
+    return lv * 1e12 + exp;
   }
 
   function cloudSaveTime(data) {
@@ -226,14 +234,19 @@
     return !cloudSameCharacterIdentity(localData, cloudData);
   }
 
-  /** a 是否應取代 b（富／新勝貧／舊） */
+  /** a 是否應取代 b（等級／經驗較高勝；同級則較新 savedAt 勝——不因花金幣／賣道具回朔） */
   function cloudSaveBeats(a, b) {
     if (!a || !a.p) return false;
     if (!b || !b.p) return true;
-    var sa = cloudSaveProgressScore(a);
-    var sb = cloudSaveProgressScore(b);
+    var ta = cloudSaveTime(a);
+    var tb = cloudSaveTime(b);
+    // 明確較舊的存檔不可覆寫較新本機（即使雲端金幣較多）
+    if (ta > 0 && tb > 0 && ta + 1500 < tb) return false;
+    var sa = cloudSaveCombatScore(a);
+    var sb = cloudSaveCombatScore(b);
     if (sa !== sb) return sa > sb;
-    return cloudSaveTime(a) >= cloudSaveTime(b);
+    if (ta || tb) return ta >= tb;
+    return cloudSaveProgressScore(a) >= cloudSaveProgressScore(b);
   }
 
   function _writeSlotLocal(slot, dataObj) {

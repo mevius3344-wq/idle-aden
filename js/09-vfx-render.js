@@ -2466,24 +2466,69 @@ function _allySpritesApply() {   // 8fps ticker 驅動
         }
     });
 }
-// 🤝 線上組隊成員（同地圖）：唯讀 sprite，位置與本地傭兵錯開；僅 idle＋名稱＋血條
+// 🤝 同地圖線上玩家（組隊＋路人）：唯讀 sprite；假走位＝緩步左右漂移，名稱＋血條
 let _remotePartySpriteStates = Object.create(null);
-function _remotePartySpritePos(i) {
+function _remotePartyKeyHash(key) {
+    var s = String(key || ''), h = 0;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+function _remotePartySpritePos(i, key) {
     var spots = [
-        { x: '11%', b: 14 }, { x: '17%', b: 20 }, { x: '23%', b: 16 },
-        { x: '89%', b: 14 }, { x: '83%', b: 20 }, { x: '77%', b: 16 },
-        { x: '54%', b: 28 }, { x: '36%', b: 28 }
+        { x: 11, b: 14 }, { x: 17, b: 20 }, { x: 23, b: 16 },
+        { x: 89, b: 14 }, { x: 83, b: 20 }, { x: 77, b: 16 },
+        { x: 54, b: 28 }, { x: 36, b: 28 },
+        { x: 8, b: 22 }, { x: 92, b: 22 }, { x: 30, b: 30 }, { x: 70, b: 30 }
     ];
-    return spots[i % spots.length];
+    var base = spots[i % spots.length];
+    var h = _remotePartyKeyHash(key || String(i));
+    // 假走位：每位玩家固定節奏左右微移，看起來像在場上走動
+    var drift = Math.sin(Date.now() / (1400 + (h % 900)) + (h % 7)) * (1.6 + (h % 5) * 0.25);
+    return { x: (base.x + drift) + '%', b: base.b };
 }
 function _remotePartyActor(mem) {
     var av = (typeof ATK_AV_BY_CLS !== 'undefined' && ATK_AV_BY_CLS[mem.cls]) ? ATK_AV_BY_CLS[mem.cls] : '王子';
     return { cls: mem.cls, avatar: av, curHp: mem.hp, mhp: mem.mhp, _faceD: 2 };
 }
+function _remoteSameMapMembersMerged() {
+    var byKey = Object.create(null);
+    var partyKeys = Object.create(null);
+    try {
+        var party = (typeof rtPartySameMapMembers === 'function') ? rtPartySameMapMembers() : [];
+        (party || []).forEach(function (m) {
+            if (!m || !m.key) return;
+            partyKeys[m.key] = 1;
+            byKey[m.key] = {
+                key: m.key, name: m.name || '隊員', cls: m.cls, lv: m.lv || 1,
+                hp: m.hp, mhp: m.mhp, online: m.online !== false, party: true
+            };
+        });
+    } catch (e0) {}
+    try {
+        var peers = (typeof mapPopSameMapPlayers === 'function') ? mapPopSameMapPlayers() : [];
+        (peers || []).forEach(function (m) {
+            if (!m || !m.key) return;
+            if (byKey[m.key]) {
+                byKey[m.key].party = byKey[m.key].party || !!partyKeys[m.key];
+                return;
+            }
+            byKey[m.key] = {
+                key: m.key, name: m.name || '冒險者', cls: m.cls, lv: m.lv || 1,
+                hp: m.hp, mhp: m.mhp, online: m.online !== false, party: !!partyKeys[m.key]
+            };
+        });
+    } catch (e1) {}
+    var list = Object.keys(byKey).map(function (k) { return byKey[k]; });
+    list.sort(function (a, b) {
+        if (!!a.party !== !!b.party) return a.party ? -1 : 1;
+        return String(a.key).localeCompare(String(b.key));
+    });
+    return list.slice(0, 12);
+}
 function _remotePartySpritesApply() {
     var bv = document.getElementById('battle-view');
     var inBattle = bv && !bv.classList.contains('hidden') && bv.classList.contains('area-fit');
-    var members = (typeof rtPartySameMapMembers === 'function') ? rtPartySameMapMembers() : [];
+    var members = _remoteSameMapMembersMerged();
     var liveKeys = Object.create(null);
     members.forEach(function (m) { if (m && m.key) liveKeys[m.key] = 1; });
     for (var k in _remotePartySpriteStates) {
@@ -2509,7 +2554,7 @@ function _remotePartySpritesApply() {
         }
         if (!st.el) {
             var el = document.createElement('div');
-            el.className = 'party-sprite remote-party';
+            el.className = 'party-sprite remote-party' + (mem.party ? ' is-party' : ' is-peer');
             var tag = document.createElement('div');
             tag.className = 'remote-party-tag';
             var bar = document.createElement('div');
@@ -2524,24 +2569,30 @@ function _remotePartySpritesApply() {
             bv.appendChild(el);
             st.el = el; st.imgs = { sh: sh, bd: bd, tag: tag, bar: barIn };
         } else if (st.el.parentElement !== bv) bv.appendChild(st.el);
+        st.el.classList.toggle('is-party', !!mem.party);
+        st.el.classList.toggle('is-peer', !mem.party);
         var w = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100;
         st.el.style.width = w + 'px';
-        var pp = _remotePartySpritePos(i);
+        var pp = _remotePartySpritePos(i, mem.key);
         st.el.style.left = 'calc(' + pp.x + ' - ' + Math.round(w / 2) + 'px)';
         st.el.style.bottom = pp.b + 'px';
         st.el.style.zIndex = String(24 - pp.b);
         st.el.style.opacity = mem.online ? '0.92' : '0.55';
         if (st.imgs.tag) {
-            st.imgs.tag.textContent = (mem.name || '隊員') + ' Lv.' + (mem.lv || 1);
+            var prefix = mem.party ? '🤝 ' : '';
+            st.imgs.tag.textContent = prefix + (mem.name || '冒險者') + ' Lv.' + (mem.lv || 1);
         }
         if (st.imgs.bar) {
             var pct = Math.max(0, Math.min(100, Math.round((mem.hp / mem.mhp) * 100)));
             st.imgs.bar.style.width = pct + '%';
         }
         st.phase = (st.phase + 1) % 999;
-        var f = a.idle ? (Math.floor(Date.now() / (1000 / MOB_ANIM_FPS)) + i * 3 + st.phase) % a.idle.length : 0;
-        if (a.idle && a.idle[f] && st.imgs.bd.src !== a.idle[f].src) st.imgs.bd.src = a.idle[f].src;
-        var ss = a.shadow && a.shadow.idle;
+        // 優先播 walk（若有），否則 idle；節奏依玩家 key 錯相
+        var useWalk = !!(a.walk && a.walk.length);
+        var seq = useWalk ? a.walk : a.idle;
+        var f = seq ? (Math.floor(Date.now() / (1000 / MOB_ANIM_FPS)) + i * 3 + st.phase + (_remotePartyKeyHash(mem.key) % 5)) % seq.length : 0;
+        if (seq && seq[f] && st.imgs.bd.src !== seq[f].src) st.imgs.bd.src = seq[f].src;
+        var ss = a.shadow && (useWalk && a.shadow.walk ? a.shadow.walk : a.shadow.idle);
         if (ss && ss.length) {
             var sf = f < ss.length ? f : (f % ss.length);
             if (st.imgs.sh.style.visibility === 'hidden') st.imgs.sh.style.visibility = '';

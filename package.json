@@ -10,7 +10,8 @@
     "vercel-build": "node scripts/inject-version.js",
     "db:migrate": "node scripts/migrate-neon.js",
     "db:import": "node scripts/import-files-to-neon.js",
-    "db:purge-closed-classes": "node scripts/purge-closed-class-saves.js"
+    "db:purge-closed-classes": "node scripts/purge-closed-class-saves.js",
+    "db:cleanup-pandora-claims": "node scripts/cleanup-pandora-dup-claims.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

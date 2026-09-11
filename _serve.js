@@ -1445,12 +1445,38 @@ function partyMapPopulation(now) {
   return counts;
 }
 
-function partyMapPopulationPayload(mapId, now) {
+function partyMapPlayersHere(mapId, excludeKey, now) {
+  const t = now || Date.now();
+  const cur = String(mapId || "").slice(0, 64);
+  if (!cur || cur.startsWith("town_")) return [];
+  const out = [];
+  for (const pre of partyPresence.values()) {
+    if (!pre || !pre.mapId) continue;
+    if (t - (pre.lastSeen || 0) > PARTY_TTL_MS) continue;
+    if (String(pre.mapId) !== cur) continue;
+    if (excludeKey && pre.key === excludeKey) continue;
+    out.push({
+      key: pre.key,
+      name: partySanitizeName(pre.name) || "冒險者",
+      lv: Math.max(1, Math.min(100, Number(pre.lv) || 1)),
+      cls: String(pre.cls || "").slice(0, 24),
+      hp: Math.max(0, Math.floor(Number(pre.hp) || 0)),
+      mhp: Math.max(1, Math.floor(Number(pre.mhp) || 1)),
+      online: true,
+    });
+    if (out.length >= 24) break;
+  }
+  out.sort((a, b) => String(a.key || "").localeCompare(String(b.key || "")));
+  return out;
+}
+
+function partyMapPopulationPayload(mapId, now, excludeKey) {
   const counts = partyMapPopulation(now);
   const cur = String(mapId || "").slice(0, 64);
   return {
     counts: counts,
     here: cur && counts[cur] ? counts[cur] : 0,
+    players: partyMapPlayersHere(cur, excludeKey, now),
     at: now || Date.now(),
   };
 }
@@ -1636,7 +1662,7 @@ async function handlePartyApi(req, res, u) {
     const partyMobs = party
       ? partyMobSyncForMember(party, up.key, up.presence.mapId || "")
       : null;
-    const mapPop = partyMapPopulationPayload(up.presence.mapId || "", Date.now());
+    const mapPop = partyMapPopulationPayload(up.presence.mapId || "", Date.now(), up.key);
     return json(res, 200, {
       ok: true,
       key: up.key,
@@ -1651,7 +1677,14 @@ async function handlePartyApi(req, res, u) {
     partyCleanupStale(Date.now());
     const url = new URL(req.url || "/", "http://localhost");
     const mapId = String(url.searchParams.get("mapId") || "").slice(0, 64);
-    const payload = partyMapPopulationPayload(mapId, Date.now());
+    const account = String(url.searchParams.get("account") || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    const slot = Math.max(0, Math.min(8, Number(url.searchParams.get("slot")) || 0));
+    const name = partySanitizeName(url.searchParams.get("name"));
+    const selfKey = account ? partyMemberKey(account, slot, name) : "";
+    const payload = partyMapPopulationPayload(mapId, Date.now(), selfKey);
     return json(res, 200, { ok: true, mapPop: payload });
   }
 

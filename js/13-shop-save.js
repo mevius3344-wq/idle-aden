@@ -1018,6 +1018,7 @@ function openLoadSelect(){
     _loadPage = 0;
     _loadSelectedSlot = [1,2,3,4].find(n => !!slotSummary(n)) || 1;
     renderLoadSelect();
+    try { refreshLoadSelectCloudAsync(true); } catch (e) {}
 }
 function loadSetPage(page){
     _loadLastClickSlot = 0; _loadLastClickAt = 0;
@@ -1068,24 +1069,34 @@ function returnToCharacterSelect(){
     try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
     return true;
 }
-function renderLoadSelect(){
-    // 📁 開啟選角畫面：先清除暫停職業，再同步雲端
-    try {
-      if (typeof window.purgeClosedClassCloudSlots === 'function') window.purgeClosedClassCloudSlots();
-    } catch (_cloudPurgeE) {}
+let _loadCloudRefreshAt = 0;
+let _loadCloudRefreshBusy = false;
+/** 選角畫面：非阻塞刷新雲端（登入已拉過 bundle；這裡只做節流補同步，避免每次重繪卡死） */
+function refreshLoadSelectCloudAsync(force) {
+    if (_loadCloudRefreshBusy) return;
+    let now = Date.now();
+    if (!force && now - _loadCloudRefreshAt < 8000) return;
+    if (typeof cloudCanSync !== 'function' || !cloudCanSync()) return;
+    if (typeof cloudSyncOnLogin !== 'function') return;
+    _loadCloudRefreshBusy = true;
+    _loadCloudRefreshAt = now;
+    Promise.resolve()
+        .then(function () { return cloudSyncOnLogin(); })
+        .catch(function () { return false; })
+        .then(function () {
+            _loadCloudRefreshBusy = false;
+            try {
+                let load = document.getElementById('load-select-panel');
+                if (load && !load.classList.contains('hidden')) renderLoadSelect(true);
+            } catch (e) {}
+        });
+}
+function renderLoadSelect(skipCloudRefresh){
+    // 📁 選角畫面只讀本機快取重繪；雲端改背景非阻塞同步（舊制每次同步打 8 次 XHR＝登入後卡死主因）
     try { purgeClosedClassCharacterSlots({ silent: true }); } catch (_purgeClsE) {}
-    try {
-      if (typeof cloudCanSync === 'function' && cloudCanSync() && typeof cloudPullSlotIntoStorage === 'function') {
-        for (let _i = 1; _i <= 8; _i++) cloudPullSlotIntoStorage(_i);
-      } else if (typeof cloudReady === 'function' && cloudReady() && typeof cloudLoggedIn === 'function' && !cloudLoggedIn()) {
-        // 已連線但未登入：不拉 guest 桶，避免覆蓋本機存檔
-      }
-    } catch (_cloudSelE) {}
-    try {
-      if (typeof desktopPlayerReady === 'function' && desktopPlayerReady() && typeof desktopPullSlotIntoStorage === 'function') {
-        for (let _i = 1; _i <= 8; _i++) desktopPullSlotIntoStorage(_i);
-      }
-    } catch (_deskSelE) {}
+    if (!skipCloudRefresh) {
+        try { refreshLoadSelectCloudAsync(false); } catch (_cloudSelE) {}
+    }
     const grid = document.getElementById('load-slot-grid');
     if(!grid) return;
     let html = '';

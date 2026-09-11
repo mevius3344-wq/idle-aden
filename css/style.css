@@ -544,6 +544,12 @@
             color: #e0f2fe; background: rgba(8, 20, 36, 0.78); border: 1px solid rgba(56, 189, 248, 0.45);
             text-shadow: 0 1px 2px #000;
         }
+        .party-sprite.remote-party.is-peer .remote-party-tag {
+            color: #fde68a; border-color: rgba(251, 191, 36, 0.5); background: rgba(30, 20, 8, 0.78);
+        }
+        .party-sprite.remote-party.is-party .remote-party-tag {
+            color: #bbf7d0; border-color: rgba(74, 222, 128, 0.5); background: rgba(8, 28, 16, 0.78);
+        }
         .party-sprite.remote-party .remote-party-hp {
             position: absolute; left: 50%; bottom: calc(100% - 2px); transform: translateX(-50%);
             width: 56px; height: 4px; margin-bottom: 14px; border-radius: 2px;
