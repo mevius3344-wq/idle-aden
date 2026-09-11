@@ -571,21 +571,52 @@
             background: rgba(8, 30, 48, 0.82); color: #bae6fd;
             text-shadow: 0 1px 2px #000; cursor: pointer;
             max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            opacity: 0.55; transition: opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         }
         .explore-portal-left { left: 0.5rem; }
         .explore-portal-right { right: 0.5rem; }
         .explore-portal.is-ready {
+            opacity: 1;
             border-color: #fde68a; color: #fef3c7; background: rgba(60, 40, 8, 0.88);
-            box-shadow: 0 0 10px rgba(251, 191, 36, 0.35);
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
         }
+        #battle-view.portal-ready-left .explore-portal-left,
+        #battle-view.portal-ready-right .explore-portal-right { opacity: 1; }
         .explore-hint {
             position: absolute; top: 0.45rem; left: 50%; transform: translateX(-50%);
             z-index: 39; font-size: 0.7rem; color: #94a3b8;
             background: rgba(15, 23, 42, 0.72); padding: 0.15rem 0.55rem; border-radius: 999px;
             pointer-events: none; white-space: nowrap;
         }
-        #battle-view.is-exploring.has-bg {
-            transition: background-position 0.08s linear;
+        /* 🗺️ v3.8.182 角色鎖中央：--wx/--wy 驅動世界層反向平移 */
+        #battle-view.is-world-scroll {
+            --wx: 0px;
+            --wy: 0px;
+            --cam-x: 0;
+            --cam-y: 0;
+            overflow: hidden;
+        }
+        /* 怪物站立帶＝世界層 */
+        #battle-view.is-world-scroll #mob-list {
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear;
+            will-change: transform;
+        }
+        /* 遠端玩家死綁世界座標（隨捲動甩出／滑入） */
+        #battle-view.is-world-scroll > .party-sprite.remote-party {
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear, left 0s, bottom 0s;
+            will-change: transform;
+        }
+        /* 主角／本地傭兵／寵物層：不套世界平移，留在畫面中央一帶 */
+        #battle-view.is-world-scroll > #player-morph-sprite,
+        #battle-view.is-world-scroll > .party-sprite:not(.remote-party),
+        #battle-view.is-world-scroll > #pet-layer {
+            transform: none !important;
+            transition: none !important;
+        }
+        #battle-view.is-world-scroll.has-bg {
+            transition: background-position 0.05s linear;
         }
         .party-sprite.remote-party.is-party .remote-party-tag {
             color: #bbf7d0; border-color: rgba(74, 222, 128, 0.5); background: rgba(8, 28, 16, 0.78);

@@ -3,6 +3,14 @@
 (function () {
   'use strict';
 
+  // 🧪 本機預設關線上組隊／同圖／聊天／雲端；線上部署維持連線（可手動覆寫 window.__DEV_OFFLINE）
+  try {
+    if (window.__DEV_OFFLINE == null) {
+      var _h = String(location.hostname || '').toLowerCase();
+      window.__DEV_OFFLINE = (_h === 'localhost' || _h === '127.0.0.1' || _h === '');
+    }
+  } catch (e0) {}
+
   var VERCEL_API = 'https://idle-aden.vercel.app';
   var RENDER_ASSETS = 'https://idle-aden.onrender.com';
 
@@ -71,6 +79,14 @@
     return assetBase ? assetBase + p : p;
   }
 
+  function onlineSuspended() {
+    try {
+      return !!(window.__DEV_OFFLINE || window.__onlineIdleForced || window.__wildOnlineForced);
+    } catch (e) {
+      return false;
+    }
+  }
+
   window.GAME_HOST = {
     apiBase: apiBase,
     assetBase: assetBase,
@@ -79,7 +95,9 @@
     isLocal: isLocal,
     isRender: isRender,
     isVercel: isVercel,
+    onlineSuspended: onlineSuspended,
   };
+  try { window.gameOnlineSuspended = onlineSuspended; } catch (e4) {}
 
   if (typeof window.fetch === 'function') {
     var origFetch = window.fetch;

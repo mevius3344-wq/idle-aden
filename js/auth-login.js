@@ -601,6 +601,15 @@
   }
 
   function wakeServerBeforeAuth() {
+    try {
+      if (window.GAME_HOST && typeof GAME_HOST.isLocal === "function" && GAME_HOST.isLocal()) {
+        return Promise.resolve({ ok: true, local: true });
+      }
+      var h = String(location.hostname || "").toLowerCase();
+      if (h === "localhost" || h === "127.0.0.1" || h === "") {
+        return Promise.resolve({ ok: true, local: true });
+      }
+    } catch (e0) {}
     if (window.GameServerWake && typeof window.GameServerWake.ensureAwake === "function") {
       return window.GameServerWake.ensureAwake(90000);
     }
@@ -618,7 +627,7 @@
       setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
       return;
     }
-    setStatus("伺服器喚醒中……", "ok");
+    setStatus("連線中……", "ok");
 
     wakeServerBeforeAuth().then(function (wake) {
       if (!wake || !wake.ok) {

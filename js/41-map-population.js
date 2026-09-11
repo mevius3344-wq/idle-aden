@@ -10,6 +10,10 @@
     var _mapHostKey = '';
 
     function mapPopOnline() {
+        try {
+            if (typeof window !== 'undefined' && typeof window.gameOnlineSuspended === 'function' && window.gameOnlineSuspended()) return false;
+            if (typeof window !== 'undefined' && window.__DEV_OFFLINE) return false;
+        } catch (e) {}
         return typeof rtPartyIsHttp === 'function' && rtPartyIsHttp();
     }
 

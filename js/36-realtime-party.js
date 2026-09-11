@@ -391,7 +391,10 @@
 
     function rtPartyIsSuspended() {
         try {
-            return !!(typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced));
+            if (typeof window !== 'undefined' && typeof window.gameOnlineSuspended === 'function') {
+                return !!window.gameOnlineSuspended();
+            }
+            return !!(typeof window !== 'undefined' && (window.__DEV_OFFLINE || window.__onlineIdleForced || window.__wildOnlineForced));
         } catch (e) { return false; }
     }
 
@@ -1031,7 +1034,7 @@
 
     function rtPartyStartPolling() {
         if (_rtPartyPolling || !rtPartyIsHttp()) return;
-        if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
+        if (rtPartyIsSuspended()) return;
         _rtPartyPolling = true;
         (function loop() {
             if (!_rtPartyPolling) return;
@@ -1106,7 +1109,7 @@
     (function watch() {
         function poke() {
             try {
-                if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) {
+                if (rtPartyIsSuspended()) {
                     rtPartyStop();
                     return;
                 }

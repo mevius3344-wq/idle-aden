@@ -2291,10 +2291,23 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         el.style.width = w + 'px';
     } else if (_pmState.el.parentElement !== bv) bv.appendChild(_pmState.el);
     // 🗡️ v3.0.71 每輪更新：站怪物格縫隙(依 5格/3格版面動態)·免 transform；🤝 v3.6.89 固定站位＝玩家恆前排中央（bottom/zIndex 一併固定）
-    // 🚶 v3.7.64 主角走位（取代 v3.6.89 玩家固定站位·僅主玩家；傭兵仍固定站位）：_playerMoveStep 每輪步進·CSS 補間平滑（同寵物 .14s linear）
+    // 🚶 v3.7.64 主角走位（取代 v3.6.89 玩家固定站位·僅主玩家；傭兵仍固定站位）：_playerMoveStep 每輪步進·CSS 補間平滑（同寵物 .pet）
+    // 🗺️ v3.8.182 探索模式：角色鎖中央，關閉走格子；朝向／步行動畫由 explore 驅動
     {
         let _pw = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100;
-        if (PLAYER_BATTLE_WALK) {
+        let _worldScroll = (typeof exploreWorldActive === 'function' && exploreWorldActive());
+        if (_worldScroll) {
+            if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }
+            _pmState.moving = !!(typeof exploreIsMoving === 'function' && exploreIsMoving());
+            if (_pmState.moving && typeof exploreFaceDir === 'function') {
+                try { player._faceD = exploreFaceDir(); } catch (e) {}
+            }
+            // 正中央鎖死（不走格子）
+            _pmState.el.style.left = 'calc(50% - ' + Math.round(_pw / 2) + 'px)';
+            _pmState.el.style.bottom = (10 - _playerMorphYOffset(form)) + 'px';
+            _pmState.el.style.zIndex = '36';
+            _pmState.mx = 0.5; _pmState.mb = 10;
+        } else if (PLAYER_BATTLE_WALK) {
             _playerMoveStep(bv);
             if (!_pmState.el._moveTrans) { _pmState.el.style.transition = 'left .14s linear, bottom .14s linear'; _pmState.el._moveTrans = true; }
             _pmState.el.style.left = 'calc(' + (_pmState.mx * 100).toFixed(2) + '% - ' + Math.round(_pw / 2) + 'px)';
@@ -2309,7 +2322,7 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
             _pmState.el.style.zIndex = String(30 - _pp.b);
         }
     }
-    // 🧭 v3.7.65 朝向：移動中已由 _playerMoveStep 依移動向量寫入 player._faceD（走路面向前進方向）→ 只有停下時才轉向攻擊目標
+    // 🧭 v3.7.65 朝向：移動中已由 _playerMoveStep／explore 寫入 player._faceD → 只有停下時才轉向攻擊目標
     //    🧍 v3.7.81 固定站位下 moving 恆 false → 這行每輪都跑＝朝向永遠對著攻擊目標（同傭兵）
     if (!_pmState.moving && (CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
     // 動作＋幀（比照 _mobAnimApply：單次動作播一輪回待機·death 凍結最後一幀）
@@ -2366,6 +2379,13 @@ if (typeof manualCast === 'function' && !manualCast._pmWrapped) {
 //    且 8 名成員時第 5 順位起 bottom≥38 → zIndex 轉負 → 沉到 #mob-list（in-flow）之下被怪物卡蓋住＝王族第 4~7 名傭兵在狩獵區看不見。
 //    改為「玩家＋傭兵依招募順序站固定位置」：玩家＋傭兵1~3 前排（bottom 2·z 28）·傭兵4~7 後排（bottom 26·z 4=站後面有景深）·永不跳位、zIndex 恆為正。
 function _partySpritePos() {
+    // 🗺️ 探索相機開啟：本地隊伍簇擁畫面中央（世界由 --wx/--wy 捲動）
+    try {
+        if (typeof exploreWorldActive === 'function' && exploreWorldActive()
+            && typeof explorePartySpritePos === 'function') {
+            return explorePartySpritePos();
+        }
+    } catch (e0) {}
     let five = true; try { five = (typeof backSlotsActive !== 'function') || backSlotsActive(); } catch (e) {}
     return five ? { P: { x: '45.5%', b: 2 }, A: [{ x: '23%', b: 2 }, { x: '66%', b: 2 }, { x: '83.5%', b: 2 }, { x: '28%', b: 26 }, { x: '51%', b: 26 }, { x: '70.5%', b: 26 }, { x: '7%', b: 26 }] }
                 : { P: { x: '39%', b: 2 },   A: [{ x: '28%', b: 2 }, { x: '62%', b: 2 }, { x: '72%', b: 2 }, { x: '33.5%', b: 26 }, { x: '57%', b: 26 }, { x: '77.5%', b: 26 }, { x: '23%', b: 26 }] };

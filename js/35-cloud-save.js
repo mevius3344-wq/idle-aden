@@ -457,7 +457,8 @@
   }
 
   function cloudMirrorAfterSave(slot) {
-    if (typeof window !== 'undefined' && (window.__onlineIdleForced || window.__wildOnlineForced)) return;
+    if (typeof window !== 'undefined' && typeof window.gameOnlineSuspended === 'function' && window.gameOnlineSuspended()) return;
+    if (typeof window !== 'undefined' && (window.__DEV_OFFLINE || window.__onlineIdleForced || window.__wildOnlineForced)) return;
     if (!cloudCanSync()) return;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
     try {

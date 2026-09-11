@@ -17,7 +17,19 @@
     }
   }
 
+  function isLocalHost() {
+    try {
+      if (window.GAME_HOST && typeof GAME_HOST.isLocal === "function" && GAME_HOST.isLocal()) return true;
+      var h = String(location.hostname || "").toLowerCase();
+      return h === "localhost" || h === "127.0.0.1" || h === "";
+    } catch (e) {
+      return false;
+    }
+  }
+
   function renderWakeUrl() {
+    // 本機開發不喚醒 Render
+    if (isLocalHost()) return "";
     try {
       if (window.GAME_HOST) {
         if (GAME_HOST.assetBase) {
@@ -92,8 +104,13 @@
 
   /**
    * 登入／連線前確保 Render 已喚醒。冷啟動最多等 maxWaitMs（預設 90 秒）。
+   * 本機／無喚醒網址：直接放行，避免卡在「伺服器喚醒中」。
    */
   function ensureAwake(maxWaitMs) {
+    if (isLocalHost() || !renderWakeUrl()) {
+      _lastOkMs = Date.now();
+      return Promise.resolve({ ok: true, warm: true, local: true });
+    }
     var limit = Math.max(15000, Number(maxWaitMs) || 90000);
     var started = Date.now();
     var delay = 1200;

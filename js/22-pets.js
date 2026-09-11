@@ -1423,7 +1423,50 @@ function _petSpriteEl(layer, p) {
     }
     return el;
 }
+function _petWanderStepExplore(p, host, hostRect) {
+    const slots = [
+        { x: 0.42, y: 0.82 }, { x: 0.58, y: 0.82 }, { x: 0.36, y: 0.88 },
+        { x: 0.64, y: 0.88 }, { x: 0.48, y: 0.90 }, { x: 0.52, y: 0.78 }
+    ];
+    let h = 0; const uid = String(p.uid || '');
+    for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) | 0;
+    const slot = slots[Math.abs(h) % slots.length];
+    if (p._px == null) { p._px = slot.x; p._py = slot.y; }
+    let dx = slot.x - p._px, dy = slot.y - p._py;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    const pull = 0.05;
+    if (dist > 0.02) {
+        p._px += dx / dist * pull;
+        p._py += dy / dist * pull;
+        p._moving = true;
+        p._dir = (typeof _vec2dir === 'function') ? _vec2dir(dx, dy) : (p._dir || 6);
+    } else {
+        p._px = slot.x; p._py = slot.y; p._moving = false;
+    }
+    try {
+        const aliveMobs = (typeof mapState !== 'undefined' && mapState.mobs) ? mapState.mobs.filter(m => m && m.curHp > 0) : [];
+        if (aliveMobs.length && !p._downed) {
+            const tgt = aliveMobs.find(m => m.uid === p._faceMobUid) || aliveMobs[0];
+            const r = (typeof _vfxSlotRect === 'function') ? _vfxSlotRect(tgt.uid) : null;
+            const hr = hostRect || host.getBoundingClientRect();
+            if (r && r.width && hr.width) {
+                const tx = (r.left + r.width / 2 - hr.left) / hr.width;
+                const ty = (r.top + r.height * 0.9 - hr.top) / hr.height;
+                p._dir = (typeof _vec2dir === 'function') ? _vec2dir((tx - p._px) * hr.width, (ty - p._py) * hr.height) : p._dir;
+            }
+        }
+    } catch (e1) {}
+    p._px = Math.max(0.30, Math.min(0.70, p._px));
+    p._py = Math.max(0.72, Math.min(0.94, p._py));
+}
 function _petWanderStep(p, host, hostRect) {
+    // 🗺️ 探索相機：寵物／召喚簇擁畫面中央主角附近（不跟世界層平移）
+    try {
+        if (typeof exploreWorldActive === 'function' && exploreWorldActive()) {
+            _petWanderStepExplore(p, host, hostRect);
+            return;
+        }
+    } catch (e0) {}
     // 位置以 0..1 正規化（x 4%~96%·y 55%~95% 地面帶）
     if (p._px == null) { p._px = 0.15 + Math.random() * 0.5; p._py = 0.6 + Math.random() * 0.3; p._wt = 0; }
     let alive = (typeof mapState !== 'undefined' && mapState.mobs) ? mapState.mobs.filter(m => m && m.curHp > 0) : [];

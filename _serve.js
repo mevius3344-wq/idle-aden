@@ -65,7 +65,15 @@ function computeBuildId() {
   }
 }
 const BUILD_ID = computeBuildId();
-const GAME_VERSION = "v3.8.143";
+function readGameVersionFromData() {
+  try {
+    const raw = fs.readFileSync(path.join(ROOT, "js", "00-data.js"), "utf8");
+    const m = raw.match(/GAME_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    if (m && m[1]) return m[1];
+  } catch (e) {}
+  return "v3.8.182";
+}
+const GAME_VERSION = readGameVersionFromData();
 const SERVER_STARTED_AT = Date.now();
 // Online (Render) keeps this off. Local Windows serve writes editable JSON to Desktop.
 const ENABLE_DESKTOP_SAVES =

@@ -58,9 +58,10 @@
         _flushSave();
         setTimeout(function () {
             try {
-                var url = location.href.split('#')[0].replace(/([?&])_v=[^&]*/g, '').replace(/([?&])_build=[^&]*/g, '').replace(/[?&]$/, '');
-                var join = url.indexOf('?') >= 0 ? '&' : '?';
-                location.replace(url + join + '_v=' + encodeURIComponent(String(targetVer || _clientVer() || Date.now())) + '&_t=' + Date.now());
+                // 清掉舊 _v/_t/_build，避免無限疊加 query 把網址撐爆 → Not Found
+                var base = location.pathname || '/';
+                var ver = encodeURIComponent(String(targetVer || _clientVer() || Date.now()));
+                location.replace(base + '?_v=' + ver + '&_t=' + Date.now());
             } catch (e) {
                 try { location.reload(); } catch (e2) {}
             }
@@ -74,17 +75,15 @@
             .then(function (data) {
                 if (!data || !data.ok || !data.gameVersion) return;
                 var serverVer = String(data.gameVersion);
-                var client = _clientVer();
-                if (!client) {
-                    _bootGameVersion = serverVer;
-                    return;
-                }
+                // 第一次只記住伺服器版本；勿因 client/server 短暫不一致狂重整（會把網址疊爆）
                 if (!_bootGameVersion) {
                     _bootGameVersion = serverVer;
-                    if (serverVer !== client) _doReload('新版本 ' + serverVer + ' 已上線，正在更新…', serverVer);
                     return;
                 }
-                if (serverVer !== _bootGameVersion) _doReload('新版本 ' + serverVer + ' 已上線，正在更新…', serverVer);
+                if (serverVer !== _bootGameVersion) {
+                    _bootGameVersion = serverVer;
+                    _doReload('新版本 ' + serverVer + ' 已上線，正在更新…', serverVer);
+                }
             })
             .catch(function () {});
     }
