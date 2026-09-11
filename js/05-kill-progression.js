@@ -342,6 +342,7 @@ function monsterGoldRange(mob) {
 function killMob(idx) {
     let mob = mapState.mobs[idx];
     if (!mob || mob._dead) return;        // 冪等保護：同一隻怪只結算一次獎勵
+    if (mob._mapMirror && typeof mapMobShouldFollow === 'function' && mapMobShouldFollow()) return;   // 👥 同圖共用怪：鏡像由地圖主機結算
     if (mob._partyMirror && typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs()) return;   // 🤝 組隊共用怪：隊員鏡像怪由隊長結算，避免重複掉落
     if (mob._worldBossMirror && typeof wbShouldFollow === 'function' && wbShouldFollow()) return;   // 👑 世界王：鏡像怪由主機結算
     if (mob._justTransformedTick != null && state.ticks - mob._justTransformedTick <= 5 && mob.curHp > 0) return;   // 🌅 審查修：同一擊內的過時二次 killMob（on-hit 特效先殺→主判定又用舊 target.curHp 呼叫同槽位）→剛變身的滿血新階段不吃這種幽靈擊殺（真死亡 curHp<=0 不受影響）

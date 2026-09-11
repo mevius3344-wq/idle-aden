@@ -547,6 +547,22 @@
         .party-sprite.remote-party.is-peer .remote-party-tag {
             color: #fde68a; border-color: rgba(251, 191, 36, 0.5); background: rgba(30, 20, 8, 0.78);
         }
+        .party-sprite.remote-party.is-pvp-ready .remote-party-tag {
+            color: #fca5a5; border-color: rgba(248, 113, 113, 0.55); background: rgba(40, 12, 12, 0.82);
+        }
+        .party-sprite.remote-party.is-fp-target {
+            filter: drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 8px #f87171);
+        }
+        .btn-field-pvp {
+            background: #1e293b;
+            color: #94a3b8;
+            border-color: #475569;
+        }
+        .btn-field-pvp.is-on {
+            background: #7f1d1d;
+            color: #fecaca;
+            border-color: #ef4444;
+        }
         .party-sprite.remote-party.is-party .remote-party-tag {
             color: #bbf7d0; border-color: rgba(74, 222, 128, 0.5); background: rgba(8, 28, 16, 0.78);
         }

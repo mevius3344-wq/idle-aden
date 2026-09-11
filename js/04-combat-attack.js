@@ -1,4 +1,5 @@
 function playerAttack() {
+    if (typeof fieldPvpTryAttack === 'function' && fieldPvpTryAttack()) return;
     let target = getTarget();
     if(!target) return;
     player._faceTgtUid = target.uid;   // 🧭 只記錄可序列化 UID；不可保存怪物物件，否則與 mob→player 面向參照形成循環而使存檔失敗

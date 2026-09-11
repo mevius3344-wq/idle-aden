@@ -1,5 +1,5 @@
 // ================= 🤝 玩家即時組隊（線上邀請／成員／同圖分享經驗金幣／跟隨隊長）=================
-// 伺服器：/api/party/*（記憶體房間）；隊伍頻道改走線上並帶 partyId。
+// 伺服器：/api/party/*（Neon 雲端）；隊伍頻道改走線上並帶 partyId。
 (function () {
     'use strict';
 
@@ -80,6 +80,7 @@
             mapName: '',
             hp: player.hp || 0,
             mhp: player.mhp || 1,
+            pvpOn: !!(player.pvpOn),
             classic: !(player.classicMode === false)
         };
     }
@@ -173,10 +174,12 @@
     }
 
     function rtPartyShouldHostMobs() {
+        if (typeof mapMobShouldSync === 'function' && mapMobShouldSync()) return false;
         return rtPartyMobHostKey() === rtPartyMyKey() && rtPartySameMapAllies() > 0;
     }
 
     function rtPartyShouldFollowMobs() {
+        if (typeof mapMobShouldFollow === 'function' && mapMobShouldFollow()) return false;
         var host = rtPartyMobHostKey();
         return !!(host && host !== rtPartyMyKey() && rtPartySameMapAllies() > 0);
     }
@@ -378,6 +381,10 @@
                 rtPartyApplyShare(ev);
             } else if (ev.type === 'mob_sync' && ev.mobSync) {
                 rtPartyApplyMobSync(ev.mobSync);
+            } else if (ev.type === 'pvp_hit' && typeof fieldPvpApplyHitEvent === 'function') {
+                fieldPvpApplyHitEvent(ev);
+            } else if (ev.type === 'pvp_death' && typeof fieldPvpHandleDeath === 'function') {
+                fieldPvpHandleDeath(ev.fromName || '對手');
             }
         });
     }
@@ -411,7 +418,10 @@
         _rtPartyInvites = Array.isArray(data.invites) ? data.invites : [];
         _rtPartyApplications = Array.isArray(data.applications) ? data.applications : [];
         rtPartyHandleEvents(data.events || []);
-        if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
+        if (data.mapPop && typeof mapPopApply === 'function') mapPopApply(data.mapPop);
+        if (data.mapHost && typeof mapMobSetHostKey === 'function') mapMobSetHostKey(data.mapHost);
+        if (data.mapMobs && typeof mapMobApplySync === 'function') mapMobApplySync(data.mapMobs);
+        else if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
         rtPartyRender();
         rtPartyRenderInvites();
     }
@@ -966,7 +976,10 @@
     function rtPartyHeartbeat() {
         if (!rtPartyIdentity() || rtPartyIsSuspended()) return Promise.resolve();
         var extra = {};
-        if (rtPartyShouldHostMobs()) {
+        if (typeof mapMobShouldHost === 'function' && mapMobShouldHost() && typeof mapMobPackSync === 'function') {
+            var mapPack = mapMobPackSync();
+            if (mapPack) extra.mapMobs = mapPack;
+        } else if (rtPartyShouldHostMobs()) {
             var pack = rtPartyPackMobSync();
             if (pack) extra.partyMobs = pack;
         }
@@ -984,8 +997,10 @@
                         _rtPartyNullMiss = 0;
                     }
                 }
-                if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
                 if (data.mapPop && typeof mapPopApply === 'function') mapPopApply(data.mapPop);
+                if (data.mapHost && typeof mapMobSetHostKey === 'function') mapMobSetHostKey(data.mapHost);
+                if (data.mapMobs && typeof mapMobApplySync === 'function') mapMobApplySync(data.mapMobs);
+                else if (data.partyMobs) rtPartyApplyMobSync(data.partyMobs);
                 if (data.seq && data.seq > _rtPartySeq) { /* poll will catch */ }
                 rtPartyRender();
             }
@@ -996,7 +1011,7 @@
         if (!rtPartyIsHttp() || rtPartyIsSuspended()) return Promise.resolve();
         var id = rtPartyIdentity();
         if (!id) return Promise.resolve();
-        var wait = _rtPartySeq > 0 ? 16000 : 0;
+        var wait = _rtPartySeq > 0 ? 8000 : 0;
         var url = '/api/party/poll?account=' + encodeURIComponent(id.account)
             + '&slot=' + encodeURIComponent(String(id.slot))
             + '&name=' + encodeURIComponent(id.name)

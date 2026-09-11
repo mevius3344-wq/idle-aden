@@ -2555,6 +2555,22 @@ function _remotePartySpritesApply() {
         if (!st.el) {
             var el = document.createElement('div');
             el.className = 'party-sprite remote-party' + (mem.party ? ' is-party' : ' is-peer');
+            el.setAttribute('data-peer-key', mem.key);
+            el.setAttribute('data-peer-name', mem.name || '冒險者');
+            el.setAttribute('data-peer-pvp', mem.pvpOn ? '1' : '0');
+            el.setAttribute('data-peer-party', mem.party ? '1' : '0');
+            el.style.cursor = (!mem.party && (typeof fieldPvpSelfOn === 'function' ? fieldPvpSelfOn() : mem.pvpOn)) ? 'pointer' : '';
+            el.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (typeof fieldPvpOnRemoteClick !== 'function') return;
+                fieldPvpOnRemoteClick(
+                    el.getAttribute('data-peer-key'),
+                    el.getAttribute('data-peer-name'),
+                    el.getAttribute('data-peer-pvp') === '1',
+                    el.getAttribute('data-peer-party') === '1'
+                );
+            });
             var tag = document.createElement('div');
             tag.className = 'remote-party-tag';
             var bar = document.createElement('div');
@@ -2571,6 +2587,14 @@ function _remotePartySpritesApply() {
         } else if (st.el.parentElement !== bv) bv.appendChild(st.el);
         st.el.classList.toggle('is-party', !!mem.party);
         st.el.classList.toggle('is-peer', !mem.party);
+        st.el.classList.toggle('is-pvp-ready', !!(!mem.party && (typeof fieldPvpSelfOn === 'function' ? fieldPvpSelfOn() : mem.pvpOn)));
+        st.el.setAttribute('data-peer-key', mem.key);
+        st.el.setAttribute('data-peer-name', mem.name || '冒險者');
+        st.el.setAttribute('data-peer-pvp', mem.pvpOn ? '1' : '0');
+        st.el.setAttribute('data-peer-party', mem.party ? '1' : '0');
+        if (typeof fieldPvpTargetKey === 'function' && fieldPvpTargetKey() === mem.key) st.el.classList.add('is-fp-target');
+        else st.el.classList.remove('is-fp-target');
+        st.el.style.cursor = (!mem.party && (typeof fieldPvpSelfOn === 'function' ? fieldPvpSelfOn() : false)) ? 'pointer' : '';
         var w = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100;
         st.el.style.width = w + 'px';
         var pp = _remotePartySpritePos(i, mem.key);
@@ -2579,7 +2603,7 @@ function _remotePartySpritesApply() {
         st.el.style.zIndex = String(24 - pp.b);
         st.el.style.opacity = mem.online ? '0.92' : '0.55';
         if (st.imgs.tag) {
-            var prefix = mem.party ? '🤝 ' : '';
+            var prefix = mem.party ? '🤝 ' : (mem.pvpOn ? '⚔️ ' : '');
             st.imgs.tag.textContent = prefix + (mem.name || '冒險者') + ' Lv.' + (mem.lv || 1);
         }
         if (st.imgs.bar) {

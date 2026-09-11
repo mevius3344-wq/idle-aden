@@ -702,6 +702,7 @@ function tick() {
     // === 出怪判定：以邏輯 tick (state.ticks) 為準，與主迴圈時間補跑同步 ===
     // mapState.spawnAt[i] = 該格子預定出怪的 tick 值；為 null 代表該格目前有怪、無需排程。
     if (!(typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs())
+        && !(typeof mapMobShouldFollow === 'function' && mapMobShouldFollow())
         && !(typeof wbShouldFollow === 'function' && wbShouldFollow())) {
         let isWbMap = typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current);
         let isPureBossMap = (PURE_BOSS_MAPS.includes(mapState.current) && !KING_ROOMS[mapState.current]) || isWbMap;   // 👑 世界王欄位＝純BOSS房式中央重生

@@ -987,6 +987,7 @@ const PARTY_INVITE_MS = 60000;
 const PARTY_APPLY_MS = 120000;
 const PARTY_SHARE_RATE_MS = 80;
 const PARTY_MOB_SYNC_TTL_MS = 12000;
+const MAP_MOB_SYNC_TTL_MS = 12000;
 const PARTY_WAIT_MAX_MS = 20000;
 const PARTY_EVENT_MAX = 120;
 const PARTIES_FILE = path.join(ROOT, "data", "parties.json");
@@ -994,6 +995,8 @@ const PARTIES_FILE = path.join(ROOT, "data", "parties.json");
 const parties = new Map();
 /** @type {Map<string, object>} memberKey -> presence */
 const partyPresence = new Map();
+/** @type {Map<string, object>} mapId -> { hostKey, rev, slots, at, mapId } */
+const mapMobRooms = new Map();
 /** @type {Map<string, object[]>} memberKey -> pending invites */
 const partyInvites = new Map();
 /** @type {Array<{since:number, resolve:Function, timer:any, key:string}>} */
@@ -1230,6 +1233,76 @@ function partyMobSyncForMember(party, key, mapId) {
   };
 }
 
+function mapMobMapAllowed(mapId) {
+  const id = String(mapId || "").slice(0, 64);
+  if (!id || id.startsWith("town_")) return false;
+  if (id === "training" || id === "arena_pvp" || id === "rift_battle") return false;
+  if (id.indexOf("wb_") === 0 || id.indexOf("world_boss") === 0) return false;
+  if (id.indexOf("king_") === 0 || id.indexOf("siege") >= 0) return false;
+  return true;
+}
+
+function mapMobElectHost(mapId, now) {
+  const cur = String(mapId || "").slice(0, 64);
+  if (!mapMobMapAllowed(cur)) return "";
+  const t = now || Date.now();
+  const keys = [];
+  for (const pre of partyPresence.values()) {
+    if (!pre || !pre.key) continue;
+    if (t - (pre.lastSeen || 0) > PARTY_TTL_MS) continue;
+    if (String(pre.mapId || "") !== cur) continue;
+    keys.push(String(pre.key));
+  }
+  if (keys.length < 2) return "";
+  keys.sort((a, b) => a.localeCompare(b));
+  return keys[0] || "";
+}
+
+function mapMobStoreSync(mapId, hostKey, pack) {
+  const id = String(mapId || "").slice(0, 64);
+  if (!mapMobMapAllowed(id) || !hostKey || !pack) return null;
+  const slots = partySanitizeMobSlots(pack.slots);
+  if (!slots.length) return null;
+  const row = {
+    mapId: id,
+    hostKey: String(hostKey),
+    rev: Math.max(0, Math.floor(Number(pack.rev) || 0)),
+    slots,
+    at: Date.now(),
+  };
+  mapMobRooms.set(id, row);
+  return row;
+}
+
+function mapMobSyncForViewer(mapId, viewerKey, now) {
+  const id = String(mapId || "").slice(0, 64);
+  if (!mapMobMapAllowed(id) || !viewerKey) return null;
+  const row = mapMobRooms.get(id);
+  if (!row) return null;
+  const t = now || Date.now();
+  if (t - (row.at || 0) > MAP_MOB_SYNC_TTL_MS) {
+    mapMobRooms.delete(id);
+    return null;
+  }
+  if (row.hostKey && row.hostKey === viewerKey) return null;
+  const host = mapMobElectHost(id, t);
+  if (host && row.hostKey && host !== row.hostKey) return null;
+  return {
+    mapId: row.mapId,
+    hostKey: row.hostKey || "",
+    rev: row.rev || 0,
+    slots: partySanitizeMobSlots(row.slots),
+    at: row.at || 0,
+  };
+}
+
+function mapMobCleanup(now) {
+  const t = now || Date.now();
+  for (const [id, row] of mapMobRooms.entries()) {
+    if (!row || t - (row.at || 0) > MAP_MOB_SYNC_TTL_MS) mapMobRooms.delete(id);
+  }
+}
+
 function partyPublic(party) {
   if (!party) return null;
   return {
@@ -1406,6 +1479,7 @@ function partyUpsertPresence(body) {
       .slice(0, 40),
     hp: Math.max(0, pickNum(body.hp, base.hp) || 0),
     mhp: Math.max(0, pickNum(body.mhp, base.mhp) || 0),
+    pvpOn: !!(body.pvpOn != null ? body.pvpOn : base.pvpOn),
     classic: body.classic !== false && base.classic !== false,
     lastSeen: now,
   };
@@ -1462,6 +1536,7 @@ function partyMapPlayersHere(mapId, excludeKey, now) {
       cls: String(pre.cls || "").slice(0, 24),
       hp: Math.max(0, Math.floor(Number(pre.hp) || 0)),
       mhp: Math.max(1, Math.floor(Number(pre.mhp) || 1)),
+      pvpOn: !!pre.pvpOn,
       online: true,
     });
     if (out.length >= 24) break;
@@ -1638,14 +1713,24 @@ async function handlePartyApi(req, res, u) {
     const up = partyUpsertPresence(data);
     if (!up) return json(res, 400, { ok: false, error: "need account" });
     const party = up.party;
-    if (party && data.partyMobs && up.key === party.leaderKey) {
+    const mapId = up.presence.mapId || "";
+    const nowHb = Date.now();
+    mapMobCleanup(nowHb);
+    const mapHost = mapMobElectHost(mapId, nowHb);
+    if (data.mapMobs && mapHost && up.key === mapHost) {
+      const mm = data.mapMobs;
+      const mid = String(mm.mapId || mapId || "").slice(0, 64);
+      if (mid && mid === mapId) mapMobStoreSync(mid, up.key, mm);
+    }
+    // 同圖 ≥2 人時改走 mapMobs；否則維持組隊 partyMobs（僅隊長）
+    if (!mapHost && party && data.partyMobs && up.key === party.leaderKey) {
       const pm = data.partyMobs;
-      const mapId = String(pm.mapId || "").slice(0, 64);
+      const pmid = String(pm.mapId || "").slice(0, 64);
       const slots = partySanitizeMobSlots(pm.slots);
-      if (mapId && slots.length) {
+      if (pmid && slots.length) {
         const rev = Math.max(0, Math.floor(Number(pm.rev) || 0));
         party.mobSync = {
-          mapId,
+          mapId: pmid,
           hostKey: up.key,
           rev,
           slots,
@@ -1659,15 +1744,20 @@ async function handlePartyApi(req, res, u) {
         partySaveToDiskSoon();
       }
     }
-    const partyMobs = party
-      ? partyMobSyncForMember(party, up.key, up.presence.mapId || "")
-      : null;
-    const mapPop = partyMapPopulationPayload(up.presence.mapId || "", Date.now(), up.key);
+    const mapMobs = mapMobSyncForViewer(mapId, up.key, nowHb);
+    const partyMobs = mapMobs
+      ? null
+      : party
+        ? partyMobSyncForMember(party, up.key, mapId)
+        : null;
+    const mapPop = partyMapPopulationPayload(mapId, nowHb, up.key);
     return json(res, 200, {
       ok: true,
       key: up.key,
       party: partyPublic(party),
       partyMobs,
+      mapMobs,
+      mapHost: mapHost || "",
       mapPop,
       seq: partyEventSeq,
     });
@@ -1675,6 +1765,7 @@ async function handlePartyApi(req, res, u) {
 
   if (u === "/api/map/population" && req.method === "GET") {
     partyCleanupStale(Date.now());
+    mapMobCleanup(Date.now());
     const url = new URL(req.url || "/", "http://localhost");
     const mapId = String(url.searchParams.get("mapId") || "").slice(0, 64);
     const account = String(url.searchParams.get("account") || "")
@@ -1685,7 +1776,14 @@ async function handlePartyApi(req, res, u) {
     const name = partySanitizeName(url.searchParams.get("name"));
     const selfKey = account ? partyMemberKey(account, slot, name) : "";
     const payload = partyMapPopulationPayload(mapId, Date.now(), selfKey);
-    return json(res, 200, { ok: true, mapPop: payload });
+    const mapHost = mapMobElectHost(mapId, Date.now());
+    const mapMobs = selfKey ? mapMobSyncForViewer(mapId, selfKey, Date.now()) : null;
+    return json(res, 200, {
+      ok: true,
+      mapPop: payload,
+      mapHost: mapHost || "",
+      mapMobs,
+    });
   }
 
   if (u === "/api/party/create" && req.method === "POST") {

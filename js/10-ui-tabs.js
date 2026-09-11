@@ -2706,6 +2706,7 @@ function setPvpMode(on) {
     }
     player.pvpOn = !!on;
     saveGame();
+    try { if (typeof fieldPvpUpdateToggleUi === 'function') fieldPvpUpdateToggleUi(); } catch (e) {}
     renderPvpTab();
 }
 const PVP_REVENGE_TAUNT_LINES = [

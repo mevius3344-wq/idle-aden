@@ -1,4 +1,4 @@
-// 部署連線：Render 跑遊戲＋素材，Vercel 跑 Neon API（帳號／雲端／聊天等）。
+// 部署連線：Render 跑遊戲＋素材，Vercel 跑 Neon API（帳號／雲端／即時組隊同圖／聊天等）。
 // 本機開發（localhost）維持同源 _serve.js，不轉發。
 (function () {
   'use strict';
@@ -41,21 +41,15 @@
   apiBase = apiBase.replace(/\/$/, '');
   assetBase = assetBase.replace(/\/$/, '');
 
-  /** 需 Neon 持久化的 API 走 Vercel（含 IP session、潘朵拉黑市，避免 Render 冷啟動） */
+  /** 需 Neon 持久化的 API 走 Vercel（帳號／雲端／聊天／組隊／同圖／拍賣／潘朵拉） */
   function useVercelApi(path) {
     if (!apiBase) return false;
     var p = String(path || '');
     if (p.indexOf('/api/') !== 0) return false;
     if (p === '/api/version' || p === '/api/build') return false;
+    // 世界王仍掛 Render 記憶體（尚未 Neon 化）
     if (p.indexOf('/api/worldboss') === 0) return false;
-    // 登入頁「當前遊玩人數」需讀 Render 記憶體 presence（與組隊／地圖人數同源），不可走 Neon 帳號連線數
-    if (p === '/api/server/status' || p.indexOf('/api/server/status?') === 0) return false;
-    if (p.indexOf('/api/party') === 0) return false;
-    if (p.indexOf('/api/map/') === 0) return false;
-    if (p.indexOf('/api/chat') === 0) return false;
-    if (p.indexOf('/api/clan') === 0) return false;
-    if (p.indexOf('/api/auction') === 0) return false;
-    // 排行榜改走 Render 同源（Neon），避免 Vercel 舊部署無法查看裝備
+    // 排行榜／素材版號仍走 Render 同源
     if (p.indexOf('/api/leaderboard') === 0) return false;
     return true;
   }

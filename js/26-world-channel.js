@@ -2196,7 +2196,7 @@ function _chatOnlineApplyBatch(messages) {
 }
 function _chatOnlinePollOnce() {
     if (!_chatIsHttpOrigin()) return Promise.resolve();
-    let wait = _chatOnlineSince > 0 ? 18000 : 0;
+    let wait = _chatOnlineSince > 0 ? 8000 : 0;
     let url = '/api/chat/poll?since=' + encodeURIComponent(String(_chatOnlineSince)) + '&wait=' + wait;
     let ctrl = null;
     try { ctrl = new AbortController(); _chatOnlineAbort = ctrl; } catch (e) { ctrl = null; }
