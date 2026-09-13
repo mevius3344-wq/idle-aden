@@ -97,13 +97,6 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
         d = DB.items[id];
     }
 
-    // 🗡️ 裝備收集冊：獲得任何武器/防具/飾品(非箭矢)即登錄圖鑑（永久·只增不減）
-    if (typeof registerEquipObtained === 'function') registerEquipObtained(id);
-    // 🧰 道具收集冊：獲得任何可分類道具即登錄（藥水/卷軸/技能書/材料/其他）
-    if (typeof registerMiscObtained === 'function') registerMiscObtained(id);
-    // 🏺 遺物收集冊：獲得任何遺物即登錄（獨立圖鑑）
-    if (typeof registerRelicObtained === 'function') registerRelicObtained(id);
-
     // 🔧 持有上限 maxHold（如精靈的私語=10）：裁切本次獲得量使總持有不超過上限；已達上限則不獲得
     if (d && d.maxHold) {
         let _held = player.inv.reduce((s, i) => s + (i.id === id ? (i.cnt || 0) : 0), 0);
@@ -131,12 +124,6 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
     let seteff = false;
 
     let _tEn = 0;   // 🏛️ v3.0.83 傳統模式已取消：掉落自帶強化值停用（任何來源恆 +0·手動強化照常）
-    let _probe = { id: id, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
-    // 🔒 v3.6.92 改為「併入鎖定堆疊」（用戶拍板·取代 v3.5.84 的分裂制）：鎖定的物品再次獲得→直接併同一格，
-    //    整疊都受鎖定保護（＝要用就得先手動解鎖整疊）。同簽章永遠只有一格是本作現行不變量，
-    //    倉庫(js/12 _whStackFind)、載入合併(js/13 consolidateInventory)、上鎖/解鎖(js/10 toggleLock) 皆同口徑。
-    //    ⚠️ 唯一例外＝`_lockMergeOff`（js/14 ensureMaterial 製作遞迴補製中間物）：中間物若併進鎖定疊，
-    //       invCountId/buildPool 看不到它 → 父層扣不到 → 重演 v3.5.85 的「底層材料被吃掉、中間物卻沒扣」。
     // 🏺 v3.6.44 巨靈的三個願望：獲得瞬間以 committed RNG 從 16 種能力抽 3 個（不重複）存於實體 gw（永不與其他堆疊合併——每只戒指願望各自獨立·calcStats 消費·tooltip 顯示）
     let _gw = null;
     if (id === 'relic_genie_wishes' && d && d.wishRing) {
@@ -144,6 +131,47 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
         _gw = [];
         for (let _k = 0; _k < 3; _k++) { let _ri = Math.floor(lootRng('geniewish') * _pool.length); _gw.push(_pool.splice(_ri, 1)[0]); }
     }
+
+    // 紀錄這次產生的物品屬性
+    let itemInfo = { id: id, cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
+    if (_gw) itemInfo.gw = _gw;
+
+    // 🗺️ 場戰地上掉落：詞綴已擲完，先排隊落地，靠近才入帳（不進包／不寫日誌／不計圖鑑）
+    if (_worldLootDefer) {
+        try {
+            _vfxDropQueue.push({
+                kind: 'item',
+                deferred: true,
+                lootUid: (typeof nextWorldLootUid === 'function') ? nextWorldLootUid() : ('wl_' + Math.random()),
+                id: id,
+                cnt: cnt,
+                en: _tEn,
+                bless: bless,
+                anc: anc,
+                attr: attr,
+                seteff: seteff,
+                gw: _gw || null,
+                mobN: _lootMobInfo ? _lootMobInfo.n : null,
+                mobLv: _lootMobInfo ? _lootMobInfo.lv : null
+            });
+        } catch (eDropQ) {}
+        try { if (_vfxLootCtx && d && d.gachaWeight === 1 && typeof vfxRareDrop === 'function') vfxRareDrop(d.n); } catch (e) {}
+        return itemInfo;
+    }
+
+    // 🗡️ 裝備收集冊：獲得任何武器/防具/飾品(非箭矢)即登錄圖鑑（永久·只增不減）
+    if (typeof registerEquipObtained === 'function') registerEquipObtained(id);
+    // 🧰 道具收集冊：獲得任何可分類道具即登錄（藥水/卷軸/技能書/材料/其他）
+    if (typeof registerMiscObtained === 'function') registerMiscObtained(id);
+    // 🏺 遺物收集冊：獲得任何遺物即登錄（獨立圖鑑）
+    if (typeof registerRelicObtained === 'function') registerRelicObtained(id);
+
+    let _probe = { id: id, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
+    // 🔒 v3.6.92 改為「併入鎖定堆疊」（用戶拍板·取代 v3.5.84 的分裂制）：鎖定的物品再次獲得→直接併同一格，
+    //    整疊都受鎖定保護（＝要用就得先手動解鎖整疊）。同簽章永遠只有一格是本作現行不變量，
+    //    倉庫(js/12 _whStackFind)、載入合併(js/13 consolidateInventory)、上鎖/解鎖(js/10 toggleLock) 皆同口徑。
+    //    ⚠️ 唯一例外＝`_lockMergeOff`（js/14 ensureMaterial 製作遞迴補製中間物）：中間物若併進鎖定疊，
+    //       invCountId/buildPool 看不到它 → 父層扣不到 → 重演 v3.5.85 的「底層材料被吃掉、中間物卻沒扣」。
     let _fastGainIndex = !_gw && _catchupGainItemIndexActive();
     if (!_fastGainIndex && _catchupGainItemIndex && !(typeof catchupActive === 'function' && catchupActive())) resetCatchupGainItemIndex();
     let ex = _gw ? null : (_fastGainIndex
@@ -151,9 +179,6 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
         : player.inv.find(i => !i.gw && (!_lockMergeOff || !i.lock) && sameItemSig(i, _probe)));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）；⚠️ 巨靈願望戒指(gw)每只獨立·簽章不含 gw 故顯式排除
     if(ex) ex.cnt += cnt;   // 僅加數量、不更動既有堆疊的廢品狀態
     else { let _push = { id: id, uid: uid(), cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_probe)]) && !(d && d.noJunk) }; if (_gw) _push.gw = _gw; player.inv.push(_push); if (_fastGainIndex) _rememberCatchupGainItemStack(_push); }   // 🔧 廢品記憶改以完整簽章比對：詞綴物品也可自動標記，但僅限「完全相同詞綴」者；🎴 noJunk(收集冊)永不自動標記
-
-    // 紀錄這次產生的物品屬性
-    let itemInfo = { id: id, cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
     
     if (!silent && d) {
         // ✦ v3.6.69 物品日誌亮點：只有「傳說」與「遺物」才加亮點提示（傳說＝琥珀橘 c-legend／遺物＝海藍 c-relic）。
@@ -176,11 +201,74 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
     
     if(typeof auditTrackGain === 'function') auditTrackGain(itemInfo);   // 統計：掉落計數
     try { if (_vfxLootCtx && d && d.gachaWeight === 1 && typeof vfxRareDrop === 'function') vfxRareDrop(d.n); } catch(e){}   // ✨ VFX：潘朵拉權重=1 的稀有掉落金色閃光
+    try { if (_vfxLootCtx && d) _vfxDropQueue.push({ kind: 'item', id: id }); } catch (eDropQ) {}   // ✨ 死亡掉落圖標佇列（非場戰僅視覺）
     try {
         if (_deferCatchupUi) deferCatchupAutoSort();
         else if (!deferUi && typeof autoSortInventory === 'function') autoSortInventory();
     } catch (e) {}   // 🔧 v2.6.73 獲得物品時自動排列背包（每 10 秒最多 1 次·節流在函式內）；補跑掉落則統一延到結束後只排一次
     return itemInfo; // 👈 讓拉霸機可以讀取最終產生的物品
+}
+
+/** 🗺️ 場戰地上掉落入帳：使用落地時已擲好的屬性，不再重抽；同一 lootUid 只入帳一次 */
+function commitWorldLootDrop(p) {
+    if (!p || typeof player === 'undefined' || !player) return null;
+    // 已入帳過的 uid 直接拒絕（成功入帳後才會寫入）
+    if (p.lootUid != null && p.lootUid !== '' && typeof _worldLootGranted !== 'undefined' && _worldLootGranted[p.lootUid]) return null;
+    if (p.kind === 'gold') {
+        let g = Math.max(0, Math.floor(Number(p.amount) || 0));
+        if (g <= 0) return null;
+        if (typeof addPlayerGold === 'function') addPlayerGold(g);
+        else player.gold = (Number(player.gold) || 0) + g;
+        try {
+            if (typeof state !== 'undefined' && state) state._goldGainAcc = (Number(state._goldGainAcc) || 0) + g;
+        } catch (eG) {}
+        try { if (typeof claimWorldLootUid === 'function') claimWorldLootUid(p.lootUid); } catch (eU) {}
+        return { kind: 'gold', amount: g };
+    }
+    let id = p.id;
+    let cnt = Math.max(1, Math.floor(Number(p.cnt) || 1));
+    let d = (typeof DB !== 'undefined' && DB.items) ? DB.items[id] : null;
+    if (!d) return null;
+    if (d.maxHold) {
+        let _held = player.inv.reduce((s, i) => s + (i.id === id ? (i.cnt || 0) : 0), 0);
+        if (_held >= d.maxHold) return null;
+        if (_held + cnt > d.maxHold) cnt = d.maxHold - _held;
+    }
+    if (typeof registerEquipObtained === 'function') registerEquipObtained(id);
+    if (typeof registerMiscObtained === 'function') registerMiscObtained(id);
+    if (typeof registerRelicObtained === 'function') registerRelicObtained(id);
+    let bless = p.bless === 'cursed' ? 'cursed' : !!p.bless;
+    let anc = !!p.anc;
+    let attr = !!p.attr;
+    let seteff = p.seteff || false;
+    let _tEn = Math.floor(Number(p.en) || 0);
+    let _gw = p.gw || null;
+    let _probe = { id: id, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
+    let ex = _gw ? null : player.inv.find(i => !i.gw && (!_lockMergeOff || !i.lock) && sameItemSig(i, _probe));
+    if (ex) ex.cnt += cnt;
+    else {
+        let _push = { id: id, uid: uid(), cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_probe)]) && !(d && d.noJunk) };
+        if (_gw) _push.gw = _gw;
+        player.inv.push(_push);
+    }
+    try { if (typeof claimWorldLootUid === 'function') claimWorldLootUid(p.lootUid); } catch (eU2) {}
+    let itemInfo = { id: id, cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
+    if (_gw) itemInfo.gw = _gw;
+    let _rare = d.relic ? 'relic' : (d.legend ? 'legend' : '');
+    let _nameHtml = _rare
+        ? `<span class="sys-drop-rare sys-drop-${_rare}">✦ ${getItemFullName(itemInfo)}</span>`
+        : `<span class="font-bold">${getItemFullName(itemInfo)}</span>`;
+    if (p.mobN) {
+        let _mc = (typeof getMobColor === 'function') ? getMobColor(p.mobLv) : '';
+        logSys(`<span class="sys-item-gain"><span class="${_mc}">${p.mobN}</span> 給你 ${_nameHtml} 。</span>`, _rare);
+    } else {
+        logSys(`<span class="sys-item-gain">獲得物品: ${_nameHtml}</span>`, _rare);
+    }
+    try { renderTabs(); } catch (eT) {}
+    if (d.grantSkills) { try { calcStats(); renderSkillSelects(); } catch (eS) {} }
+    if (typeof auditTrackGain === 'function') auditTrackGain(itemInfo);
+    try { if (typeof autoSortInventory === 'function') autoSortInventory(); } catch (eA) {}
+    return itemInfo;
 }
 
 // 🦴 v3.1.68 取得席琳遺骸（唯一入口：killMob 掉落／NPC 伊奧兌換／菈克希絲拆分）：
@@ -526,7 +614,7 @@ function useItem(u, silent = false) {
     if (!item) return;
     if (player.dead) { if (!silent) logSys(`死亡狀態無法使用道具，請先復活。`); return; }   // 死亡(未復活前)鎖住手動使用
     if (inAbsBarrier()) { if(!silent) logSys('絕對屏障期間與世界隔絕，無法使用藥水與道具。'); return; }   // 🛡️ 絕對屏障：禁止使用任何道具（自動使用 silent 亦略過）
-    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用，死亡時可於畫面下方點選『原地復活』。`); return; }
+    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後請點「祈求復活」回村；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
     let d = DB.items[item.id];
     if (d.noUse) { if(!silent) logSys(`此物品無法直接使用。`); return; }
 
@@ -1435,7 +1523,6 @@ function _updateUIImpl() {
     if(state.ff) return; // 補跑期間不刷新畫面
     updatePrideFloorIndicator();   // 🗼 攀登中右上角顯示目前樓層（背景補跑後回到前景時同步）
     try { if (typeof updateOblivionTravelHint === 'function') updateOblivionTravelHint(); } catch (e) {}   // 🏝️ 遺忘之島途中：戰鬥畫面頂部目標提示
-    try { if (typeof updateMercRoleHint === 'function') updateMercRoleHint(); } catch (e) {}   // 🧑‍🤝‍🧑 v3.7.84 「目前擔任隊員中」提示（受僱/解散由其他分頁造成→靠這裡每輪自動同步）
     try { renderPandoraBanner(); } catch (e) {}   // 🔧 潘朵拉黑市稀有商品公告橫幅
     try { if (typeof updatePvpButtonTone === 'function') updatePvpButtonTone(); } catch (e) {}
     try { renderSyslogPandora(); } catch (e) {}   // 🔧 系統日誌標題列右側：黑市拍賣中商品
@@ -1489,10 +1576,19 @@ function _updateUIImpl() {
         }
     }
 
-    // 處理背景圖片：全部職業／性別頭像統一使用 assets/character 對應的 PNG。
+    // 處理背景圖片：一律用職業頭像（assets/character），不用 Q 靜態圖
     let bgImageName = player.avatar || clsDisplayName;
-    document.getElementById('status-panel').style.backgroundImage = `url('assets/character/${bgImageName}.png')`;
-    document.getElementById('status-panel').classList.add('bg-top'); // 確保圖片從頂部對齊
+    let _sp = document.getElementById('status-panel');
+    if (_sp) {
+        let _avVer = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'v3.8.252';
+        _sp.style.backgroundImage = `url('assets/character/${bgImageName}.png?v=${_avVer}')`;
+        _sp.classList.add('bg-top');
+        _sp.classList.remove('q-skin-portrait', 'aden-skin-portrait');
+        // 性別可辨：狀態欄加上 gender class（樣式微調／標記）
+        let _isF = /女|公主/.test(String(player.avatar || ''));
+        _sp.classList.toggle('avatar-gender-f', _isF);
+        _sp.classList.toggle('avatar-gender-m', !_isF);
+    }
 
     document.getElementById('st-ac').innerText = player.d.ac;
     document.getElementById('st-mr').innerText = player.d.mr;

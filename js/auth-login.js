@@ -149,11 +149,11 @@
 
   function saveRememberedCreds(account, password) {
     try {
+      // 🛡️ 只記住帳號，不存明文密碼（XSS／共用電腦可被讀出）
       localStorage.setItem(
         REMEMBER_KEY,
         JSON.stringify({
           account: normalizeCred(account),
-          password: String(password == null ? "" : password),
           savedAt: Date.now(),
         })
       );
@@ -179,7 +179,7 @@
     const acc = $("auth-account");
     const pass = $("auth-password");
     if (acc) acc.value = remembered.account;
-    if (pass) pass.value = remembered.password;
+    if (pass) pass.value = ""; // 密碼不自動填入
     setRememberChecked(true);
     return true;
   }
@@ -199,12 +199,15 @@
     return el ? String(el.value == null ? "" : el.value) : "";
   }
 
-  function saveAccount(account, password) {
+  function saveAccount(account, password, opts) {
     try {
-      localStorage.setItem(
-        ACC_PREFIX + account,
-        JSON.stringify({ password: String(password), createdAt: Date.now() })
-      );
+      opts = opts || {};
+      var row = { createdAt: Date.now() };
+      // 🛡️ 線上帳號不存明文密碼；僅「離線本機註冊」保留本機驗證用密碼
+      if (opts.keepLocalPassword && password != null && String(password) !== "") {
+        row.password = String(password);
+      }
+      localStorage.setItem(ACC_PREFIX + account, JSON.stringify(row));
       return true;
     } catch (e) {
       return false;
@@ -223,7 +226,24 @@
   }
 
   function isRegistered(account) {
-    return getStoredPassword(account) !== null;
+    try {
+      return !!localStorage.getItem(ACC_PREFIX + account);
+    } catch (e) {
+      return getStoredPassword(account) !== null;
+    }
+  }
+
+  /** 清除「記住我」裡殘留的明文密碼 */
+  function scrubLocalPlaintextPasswords() {
+    try {
+      var rem = loadRememberedCreds();
+      if (rem && rem.account) {
+        localStorage.setItem(
+          REMEMBER_KEY,
+          JSON.stringify({ account: rem.account, savedAt: Date.now() })
+        );
+      }
+    } catch (e0) {}
   }
 
   function currentSession() {
@@ -566,6 +586,10 @@
       setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
       return;
     }
+    if (!password || password.length < 6) {
+      setStatus("密碼至少 6 個字元。", "err");
+      return;
+    }
     if (isRegistered(account)) {
       setStatus("此帳號已在本機註冊，請直接登入。", "err");
       return;
@@ -573,7 +597,7 @@
     setStatus("註冊中……", "ok");
     accountsApiReady().then(function (online) {
       if (!online) {
-        if (!saveAccount(account, password)) {
+        if (!saveAccount(account, password, { keepLocalPassword: true })) {
           setStatus("註冊失敗（本機儲存空間不足）。", "err");
           return;
         }
@@ -625,6 +649,10 @@
     }
     if (!accountLooksValid(account)) {
       setStatus("帳號僅能使用中文、英數、底線或連字號。", "err");
+      return;
+    }
+    if (!password) {
+      setStatus("請輸入密碼。", "err");
       return;
     }
     setStatus("連線中……", "ok");
@@ -823,7 +851,8 @@
   }
 
   function boot() {
-    // 有「記住」則還原帳密；否則清空，並阻擋瀏覽器自動填入舊的「天堂」
+    // 🛡️ 清掉舊版本機明文密碼；「記住」只還原帳號
+    try { scrubLocalPlaintextPasswords(); } catch (eScrub) {}
     if (!applyRememberedCreds()) {
       clearCredFields();
       setTimeout(clearCredFields, 0);

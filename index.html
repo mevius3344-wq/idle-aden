@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -6,9 +6,9 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <!-- 版本號（_serve.js 部署時替換 v3.8.183） -->
-    <meta name="game-version" content="v3.8.183">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+    <!-- 版本號（_serve.js 部署時替換 v3.8.262） -->
+    <meta name="game-version" content="v3.8.262">
     <script>
     (function () {
       try {
@@ -26,8 +26,8 @@
       } catch (e0) {}
     })();
     </script>
-    <script src="js/00-host-config.js?v=v3.8.183"></script>
-    <script src="js/00-server-wake.js?v=v3.8.183"></script>
+    <script src="js/00-host-config.js?v=v3.8.262"></script>
+    <script src="js/00-server-wake.js?v=v3.8.262"></script>
     <!-- 🗑️ v3.5.87 移除死的行動裝置偵測 IIFE：applyViewport 無任何分支（mobile 變數算了沒用）、
          DESIGN_W/isMobileDevice/window.__mobileScaling 全專案零呼叫；唯一實際效果 viewport-fit=cover 直接併入上方 meta。
          （width=1180 手機縮放已於桌機專注決策時移除·本作 desktop-only） -->
@@ -35,9 +35,11 @@
     <title>躺著變強</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.8.183">
-    <link rel="stylesheet" href="css/floating-ui.css?v=v3.8.183">
+    <link rel="stylesheet" href="css/style.css?v=v3.8.262">
+    <link rel="stylesheet" href="css/floating-ui.css?v=v3.8.262">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
+    <link rel="stylesheet" href="css/mobile-ui.css?v=v3.8.262"><!-- 📱 手機優先：登入／選角／創角／主畫面觸控版面（置於末尾以覆蓋 desktop 絕對定位） -->
+    <link rel="stylesheet" href="css/combat-hud.css?v=v3.8.262"><!-- 🎮 戰鬥優先 HUD -->
 </head>
 <body class="h-screen w-screen overflow-hidden">
 
@@ -55,13 +57,12 @@
             <div class="account-auth-brand">
                 <div class="account-auth-title-row">
                     <div class="account-auth-game-title">躺著變強</div>
-                    <img class="account-auth-goblin-dead" src="assets/anim/哥布林/death_11.png" alt="" width="72" height="72" draggable="false" aria-hidden="true">
                 </div>
                 <p class="account-auth-tagline">登入帳號 · 開始冒險</p>
                 <div id="auth-server-stats" class="account-auth-stats" aria-live="polite">
-                    <span class="account-auth-stat">當前遊玩人數 <strong id="auth-stat-players">—</strong></span>
-                    <span class="account-auth-stat">金幣倍率 <strong id="auth-stat-gold">—</strong></span>
-                    <span class="account-auth-stat">掉寶倍率 <strong id="auth-stat-drop">—</strong></span>
+                    <span class="account-auth-stat">在線 <strong id="auth-stat-players">—</strong></span>
+                    <span class="account-auth-stat">金幣 <strong id="auth-stat-gold">—</strong></span>
+                    <span class="account-auth-stat">掉寶 <strong id="auth-stat-drop">—</strong></span>
                 </div>
             </div>
             <div class="account-auth-box">
@@ -76,7 +77,7 @@
                 </div>
                 <label class="account-auth-remember" for="auth-remember">
                     <input id="auth-remember" type="checkbox">
-                    <span>記住帳號密碼</span>
+                    <span>記住帳號</span>
                 </label>
                 <div class="account-auth-btns">
                     <button type="button" id="btn-auth-register" class="account-game-btn">註冊</button>
@@ -89,15 +90,14 @@
         <div id="login-title-layer" class="text-center account-gated hidden">
             <div class="login-title-row">
                 <h1 class="text-4xl font-bold text-yellow-400 mb-2">躺著變強</h1>
-                <img class="login-title-goblin-dead" src="assets/anim/哥布林/death_11.png" alt="" width="64" height="64" draggable="false" aria-hidden="true">
             </div>
-            <p class="text-base text-slate-400">創造您的角色並開始冒險</p>
+            <p class="text-base text-slate-400">選擇角色，繼續你的冒險</p>
         </div>
 
         <div id="main-menu" class="flex flex-col gap-5 items-center my-12 account-gated hidden">
-            <p id="auth-welcome" class="text-sm text-amber-200/90 -mb-2"></p>
-            <button onclick="openLoadSelect()" id="btn-start-menu" class="btn text-xl w-72 py-4 bg-blue-700 hover:bg-blue-600 border-blue-500">開始遊戲</button>
-            <button type="button" id="btn-auth-logout" class="btn text-base w-72 py-2.5 bg-slate-800 hover:bg-slate-700 border-slate-600">登出</button>
+            <p id="auth-welcome" class="auth-welcome"></p>
+            <button onclick="openLoadSelect()" id="btn-start-menu" class="login-menu-btn login-menu-btn-primary" type="button">開始遊戲</button>
+            <button type="button" id="btn-auth-logout" class="login-menu-btn login-menu-btn-ghost">登出</button>
         </div>
 
         <div id="login-meta-layer" class="account-gated hidden">
@@ -111,6 +111,10 @@
         <div id="load-select-panel" class="hidden" aria-label="角色選擇">
           <div id="load-art-stage">
             <img id="load-select-bg" src="public/assets/login/load.png" alt="角色選擇背景" draggable="false">
+            <header id="load-select-heading" aria-hidden="false">
+                <h2 class="load-select-title">選擇角色</h2>
+                <p class="load-select-sub">點選欄位 · 雙擊直接進入</p>
+            </header>
             <div id="load-slot-grid" aria-label="存檔角色"></div>
             <img id="load-select-overlay" src="public/assets/login/load1.png" alt="" aria-hidden="true" draggable="false">
             <div id="load-page-tabs" aria-label="存檔頁切換">
@@ -136,7 +140,7 @@
             <div id="load-action-panel">
                 <button onclick="loadCreateSelected()" id="load-btn-create" type="button">創新角色</button>
                 <button onclick="loadEnterSelected()" id="load-btn-enter" type="button" class="hidden">進入遊戲</button>
-                <button onclick="loadDeleteSelected()" id="load-btn-delete" type="button" class="hidden" style="color:#e7a09a;border-color:rgba(151,61,52,.82);">刪除角色</button>
+                <button onclick="loadDeleteSelected()" id="load-btn-delete" type="button" class="hidden">刪除角色</button>
                 <button onclick="loadBackToMenu()" id="load-btn-back" type="button">返回</button>
             </div>
           </div>
@@ -188,26 +192,33 @@
     </div>
 
     <script>
-      // 登入頁逐幀動畫：273.png～300.png，使用相對路徑，GitHub Pages 可直接部署。
+      // 登入頁逐幀動畫：273.png～300.png。預載進記憶體後輪播；選角／創角開啟時暫停，避免雙動畫搶解碼。
       (function(){
-        var first=273,last=300,frame=first,lastAt=0,stepMs=90,ready=false;
+        var first=273,last=300,frame=first,lastAt=0,stepMs=130,ready=false;
         var base='public/assets/login/';
-        // 首頁 BGM 優先；頁面載入完成後再逐張載入動畫，避免 28 張圖片同時與音樂搶讀取／解碼資源。
+        var cache=[];
         function preloadFrame(n){
           if(n>last){ready=true;return;}
           var p=new Image();
-          p.onload=p.onerror=function(){preloadFrame(n+1);};
+          p.onload=p.onerror=function(){cache[n-first]=p;preloadFrame(n+1);};
           p.src=base+n+'.png';
         }
-        function beginPreload(){setTimeout(function(){preloadFrame(first+1);},500);}
+        function beginPreload(){setTimeout(function(){preloadFrame(first);},400);}
         if(document.readyState==='complete') beginPreload();
         else window.addEventListener('load',beginPreload,{once:true});
+        function overlayBusy(){
+          var load=document.getElementById('load-select-panel');
+          var create=document.getElementById('creation-panel');
+          return (load&&!load.classList.contains('hidden'))||(create&&!create.classList.contains('hidden'));
+        }
         function animateLogin(now){
           var screen=document.getElementById('creation-screen');
           var img=document.getElementById('login-anim-image');
-          if(ready&&img&&screen&&!screen.classList.contains('hidden')&&now-lastAt>=stepMs){
+          if(ready&&img&&screen&&!screen.classList.contains('hidden')&&!overlayBusy()&&!document.hidden&&now-lastAt>=stepMs){
             frame=frame>=last?first:frame+1;
-            img.src=base+frame+'.png';
+            var hit=cache[frame-first];
+            if(hit&&hit.src){ if(img.src!==hit.src) img.src=hit.src; }
+            else { var url=base+frame+'.png'; if(img.src.indexOf(String(frame)+'.png')<0) img.src=url; }
             lastAt=now;
           }
           requestAnimationFrame(animateLogin);
@@ -264,7 +275,6 @@
     <!-- 👇 新增一個 flex 容器把按鈕跟地圖選單包起來 -->
     <div class="flex items-center gap-3">
         <button onclick="revive()" id="btn-revive" class="hidden bg-red-800 hover:bg-red-700 px-6 py-1.5 text-white font-bold border border-red-500 rounded anim-flash text-base shadow-md">祈求復活</button>
-        <button onclick="reviveInPlace()" id="btn-revive-inplace" class="hidden bg-yellow-700 hover:bg-yellow-600 px-6 py-1.5 text-white font-bold border border-yellow-500 rounded anim-flash text-base shadow-md">原地復活</button>
         <button onclick="returnToTown()" id="btn-return-town" class="bg-emerald-800 hover:bg-emerald-700 px-3 py-1 text-white font-bold border border-emerald-500 rounded text-sm shadow-md whitespace-nowrap min-w-[3.25rem] text-center">回村</button>
         <select id="map-category" class="bg-slate-800 border border-slate-600 text-white px-3 py-1.5 text-base rounded outline-none" onchange="onMapCategoryChange()">
             <option value="village">村莊</option>
@@ -276,7 +286,6 @@
         <span id="map-pop-indicator" class="hidden text-cyan-300 text-sm font-semibold whitespace-nowrap px-1" title="此地圖目前線上狩獵人數"></span>
         <button type="button" id="btn-field-pvp" class="btn-field-pvp text-xs font-bold px-2 py-1 rounded border" onclick="fieldPvpToggle()" title="Field PK">PK</button>
         <span id="pride-floor-indicator" class="hidden text-rose-200 font-bold text-base px-3 py-1.5 whitespace-nowrap"></span>
-        <span id="merc-role-hint" class="hidden" hidden aria-hidden="true"></span>
                 </div>
             </div> <!-- 👈 就是少了這個標籤！它是用來把 panel-header 關閉的 -->
 
@@ -347,7 +356,6 @@
                             <button id="cf-btn-status" onclick="toggleMobStatus()" class="cf-pill" style="color:#e2e8f0;border-color:#64748b;background:rgba(71,85,105,.30)" title="點亮/點暗：怪物圖片上的異常狀態徽章與出血/鈍擊/硬皮等狀態標示">狀態</button>
                             <button id="cf-btn-enemy" onclick="toggleCombatFilter('enemy')" class="cf-pill" style="color:#fca5a5;border-color:#b91c1c;background:rgba(127,29,29,.30)" title="點亮/點暗：敵人的戰鬥訊息">敵人</button>
                             <button id="cf-btn-player" onclick="toggleCombatFilter('player')" class="cf-pill" style="color:#93c5fd;border-color:#2563eb;background:rgba(30,58,138,.30)" title="點亮/點暗：玩家的戰鬥訊息">玩家</button>
-                            <button id="cf-btn-mercenary" class="cf-pill hidden" hidden aria-hidden="true" style="display:none"></button>
                             <button id="cf-btn-summon" onclick="toggleCombatFilter('summon')" class="cf-pill" style="color:#d8b4fe;border-color:#7c3aed;background:rgba(76,29,149,.30)" title="點亮/點暗：召喚物的戰鬥訊息">召喚</button>
                             <button id="cf-btn-pet" onclick="toggleCombatFilter('pet')" class="cf-pill" style="color:#fdba74;border-color:#ea580c;background:rgba(124,45,18,.30)" title="點亮/點暗：夥伴的戰鬥訊息">夥伴</button>
                         </div>
@@ -648,55 +656,57 @@
     })();
     </script>
 
-    <script src="js/34-ip-session-limit.js?v=v3.8.183"></script>
-    <script src="js/41-anti-cheat.js?v=v3.8.183"></script>
-    <script src="js/36-account-session.js?v=v3.8.183"></script>
-    <script src="js/35-cloud-save.js?v=v3.8.183"></script>
-    <script src="js/auth-login.js?v=v3.8.183"></script>
-    <script src="js/anim-manifest.js?v=v3.8.183"></script>
-<script src="js/00-data.js?v=v3.8.183"></script>
-<script src="js/01-drops-config.js?v=v3.8.183"></script>
-<script src="js/42-idle-logout.js?v=v3.8.183"></script>
-<script src="js/02-stats-recompute.js?v=v3.8.183"></script>
-<script src="js/39-talent-tree.js?v=v3.8.183"></script>
-    <script src="js/03-combat-core.js?v=v3.8.183"></script>
-    <script src="js/04-combat-attack.js?v=v3.8.183"></script>
-<script src="js/05-kill-progression.js?v=v3.8.183"></script>
-    <script src="js/06-status-allies.js?v=v3.8.183"></script>
-    <script src="js/07-skills-cast.js?v=v3.8.183"></script>
-<script src="js/08-items-equip.js?v=v3.8.183"></script>
-<script src="js/09-vfx-render.js?v=v3.8.183"></script>
-    <script src="js/10-ui-tabs.js?v=v3.8.183"></script>
-<script src="js/11-world-map.js?v=v3.8.183"></script>
-<script src="js/12-npc-quests.js?v=v3.8.183"></script>
-<script src="js/13-shop-save.js?v=v3.8.183"></script>
-    <script src="js/14-craft-pandora.js?v=v3.8.183"></script>
-<script src="js/15-cards.js?v=v3.8.183"></script>
-<script src="js/16-equip-book.js?v=v3.8.183"></script>
-<script src="js/18-misc-book.js?v=v3.8.183"></script>
-<script src="js/17-audio.js?v=v3.8.183"></script>
-<script src="js/19-equipment-window.js?v=v3.8.183"></script>
-<script src="js/20-warehouse-window.js?v=v3.8.183"></script>
-<script src="js/21-relic-book.js?v=v3.8.183"></script>
-    <script src="js/23-summons.js?v=v3.8.183"></script>
-    <script src="js/22-pets.js?v=v3.8.183"></script>
-    <script src="js/24-pandora-relic-market.js?v=v3.8.183"></script>
-    <script src="js/25-clan-system.js?v=v3.8.183"></script>
-    <script src="js/26-world-channel.js?v=v3.8.183"></script>
-    <script src="js/36-realtime-party.js?v=v3.8.183"></script>
-    <script src="js/40-world-boss.js?v=v3.8.183"></script>
-    <script src="js/41-map-population.js?v=v3.8.183"></script>
-    <script src="js/43-field-pvp.js?v=v3.8.183"></script>
-    <script src="js/44-map-explore.js?v=v3.8.183"></script>
-    <script src="js/37-auction-house.js?v=v3.8.183"></script>
-    <script src="js/27-offline-rewards.js?v=v3.8.183"></script>
-<script src="js/28-pvp-arena.js?v=v3.8.183"></script>
-<script src="js/29-siege-v2-data.js?v=v3.8.183"></script>
-<script src="js/30-siege-v2.js?v=v3.8.183"></script>
-<script src="js/31-castle-guards.js?v=v3.8.183"></script>
-<script src="js/32-threat.js?v=v3.8.183"></script>
-<script src="js/33-desktop-player-files.js?v=v3.8.183"></script>
-    <script src="js/38-pandora-global-auction.js?v=v3.8.183"></script>
-    <script src="js/38-live-update.js?v=v3.8.183"></script>
+    <script src="js/34-ip-session-limit.js?v=v3.8.262"></script>
+    <script src="js/41-anti-cheat.js?v=v3.8.262"></script>
+    <script src="js/36-account-session.js?v=v3.8.262"></script>
+    <script src="js/35-cloud-save.js?v=v3.8.262"></script>
+    <script src="js/auth-login.js?v=v3.8.262"></script>
+    <script src="js/anim-manifest.js?v=v3.8.262"></script>
+<script src="js/00-data.js?v=v3.8.262"></script>
+<script src="js/01-drops-config.js?v=v3.8.262"></script>
+<script src="js/42-idle-logout.js?v=v3.8.262"></script>
+<script src="js/02-stats-recompute.js?v=v3.8.262"></script>
+<script src="js/39-talent-tree.js?v=v3.8.262"></script>
+    <script src="js/03-combat-core.js?v=v3.8.262"></script>
+    <script src="js/04-combat-attack.js?v=v3.8.262"></script>
+<script src="js/05-kill-progression.js?v=v3.8.262"></script>
+    <script src="js/06-status-allies.js?v=v3.8.262"></script>
+    <script src="js/07-skills-cast.js?v=v3.8.262"></script>
+<script src="js/08-items-equip.js?v=v3.8.262"></script>
+<script src="js/45-q-anim.js?v=v3.8.262"></script>
+<script src="js/09-vfx-render.js?v=v3.8.262"></script>
+    <script src="js/10-ui-tabs.js?v=v3.8.262"></script>
+<script src="js/11-world-map.js?v=v3.8.262"></script>
+<script src="js/12-npc-quests.js?v=v3.8.262"></script>
+<script src="js/13-shop-save.js?v=v3.8.262"></script>
+    <script src="js/14-craft-pandora.js?v=v3.8.262"></script>
+<script src="js/15-cards.js?v=v3.8.262"></script>
+<script src="js/16-equip-book.js?v=v3.8.262"></script>
+<script src="js/18-misc-book.js?v=v3.8.262"></script>
+<script src="js/17-audio.js?v=v3.8.262"></script>
+<script src="js/19-equipment-window.js?v=v3.8.262"></script>
+<script src="js/20-warehouse-window.js?v=v3.8.262"></script>
+<script src="js/21-relic-book.js?v=v3.8.262"></script>
+    <script src="js/23-summons.js?v=v3.8.262"></script>
+    <script src="js/22-pets.js?v=v3.8.262"></script>
+    <script src="js/24-pandora-relic-market.js?v=v3.8.262"></script>
+    <script src="js/25-clan-system.js?v=v3.8.262"></script>
+    <script src="js/26-world-channel.js?v=v3.8.262"></script>
+    <script src="js/36-realtime-party.js?v=v3.8.262"></script>
+    <script src="js/40-world-boss.js?v=v3.8.262"></script>
+    <script src="js/41-map-population.js?v=v3.8.262"></script>
+    <script src="js/43-field-pvp.js?v=v3.8.262"></script>
+    <script src="js/44-map-explore.js?v=v3.8.262"></script>
+    <script src="js/46-combat-hud.js?v=v3.8.262"></script>
+    <script src="js/37-auction-house.js?v=v3.8.262"></script>
+    <script src="js/27-offline-rewards.js?v=v3.8.262"></script>
+<script src="js/28-pvp-arena.js?v=v3.8.262"></script>
+<script src="js/29-siege-v2-data.js?v=v3.8.262"></script>
+<script src="js/30-siege-v2.js?v=v3.8.262"></script>
+<script src="js/31-castle-guards.js?v=v3.8.262"></script>
+<script src="js/32-threat.js?v=v3.8.262"></script>
+<script src="js/33-desktop-player-files.js?v=v3.8.262"></script>
+    <script src="js/38-pandora-global-auction.js?v=v3.8.262"></script>
+    <script src="js/38-live-update.js?v=v3.8.262"></script>
 </body>
 </html>

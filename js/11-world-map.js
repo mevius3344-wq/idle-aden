@@ -306,9 +306,6 @@ function prideHasTalisman(tier, kinds) {
 }
 function mapOptDisabled(m) {
     if (m.disabled) return true;
-    // 🧑‍🤝‍🧑 v3.7.84 受僱為其他角色的傭兵期間＝只能停留在安全區 → 下拉中所有非 town_ 地圖一律灰階不可選
-    //    （與 changeMap 的 mercenaryRoleBattleBlocked 同一條規則·此處只是把它前推到 UI 上；快取版避免每個選項都掃 localStorage）
-    if (m.v && !String(m.v).startsWith('town_') && typeof mercRoleSafeAreaOnly === 'function' && mercRoleSafeAreaOnly()) return true;
     if (m.classicHide && player.classicMode) return true;   // 🔥 經典模式：席琳神殿不可進入（縱深防護，配合 populateMapSelect 隱藏選項）
     if (m.needKey && !player.inv.some(i => i.id === m.needKey && (i.cnt || 1) >= 1)) return true;   // 🔑 需鑰匙地圖：背包無鑰匙 → 灰色不可選
     // 🗼 傲慢之塔樓層門檻：2~10樓需曾擊敗潔尼斯女王；11樓以上需持有對應傳送符/支配符/移動卷軸
@@ -347,8 +344,6 @@ function onMapCategoryChange() {
         document.getElementById('map-select').value = target;
         changeMap();   // 實際移動（受控狀態時 changeMap 會擋下並還原兩個選單）
     }
-    // 🧑‍🤝‍🧑 v3.7.84 隊員期間切到「沒有安全區」的地區＝整區灰階、無可選目標 → 補一則提示，否則畫面毫無回應
-    else if (typeof mercRoleSafeAreaOnly === 'function' && mercRoleSafeAreaOnly() && typeof mercenaryRoleNotifySafeAreaOnly === 'function') mercenaryRoleNotifySafeAreaOnly();
     try { if (typeof wbOnCategoryChange === 'function') wbOnCategoryChange(cat); } catch (e) {}
 }
 function setMapSelectors(mapKey) {
@@ -359,17 +354,12 @@ function setMapSelectors(mapKey) {
     populateMapSelect(cat);
     let sel = document.getElementById('map-select'); if (sel) sel.value = mapKey;
     updatePrideFloorIndicator();
-    updateMercRoleHint();
     try { if (typeof mapPopUpdateIndicator === 'function') mapPopUpdateIndicator(); } catch (e) {}
     try { if (typeof wbOnCategoryChange === 'function') wbOnCategoryChange(cat); } catch (e) {}
 }
 // 🧑‍🤝‍🧑 v3.7.84 地圖列右側「目前擔任隊員中」常駐提示：受僱期間非安全區全部灰階＝點不下去，
 //    所以改用一個常駐標籤說明原因（否則玩家只會看到一整排灰色而不知道為什麼）。setMapSelectors 與每輪 updateUI 各呼叫一次。
-function updateMercRoleHint() {
-    let el = document.getElementById('merc-role-hint'); if (!el) return;
-    let on = (typeof mercRoleSafeAreaOnly === 'function') && mercRoleSafeAreaOnly();
-    el.classList.toggle('hidden', !on);
-}
+function updateMercRoleHint() {}
 function syncMapSelectors() { setMapSelectors(mapState.current); }
 // ===== 🖥️ 打包版自訂下拉選單（僅 pkg-build）=====
 //   Electron 原生 <select> 彈出選單間距太擠且 padding/行高不可調。改法：保留原生 <select> 承載 value/狀態/onchange
@@ -1462,12 +1452,21 @@ function changeMap(force) {
         try { applyAreaBackground(); } catch(e){}   // ⚡ v2.6.49 立即套用狩獵區 area-fit(1920/580 條狀)＋背景，避免等到下一次 updateUI(下一 tick·最多~100ms)才變換→切村↔狩獵時戰鬥區解析度延遲跳動（村莊分支已於下方 updateUI() 即時處理·此分支原本漏呼故有延遲）
 
         // 進入新區域：依邏輯 tick 排程出怪（中央 50t=5秒、左側 70t=7秒、右側 90t=9秒）
+        // 🗺️ 場戰：改依練功點展開槽位＋錯開出生，勿再用 3 格排程（否則其餘格會同一時間狂刷）
         let t0 = state.ticks;
-        if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
-            mapState.spawnAt = [null, t0 + 50, null, null, null];   // 👑 世界王：僅中央格
-            try { if (typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (e) {}
+        let _fieldInited = false;
+        try {
+            if (typeof exploreInitFieldSpawns === 'function') _fieldInited = !!exploreInitFieldSpawns(t0);
+        } catch (eFieldInit) { _fieldInited = false; }
+        if (!_fieldInited) {
+            if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
+                mapState.spawnAt = [null, t0 + 50, null, null, null];   // 👑 世界王：僅中央格
+                try { if (typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (e) {}
+            } else {
+                mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
+            }
         } else {
-            mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
+            try { if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current) && typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (eWb) {}
         }
         mapState.suppressSiegeBoss = true;   // 初次進場：必定不出現肯特城門/守護塔
         // 🏛️ 雙BOSS祭壇：進場立即生成兩隻BOSS（之後不逐格補怪，兩隻皆亡才會在 15 秒後同時復活）
@@ -1478,6 +1477,7 @@ function changeMap(force) {
         renderMobs();
     }
     syncMapSelectors();   // 切換完成後，同步分類選單與地圖選單為目前所在地圖
+    try { if (typeof syncCombatHudTownMode === 'function') syncCombatHudTownMode(); } catch (eHud) {}
 }
 
 // ===== 席琳系統已移除 =====
@@ -1859,6 +1859,7 @@ function openPandoraShortcut() {
 
 function interactNPC(npcId, townId) {
     try { ensureTownAllyGuilds(); } catch (e) {}
+    try { ensureTownTeleporters(); } catch (e) {}
     let npc = DB.towns[townId].npcs.find(n => n.id === npcId);
     if(!npc) return;
     normalizeClanGuildNpc(npc);
@@ -1974,6 +1975,8 @@ function interactNPC(npcId, townId) {
     } else if (npc.type === 'petstore') {   // 🐾 v3.7.7 改依 type 分派（包武／奧斯丁共用同一個保管桶）——新增寵物保管 NPC 不必再回來加 id
         try { if (typeof _petRosterResync === 'function') _petRosterResync(); } catch (e) {}   // 🔄 開啟寵物保管前先與共用桶同步（顯示別角色最新裝備/出戰狀態·防過期鏡像）
         renderPetStorageNPC(contentDiv);
+    } else if (npc.type === 'teleport' || npc.id === 'npc_teleport') {   // 🧭 v3.8.255 村莊傳送師：取代頂部雙下拉
+        renderTeleporterNPC(contentDiv);
     } else if (npc.id === 'npc_isba') {
         renderIsbaTravel(contentDiv);
     } else if (npc.id === 'npc_doll_merchant') {
@@ -1998,6 +2001,137 @@ function closeNpcInteraction() {
     { let _m = document.getElementById('town-npc-map'); if (_m) _m.classList.remove('hidden'); }   // 🏘️ v3.2.83 關閉功能視窗→重新顯示地圖
     // NPC 底列容器：v3.2.89 起恆為空（傲慢之塔/時空裂痕入口改地圖告示 NPC＋浮動視窗），維持收合即可
     { let _c = document.getElementById('town-npc-container'); if (_c) _c.classList.add('hidden'); }   // 🗑️ v3.5.87 原 children.length 判斷恆 0·簡化
+}
+
+// 🧭 v3.8.255 各安全區注入「傳送師」：頂部雙下拉改由此 NPC 出圖（重用 regionMapList／mapOptDisabled／changeMap）
+function ensureTownTeleporters() {
+    try {
+        if (typeof DB === 'undefined' || !DB || !DB.towns) return;
+        Object.keys(DB.towns).forEach(function (tid) {
+            if (tid === 'town_sherine') return;
+            var t = DB.towns[tid];
+            if (!t) return;
+            if (!Array.isArray(t.npcs)) t.npcs = [];
+            if (t.npcs.some(function (n) { return n && (n.type === 'teleport' || n.id === 'npc_teleport'); })) return;
+            t.npcs.unshift({
+                id: 'npc_teleport',
+                n: '傳送師',
+                title: '傳送',
+                type: 'teleport',
+                d: '掌握各地傳送陣的旅人引路人。可將你送往已知的村莊、野外與地監。'
+            });
+        });
+    } catch (e) {}
+}
+
+function _teleporterRegionTabs() {
+    var opts = [];
+    try {
+        if (player && player.siege && player.siege.active) opts.push({ key: 'siege', label: '攻城' });
+        if (typeof wbWorldBossList === 'function' && wbWorldBossList().length) opts.push({ key: 'worldboss', label: '世界王' });
+        if (typeof wbBossZoneVisible === 'function' && wbBossZoneVisible() && typeof wbBossZoneList === 'function' && wbBossZoneList().length) {
+            opts.push({ key: 'boss_zone', label: 'BOSS專區' });
+        }
+        if (typeof MAP_REGIONS !== 'undefined' && Array.isArray(MAP_REGIONS)) {
+            MAP_REGIONS.forEach(function (r) {
+                if (typeof regionHasVisible === 'function' && regionHasVisible(r.key)) opts.push({ key: r.key, label: r.label });
+            });
+        }
+    } catch (e) {}
+    return opts;
+}
+
+function renderTeleporterNPC(div) {
+    if (!div) return;
+    ensureTownTeleporters();
+    var regions = _teleporterRegionTabs();
+    var curKey = '';
+    try { curKey = (typeof mapRegionOf === 'function') ? mapRegionOf(mapState.current) : ''; } catch (e) {}
+    if (!regions.some(function (r) { return r.key === curKey; })) curKey = regions.length ? regions[0].key : '';
+
+    div.innerHTML =
+        '<div class="tp-panel">' +
+        '<div class="tp-hint">選擇地區後點擊目的地。無法前往的地圖會顯示為灰色（缺鑰匙／條件未達成）。狩獵中請用「回村」返回安全區。</div>' +
+        '<div class="tp-regions" id="tp-regions"></div>' +
+        '<div class="tp-maps" id="tp-maps"></div>' +
+        '</div>';
+
+    var regionEl = div.querySelector('#tp-regions');
+    var mapsEl = div.querySelector('#tp-maps');
+
+    function paintRegions() {
+        if (!regionEl) return;
+        regionEl.innerHTML = regions.map(function (r) {
+            return '<button type="button" class="tp-region-btn' + (r.key === curKey ? ' is-on' : '') + '" data-rk="' + r.key + '">' + r.label + '</button>';
+        }).join('');
+    }
+
+    function paintMaps() {
+        if (!mapsEl) return;
+        var list = (typeof regionMapList === 'function') ? regionMapList(curKey) : [];
+        if (!list || !list.length) {
+            mapsEl.innerHTML = '<div class="tp-hint">此地區目前沒有可顯示的地圖。</div>';
+            return;
+        }
+        mapsEl.innerHTML = list.map(function (m) {
+            if (m.classicHide && player && player.classicMode) return '';
+            var dis = (typeof mapOptDisabled === 'function') && mapOptDisabled(m);
+            var here = mapState && mapState.current === m.v;
+            var label = m.t + ((typeof mapPopSuffix === 'function') ? mapPopSuffix(m.v) : '');
+            var style = (!dis && m.c) ? (' style="color:' + m.c + '"') : '';
+            return '<button type="button" class="tp-map-btn' + (here ? ' is-here' : '') + '"' +
+                ' data-map="' + m.v + '"' + (dis ? ' disabled' : '') + style + '>' +
+                (here ? '📍 ' : '') + label + (dis ? '（無法前往）' : '') + '</button>';
+        }).join('');
+    }
+
+    paintRegions();
+    paintMaps();
+
+    if (regionEl) {
+        regionEl.onclick = function (e) {
+            var btn = e.target && e.target.closest ? e.target.closest('[data-rk]') : null;
+            if (!btn) return;
+            curKey = btn.getAttribute('data-rk');
+            paintRegions();
+            paintMaps();
+        };
+    }
+    if (mapsEl) {
+        mapsEl.onclick = function (e) {
+            var btn = e.target && e.target.closest ? e.target.closest('[data-map]') : null;
+            if (!btn || btn.disabled) return;
+            var mapKey = btn.getAttribute('data-map');
+            if (!mapKey) return;
+            teleporterGo(mapKey);
+        };
+    }
+}
+
+function teleporterGo(mapKey) {
+    if (!mapKey) return;
+    try {
+        if (mapState && mapState.current === mapKey) {
+            logSys('<span class="text-slate-400">你已經在此地。</span>');
+            return;
+        }
+        var rk = (typeof mapRegionOf === 'function') ? mapRegionOf(mapKey) : null;
+        var list = rk && typeof regionMapList === 'function' ? regionMapList(rk) : [];
+        var entry = (list || []).find(function (m) { return m.v === mapKey; }) || (typeof mapEntryOf === 'function' ? mapEntryOf(mapKey) : null);
+        if (entry && typeof mapOptDisabled === 'function' && mapOptDisabled(entry)) {
+            logSys('<span class="text-red-400">目前無法傳送到該地（條件未達成或缺少道具）。</span>');
+            return;
+        }
+        if (typeof setMapSelectors === 'function') setMapSelectors(mapKey);
+        else {
+            var sel = document.getElementById('map-select');
+            if (sel) sel.value = mapKey;
+        }
+        try { closeNpcInteraction(); } catch (e0) {}
+        changeMap();
+    } catch (e) {
+        try { logSys('<span class="text-red-400">傳送失敗。</span>'); } catch (e2) {}
+    }
 }
 
 // ================= 🏘️ v3.2.83 城鎮 NPC 地圖系統 =================
@@ -2069,7 +2203,7 @@ const NPC_SPR_POOL = {
     bless: ['1788'], pray: ['918'], mastery: ['1222'], synth: ['1307'], skill: ['237'], travel: ['1045'], petstore: ['100', '727']   // 🐾 v3.4.75 包武(petstore)原池['54']＝舊倉庫寶箱造型·v3.4.74 倉庫改用10669後54被釋出→包武誤拿寶箱圖；改人類外型(甘特/萊恩)·54 全面除役
 };
 // 依 type 的單一固定 sprite（每城鎮至多一個→恆不重複）
-const NPC_SPR_ROLE = { warehouse: '10669', ally: '51', clan: '51', castleguard: '1222' };   // 🏦 v3.4.74 倉庫通用外型 54→10669（朵琳新造型·妖精森林倉庫=npc_wh_elf 走 FIXED '918' 不受影響）
+const NPC_SPR_ROLE = { warehouse: '10669', ally: '51', clan: '51', castleguard: '1222', teleport: '1045' };   // 🏦 v3.4.74 倉庫通用外型 54→10669；🧭 v3.8.255 傳送師沿用旅人外型 1045
 // 全域後備順序（池與 role 都耗盡時取用；人形/商販在前、怪物型在後，避免奇怪配對）
 const NPC_SPR_FALLBACK = ['1256', '1307', '1314', '1768', '1305', '1254', '1278', '1766', '3858', '1276',
     '237', '261', '902', '1045', '457', '460', '727', '914', '916', '918', '920', '949', '100', '118', '1788', '1222', '1049',
@@ -2299,7 +2433,10 @@ function _townNpcLayout(n, townId) {
 
 function _townNpcMapPoint(npc, index, pos, overrides) {
     let ov = overrides[npc.id];
-    return ov ? { x: ov[0], y: ov[1] } : (pos[npc._spotIdx != null ? npc._spotIdx : index] || { x: 50, y: 60 });
+    if (ov) return { x: ov[0], y: ov[1] };
+    // 🧭 傳送師固定偏畫面下方中央，方便在全螢幕村莊一眼找到
+    if (npc && (npc.type === 'teleport' || npc.id === 'npc_teleport')) return { x: 50, y: 78 };
+    return pos[npc._spotIdx != null ? npc._spotIdx : index] || { x: 50, y: 60 };
 }
 
 function _townPointDistance(a, b) {
@@ -2311,7 +2448,8 @@ function _townPointDistance(a, b) {
 const TOWN_NPC_MIN_GAP = 15;
 
 function _townNpcCoarsePointer() {
-    try { return window.matchMedia('(max-width: 768px), (max-height: 520px) and (pointer: coarse)').matches; } catch (e) { return false; }
+    // 與 isMobileCompactUi 一致：桌機也走觸控友善村莊互動
+    return true;
 }
 
 function _townNpcTouchFocus(el, map) {
@@ -2440,6 +2578,7 @@ function _townCastleCrownAlign(crown, bodyImg) {
     crown.style.bottom = box.bottom + 'px';
 }
 function renderTownNPCMap(townId) {
+    ensureTownTeleporters();
     let map = document.getElementById('town-npc-map');
     if (!map) return;
     map.classList.remove('hidden');

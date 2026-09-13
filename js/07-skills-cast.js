@@ -491,7 +491,6 @@ function castSkillInner(skId) {
     if (_echoFree) cost = 0;   // 🏅 迴響精通：連發那次不消耗 MP
     if (_royalFreeCast) cost = 0;   // 👑 魔法精通：免費額外施放選定攻擊技
     if (sk.throwAxe && hasMastery('k_dualaxe')) cost = 0;   // ⚔️ 雙斧精通：戰斧投擲不消耗 MP
-    if (sk.callAllies && hasMastery('k_royal_pledge')) cost = Math.ceil(cost / 2);   // 👑 血盟精通：呼喚盟友消耗 MP 減半
     if (_autoCastNow && sk.dmgType === 'magic' && cost > 0) { let _mm = _equipWpnField('autoCastMpMult'); if (_mm) cost = Math.round(cost * _mm); }   // 🐍 枯竭魔杖：自動施放傷害魔法 MP×autoCastMpMult(2)
     if(player.mp < cost) return false;
     if(sk.hpCost && player.hp <= sk.hpCost + 5) return false;  // HP 不足，拒絕施放
@@ -651,17 +650,7 @@ function castSkillInner(skId) {
             renderMobs();
             return true;
         }
-        // 👑 呼喚盟友：所有上場傭兵立即各發動一次額外攻擊（需有目標與傭兵；消耗 MP30＋攻擊冷卻）
-        if (sk.callAllies) {
-            let t = getTarget(); if (!t || t.curHp <= 0) return false;
-            let allies = (player.allies || []).filter(a => a && a.curHp > 0);
-            if (!allies.length) return false;
-            if (player.mp < cost) return false;
-            player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
-            logCombat(`<span class="text-amber-300 font-bold">${sk.n}！</span>你號召盟友一同出擊。`, 'player');
-            allies.forEach(a => { try { allyAttackOnce(a); } catch(e){} });
-            return true;
-        }
+        if (sk.callAllies) return false;   // 呼喚盟友（離線存檔位協力）已移除
         // 🐉 控制系異常技（護衛毀滅/恐懼無助/驚悚死神）：固定機率施加自訂異常狀態（驚悚死神無視 MR，已以固定機率處理）
         if (sk.fixedStatus) {
             let t = getTarget(); if (!t || t.curHp <= 0) return false;
@@ -707,6 +696,10 @@ function castSkillInner(skId) {
                 dmg = Math.max(1, Math.floor(magicBaseDamage(dmg, player.d, 0, true) * magicDamageCoef(player.d, magicAttrDefense(t, 'none'), sk.tier) * ((player.eq.wpn && (DB.items[player.eq.wpn.id] || {}).spellIgnoreMr) ? 1 : mrMult(Math.max(0, effMr)))));   // 🏺 v3.6.44 血祭儀式短刀：無視魔抗
             }
             dmg = Math.max(1, Math.floor(dmg * fragileMult(t) * illuLvMult(player) * wpnEnFinalMult(player.eq.wpn) * elementCounterMult(sk.weaponDmg ? getWpnEle(player.eq.wpn, player.eq.wpn ? DB.items[player.eq.wpn.id] : null) : 'none', t.e)));   // 🔮 幻術士等級加成 ×(1+等級/50)；🔧 武器強化 +11~+20 最終倍率；⚔️ 屬性剋制(僅武器傷害技吃武器屬性)
+            try {
+                let _ceFd = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+                if (_ceFd && _ceFd.finalDmg > 0) dmg = Math.max(1, Math.floor(dmg * (1 + _ceFd.finalDmg)));
+            } catch (eClanFdM) {}
             t.curHp -= dmg; if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, t, dmg); t.justHit = sk.weaponDmg ? getWpnEle(player.eq.wpn, player.eq.wpn ? DB.items[player.eq.wpn.id] : null) : 'magic'; if (!sk.weaponDmg) t._spellHurt = true; mobWake(t);   // 🎬 v3.0.14 純魔法技→hurt(含頭目)
             if (typeof reflectWallOnDamage === 'function' && t._reflectWall) { let _rwW = player.eq.wpn && DB.items[player.eq.wpn.id]; reflectWallOnDamage(t, dmg, sk.weaponDmg ? ((_rwW && (_rwW.isBow || _rwW.ranged)) ? 'ranged' : 'melee') : 'magic', null); }   // 🌑 v3.3.33 血壁空間：玩家技能傷害反射
             if (player.dead) return true;   // ☠️ v3.5.87 反射反殺：死後中止收尾（不結算擊殺）

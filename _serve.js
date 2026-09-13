@@ -29,6 +29,11 @@ try {
   _antiCheat = require("./lib/rt-anti-cheat");
 } catch (e) {}
 
+let _cloudWallet = null;
+try {
+  _cloudWallet = require("./lib/rt-cloud-wallet");
+} catch (e) {}
+
 let _accountSessions = null;
 try {
   const _accountSessionsFile = path.join(
@@ -674,6 +679,10 @@ async function handleCloudApi(req, res, u) {
       if (fs.existsSync(file)) {
         try {
           const existing = JSON.parse(fs.readFileSync(file, "utf8"));
+          // B2：伺服器錢包序號較新時，金幣以伺服器為準
+          if (_cloudWallet && existing && existing.p && data.p) {
+            _cloudWallet.mergeWalletAuthority(data, existing);
+          }
           if (existing && existing.p && data.p && cloudIdentityConflict(data, existing)) {
             return json(res, 409, {
               ok: false,
@@ -1487,6 +1496,8 @@ function partyUpsertPresence(body) {
       .slice(0, 40),
     hp: Math.max(0, pickNum(body.hp, base.hp) || 0),
     mhp: Math.max(0, pickNum(body.mhp, base.mhp) || 0),
+    wx: Math.max(-3000, Math.min(3000, Math.round(pickNum(body.wx, base.wx) || 0))),
+    wy: Math.max(-1500, Math.min(1500, Math.round(pickNum(body.wy, base.wy) || 0))),
     pvpOn: !!(body.pvpOn != null ? body.pvpOn : base.pvpOn),
     classic: body.classic !== false && base.classic !== false,
     lastSeen: now,
@@ -1503,6 +1514,8 @@ function partyUpsertPresence(body) {
         lv: row.lv,
         hp: row.hp,
         mhp: row.mhp,
+        wx: row.wx,
+        wy: row.wy,
         cls: row.cls,
         classic: row.classic,
         sessionId: row.sessionId,
@@ -1544,6 +1557,8 @@ function partyMapPlayersHere(mapId, excludeKey, now) {
       cls: String(pre.cls || "").slice(0, 24),
       hp: Math.max(0, Math.floor(Number(pre.hp) || 0)),
       mhp: Math.max(1, Math.floor(Number(pre.mhp) || 1)),
+      wx: Math.max(-3000, Math.min(3000, Math.round(Number(pre.wx) || 0))),
+      wy: Math.max(-1500, Math.min(1500, Math.round(Number(pre.wy) || 0))),
       pvpOn: !!pre.pvpOn,
       online: true,
     });
@@ -2291,7 +2306,7 @@ async function handlePartyApi(req, res, u) {
 }
 
 // ===== 🩸 Realtime player clans (create / search / join). Persisted to data/clans.json. =====
-const CLAN_MAX = 40;
+const CLAN_MAX = 9999;
 const CLAN_TTL_MS = 180000;
 const CLANS_FILE = path.join(ROOT, "data", "clans.json");
 /** @type {Map<string, object>} clanId -> clan */
@@ -2813,6 +2828,72 @@ function auctionPushClaim(account, claim) {
   rtAuctionClaims.set(a, list);
 }
 
+async function auctionRequireAuth(data, res) {
+  if (!_antiCheat) {
+    const account = String((data && data.account) || "")
+      .replace(/[<>&"']/g, "")
+      .trim()
+      .slice(0, 24);
+    if (!account) {
+      json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
+      return null;
+    }
+    return { ok: true, account };
+  }
+  const auth = _antiCheat.authFromBody(data || {}, ROOT);
+  if (!auth.ok) {
+    json(res, 401, {
+      ok: false,
+      error: auth.error || "auth_required",
+      message: "拍賣行需要有效登入，請重新登入。",
+    });
+    return null;
+  }
+  if (_accountSessions) {
+    const valid = await _accountSessions.verify(accountKey(auth.account), auth.sessionId);
+    if (!valid) {
+      json(res, 401, {
+        ok: false,
+        error: "session_invalid",
+        message: "登入已失效（可能已在其他裝置登入）。請重新登入。",
+      });
+      return null;
+    }
+  }
+  return auth;
+}
+
+function auctionFileWalletMutate(account, slot, mutator) {
+  if (!_cloudWallet || !ENABLE_CLOUD_SAVE) {
+    return { ok: false, error: "no_wallet", message: "雲端存檔未啟用，無法伺服器結算。" };
+  }
+  const s = _cloudWallet.normSlot(slot);
+  const dir = cloudAccountDir(account);
+  const file = path.join(dir, "slot-" + s + ".json");
+  if (!fs.existsSync(file)) {
+    return { ok: false, error: "no_save", message: "找不到雲端角色存檔，請先存檔後再試。" };
+  }
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    return { ok: false, error: "no_save", message: "雲端存檔格式異常。" };
+  }
+  if (!data || !data.p) return { ok: false, error: "no_save", message: "雲端存檔格式異常。" };
+  const result = mutator(data);
+  if (!result || !result.ok) return result || { ok: false, error: "mutate_failed" };
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    return { ok: false, error: "save_failed", message: "雲端錢包寫入失敗。" };
+  }
+  return Object.assign({}, result, {
+    goldAfter: _cloudWallet.goldOf(data),
+    walletRev: _cloudWallet.walletRevOf(data),
+  });
+}
+
 function auctionExpireStale(now) {
   now = now || Date.now();
   let changed = false;
@@ -3057,12 +3138,10 @@ async function handleAuctionApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
-    const account = String((data && data.account) || "")
-      .replace(/[<>&"']/g, "")
-      .trim()
-      .slice(0, 24);
-    if (!account) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
-    const slot = Math.max(0, Math.min(8, Number(data.slot) || 0));
+    const auth = await auctionRequireAuth(data, res);
+    if (!auth) return;
+    const account = auth.account;
+    const slot = _cloudWallet ? _cloudWallet.normSlot(data.slot) : Math.max(1, Math.min(8, Number(data.slot) || 1));
     const name = partySanitizeName(data.name) || "未命名";
     const key = partyMemberKey(account, slot, name);
     const item = auctionSanitizeItem(data.item);
@@ -3072,6 +3151,10 @@ async function handleAuctionApi(req, res, u) {
       .trim()
       .slice(0, 40);
     if (itemName) item._n = itemName;
+    const sourceUid = String(data.sourceUid || "").slice(0, 64);
+    if (!sourceUid) {
+      return json(res, 400, { ok: false, error: "need_uid", message: "上架缺少物品識別，請更新客戶端後重試。" });
+    }
     const fees = auctionFeesForPrice(data.price);
     if (fees.price < AUCTION_PRICE_MIN) {
       return json(res, 400, { ok: false, error: "bad price", message: "價格過低。" });
@@ -3084,6 +3167,18 @@ async function handleAuctionApi(req, res, u) {
         ok: false,
         error: "limit",
         message: "每個帳號最多同時上架 " + AUCTION_MAX_PER_ACCOUNT + " 件。",
+      });
+    }
+    const wallet = auctionFileWalletMutate(account, slot, (pdata) => {
+      const rem = _cloudWallet.applyRemoveInv(pdata, sourceUid, item.cnt, item.id);
+      if (!rem.ok) return rem;
+      return _cloudWallet.applyDebitGold(pdata, fees.listFee);
+    });
+    if (!wallet.ok) {
+      return json(res, wallet.error === "gold_short" ? 400 : 409, {
+        ok: false,
+        error: wallet.error || "wallet",
+        message: wallet.message || "上架扣款／扣物失敗。",
       });
     }
     const now = Date.now();
@@ -3105,6 +3200,8 @@ async function handleAuctionApi(req, res, u) {
       ok: true,
       listing: auctionPublic(listing, { mine: true }),
       listFee: fees.listFee,
+      goldAfter: wallet.goldAfter,
+      walletRev: wallet.walletRev,
       message: "上架成功。已收取上架手續費 " + fees.listFee.toLocaleString() + " 金幣。",
     });
   }
@@ -3117,11 +3214,10 @@ async function handleAuctionApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
-    const account = String((data && data.account) || "")
-      .replace(/[<>&"']/g, "")
-      .trim()
-      .slice(0, 24);
-    if (!account) return json(res, 400, { ok: false, error: "need account", message: "請先登入帳號。" });
+    const auth = await auctionRequireAuth(data, res);
+    if (!auth) return;
+    const account = auth.account;
+    const slot = _cloudWallet ? _cloudWallet.normSlot(data.slot) : Math.max(1, Math.min(8, Number(data.slot) || 1));
     const buyerName = partySanitizeName(data.name) || "未命名";
     const listingId = String(data.listingId || "").slice(0, 48);
     const L = rtAuction.get(listingId);
@@ -3131,6 +3227,17 @@ async function handleAuctionApi(req, res, u) {
     }
     const fees = auctionFeesForPrice(L.price);
     rtAuction.delete(listingId);
+    const wallet = auctionFileWalletMutate(account, slot, (pdata) =>
+      _cloudWallet.applyDebitGold(pdata, fees.totalBuy)
+    );
+    if (!wallet.ok) {
+      rtAuction.set(L.id, L);
+      return json(res, 400, {
+        ok: false,
+        error: wallet.error || "gold_short",
+        message: wallet.message || "金幣不足。",
+      });
+    }
     auctionPushClaim(L.sellerAccount, {
       id: auctionNewId("G"),
       type: "gold",
@@ -3148,6 +3255,8 @@ async function handleAuctionApi(req, res, u) {
       buyFee: fees.buyFee,
       totalPaid: fees.totalBuy,
       sellerName: L.sellerName,
+      goldAfter: wallet.goldAfter,
+      walletRev: wallet.walletRev,
       message:
         "購買成功。支付 " +
         fees.price.toLocaleString() +
@@ -3167,11 +3276,9 @@ async function handleAuctionApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
-    const account = String((data && data.account) || "")
-      .replace(/[<>&"']/g, "")
-      .trim()
-      .slice(0, 24);
-    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    const auth = await auctionRequireAuth(data, res);
+    if (!auth) return;
+    const account = auth.account;
     const listingId = String(data.listingId || "").slice(0, 48);
     const L = rtAuction.get(listingId);
     if (!L) return json(res, 404, { ok: false, error: "gone", message: "找不到此上架。" });
@@ -3195,11 +3302,9 @@ async function handleAuctionApi(req, res, u) {
     } catch (e) {
       return json(res, 400, { ok: false, error: "bad json" });
     }
-    const account = String((data && data.account) || "")
-      .replace(/[<>&"']/g, "")
-      .trim()
-      .slice(0, 24);
-    if (!account) return json(res, 400, { ok: false, error: "need account" });
+    const auth = await auctionRequireAuth(data, res);
+    if (!auth) return;
+    const account = auth.account;
     const list = rtAuctionClaims.get(account) || [];
     if (!list.length) return json(res, 200, { ok: true, claims: [], message: "沒有待領取內容。" });
     const claimId = data.claimId ? String(data.claimId).slice(0, 48) : "";
@@ -3418,6 +3523,7 @@ async function handleAccountsApi(req, res, u) {
     const account = normalizeAccountId(data.account);
     const password = String(data.password == null ? "" : data.password);
     if (!account) return json(res, 400, { ok: false, error: "bad account" });
+    if (password.length < 6) return json(res, 400, { ok: false, error: "password too short", message: "密碼至少 6 個字元。" });
     if (password.length > 64) return json(res, 400, { ok: false, error: "password too long" });
     const map = loadAccounts();
     const key = accountKey(account);
@@ -4020,6 +4126,24 @@ const server = http.createServer(async (req, res) => {
 
   if (u === "/") u = "/index.html";
   const rel = u.replace(/^\/+/, "");
+  // 🛡️ 禁止透過靜態檔外洩敏感路徑（帳號庫、雲端存檔、環境變數等）
+  const relNorm = rel.replace(/\\/g, "/").toLowerCase();
+  if (
+    relNorm === ".env" ||
+    relNorm.startsWith(".env.") ||
+    relNorm === ".git" ||
+    relNorm.startsWith(".git/") ||
+    relNorm === "node_modules" ||
+    relNorm.startsWith("node_modules/") ||
+    relNorm === "data" ||
+    relNorm.startsWith("data/") ||
+    /(^|\/)\.env(\.|$)/.test(relNorm) ||
+    /(^|\/)accounts\.json$/.test(relNorm) ||
+    /(^|\/)package-lock\.json$/.test(relNorm)
+  ) {
+    res.writeHead(403);
+    return res.end("Forbidden");
+  }
   const full = path.normalize(path.join(ROOT, rel));
   if (!full.startsWith(ROOT)) {
     res.writeHead(403);
@@ -4061,6 +4185,12 @@ server.on("error", (e) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log("READY http://localhost:" + PORT);
   console.log("BUILD " + BUILD_ID);
+  if (!String(process.env.AUTH_SECRET || "").trim() || String(process.env.AUTH_SECRET || "").length < 16) {
+    console.warn("WARN AUTH_SECRET 未設定或過短：正式環境請設至少 16 字元隨機密鑰，否則登入 token 可被推導。");
+  }
+  if (!String(process.env.METRICS_TOKEN || "").trim()) {
+    console.warn("WARN METRICS_TOKEN 未設定：/api/server/metrics 與監控面板無法使用（這是預期的安全預設）。");
+  }
   console.log(
     "IP_SESSION " +
       (IP_SESSION_ENABLED ? "max=" + IP_SESSION_MAX + " ttlMs=" + IP_SESSION_TTL_MS : "off")

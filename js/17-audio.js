@@ -50,7 +50,9 @@ function _sfxSaveCfg() { try { if (typeof _lsSet === 'function') _lsSet('fb5_sfx
 function _sfxTryLoad(key, def) {
     if (_sfxPool[key] !== undefined || _sfxLoading[key]) return;
     _sfxLoading[key] = true;
-    var exts = ['ogg', 'mp3', 'wav'], i = 0;
+    // 🚀 編號音檔庫全是 .ogg（502 檔）：跳過 mp3/wav 探測，避免缺檔時連打 2 次 404 造成戰鬥卡頓
+    var file = String((def && def.file) || '');
+    var exts = /^\d+$/.test(file) ? ['ogg'] : ['ogg', 'mp3', 'wav'], i = 0;
     function failAll() { _sfxPool[key] = null; delete _sfxLoading[key]; }
     function tryNext() {
         if (i >= exts.length) { failAll(); return; }

@@ -49,7 +49,11 @@
         if (!_ahIsHttp()) return Promise.resolve({ ok: false, error: 'offline', message: '請透過伺服器網頁登入後使用拍賣行。' });
         var base = _ahIdentity();
         if (!base) return Promise.resolve({ ok: false, error: 'need account', message: '請先登入帳號再使用拍賣行。' });
-        var body = Object.assign({}, base, extra || {});
+        var auth = (typeof anticheatAuthExtras === 'function') ? anticheatAuthExtras() : {};
+        if (!auth.authToken) {
+            return Promise.resolve({ ok: false, error: 'auth_required', message: '登入令牌失效，請重新登入後再使用拍賣行。' });
+        }
+        var body = Object.assign({}, base, auth, extra || {});
         return fetch('/api/auction/' + path, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -62,6 +66,15 @@
         }).catch(function () {
             return { ok: false, error: 'network', message: '無法連線拍賣伺服器。' };
         });
+    }
+    function _ahApplyWallet(data) {
+        if (!player || !data) return;
+        if (data.goldAfter != null && Number.isFinite(Number(data.goldAfter))) {
+            player.gold = Math.max(0, Math.floor(Number(data.goldAfter)));
+        }
+        if (data.walletRev != null && Number.isFinite(Number(data.walletRev))) {
+            player._walletRev = Math.max(0, Math.floor(Number(data.walletRev)));
+        }
     }
     function _ahGet(pathWithQuery) {
         if (!_ahIsHttp()) return Promise.resolve({ ok: false, error: 'offline', message: '請透過伺服器網頁登入。' });
@@ -465,20 +478,25 @@
             itemName = d0 && d0.n ? String(d0.n) : String(item.id);
         } catch (e0) { itemName = String(item.id); }
         _auctionBusy = true;
-        player.gold -= fees.listFee;
+        // 先同步雲端（同步 PUT），讓伺服器能扣到正確背包／金幣
+        try {
+            if (typeof saveGame === 'function') saveGame();
+            if (typeof cloudPushSlotSync === 'function' && typeof saveStateJson === 'function' && typeof currentSlot !== 'undefined') {
+                cloudPushSlotSync(currentSlot, JSON.parse(saveStateJson()));
+            }
+        } catch (eSave0) {}
+        // B2：金幣由伺服器雲端錢包扣除；本機只樂觀移除物品
         if (!_ahRemoveInv(uidStr, cnt)) {
-            player.gold += fees.listFee;
             _auctionBusy = false;
             if (typeof logSys === 'function') logSys('扣除物品失敗。');
             return;
         }
         try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
 
-        _ahPost('create', { price: fees.price, item: snap, itemName: itemName }).then(function (data) {
+        _ahPost('create', { price: fees.price, item: snap, itemName: itemName, sourceUid: uidStr }).then(function (data) {
             _auctionBusy = false;
             if (!data || !data.ok) {
-                // 回滾
-                player.gold = (player.gold || 0) + fees.listFee;
+                // 回滾物品（金幣未在本機預扣）
                 _ahGrantItem(snap);
                 try { if (typeof updateUI === 'function') updateUI(); } catch (e2) {}
                 try { if (typeof renderTabs === 'function') renderTabs(); } catch (e3) {}
@@ -486,7 +504,12 @@
                 renderAuctionTab();
                 return;
             }
+            _ahApplyWallet(data);
+            if (data.goldAfter == null) {
+                player.gold = Math.max(0, (player.gold || 0) - fees.listFee);
+            }
             if (typeof logSys === 'function') logSys('<span class="text-amber-300">' + (data.message || '上架成功') + '</span>');
+            try { if (typeof updateUI === 'function') updateUI(); } catch (e4a) {}
             try { if (typeof saveGame === 'function') saveGame(); } catch (e4) {}
             try { if (typeof renderTabs === 'function') renderTabs(); } catch (e5) {}
             _auctionTab = 'mine';
@@ -516,6 +539,12 @@
         }
 
         _auctionBusy = true;
+        try {
+            if (typeof saveGame === 'function') saveGame();
+            if (typeof cloudPushSlotSync === 'function' && typeof saveStateJson === 'function' && typeof currentSlot !== 'undefined') {
+                cloudPushSlotSync(currentSlot, JSON.parse(saveStateJson()));
+            }
+        } catch (eBuySync) {}
         _ahPost('buy', { listingId: listingId }).then(function (data) {
             _auctionBusy = false;
             if (!data || !data.ok) {
@@ -523,12 +552,12 @@
                 auctionRefreshBrowse(true);
                 return;
             }
-            var total = Math.max(0, Math.floor(Number(data.totalPaid) || ((data.price || 0) + (data.buyFee || 0))));
-            if ((player.gold || 0) < total) {
-                // 理論上不該發生；若金幣中途變少，仍發放物品但記 log（伺服器已成交）
-                if (typeof logSys === 'function') logSys('<span class="text-red-300">金幣不足但交易已成立，請確認存檔。應扣 ' + total.toLocaleString() + '</span>');
+            // B2：以伺服器雲端扣款結果為準
+            _ahApplyWallet(data);
+            if (data.goldAfter == null) {
+                var total = Math.max(0, Math.floor(Number(data.totalPaid) || ((data.price || 0) + (data.buyFee || 0))));
+                player.gold = Math.max(0, (player.gold || 0) - total);
             }
-            player.gold = Math.max(0, (player.gold || 0) - total);
             _ahGrantItem(data.item);
             if (typeof logSys === 'function') logSys('<span class="text-emerald-300">' + (data.message || '購買成功') + '</span>');
             try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}

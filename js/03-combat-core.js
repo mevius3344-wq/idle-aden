@@ -716,6 +716,21 @@ function tick() {
             if(state._kbVictory !== true && !mapState.mobs.some(m => m && m.boss)) state._kbVictory = true;
         } else {
             let slotCount = backSlotsActive() ? 5 : 3;                          // 🆕 一般狩獵／攻城／時空裂痕／四軍王房開放後排兩格(3,4)→最多 5 隻
+            try {
+                if (typeof exploreFieldSlotCount === 'function') {
+                    let _fs = exploreFieldSlotCount();
+                    if (_fs > 0) slotCount = _fs;   // 🗺️ 場戰練功點：每點 3~4 隻→擴槽
+                }
+            } catch (eFs) {}
+            if (!mapState.spawnAt || mapState.spawnAt.length < slotCount) {
+                let _sa = mapState.spawnAt || [];
+                while (_sa.length < slotCount) _sa.push(null);
+                mapState.spawnAt = _sa;
+            }
+            if (!mapState.mobs) mapState.mobs = [];
+            while (mapState.mobs.length < slotCount) mapState.mobs.push(null);
+            let _spawnedThisTick = 0;
+            const _MAX_SPAWN_PER_TICK = slotCount > 8 ? 4 : 8;   // 場戰每 tick 最多 4 隻，避免進圖／重生尖峰卡死
             for(let i=0; i<slotCount; i++) {
                 if(mapState.mobs[i]) { mapState.spawnAt[i] = null; continue; } // 有怪：清除排程
                 if(isPureBossMap && i !== 1) continue;                          // 純 BOSS 房只生中央
@@ -742,30 +757,35 @@ function tick() {
                     delay = 50;                                                 // 🐉 v3.7.57 侵蝕的安塔瑞斯棲息地（BOSS房）：固定 5 秒重生
                 } else {
                     // 🐾 重生延遲＝基準 50 tick(5秒) × 玩家有效移動延遲倍率。
-                    // 變身(wlk·16=100%)、加速、勇敢／餅乾、行走加速、裝備移速與資訊面板共用 playerMoveDelayMultiplier()。
-                    // ⚡ v3.4.26 日光術／席琳的世界由「固定 −1 秒(−10 tick)」改為【乘算 ×0.8】（用戶要求）：
-                    //    基準 5 秒下 ×0.8＝4 秒（與舊制 −1 秒等值·手感不變）；但在已被加速到很快時只按比例縮短，
-                    //    不再像減法那樣把結果打成負數 → 舊制可觸底 0.1 秒(1 tick)＝怪一死立刻補位，已修正。
-                    //    全項目相乘故所有加速一律「按比例」疊加；下限 5 tick＝0.5 秒（全加成極限約 6 tick／0.6 秒，此 clamp 為安全底線）。
                     let _mv = playerMoveDelayMultiplier();
-                    if (player.buffs.sk_sunlight > 0) _mv *= 0.8;                     // ☀️ v3.4.26 日光術：重生延遲 ×0.8（原「固定 −1 秒」→乘算）
-                    if (sherineWorldActive() && !isSiegeArea(mapState.current)) _mv *= 0.8;   // 🔮 v3.4.26 席琳的世界：重生延遲 ×0.8（與日光術相乘疊加）
-                    delay = Math.max(5, Math.round(50 * _mv));                       // 🚧 下限 5 tick＝0.5 秒
+                    if (player.buffs.sk_sunlight > 0) _mv *= 0.8;
+                    if (sherineWorldActive() && !isSiegeArea(mapState.current)) _mv *= 0.8;
+                    delay = Math.max(5, Math.round(50 * _mv));
                     if (isSiegeArea(mapState.current) && typeof npcClanSiegeRespawnMultiplier === 'function') {
                         delay = Math.max(1, Math.round(delay * npcClanSiegeRespawnMultiplier()));
                     }
                     if (typeof mapPopCrowdMult === 'function') {
-                        delay = Math.max(5, Math.round(delay * mapPopCrowdMult(mapState.current)));   // 👥 同圖人數越多出怪越慢
+                        delay = Math.max(5, Math.round(delay * mapPopCrowdMult(mapState.current)));
                     }
+                    try {
+                        if (slotCount > 8 && typeof exploreRespawnDelayJitter === 'function') {
+                            delay = exploreRespawnDelayJitter(i, delay);
+                        }
+                    } catch (eJit) {}
                 }
-                if(mapState.spawnAt[i] == null) mapState.spawnAt[i] = nowT + delay; // 空格剛出現：排程 delay 後（一般／純BOSS房／軍王之室皆 5 秒）
+                if(mapState.spawnAt[i] == null) mapState.spawnAt[i] = nowT + delay; // 空格剛出現：排程 delay 後
                 if(nowT >= mapState.spawnAt[i]) {
+                    if (_spawnedThisTick >= _MAX_SPAWN_PER_TICK) {
+                        mapState.spawnAt[i] = nowT + 1; // 延到下 tick，維持出生點佇列
+                        continue;
+                    }
                     // 🌑 v3.4.18 聖地/崩壞廳 BOSS 復活收費：首次生成免費（入場費已付），之後每次復活扣 1 入場道具；沒道具→傳送出去、停止本輪出怪
                     if(isPureBossMap && i === 1 && typeof SANCT_RESPAWN_COST !== 'undefined' && SANCT_RESPAWN_COST[mapState.current]) {
-                        if(mapState._sanctBossSpawned) { if(!sanctBossRespawnCharge()) { mapState.spawnAt[i] = null; break; } }   // 復活：扣道具/無道具傳送出去
-                        else mapState._sanctBossSpawned = true;                                                                   // 首次生成免費
+                        if(mapState._sanctBossSpawned) { if(!sanctBossRespawnCharge()) { mapState.spawnAt[i] = null; break; } }
+                        else mapState._sanctBossSpawned = true;
                     }
                     spawnMob(i); mapState.spawnAt[i] = null;
+                    _spawnedThisTick++;
                 }
             }
         }
@@ -784,7 +804,9 @@ function tick() {
         state._pAtkIntervalTicks = aspdTicks;
         state.pDmgTick = attackProgress + 1;
         if(state.pDmgTick >= aspdTicks) {
-            if (!bindSelfBlocked(player)) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
+            // 🎮 AUTO OFF：暫停一般攻擊節奏（技能快捷列仍可手動施放）
+            var _autoOn = !(state && state.autoHunt === false);
+            if (_autoOn && !bindSelfBlocked(player)) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
             state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
             state._pStunCycle = false;   // ⚔️ 硬直：每次攻擊後重置「本週期已硬直」旗標（下週期被擊可再延遲一次）
         }
@@ -803,7 +825,8 @@ function tick() {
             state.pOffDmgTick = offProgress + 1;
             if (state.pOffDmgTick >= offTicks) {
                 let _ot = getTarget();   // 副手自行取目標（不依賴主手這一拍有沒有攻擊）
-                if (_ot && !bindSelfBlocked(player)) dualWieldOffhandAttack(_ot);   // 🕸️ v3.7.75 束縛：副手必為近戰→被束縛時同樣打不出去
+                var _autoOnOff = !(state && state.autoHunt === false);
+                if (_autoOnOff && _ot && !bindSelfBlocked(player)) dualWieldOffhandAttack(_ot);   // 🕸️ v3.7.75 束縛：副手必為近戰→被束縛時同樣打不出去
                 state.pOffDmgTick = Math.max(0, state.pOffDmgTick - offTicks);
             }
         } else { state.pOffDmgTick = 0; state._pOffAtkIntervalTicks = 0; }   // 卸下副手：歸零，避免下次裝上時瞬間觸發
@@ -814,6 +837,10 @@ function tick() {
     for(let i=0; i<mapState.mobs.length; i++) {   // 🆕 含後排(3,4)：所有在場怪皆會行動攻擊
         let m = mapState.mobs[i];
         if(!m) continue;
+        // 🚀 場戰效能：鏡頭遠處的怪不跑 AI／狀態／音效（走近才喚醒）
+        try {
+            if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m)) continue;
+        } catch (eSim) {}
         if(m._hasteTicks > 0) { m._hasteTicks--; if(m._hasteTicks <= 0 && m._baseAtkSpd !== undefined) { m.atkSpd = m._baseAtkSpd; m._baseAtkSpd = undefined; } }  // 自我加速到期恢復
 
         // --- 新增：被動怪物滿血時不主動攻擊 ---
@@ -884,6 +911,12 @@ function tick() {
 
         let slowAdd = (m.st && m.st.slow > 0) ? 10 : 0; // 緩速：攻擊間隔 +1 秒
         if(m._atkCd <= 0) {
+            // 🗺️ 場戰距離閘：圈外怪不打玩家（站開就不被遠距戳）
+            if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
+                && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(m)) {
+                m._atkCd = Math.max(1, Math.floor(m.atkSpd * 10)) + slowAdd;
+                continue;
+            }
             _dpsReactWrap(() => enemyAttackChooseVictim(m, i));   // 🤝 Phase 3：一般物理攻擊可能改打非倒地傭兵（加權隨機）；魔法/狀態仍只打玩家；🎯 DPS：受擊反應(反擊/居合/反射/荊棘/爆彈/受傷施法)歸玩家，傭兵反應由 _allyDamageMob/_dpsAllyReact 扣除
             m._atkCd = Math.max(1, Math.floor(m.atkSpd * 10)) + slowAdd;
             m._bluntDelayed = false;   // 攻擊後重置鈍擊延遲標記，下一週期可再被延遲一次
@@ -977,6 +1010,12 @@ function _regenHP() {
         let baseHpRegen = player.d.hpRegenMax > 0 ? roll(1, player.d.hpRegenMax) : 0;
         // 使用 Number() 強制轉換為數字，避免 10 + '1' = 101 的字串相加 Bug
         let totalHpRegen = Number(baseHpRegen) + Number(player.d.hpR || 0);
+        try {
+            let _ce = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+            if (_ce && _ce.regen > 0) {
+                totalHpRegen = Math.floor(totalHpRegen * (1 + _ce.regen)) + Math.max(1, Math.round(_ce.regen * 50));
+            }
+        } catch (eClanHp) {}
         if (totalHpRegen > 0) {
             player.hp = Math.min(player.mhp, player.hp + totalHpRegen);
         }
@@ -989,6 +1028,12 @@ function _regenMP() {
         // 同樣加上 Number() 保護
         let totalMpRegen = Number(player.d.mpR || 0);
         if (player.d.lowMpRegenBonus && player.mp < player.mmp * 0.15) totalMpRegen += player.d.lowMpRegenBonus;   // 🐍 蛇神的凝視：MP<15% 時 MP自然恢復量額外 +N
+        try {
+            let _ce = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+            if (_ce && _ce.regen > 0) {
+                totalMpRegen = Math.floor(totalMpRegen * (1 + _ce.regen)) + Math.max(1, Math.round(_ce.regen * 25));
+            }
+        } catch (eClanMp) {}
         if (totalMpRegen > 0) {
             player.mp = Math.min(player.mmp, player.mp + totalMpRegen);
         }
@@ -2188,6 +2233,9 @@ function spawnMob(idx) {
     if (base.boss && typeof vfxBossEntrance === 'function') { try { vfxBossEntrance(mapState.mobs[idx]); } catch (e) {} }   // 🐉 頭目出場特效＋螢幕震動（cosmetic·v3.4.95 起全頭目通用：名單有專屬配色/稱號·未註冊者依屬性配色·吃 __vfxOff/補跑）
     if (typeof announceBossSpawn === 'function') { try { announceBossSpawn(mapState.mobs[idx]); } catch (e) {} }   // 📢 頭目出現／重生跑馬燈
     if (mapState.mobs[idx]._wcMassTauntBattle && typeof wcMassTauntGroupBattleFill === 'function') wcMassTauntGroupBattleFill();
+    try {
+        if (typeof exploreAssignFieldPos === 'function') exploreAssignFieldPos(mapState.mobs[idx], idx);
+    } catch (eField) {}
     if (!state.ff && !mapState._wcMassTauntBattleFilling) renderMobs();
 }
 
@@ -2208,6 +2256,20 @@ function getMobNameClass(m) {
 function getTarget() {
     let t = mapState.mobs[mapState.targetIdx];
     if (t && t._dead) t = null;   // 🔧 架構#2：已死亡待清算的怪不可作為目標
+    let _field = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive());
+    if (_field) {
+        try { if (typeof exploreEnsureAllFieldPos === 'function') exploreEnsureAllFieldPos(); } catch (e0) {}
+        if (t && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(t)) t = null;
+        if (!t) {
+            let best = (typeof exploreNearestEngageIdx === 'function') ? exploreNearestEngageIdx() : -1;
+            if (best >= 0) {
+                mapState.targetIdx = best;
+                return mapState.mobs[best];
+            }
+            return null;
+        }
+        return t;
+    }
     // 🎯 v3.0.11 當前目標不存在（如剛開局或剛擊殺）時，自動鎖定「最早出生」的活怪（_born 最小＝在場上存活最久）。
     //    _born＝全域單調出生序（spawnMob/spawnRiftMob/軍王之室 三處生成時戳記）；缺 _born 的怪（理論上不會有）以 Infinity 墊底、再以格位序 tiebreak。
     //    手動點擊鎖定（setTarget）不受影響：鎖定目標存活期間不會被此邏輯改鎖。
@@ -2271,6 +2333,10 @@ function consumeWetMult(target, ele) {
 function getPhysicalDmg(diceStr, target, wpn, arrowData, forceHeavy, forceHit, forceLand, forceCrit, wpnInst, forceGraze, probe) {
     let isRanged = !!(wpn && wpn.ranged);
     let hitBonus = (isRanged ? player.d.rangedHit : player.d.meleeHit) + player.d.extraHit + (player._skillHitBonus || 0);   // 🗼 范德之劍：施展衝擊之暈時本次技能近距離命中+1
+    try {
+        let _ceHit = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+        if (_ceHit && _ceHit.hit > 0) hitBonus += Math.max(1, Math.round(_ceHit.hit * 100));
+    } catch (eClanHit) {}
     let dmgBonus = (isRanged ? player.d.rangedDmg : player.d.meleeDmg);
     // 🌅 日出之國異常（玩家承受）：弱化＝傷害−5/命中−2；疾病＝命中−4（AC+8 在敵方命中端）；目盲＝命中−6
     if (player.statuses) {
@@ -2330,6 +2396,10 @@ function getPhysicalDmg(diceStr, target, wpn, arrowData, forceHeavy, forceHit, f
     let _ignHard = !!(_cw && _cw.ignHardSkin);   // 🗡️ 貫穿（暗黑十字弓）：攻擊無視硬皮額外減傷（主攻擊與連射皆走本函式 → 一併涵蓋）
     let inner = Math.floor(nearFar * critMult) + player.d.extraDmg - ((target.dr || 0) + (_ignHard ? 0 : mobHardSkin(target)) + ((target._siegeDrEnd > state.ticks) ? (target._siegeDrVal || 0) : 0));   // 堅固防護：怪物傷害減免；🔧 硬皮：額外物理減傷（貫穿時不扣）
     inner = Math.max(1, inner);
+    try {
+        let _ceFd = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+        if (_ceFd && _ceFd.finalDmg > 0) inner = Math.max(1, Math.floor(inner * (1 + _ceFd.finalDmg)));
+    } catch (eClanFd) {}
     if (target._trauma && target._trauma.until > state.ticks) inner += (target._trauma.dmg || 5) * (target._trauma.s || 1);   // 🏺 v3.7.20 創傷（戰士的漆黑之劍）：目標受到的所有物理傷害 +5×層數（玩家物理樞紐·傭兵側 allyStrikeRoll 另掛）
 
     // 固定傷害（屬性/特效，於最低1之後加上）

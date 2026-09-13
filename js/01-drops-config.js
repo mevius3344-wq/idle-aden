@@ -1172,7 +1172,32 @@ let _forceBless = false;    // 🔧 v3.1.27 製作：設 true 時 gainItem 產�
 let _lockMergeOff = false;
 let _craftBlessCount = 0;   // 🔧 v3.1.27 製作：本次 doCraft 消耗到的「祝福裝備」材料件數（consumeMaterialById/whConsumeId 累加·doCraft 前歸零、依此逐件強制祝福）
 let _vfxLootCtx = false;   // ✨ VFX：擊殺掉落期間設 true，供 gainItem 判定稀有(潘朵拉權重=1)掉落閃光
+let _vfxDropQueue = [];    // ✨ VFX／地上掉落：本次擊殺的金幣／道具佇列（場戰＝待撿取；非場戰＝僅圖標）
+let _worldLootDefer = false; // 🗺️ 場戰：擊殺掉落先落地，靠近才 commit（不可一掉就進包）
+let _worldLootUidSeq = 0;    // 🗺️ 地上掉落唯一 id（防重複入帳）
+let _worldLootGranted = Object.create(null); // 🗺️ 已入帳的 lootUid
 let _lootMobInfo = null;   // 🐾 擊殺掉落期間設 {n,lv,boss}＝掉落來源怪物；boss 另供 gainItem 套用頭目掉落 10% 祝福率。（商店/製作/NPC 兌換為 null）
+
+function nextWorldLootUid() {
+    _worldLootUidSeq = (_worldLootUidSeq + 1) | 0;
+    if (_worldLootUidSeq > 1e9) _worldLootUidSeq = 1;
+    return 'wl_' + Date.now().toString(36) + '_' + _worldLootUidSeq;
+}
+/** 標記 lootUid 已入帳；若已入帳過回傳 false（拒絕重複） */
+function claimWorldLootUid(uid) {
+    if (uid == null || uid === '') return true; // 無 uid 的舊資料仍允許一次
+    if (_worldLootGranted[uid]) return false;
+    _worldLootGranted[uid] = 1;
+    // 節流：超過 800 筆清一半（依插入順序無法保證，改整表重建保留近期意義不大→直接清空過舊）
+    let n = 0;
+    for (let k in _worldLootGranted) { n++; if (n > 800) break; }
+    if (n > 800) {
+        let keep = Object.create(null);
+        keep[uid] = 1;
+        _worldLootGranted = keep;
+    }
+    return true;
+}
 
 // ===== 🔮 席琳套裝效果（9 組；不再分五種詞綴，seteff 直接存「套裝名」＝組名）=====
 // 掉落判定：席琳的世界中，武器/頭盔/盔甲/手套/長靴/斗篷/腰帶 掉落時，
@@ -1591,7 +1616,7 @@ function skillReqLv(sk, skId) {
 let _echoFree = false;        // 🏅 迴響精通：免費連發旗標（連發那次不耗MP、不再連鎖）
 let _royalFreeCast = false;   // 👑 魔法精通：一般攻擊命中 10% 免MP額外施放選定攻擊技的旗標
 
-let state = { running: false, ticks: 0, pDmgTick: 0, ff: false, ffSmall: false, inTick: false };
+let state = { running: false, ticks: 0, pDmgTick: 0, ff: false, ffSmall: false, inTick: false, autoHunt: true };
 // 🗑️ v3.7.94 用戶指定移除離線掛機（js/27 整檔刪除）：現在只剩「網頁還開著」這一軌——
 //    切分頁／縮小的背景期間由下方 Worker 心跳持續跑，被節流到的差額則於回前景時補幀補跑（state.ff 補跑重建）。
 //    **真正關閉網頁＝進度完全停止**，重開不再有任何離線結算。

@@ -93,7 +93,7 @@
     filter:blur(.7px);
     pointer-events:none;
 }
-@media(max-width:768px){
+@media all{ /* desktop=mobile */
     #tab-content-panel.equipment-panel-host{
         height:var(--equipment-panel-height)!important;
         min-height:var(--equipment-panel-height)!important;

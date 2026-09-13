@@ -2,6 +2,9 @@ function playerAttack() {
     if (typeof fieldPvpTryAttack === 'function' && fieldPvpTryAttack()) return;
     let target = getTarget();
     if(!target) return;
+    // 🗺️ 場戰：畫面距離未進交戰圈則本拍不攻擊（攻速 tick 照跑）
+    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
+        && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(target)) return;
     player._faceTgtUid = target.uid;   // 🧭 只記錄可序列化 UID；不可保存怪物物件，否則與 mob→player 面向參照形成循環而使存檔失敗
     delete player._faceTgt;
     if (typeof _playerMorphTrigger === 'function') { try { _playerMorphTrigger('attack'); } catch (e) {} }   // 🧝 v3.0.46 玩家變身 sprite：攻擊動作（含被迴避＝有揮擊）
@@ -1221,6 +1224,10 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
 
         totalDmg -= player.d.dr; // 傷害減免（已含增幅防禦）
         totalDmg -= randomDr;    // 隨機減免
+        try {
+            let _ceDr = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+            if (_ceDr && _ceDr.dr > 0) totalDmg = Math.floor(totalDmg * (1 - _ceDr.dr));
+        } catch (eClanDr) {}
         totalDmg -= stoneEssenceDr();   // 🏺 v3.6.44 石化魔法的精髓：石化精髓 buff 期間傷害減免 +50
         if ((player._hardSkinPool || 0) > 0) { totalDmg -= 2; player._hardSkinPool--; }   // 🏺 v3.6.44 守護獸的難題：有硬皮值時受到一般攻擊傷害 -2 並消耗 1 點（每5秒回1·上限20·js/03 tick）
         // 🔧 百分比受傷「增加」效果（冰凍/破壞盔甲）：仍各自相乘
@@ -1767,9 +1774,10 @@ function killPlayer() {
     logCombat(`你的角色已經死亡。`, 'enemy');
     
     // 重新顯示「祈求復活」按鈕（⚔️ 決鬥落敗除外：改由 js/28 的決鬥結果視窗處理——選「繼續」就地整備、選「回村莊」送回古魯丁，兩條路都會解除死亡，不必也不該手動復活）
+    // 🪦 已移除「原地復活」：死亡後僅能祈求復活回村
     if (!_duelDeath) {
         document.getElementById('btn-revive').classList.remove('hidden');
-        updateReviveInPlaceBtn();   // 視條件顯示「原地復活」按鈕
+        if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
     }
     updateUI();
 }
@@ -2418,6 +2426,10 @@ function _applyMobMagicInner(mob, sk) {
             dmg = baseMagicDmg + extraMagicDmg;   // 🔧 固定傷害（如 卡瑞·龍的一擊）：不受屬性抗性/抗魔/傷害減免影響
         } else {
             dmg = Math.floor(Math.floor((baseMagicDmg + extraMagicDmg) * resFactor) * mrFactor) - player.d.dr - ((mob.st && (mob.st.confuse > 0 || mob.st.panic > 0)) ? 10 : 0) - ((mob.st && mob.st.doom > 0) ? 20 : 0);   // 🔮 混亂/恐慌：怪物技能傷害-10；🐉 驚悚死神：怪物技能傷害-20（下方 Math.max(1,dmg) 保底）
+            try {
+                let _ceDrM = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
+                if (_ceDrM && _ceDrM.dr > 0) dmg = Math.floor(dmg * (1 - _ceDrM.dr));
+            } catch (eClanDrM) {}
             if (player.d.wearerEle && sk.ele && sk.ele !== 'none') dmg = Math.max(1, Math.floor(dmg * elementCounterMult(sk.ele, player.d.wearerEle)));   // 🏺 遺物 火焰/寒冷化身：裝備者化屬性→受剋屬性魔法傷害↑(×1.4)、受剋制屬性傷害↓(×0.6)（固定傷害 fixedDmg 不受影響）
         }
         if(sk.ext_freeze && player.statuses.freeze > 0) { dmg += sk.ext_freeze; if(sk.extUnfreeze) player.statuses.freeze = 0; }   // 🔧 冰裂：對冰凍目標額外傷害，並解除冰凍

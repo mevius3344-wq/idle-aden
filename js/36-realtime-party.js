@@ -69,6 +69,11 @@
         if (typeof player === 'undefined' || !player || !player.cls) return null;
         var account = rtPartyAccount();
         if (!account) return null;
+        var wx = 0, wy = 0;
+        try {
+            if (typeof exploreCamX === 'function') wx = Math.round(Number(exploreCamX()) || 0);
+            if (typeof exploreCamY === 'function') wy = Math.round(Number(exploreCamY()) || 0);
+        } catch (ePos) {}
         return {
             account: account,
             slot: (typeof currentSlot !== 'undefined' ? currentSlot : 0),
@@ -80,6 +85,8 @@
             mapName: '',
             hp: player.hp || 0,
             mhp: player.mhp || 1,
+            wx: wx,
+            wy: wy,
             pvpOn: !!(player.pvpOn),
             classic: !(player.classicMode === false)
         };
@@ -153,6 +160,8 @@
                 lv: m.lv || 1,
                 hp: Math.max(0, Math.floor(Number(m.hp) || 0)),
                 mhp: Math.max(1, Math.floor(Number(m.mhp) || 1)),
+                wx: Math.round(Number(m.wx) || 0),
+                wy: Math.round(Number(m.wy) || 0),
                 online: !!m.online
             };
         });

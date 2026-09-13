@@ -85,7 +85,7 @@ function auditTrackKill(mob) {
     // 📊 v3.6.58 刻意**不乘** getExpGainMult(player.lv)：該倍率在 Lv100 為 0（滿等不入帳），統計頁會整片歸零、
     //    連「這張圖效率如何」都看不出來。此處改記「同條件下應得的經驗」＝練功效率指標（Lv<100 時倍率恆 1，數字與實得完全相同）。
     //    ⚠️ 實際入帳仍在 killMob :320（照樣乘 getExpGainMult）——統計是參考值，不是經驗來源，勿把這裡當入帳口徑。
-    let g = Math.floor((mob.exp || 0) * (1 + partyExpBonusPct() / 100) * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));   // 🤝 v3.7.62 組隊不再拆分經驗；統計記主玩家完整應得值
+    let g = Math.floor((mob.exp || 0) * (1 + partyExpBonusPct() / 100) * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1));   // 🤝 v3.7.62 組隊不再拆分經驗；統計記主玩家完整應得值
     if (typeof serverExpEventMult === 'function') g = Math.floor(g * serverExpEventMult());   // 🎉 全服經驗活動
     if (g > 0) _audit.exp += g;
     _audit.kills++;
@@ -374,6 +374,12 @@ function killMob(idx) {
     _sherineLootCtx = mob._sherine ? { mad: !!mob._sherineMad } : null;   // 🔮 一般怪祝福率 ×3／×5；頭目由 rollAffixesNew 搭配 _lootMobInfo 固定為 20%／30%
     _tradLootCtx = traditionalActive();   // 🏛️ 傳統模式：本次擊殺掉落的裝備隨機自帶強化值＋抑制施法卷軸（於 _sherineLootCtx 清除處一併關閉）
     _vfxLootCtx = true;   // ✨ VFX：本次擊殺掉落期間→gainItem 對潘朵拉權重=1 物品閃光
+    try { _vfxDropQueue.length = 0; } catch (eClrQ) {}
+    // 🗺️ 場戰：掉落先進地，靠近才入帳（補跑／快轉仍直接入帳）
+    try {
+        _worldLootDefer = !!(typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
+            && !(typeof state !== 'undefined' && state && state.ff));
+    } catch (eDef) { _worldLootDefer = false; }
     _lootMobInfo = { n: mob.n, lv: mob.lv, boss: !!mob.boss };   // 🐾 本次擊殺掉落來源；頭目裝備由 gainItem 套用 10% 祝福率
     // 🩹 v3.3.25 擊殺／掉落訊息一律歸「玩家」來源：寵物/召喚/傭兵補刀時 _combatSrc 為 'pet'/'summon'/'mercenary'，
     //   killMob 的「擊敗了…」與 gainItem 掉落訊息若繼承該來源，會被戰鬥日誌「來源過濾」隱藏 → 玩家把該來源關掉時，
@@ -388,8 +394,8 @@ function killMob(idx) {
     let _hideKillMsg = (mob.race === '建築' && mob.noAutoTeleport);
     if(!_hideKillMsg) logCombat(`擊敗了 <span class="${getMobColor(mob.lv)}">${mob.n}</span>！`, 'player-heavy');  // 👈 新增
     // 🤝 v3.7.62 組隊經驗不再拆分：主玩家、每名未倒地傭兵、每隻未倒地寵物各取得完整經驗；既有組隊加成保留。
-    let _expEach = mob.exp * (1 + partyExpBonusPct() / 100);
-    if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();   // 🎉 全服經驗 ×5（48h）
+    let _expEach = mob.exp * (1 + partyExpBonusPct() / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
+    if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();   // 🎉 全服經驗活動（可疊加）
     let _petExpGain = Math.floor(_expEach * (1 + dollFieldVal('expBonus') / 100));   // 🐾 每隻存活寵物各得完整玩家份額；玩家滿等不影響養寵
     let _playerExpGain = Math.floor(_petExpGain * getExpGainMult(player.lv));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
     player.exp += _playerExpGain;
@@ -422,11 +428,30 @@ function killMob(idx) {
             if (typeof serverGoldEventMult === 'function') g = Math.floor(g * serverGoldEventMult());   // 🌐 全服金幣活動
             if (typeof newbieBoostMult === 'function') g = Math.floor(g * newbieBoostMult());   // 🎁 新手啟程：金幣 ×3（48h）
             g = Math.max(1, Math.floor(Number(g) || 0));
-            if (typeof addPlayerGold === 'function') addPlayerGold(g);
-            else player.gold = (Number(player.gold) || 0) + g;
-            // 累積擊殺金幣，由 tick 定期刷到系統日誌（避免每殺一隻洗版）
-            state._goldGainAcc = (Number(state._goldGainAcc) || 0) + g;
             _shareGold = g;
+            if (_worldLootDefer) {
+                // 🗺️ 場戰：金幣落地待撿，不直接入帳
+                try {
+                    _vfxDropQueue.push({
+                        kind: 'gold',
+                        amount: g,
+                        deferred: true,
+                        lootUid: (typeof nextWorldLootUid === 'function') ? nextWorldLootUid() : ('wl_' + Math.random())
+                    });
+                } catch (eGoldQ) {}
+            } else {
+                if (typeof addPlayerGold === 'function') addPlayerGold(g);
+                else player.gold = (Number(player.gold) || 0) + g;
+                // 累積擊殺金幣，由 tick 定期刷到系統日誌（避免每殺一隻洗版）
+                state._goldGainAcc = (Number(state._goldGainAcc) || 0) + g;
+                try { _vfxDropQueue.push({ kind: 'gold', amount: g }); } catch (eGoldQ) {}
+                try {
+                    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive() && !state.ff) {
+                        try { saveGame(); } catch (e1) {}
+                        try { if (typeof cloudMirrorAfterSave === 'function') cloudMirrorAfterSave(); } catch (e2) {}
+                    }
+                } catch (eGoldPop) {}
+            }
         }
     }
     try {
@@ -621,6 +646,11 @@ function killMob(idx) {
     
     } finally {
         _combatSrc = _svKillSrc;   // 🩹 v3.3.25 還原擊殺前的來源情境（寵物/召喚/傭兵 tick 的 _dps 歸屬不受污染）
+        try {
+            if (typeof vfxDropSpray === 'function') vfxDropSpray(_vfxDropQueue.slice(), mob);
+        } catch (eSpray) {}
+        _vfxDropQueue.length = 0;
+        _worldLootDefer = false;  // 🗺️ 場戰延遲入帳旗標關閉
         _sherineLootCtx = null;   // 🔮 掉落判定結束，清除上下文（try/finally：縱使中途拋例外也必清，杜絕 _tradLootCtx 殘留洩漏到兌換/任務/其他 forceNormal=false 獎勵）
         _tradLootCtx = false;     // 🏛️ 傳統模式掠奪上下文一併關閉
         _vfxLootCtx = false;      // ✨ VFX：擊殺掉落上下文一併關閉
@@ -1480,49 +1510,18 @@ function revive() {
     saveGame();   // 城鎮復活成功後自動存檔：固化死亡懲罰（傭兵解散、召喚清除等），避免重載又把狀態帶回
 }
 
-// 原地復活：返生術(消耗MP，無冷卻) 優先；否則用復活卷軸(消耗1張，設定15秒冷卻)。效果相同：恢復1~200 HP、不恢復MP、留在原地。
+// 🪦 已停用玩家「原地復活」：死亡後僅能「祈求復活」回村甦醒。保留函式以免舊 onclick／離線結算報錯。
 function reviveInPlace() {
-    if(!player.dead) return;
-    if((player.reviveScrollCd || 0) > 0) return;   // 冷卻中：返生術與復活卷軸都不可用
-    let rk = DB.skills.sk_resurrection;
-    let cost = rk ? player.d.getMpCost(rk.mp, rk.tier) : Infinity;
-    let hasRez = player.skills.includes('sk_resurrection') && player.mp >= cost;
-    let scroll = player.inv.find(i => i.id === 'scroll_revive');
-    if(hasRez) {
-        player.mp -= cost;   // 返生術：消耗MP，無冷卻
-        logCombat('<span class="text-yellow-300 font-bold">返生術 發動！你從死亡邊緣原地復活了。</span>', 'heal');
-    } else if(scroll) {
-        scroll.cnt--;
-        player.inv = player.inv.filter(i => i.cnt == null || i.cnt > 0);   // ⚠️ null-safe：cnt 未定義的舊存檔物品不得被當成 0 而靜默刪除
-        player.reviveScrollCd = 15;   // 復活卷軸：15秒冷卻（僅存活時倒數）
-        logCombat('<span class="text-yellow-300 font-bold">復活卷軸 發動！你從死亡邊緣原地復活了。</span>', 'heal');
-    } else {
-        return;
+    if (!player.dead) return;
+    if (typeof logSys === 'function') {
+        logSys('<span class="text-amber-300">已取消原地復活。請點「祈求復活」回到村莊甦醒。</span>');
     }
-    player.dead = false;
-    player.statuses = { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0 };  // 復活清除所有異常(含中毒/灼燒/燙傷)，避免死亡迴圈
-    player.hp = Math.min(player.mhp, roll(1, 200));   // 返生術/復活卷軸相同：1~200 隨機 HP、不恢復 MP
-    player.summon = null; player.charmed = null; player.manualCd = {}; player.hots = {}; player.buffs.sk_charm = 0;   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制狀態一律存 hots(複數 dict)
-    player.skills.forEach(s => { if(DB.skills[s] && DB.skills[s].summon) player.buffs[s] = 0; });   // 清除召喚 buff，避免復活後召喚消失卻長時間不自動重新召喚
-    document.getElementById('btn-revive').classList.add('hidden');
-    { let ip = document.getElementById('btn-revive-inplace'); if(ip) ip.classList.add('hidden'); }
-    calcStats(); updateUI();
-    if (typeof playSelfFx === 'function') { try { playSelfFx('返生術', (typeof _partyMemberRect === 'function') ? _partyMemberRect(player) : null); } catch (e) {} }   // 🪦 v3.0.102 返生術/復活卷軸→於復活的玩家身上播返生術特效
-    if (player.allies && player.allies.length) logSys('<span class="text-emerald-300">原地復活，協力傭兵仍在你身邊。</span>');
-    saveGame();   // 原地復活成功後自動存檔（傭兵保留）
 }
 
-// 依條件決定是否顯示「原地復活」按鈕：未在冷卻中，且(學會返生術且MP足夠 或 持有復活卷軸)
+// 永久隱藏「原地復活」按鈕（HTML 已移除；相容舊快取／離線結算仍會呼叫）
 function updateReviveInPlaceBtn() {
     let btn = document.getElementById('btn-revive-inplace');
-    if(!btn) return;
-    let onCd = (player.reviveScrollCd || 0) > 0;
-    let rk = DB.skills.sk_resurrection;
-    let cost = rk ? player.d.getMpCost(rk.mp, rk.tier) : Infinity;
-    let hasRez = player.skills.includes('sk_resurrection') && player.mp >= cost;
-    let hasScroll = player.inv.some(i => i.id === 'scroll_revive');
-    if(player.dead && !onCd && (hasRez || hasScroll)) btn.classList.remove('hidden');
-    else btn.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
 }
 
 // ===================== 📢 頭目死亡／重生跑馬燈 =====================

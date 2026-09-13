@@ -7,6 +7,7 @@
   var _ready = null; // null unknown, true/false
   var _readyCheckedAt = 0;
   var _conflictNotified = false;
+  var _cloudBundleSyncedAt = 0; // 登入／選角非阻塞 bundle 完成時間（進角可跳過同步 XHR）
 
   function currentAccount() {
     try {
@@ -37,15 +38,23 @@
     }
   }
 
-  function _xhrJson(method, url, body, sync) {
+  function _xhrJson(method, url, body, sync, timeoutMs) {
     var xhr = new XMLHttpRequest();
     xhr.open(method, url, !sync);
     if (body != null) xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+    var limit = timeoutMs == null ? (sync ? 2200 : 0) : timeoutMs;
+    if (limit > 0) {
+      try { xhr.timeout = limit; } catch (eT) {}
+    }
     if (sync) {
       try {
         xhr.send(body != null ? body : null);
       } catch (e) {
-        return { ok: false, status: 0, data: null };
+        return { ok: false, status: 0, data: null, timedOut: true };
+      }
+      // 逾時／中止：勿當成成功
+      if (xhr.status === 0 && (!xhr.responseText || xhr.responseText === '')) {
+        return { ok: false, status: 0, data: null, timedOut: true };
       }
       var data = null;
       try {
@@ -254,7 +263,11 @@
     try {
       var payload = JSON.stringify(dataObj);
       var wrapped = typeof _saveWrap === 'function' ? _saveWrap(payload) : payload;
-      return !!_lzSet('lineage_idle_save_' + slot, wrapped);
+      var ok = !!_lzSet('lineage_idle_save_' + slot, wrapped);
+      if (ok) {
+        try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(slot); } catch (eInv) {}
+      }
+      return ok;
     } catch (e) {
       return false;
     }
@@ -331,12 +344,13 @@
 
   /**
    * 將雲端槽位灌入本機：僅當雲端進度較佳／較新時覆寫；本機較佳則反推上雲。
-   * 他帳殘留本機檔不會被雲端舊檔洗掉後再上傳到目前帳號。
+   * opts.skipPush＝進角快速路徑：本機較佳時不要同步 PUT（改背景非同步），避免雙倍 RTT。
    */
-  function cloudPullSlotIntoStorage(slot) {
+  function cloudPullSlotIntoStorage(slot, opts) {
     if (!cloudCanSync()) return false;
+    opts = opts || {};
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
-    var r = _xhrJson('GET', _base() + '/slot/' + slot, null, true);
+    var r = _xhrJson('GET', _base() + '/slot/' + slot, null, true, 2200);
     var cloudData = r && r.ok && r.data && r.data.ok && r.data.data && r.data.data.p ? r.data.data : null;
     if (r && r.status === 404) cloudData = null;
     if (!cloudData && !(r && r.ok) && r && r.status !== 404) return false;
@@ -350,7 +364,10 @@
     }
 
     if (!cloudData) {
-      if (localData && localData.p && _localBelongsToCurrent(localData, true)) cloudPushSlotSync(slot, localData);
+      if (localData && localData.p && _localBelongsToCurrent(localData, true)) {
+        if (opts.skipPush) cloudPushSlot(slot, localData);
+        else cloudPushSlotSync(slot, localData);
+      }
       return false;
     }
     if (!localData || !localData.p) return _writeSlotLocal(slot, cloudData);
@@ -372,7 +389,8 @@
       return _writeSlotLocal(slot, cloudData);
     }
     // 本機較佳／較新 → 保留本機並回填雲端（修「舊雲端覆蓋洗白」）
-    cloudPushSlotSync(slot, localData);
+    if (opts.skipPush) cloudPushSlot(slot, localData);
+    else cloudPushSlotSync(slot, localData);
     return false;
   }
 
@@ -450,10 +468,53 @@
 
   function cloudPullSharedIntoStorage(name, storageKey) {
     if (!cloudCanSync() || !name || !storageKey) return false;
-    var r = _xhrJson('GET', _base() + '/shared/' + encodeURIComponent(name), null, true);
+    var r = _xhrJson('GET', _base() + '/shared/' + encodeURIComponent(name), null, true, 2200);
     if (!r || r.status === 404) return false;
     if (!r.ok || !r.data || !r.data.ok) return false;
     return _mergeSharedPreferRicher(name, storageKey, r.data.data);
+  }
+
+  /** 進角後背景拉倉庫／寵物（不阻塞畫面） */
+  function cloudPullSharedDeferred(slot) {
+    if (!cloudCanSync()) return;
+    slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
+    setTimeout(function () {
+      try {
+        var classicGuess = false;
+        try {
+          var raw = typeof _lzGet === 'function' ? _lzGet('lineage_idle_save_' + slot) : null;
+          var d = _parseLzPayload(raw);
+          classicGuess = !!(d && d.p && d.p.classicMode);
+        } catch (e) {}
+        var wName = _sharedName('warehouse', classicGuess);
+        var wKey =
+          (typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse') +
+          (classicGuess ? '_classic' : '');
+        cloudPullSharedIntoStorage(wName, wKey);
+        var pName = _sharedName('pets', classicGuess);
+        var pKey =
+          (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') +
+          (classicGuess ? '_classic' : '');
+        cloudPullSharedIntoStorage(pName, pKey);
+      } catch (e2) {}
+    }, 80);
+  }
+
+  function cloudPullBeforeLoad(slot) {
+    if (!cloudCanSync()) return false;
+    slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
+    // 登入／選角已非阻塞拉過 bundle：30 秒內進角直接用本機快取，背景再補倉庫／寵物
+    var recent =
+      (_cloudBundleSyncedAt > 0 && Date.now() - _cloudBundleSyncedAt < 30000) ||
+      (typeof window !== 'undefined' && window.__cloudBundleSyncedAt > 0 && Date.now() - window.__cloudBundleSyncedAt < 30000) ||
+      (typeof _loadCloudRefreshAt === 'number' && _loadCloudRefreshAt > 0 && Date.now() - _loadCloudRefreshAt < 30000);
+    if (recent) {
+      cloudPullSharedDeferred(slot);
+      return false;
+    }
+    var pulled = cloudPullSlotIntoStorage(slot, { skipPush: true });
+    cloudPullSharedDeferred(slot);
+    return pulled;
   }
 
   function cloudMirrorAfterSave(slot) {
@@ -497,31 +558,6 @@
         }
       }
     } catch (e4) {}
-  }
-
-  function cloudPullBeforeLoad(slot) {
-    if (!cloudCanSync()) return false;
-    slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
-    var pulled = cloudPullSlotIntoStorage(slot);
-    try {
-      var classicGuess = false;
-      try {
-        var raw = typeof _lzGet === 'function' ? _lzGet('lineage_idle_save_' + slot) : null;
-        var d = _parseLzPayload(raw);
-        classicGuess = !!(d && d.p && d.p.classicMode);
-      } catch (e) {}
-      var wName = _sharedName('warehouse', classicGuess);
-      var wKey =
-        (typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse') +
-        (classicGuess ? '_classic' : '');
-      cloudPullSharedIntoStorage(wName, wKey);
-      var pName = _sharedName('pets', classicGuess);
-      var pKey =
-        (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') +
-        (classicGuess ? '_classic' : '');
-      cloudPullSharedIntoStorage(pName, pKey);
-    } catch (e2) {}
-    return pulled;
   }
 
   function cloudApplyBundle(bundle) {
@@ -663,7 +699,8 @@
     return false;
   }
 
-  /** 只上傳「屬於目前帳號」的本機槽位（避免登入空帳號時把他人進度種子化進雲端） */
+  /** 只上傳「屬於目前帳號」的本機槽位（避免登入空帳號時把他人進度種子化進雲端）
+   *  🚀 改非同步 fetch：舊制 sync XHR ×8 槽＋倉庫／寵物＝登入／選角主執行緒卡死主因之一 */
   function cloudFlushLocalToCloud() {
     if (!cloudCanSync() || typeof _lzGet !== 'function') return false;
     var any = false;
@@ -672,8 +709,8 @@
         var data = _readSlotLocal(i);
         if (!data || !data.p) continue;
         if (!_localBelongsToCurrent(data)) continue;
-        var r = _xhrJson('PUT', _base() + '/slot/' + i, JSON.stringify(data), true);
-        if (r && r.ok) any = true;
+        cloudPushSlot(i, data);
+        any = true;
       } catch (e) {}
     }
     ['warehouse', 'warehouse_classic', 'pets', 'pets_classic'].forEach(function (name) {
@@ -688,13 +725,8 @@
         if (raw == null || raw === '') return;
         var obj =
           name.indexOf('pets') === 0 ? _parseLzPayload(raw) || JSON.parse(raw) : JSON.parse(raw);
-        var r2 = _xhrJson(
-          'PUT',
-          _base() + '/shared/' + encodeURIComponent(name),
-          JSON.stringify(obj == null ? {} : obj),
-          true
-        );
-        if (r2 && r2.ok) any = true;
+        cloudPushShared(name, obj == null ? {} : obj);
+        any = true;
       } catch (e2) {}
     });
     return any;
@@ -780,14 +812,17 @@
               try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
               _stripClosedSlotsFromBundle(data);
               cloudApplyBundle(data);
+              _cloudBundleSyncedAt = Date.now();
+              try { window.__cloudBundleSyncedAt = _cloudBundleSyncedAt; } catch (eMark) {}
               try { purgeClosedClassCharacterSlots({ silent: true }); } catch (ePurge2) {}
               for (var s = 1; s <= 8; s++) {
                 var local = _readSlotLocal(s);
                 var cloud = data.slots && data.slots[s];
                 if (local && local.p && _localBelongsToCurrent(local) && !(cloud && cloud.p)) {
-                  cloudPushSlotSync(s, local);
+                  cloudPushSlot(s, local);   // 🚀 非同步上傳，勿用 Sync XHR 卡死登入／選角
                 }
               }
+              try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(null); } catch (eInv) {}
               return true;
             }
             try {
@@ -822,10 +857,12 @@
   window.cloudReady = cloudReady;
   window.cloudReadyAsync = cloudReadyAsync;
   window.cloudPushSlot = cloudPushSlot;
+  window.cloudPushSlotSync = cloudPushSlotSync;
   window.cloudPullSlotIntoStorage = cloudPullSlotIntoStorage;
   window.cloudDeleteSlot = cloudDeleteSlot;
   window.cloudMirrorAfterSave = cloudMirrorAfterSave;
   window.cloudPullBeforeLoad = cloudPullBeforeLoad;
+  window.cloudPullSharedDeferred = cloudPullSharedDeferred;
   window.cloudPullBundleSync = cloudPullBundleSync;
   window.cloudBootstrapFromLocal = cloudBootstrapFromLocal;
   window.cloudFlushLocalToCloud = cloudFlushLocalToCloud;

@@ -39,7 +39,7 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     gludio: 'assets/area/城鎮周邊.jpg', kent: 'assets/area/城鎮周邊.jpg', giran: 'assets/area/城鎮周邊.jpg',   // 🏙️ 古魯丁/肯特/奇岩（野外·城鎮周邊·≠村莊周邊）
     training: 'assets/area/村莊周邊.jpg',   // 🆕 新兵修鍊場（套 area-fit·與其餘野外共用村莊周邊背景）
     dream_island: 'assets/area/夢幻之島.jpg',   // 🆕 夢幻之島（套 area-fit·專屬背景）
-    zone_02: 'assets/area/歐瑞.jpg', zone_03: 'assets/area/歐瑞.jpg', zone_05: 'assets/area/歐瑞.jpg',   // 🗺️ 歐瑞/歐瑞雪原/國境要塞（野外·共用歐瑞背景）
+    zone_02: 'assets/area/歐瑞.jpg', zone_03: 'assets/area/歐瑞雪原.jpg', zone_05: 'assets/area/歐瑞.jpg',   // 🗺️ 歐瑞周邊／歐瑞雪原／國境要塞（雪原專屬 1920）
     zone_04: 'assets/area/艾爾摩.jpg',   // ⚔️ 艾爾摩激戰地（野外·專屬背景）
     zone_09: 'assets/area/地監深層.jpg', zone_10: 'assets/area/地監深層.jpg', zone_11: 'assets/area/地監深層.jpg', zone_12: 'assets/area/地監深層.jpg', zone_14: 'assets/area/地監深層.jpg',   // 🕳️ 古魯丁地監4~7樓＋說話之島地監2樓（改深層背景·area-fit）
     dragon_valley: 'assets/area/龍之谷.jpg', twilight_mt: 'assets/area/龍之谷.jpg',   // 🐉 龍之谷/黃昏山脈（野外·共用龍之谷背景；地監龍之谷 zone_26~31 仍為洞窟.jpg）
@@ -404,7 +404,18 @@ function _summaryFromRaw(s){
         };   // 🎮 經典模式旗標：供存檔位顯示與傭兵同模式招募限制（🏛️v3.0.83 傳統已取消·未載入過的舊傳統存檔以 classicMode 歸類）；avatar＝職業性別頭像名（assets/character/<avatar>.png）；name 未命名時留空字串（顯示端自行省略）
     } catch(e){ return null; }
 }
-function slotSummary(n){ return _summaryFromRaw(_lzGet('lineage_idle_save_' + n)); }
+function slotSummary(n){
+    n = Math.max(1, Math.min(8, parseInt(n, 10) || 1));
+    if (Object.prototype.hasOwnProperty.call(_slotSummaryCache, n)) return _slotSummaryCache[n];
+    var sum = _summaryFromRaw(_lzGet('lineage_idle_save_' + n));
+    _slotSummaryCache[n] = sum;
+    return sum;
+}
+function invalidateSlotSummary(n){
+    if (n == null) { _slotSummaryCache = Object.create(null); return; }
+    delete _slotSummaryCache[Math.max(1, Math.min(8, parseInt(n, 10) || 1))];
+}
+var _slotSummaryCache = Object.create(null);
 
 // 🆔 角色名稱（ID）唯一：本機各存檔位不可重複；線上另經 /api/names 全站鎖定。
 function normalizeCharNameId(name) {
@@ -577,8 +588,6 @@ function _roleSessionHeartbeat(){
     if(active) reg[_roleSessionId] = { ts:Date.now(), slot:currentSlot, fp:_roleFingerprint(player), name:player.name || '未命名', classic:!!player.classicMode };
     else delete reg[_roleSessionId];
     _roleWriteObject(ROLE_SESSION_REGISTRY_KEY, reg);
-    if(active && typeof syncMercenaryEmploymentRegistry === 'function') syncMercenaryEmploymentRegistry();
-    if(active && typeof enforceMercenarySafeArea === 'function') enforceMercenarySafeArea();
 }
 function _roleOtherActiveSessions(){
     let reg = _rolePruneSessions(_roleReadObject(ROLE_SESSION_REGISTRY_KEY));
@@ -987,7 +996,55 @@ const LOAD_CLASS_TO_START_KEY = {
 let _loadSelectedSlot = 1;
 let _loadPage = 0;
 let _loadSlotMeta = {};   // 🔋 存檔位徽章快取（renderLoadSelect 建立）：活刷計時器只重讀輕量 checkpoint／session 名單，不重解壓整份存檔
-let _loadAnimState = { key: null, frame: 0, noneFrame: LOAD_NONE_ANIM_FRAMES[0], lastAt: 0, stepMs: 92 };
+let _loadAnimState = { key: null, frame: 0, noneFrame: LOAD_NONE_ANIM_FRAMES[0], lastAt: 0, stepMs: 120 };
+let _loadFrameCache = Object.create(null); // key|frame → Image
+let _loadClosedPurgedAt = 0;
+function _loadPreloadFrame(key, frame) {
+    var ck = key + '|' + frame;
+    if (_loadFrameCache[ck]) return _loadFrameCache[ck];
+    var im = new Image();
+    im.decoding = 'async';
+    im.src = loadFrameSrc(key, frame);
+    _loadFrameCache[ck] = im;
+    return im;
+}
+/** 只預熱少數幀（勿一次拉完整職業循環＝選角卡死主因：prince 約 85 張） */
+function _loadWarmAnimRange(key, ahead) {
+    if (!key) return;
+    ahead = Math.max(1, Math.min(6, Number(ahead) || 3));
+    if (key === 'none') {
+        _loadPreloadFrame('none', LOAD_NONE_ANIM_FRAMES[0]);
+        return;
+    }
+    var range = CREATION_CLASS_ANIM_FRAMES[key] || CREATION_CLASS_ANIM_FRAMES.prince;
+    var start = (_loadAnimState.key === key && _loadAnimState.frame)
+        ? _loadAnimState.frame
+        : range[0];
+    for (var i = 0; i < ahead; i++) {
+        var f = start + i;
+        if (f > range[1]) f = range[0] + (f - range[1] - 1);
+        if (f < range[0] || f > range[1]) f = range[0];
+        _loadPreloadFrame(key, f);
+    }
+}
+function _loadWarmAnimRangeIdle(key) {
+    if (!key || key === 'none') return;
+    try {
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(function () { try { _loadWarmAnimRange(key, 4); } catch (e0) {} }, { timeout: 900 });
+        } else {
+            setTimeout(function () { try { _loadWarmAnimRange(key, 4); } catch (e1) {} }, 40);
+        }
+    } catch (e) {
+        try { _loadWarmAnimRange(key, 3); } catch (e2) {}
+    }
+}
+function _purgeClosedClassesThrottled() {
+    var now = Date.now();
+    if (now - _loadClosedPurgedAt < 60000) return;
+    _loadClosedPurgedAt = now;
+    try { purgeClosedClassCharacterSlots({ silent: true }); } catch (_purgeClsE) {}
+}
 let _loadLastClickSlot = 0;
 let _loadLastClickAt = 0;
 function loadEsc(v){
@@ -1017,8 +1074,19 @@ function openLoadSelect(){
     _loadLastClickSlot = 0; _loadLastClickAt = 0;
     _loadPage = 0;
     _loadSelectedSlot = [1,2,3,4].find(n => !!slotSummary(n)) || 1;
-    renderLoadSelect();
-    try { refreshLoadSelectCloudAsync(true); } catch (e) {}
+    // 先本機快繪畫面；purge／雲端／立繪預熱全部延後，避免「開始遊戲」一按就卡
+    renderLoadSelect(true);
+    requestAnimationFrame(function () {
+        setTimeout(function () {
+            try { _purgeClosedClassesThrottled(); } catch (eP) {}
+            try {
+                var sum0 = slotSummary(_loadSelectedSlot);
+                var key0 = loadStartKeyFromSummary(sum0);
+                if (key0 && key0 !== 'none') _loadWarmAnimRangeIdle(key0);
+            } catch (eWarm) {}
+            try { refreshLoadSelectCloudAsync(false); } catch (e) {}
+        }, 0);
+    });
 }
 function loadSetPage(page){
     _loadLastClickSlot = 0; _loadLastClickAt = 0;
@@ -1065,7 +1133,13 @@ function returnToCharacterSelect(){
     _loadLastClickAt = 0;
     _loadPage = currentSlot > 4 ? 1 : 0;
     _loadSelectedSlot = currentSlot;
-    renderLoadSelect();
+    renderLoadSelect(true);
+    requestAnimationFrame(function () {
+        setTimeout(function () {
+            try { _purgeClosedClassesThrottled(); } catch (eP) {}
+            try { refreshLoadSelectCloudAsync(false); } catch (eC) {}
+        }, 0);
+    });
     try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
     return true;
 }
@@ -1075,7 +1149,14 @@ let _loadCloudRefreshBusy = false;
 function refreshLoadSelectCloudAsync(force) {
     if (_loadCloudRefreshBusy) return;
     let now = Date.now();
-    if (!force && now - _loadCloudRefreshAt < 8000) return;
+    if (!force && now - _loadCloudRefreshAt < 12000) return;
+    // 登入剛同步過：45 秒內不再整包重拉（否則選角一開又卡）
+    try {
+        var syncedAt = 0;
+        if (typeof window !== 'undefined' && window.__cloudBundleSyncedAt) syncedAt = Number(window.__cloudBundleSyncedAt) || 0;
+        if (!force && syncedAt > 0 && now - syncedAt < 45000) return;
+        if (force && syncedAt > 0 && now - syncedAt < 20000) return;
+    } catch (eRecent) {}
     if (typeof cloudCanSync !== 'function' || !cloudCanSync()) return;
     if (typeof cloudSyncOnLogin !== 'function') return;
     _loadCloudRefreshBusy = true;
@@ -1085,6 +1166,7 @@ function refreshLoadSelectCloudAsync(force) {
         .catch(function () { return false; })
         .then(function () {
             _loadCloudRefreshBusy = false;
+            try { window.__cloudBundleSyncedAt = Date.now(); } catch (eMark) {}
             try {
                 let load = document.getElementById('load-select-panel');
                 if (load && !load.classList.contains('hidden')) renderLoadSelect(true);
@@ -1093,7 +1175,7 @@ function refreshLoadSelectCloudAsync(force) {
 }
 function renderLoadSelect(skipCloudRefresh){
     // 📁 選角畫面只讀本機快取重繪；雲端改背景非阻塞同步（舊制每次同步打 8 次 XHR＝登入後卡死主因）
-    try { purgeClosedClassCharacterSlots({ silent: true }); } catch (_purgeClsE) {}
+    // 🚀 關閉職業 purge 改節流，勿每次重繪掃 8 格解壓存檔
     if (!skipCloudRefresh) {
         try { refreshLoadSelectCloudAsync(false); } catch (_cloudSelE) {}
     }
@@ -1109,8 +1191,12 @@ function renderLoadSelect(skipCloudRefresh){
         const frame = loadFirstFrame(key);
         _loadSlotMeta[n] = _slotBadgeMeta(n, sum);
         const title = sum ? `角色 ${n} ${sum.cls} Lv.${sum.lv}` : `角色 ${n} 空`;
+        const caption = empty
+            ? `<span class="load-slot-caption empty"><strong>空欄位</strong><small>點擊創新角色</small></span>`
+            : `<span class="load-slot-caption"><strong>${loadEsc(sum.name || '未命名')}</strong><small>Lv.${loadEsc(sum.lv)} · ${loadEsc(sum.cls || '')}</small></span>`;
         html += `<button type="button" onclick="loadSelectSlot(${n})" data-slot="${n}" data-key="${key}" class="load-slot-card ${selected ? 'selected' : ''} ${empty ? 'empty' : 'filled'}" title="${loadEsc(title)}">`
-            + `<img src="${loadFrameSrc(key, frame)}" alt="${loadEsc(title)}" draggable="false">`
+            + `<img src="${loadFrameSrc(key, frame)}" alt="${loadEsc(title)}" draggable="false" decoding="async" loading="eager">`
+            + caption
             + _slotBadgeHtml(_slotPartyStatusNow(_loadSlotMeta[n]))
             + `</button>`;
     }
@@ -1153,6 +1239,7 @@ function updateLoadInfo(){
     if(del) del.classList.toggle('hidden', empty);
 }
 function loadSelectSlot(n){
+    n = Math.max(1, Math.min(8, parseInt(n, 10) || 1));
     const sum = slotSummary(n);
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const doubleClick = !!sum && _loadLastClickSlot === n && now - _loadLastClickAt <= 500;
@@ -1161,13 +1248,28 @@ function loadSelectSlot(n){
     const prevSlot = _loadSelectedSlot;
     _loadSelectedSlot = n;
     if(doubleClick){ loadEnterSelected(); return; }
-    // 同頁切換存檔位：先即時刷新能力面板，再重繪卡面／動畫（避免只改 selected 卻殘留上一角數值）
-    if(prevSlot !== n) updateLoadInfo();
-    if(document.querySelector(`.load-slot-card.selected[data-slot="${n}"]`)){
+    // 同頁切欄：只改 selected class＋資訊面板，避免 innerHTML 重建 4 張圖造成延遲
+    const start = _loadPage * 4 + 1;
+    const onPage = n >= start && n <= start + 3;
+    if (onPage) {
+        const grid = document.getElementById('load-slot-grid');
+        if (grid) {
+            grid.querySelectorAll('.load-slot-card').forEach(function (btn) {
+                const slot = parseInt(btn.getAttribute('data-slot'), 10) || 0;
+                btn.classList.toggle('selected', slot === n);
+            });
+        }
+        const selectedKey = loadStartKeyFromSummary(sum);
+        _loadAnimState.key = selectedKey;
+        _loadAnimState.frame = loadFirstFrame(selectedKey);
+        _loadAnimState.lastAt = 0;
         updateLoadInfo();
+        if (selectedKey && selectedKey !== 'none' && prevSlot !== n) {
+            try { _loadWarmAnimRangeIdle(selectedKey); } catch (eW) {}
+        }
         return;
     }
-    renderLoadSelect();
+    renderLoadSelect(true);
 }
 function loadCreateSelected(){
     const sum = slotSummary(_loadSelectedSlot);
@@ -1180,9 +1282,36 @@ function loadCreateSelected(){
 function loadEnterSelected(){
     const sum = slotSummary(_loadSelectedSlot);
     if(!sum) return;
+    if (loadEnterSelected._busy) return;
     _loadLastClickSlot = 0; _loadLastClickAt = 0;
     currentSlot = _loadSelectedSlot;
-    loadGame();
+    loadEnterSelected._busy = true;
+    const enterBtn = document.getElementById('load-btn-enter');
+    const prevLabel = enterBtn ? enterBtn.textContent : '';
+    try {
+        if (enterBtn) {
+            enterBtn.disabled = true;
+            enterBtn.textContent = '進入中…';
+            enterBtn.classList.add('is-entering');
+        }
+    } catch (eBtn) {}
+    // 先讓按鈕／畫面重繪，再跑 loadGame（避免同步雲端 XHR 卡到「沒反應」）
+    requestAnimationFrame(function () {
+        setTimeout(function () {
+            try { loadGame(); }
+            catch (eLoad) { console.warn('loadGame', eLoad); }
+            finally {
+                loadEnterSelected._busy = false;
+                try {
+                    if (enterBtn) {
+                        enterBtn.disabled = false;
+                        enterBtn.textContent = prevLabel || '進入遊戲';
+                        enterBtn.classList.remove('is-entering');
+                    }
+                } catch (eBtn2) {}
+            }
+        }, 0);
+    });
 }
 function loadImportSelected(){ /* 匯入進度已移除 */ }
 function loadExportSelected(){ /* 匯出進度已移除 */ }
@@ -1222,6 +1351,7 @@ function _executeDeleteCharacter(slot, oldPlayer, expected){
     try { if(typeof antharasForgetRoleClear === 'function') antharasForgetRoleClear(oldPlayer, slot); } catch(e){ console.warn('antharas clear cleanup', e); }
     _lsRemove('lineage_idle_save_' + slot);
     _lsRemove('lineage_idle_save_' + slot + '_bak');
+    try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(slot); } catch (_invDelE) {}
     if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return { ok: false, reason: 'storage' }; }
     try { if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot); } catch (_deskDelE) {}
     try { if (typeof cloudDeleteSlot === 'function') cloudDeleteSlot(slot); } catch (_cloudDelE) {}
@@ -1255,10 +1385,11 @@ function purgeClosedClassCharacterSlots(opts) {
     opts = opts || {};
     const removed = [];
     for (let slot = 1; slot <= 8; slot++) {
+        // 先用摘要快取判斷職業，避免 8 格全解壓
+        const sum = slotSummary(slot);
+        if (!sum || !isCreationClsClosed(sum.rawCls)) continue;
         const oldPlayer = _roleReadSavePlayer(slot);
         if (!oldPlayer || !isCreationClsClosed(oldPlayer.cls)) continue;
-        const sum = slotSummary(slot);
-        if (!sum) continue;
         const r = deleteCharacterSlot(slot, { skipConfirm: true, oldPlayer: oldPlayer });
         if (r.ok) removed.push({ slot: slot, name: r.name, cls: oldPlayer.cls });
     }
@@ -1316,9 +1447,8 @@ function deleteCurrentCharacter(){
 (function animateLoadSelectPreview(){
     function tick(now){
         const panel = document.getElementById('load-select-panel');
-        if(panel && !panel.classList.contains('hidden') && now - _loadAnimState.lastAt >= _loadAnimState.stepMs){
-            _loadAnimState.noneFrame = _loadAnimState.noneFrame >= LOAD_NONE_ANIM_FRAMES[1] ? LOAD_NONE_ANIM_FRAMES[0] : _loadAnimState.noneFrame + 1;
-            document.querySelectorAll('.load-slot-card.empty img').forEach(img => { img.src = loadFrameSrc('none', _loadAnimState.noneFrame); });
+        if(panel && !panel.classList.contains('hidden') && !document.hidden && now - _loadAnimState.lastAt >= _loadAnimState.stepMs){
+            // 🚀 空欄位改靜態圖；只輪播選中有角色那一格；每次只預載下一幀（勿一次暖整段）
             const selected = document.querySelector('.load-slot-card.selected.filled');
             if(selected){
                 const key = selected.dataset.key || 'prince';
@@ -1330,7 +1460,14 @@ function deleteCurrentCharacter(){
                     _loadAnimState.frame = _loadAnimState.frame >= range[1] ? range[0] : _loadAnimState.frame + 1;
                 }
                 const img = selected.querySelector('img');
-                if(img) img.src = loadFrameSrc(key, _loadAnimState.frame);
+                if(img){
+                    var hit = _loadPreloadFrame(key, _loadAnimState.frame);
+                    // 預載下一幀，避免播到才開始下載
+                    var nf = _loadAnimState.frame >= range[1] ? range[0] : _loadAnimState.frame + 1;
+                    _loadPreloadFrame(key, nf);
+                    var next = (hit && hit.src) ? hit.src : loadFrameSrc(key, _loadAnimState.frame);
+                    if(img.src !== next) img.src = next;
+                }
             }
             _loadAnimState.lastAt = now;
         }
@@ -1455,9 +1592,13 @@ function setCreationClassAnimation(c){
         const panel = document.getElementById('creation-panel');
         const img = document.getElementById('class-preview-img');
         const gs = document.getElementById('game-screen');   // 🔊 v3.4.17 已進遊戲→停創角動畫（防 creation-panel classList 殘留→動畫續跑並每 loop 重觸發創角音效）
-        if(panel && img && !panel.classList.contains('hidden') && (!gs || gs.classList.contains('hidden')) && !creationClassAnim.static && now - creationClassAnim.lastAt >= creationClassAnim.stepMs){
+        if(panel && img && !panel.classList.contains('hidden') && (!gs || gs.classList.contains('hidden')) && !document.hidden && !creationClassAnim.static && now - creationClassAnim.lastAt >= creationClassAnim.stepMs){
             creationClassAnim.frame = creationClassAnim.frame >= creationClassAnim.last ? creationClassAnim.first : creationClassAnim.frame + 1;
-            img.src = `assets/start/${creationClassAnim.key}/${creationClassAnim.frame}.png`;
+            var hit = (typeof _loadPreloadFrame === 'function')
+                ? _loadPreloadFrame(creationClassAnim.key, creationClassAnim.frame)
+                : null;
+            var next = (hit && hit.src) ? hit.src : ('assets/start/' + creationClassAnim.key + '/' + creationClassAnim.frame + '.png');
+            if (img.src !== next) img.src = next;
             if(creationClassAnim.frame === creationClassAnim.first && typeof playCreationFrameSfx === 'function') playCreationFrameSfx(creationClassAnim.key, creationClassAnim.frame);
             creationClassAnim.lastAt = now;
         }
@@ -1651,6 +1792,7 @@ function startGame() {
     creationClassAnim.static = true;   // 立即停創角動畫迴圈（免離開畫面仍每幀更新 img＋每 loop 重觸發 SFX）
     document.getElementById('creation-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
+    try { if (typeof enableCombatHud === 'function') enableCombatHud(); } catch (eHud) {}
     document.body.classList.add('game-bg-dim');   // 正式遊戲後：背景淡化
     if (typeof mercLedgerPurgeSlot === 'function') { try { mercLedgerPurgeSlot(currentSlot); } catch (e) {} }   // 🩹 v3.0.108 新角色覆蓋此存檔位→清除前一個角色的待領傭兵經驗（新角色不繼承）
     if (typeof petReleaseSlotAssignments === 'function') { try { petReleaseSlotAssignments(currentSlot); } catch (e) { console.warn('pet slot ownership cleanup', e); } }   // 🐾 覆蓋角色時，舊角色出戰寵物回保管，避免卡在不存在的角色名下
@@ -1894,24 +2036,7 @@ function saveStateJson() {
 //    經驗墊高，本情境用較舊的記憶體快照存回會覆蓋掉墊高的經驗＝待領經驗遺失。對策：存檔序列化前，
 //    若「目前正擔任傭兵（mercRoleSafeAreaOnly·2 秒快取）」且磁碟等級/經驗高於記憶體 → 吸收磁碟較高值，
 //    保證存回只增不減（不以舊經驗覆蓋主玩家攜帶存回的經驗）。非受僱角色不受影響（閘門快取 false 直接早退）。
-function _mercMonotonicExpGuard() {
-    try {
-        if (typeof mercRoleSafeAreaOnly !== 'function' || !mercRoleSafeAreaOnly()) return;   // 只在「受僱中·被鎖安全區·無法外掛」時啟用
-        if (!player || !player.cls || typeof currentSlot === 'undefined' || currentSlot == null) return;
-        let stored = _saveUnwrap(_lzGet('lineage_idle_save_' + currentSlot));
-        if (stored.signed && !stored.ok) return;                                  // 磁碟簽章壞 → 不冒險比對
-        let raw = stored.payload; if (!raw) return;
-        let dp = JSON.parse(raw).p; if (!dp || dp.cls !== player.cls) return;      // 不同職業＝別的角色（同位重創）→ 不吸收
-        if (player.enSeed && dp.enSeed && player.enSeed !== dp.enSeed) return;     // enSeed 不符＝別的角色 → 不吸收
-        let dLv = Math.floor(dp.lv || 1), dExp = Math.floor(dp.exp || 0);
-        let mLv = Math.floor(player.lv || 1), mExp = Math.floor(player.exp || 0);
-        if (!((dLv > mLv) || (dLv === mLv && dExp > mExp))) return;                // 磁碟不比記憶體高 → 照常存回（含記憶體剛領取到的較高值）
-        player.lv = dLv; player.exp = dExp;
-        if (typeof dp.bonus === 'number') player.bonus = Math.max(Math.floor(player.bonus || 0), Math.floor(dp.bonus));   // 配點點數不倒退
-        if (dLv !== mLv && typeof calcStats === 'function') { try { calcStats(); } catch (e) {} }   // 升級 → 重算 HP/MP 上限
-        try { logSys(`<span class="text-emerald-300">受僱中偵測到存檔經驗較新（Lv.${dLv}），已保留較高進度、不以舊經驗覆蓋。</span>`); } catch (e) {}
-    } catch (e) {}
-}
+function _mercMonotonicExpGuard() {}
 function saveGame() {
     // 死亡狀態不寫檔：避免把 player.dead=true 存進去，導致下次讀檔卡在死亡狀態而不出怪。
     // 死亡期間沒有可保存的進度，保留上一份「存活」存檔即可。
@@ -1969,8 +2094,8 @@ function saveGame() {
     });
     }   // ← _uiConfigReady 閘（審計#1）
 
-    _mercMonotonicExpGuard();   // 🤝 v3.8.2 受僱中經驗只增不減：序列化前吸收磁碟較高的等級/經驗，防舊快照覆蓋待領帳本領取的經驗
     if(!_lzSet('lineage_idle_save_' + currentSlot, _saveWrap(saveStateJson()))) throw new Error('persistent storage write failed');   // 🔧 寫入成功才回報；並由 saveStateJson 排除戰鬥面向暫存參照
+    try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(currentSlot); } catch (_invE) {}
     if(typeof petRosterSave === 'function' && !petRosterSave()) throw new Error('pet roster write failed');
     try { if (typeof desktopMirrorAfterSave === 'function') desktopMirrorAfterSave(currentSlot); } catch (_deskE) {}
     try { if (typeof cloudMirrorAfterSave === 'function') cloudMirrorAfterSave(currentSlot); } catch (_cloudE) {}
@@ -2088,6 +2213,7 @@ function loadGame() {
           let b2 = document.getElementById('btn-revive-inplace'); if(b2) b2.classList.add('hidden'); }
         document.getElementById('creation-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
+        try { if (typeof enableCombatHud === 'function') enableCombatHud(); } catch (eHud2) {}
         document.body.classList.add('game-bg-dim');   // 正式遊戲後：背景淡化
         
         player.inv.forEach(i => { if(i.lock === undefined) i.lock = false; });

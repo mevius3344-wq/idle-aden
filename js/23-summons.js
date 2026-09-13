@@ -431,12 +431,7 @@ function summonV2ActiveSk() { return (player && player._summonV2Sk) || 'sk_summo
 function summonV2List() { return (player && player.summonsV2) || []; }
 // 🧱 v3.4.50 傭兵召喚物清單（可被攻擊的抽象實體·無 sprite）：ally.summon 帶 hp/mhp(由 js/06 _mercSummonAttachEntity 附加)→進 js/04 受害者池。
 //   只收「有血量欄位且存活」者（舊存檔未遷移的召喚物自然排除·到期重召後補齊）；玩家迷魅(player.summon)不在此（維持無敵抽象）。
-function mercSummonList() {
-    if (typeof player === 'undefined' || !player || !player.allies || !player.allies.length) return [];
-    let out = [];
-    for (let a of player.allies) { let s = a && !a._downed && a.summon; if (s && (s.mhp || 0) > 0 && !s._downed && (s.hp || 0) > 0) out.push(s); }
-    return out;
-}
+function mercSummonList() { return []; }   // 離線存檔位協力召喚已移除
 function summonV2Knows(skId) { skId = skId || 'sk_summon'; return ((player.skills || []).includes(skId) || (player.grantedSkills || []).includes(skId)); }   // 已習得（比照 castSkillInner 的 grantedSkills 旁路）
 function summonRenderList() {   // 供 js/22 寵物圖層渲染（含死亡殘影 2 秒）
     if (typeof player === 'undefined' || !player || !player.cls) return [];
@@ -755,28 +750,7 @@ function renderSummonTeamHTML() {
 }
 // 🧱 v3.4.51 傭兵召喚物 HP 卡（比照玩家召喚物呈現·接在其後）：v3.4.50 起傭兵召喚物無 sprite 但有血量·此為唯一血量可視化。
 //   標示「協力名·召喚物名」＋同款血條；無「重新施放」鈕（被打死由 allyMaintainBuffs 自動重施·扣該傭兵 MP）、無倒數（到期同樣自動重施）。
-function renderMercSummonTeamHTML() {
-    try {
-        if (typeof player === 'undefined' || !player || !player.allies || !player.allies.length) return '';
-        const rows = [];
-        for (const a of player.allies) {
-            const s = a && !a._downed && a.summon;
-            if (!s || !(s.mhp > 0) || s._downed || !(s.hp > 0)) continue;
-            const hpPct = Math.max(0, Math.min(100, Math.floor((s.hp || 0) / Math.max(1, s.mhp || 1) * 100)));
-            rows.push(`<div class="bg-slate-800/80 border border-purple-800 rounded px-2 py-1 text-xs flex items-center gap-2">
-                <span class="shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" style="width:8rem;" title="${(a._allyName || '協力')} 的召喚物"><span class="text-emerald-300">${a._allyName || '協力'}</span><span class="text-slate-500">·</span><span class="text-purple-300 font-bold">${s.form || s.n || '召喚物'}</span></span>
-                <div class="bar-bg flex-1 !h-3">
-                    <div class="bar-fill bg-red-600" style="width:${hpPct}%;"></div>
-                    <div class="bar-text text-white" style="font-size:10px;line-height:12px;">${s.hp || 0}/${s.mhp || 0}</div>
-                </div>
-            </div>`);
-        }
-        if (!rows.length) return '';
-        return `<div class="flex items-center justify-between gap-2 pt-1 border-t border-purple-900/70">
-                <span class="text-purple-300 font-bold text-xs">傭兵召喚物（${rows.length}）</span>
-            </div>` + rows.join('');
-    } catch (e) { return ''; }
-}
+function renderMercSummonTeamHTML() { return ''; }
 
 function renderSummonPanel(force) {
     try {

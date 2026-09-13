@@ -691,8 +691,8 @@ function doLachesisSplit() {
     logSys('<span class="text-amber-300">席琳系統已移除。</span>');
 }
 
-// ===== 🔥 v3.0.78 試煉接取制（15/30/45 級）：須達等級向 NPC 接取 → 試煉道具才開始掉落（100%·達需求即停·禁倉庫）→ 一次性完成領「全部」獎勵 =====
-//   狀態：player.trialQ[key] = 0/undefined 未接取、1 進行中、2 已完成（完成後無法再接取、道具不再掉落）。
+// ===== 🔥 v3.0.78 試煉接取制（15/30/45 級）：須達等級向 NPC 接取 → 試煉道具才開始掉落（100%·達需求即停·禁倉庫）→ 完成領「全部」獎勵（可重複接取）=====
+//   狀態：player.trialQ[key] = 0/undefined 未接取、1 進行中、2 已完成（可再次接取重解）。
 //   掉落閘＝js/01 trialDropBlocked → trialItemActive；100% 掉落＝js/05 掉落迴圈 trialForced100。
 const TRIAL_Q = {
     knight15:   { cls:'knight',   lv:15, npc:'瑞奇',         reqs:[['new_item_196',1],['new_item_198',1],['new_item_206',1]], rewards:['arm_53'] },
@@ -717,7 +717,7 @@ const TRIAL_Q = {
     dragon30:   { cls:'dragon',   lv:30, npc:'普洛凱爾',     reqs:[['item_demon_spy',1]], rewards:['armguard_dragonscale','bk_dragon_bloodlust'] },
     dragon45:   { cls:'dragon',   lv:45, npc:'普洛凱爾',     reqs:[['item_yeti_heart',10]], rewards:['clk_dragon'] },
     royal15:    { cls:'royal',    lv:15, npc:'甘特',         reqs:[['new_item_197',1]], rewards:['clk_royal_red','bk_royal_precise'] },
-    royal30:    { cls:'royal',    lv:30, npc:'甘特',         reqs:[['new_item_211',1]], rewards:['clk_royal_majesty','bk_royal_callally'] },
+    royal30:    { cls:'royal',    lv:30, npc:'甘特',         reqs:[['new_item_211',1]], rewards:['clk_royal_majesty'] },
     royal45:    { cls:'royal',    lv:45, npc:'馬沙',         reqs:[['item_lost_soul',1]], rewards:['acc_royal_guard'] },
 };
 const TRIAL_ITEM_Q = {};   // 試煉道具 id → 所屬試煉 key 陣列（古代鑰匙＝knight45+elf45 共用）
@@ -786,7 +786,12 @@ function trialQHTML(key, rr) {
     let c = TRIAL_Q[key]; if (!c || player.cls !== c.cls) return '';
     let st = trialQState(key);
     let h = `<div class="mb-2 p-3 bg-slate-800/60 rounded border border-slate-700"><div class="text-amber-300 font-bold text-sm">⚔️ ${c.lv} 級試煉</div>`;
-    if (st === 2) return h + `<div class="text-emerald-400 text-sm mt-1">✅ 已完成（每個角色僅能完成一次）。</div></div>`;
+    if (st === 2) {
+        if ((player.lv || 1) < c.lv) return h + `<div class="text-emerald-400 text-sm mt-1">✅ 已完成。再次接取需等級 ${c.lv}。</div></div>`;
+        h += `<div class="text-emerald-400 text-sm mt-1 mb-2">✅ 已完成。可再次接取，重新收集道具後再領獎勵。</div>`;
+        h += `<div class="text-xs text-slate-400 mb-2">獎勵：${c.rewards.map(id => `<b class="text-sky-300">${DB.items[id].n}</b>`).join('＋')}</div>`;
+        return h + `<button class="btn bg-amber-800 hover:bg-amber-700 py-2 px-4 font-bold" onclick="trialQAccept('${key}','${rr}')">再次接取試煉</button></div>`;
+    }
     if ((player.lv || 1) < c.lv) return h + `<div class="text-red-400 text-sm mt-1">需要等級 ${c.lv} 以上才能接取此試煉。</div></div>`;
     if (st === 0) {
         h += `<div class="text-xs text-slate-400 mt-1 mb-2">接取後才會開始掉落：${c.reqs.map(p => `<b class="text-amber-200">${DB.items[p[0]].n}</b>×${p[1]}`).join('、')}（擊殺指定怪物 100% 掉落·無法存入倉庫·達需求數量即停止掉落）</div>`;
@@ -803,7 +808,8 @@ function trialQHTML(key, rr) {
 }
 function trialQAccept(key, rr) {
     let c = TRIAL_Q[key];
-    if (!c || player.cls !== c.cls || (player.lv || 1) < c.lv || trialQState(key) !== 0) return;
+    let st = trialQState(key);
+    if (!c || player.cls !== c.cls || (player.lv || 1) < c.lv || (st !== 0 && st !== 2)) return;
     if (typeof currentRoleIsMercenary === 'function' && currentRoleIsMercenary()) { logSys('<span class="text-amber-300">此角色正在擔任傭兵，請由隊長在傭兵公會接取試煉。</span>'); return; }
     if (!player.trialQ || typeof player.trialQ !== 'object') player.trialQ = {};
     player.trialQ[key] = 1;
@@ -821,7 +827,7 @@ function trialQComplete(key, rr) {   // 🚫 v3.2.16 移除席琳完成：原第
         c.rewards.forEach(id => { gainItem(id, 1, false, false); });
     } finally { _tradLootCtx = _sv; }
     player.trialQ[key] = 2;
-    logSys(`<span class="c-legend font-bold">${c.npc}：試煉通過！</span><span class="text-amber-200">你獲得了 ${c.rewards.map(id => DB.items[id].n).join('、')}。（此試煉已完成，無法再次接取）</span>`);
+    logSys(`<span class="c-legend font-bold">${c.npc}：試煉通過！</span><span class="text-amber-200">你獲得了 ${c.rewards.map(id => DB.items[id].n).join('、')}。（可再次接取重複挑戰）</span>`);
     saveGame(); renderTabs(); _trialRerender(rr);
 }
 
@@ -1023,10 +1029,14 @@ function build50TrialHTML(npcName) {
         h += enough ? `<div class="p-4"><button class="btn bg-emerald-800 py-2 px-4 font-bold" onclick="trial50TurnIn()">交付 ${stage.nm}</button></div>` : `<div class="p-4 text-red-400">尚未備齊。${_lk50 > 0 ? '<span class="text-slate-400 text-xs">（有道具已上鎖·解鎖後才會列入計數）</span>' : ''}</div>`;
         return h;
     }
-    // 🔥 v3.0.78：最終兌換改「一次性·全拿」（trialStage = 階段數+2 ＝已完成；魔族神殿維持開放）
-    if (st >= nStages + 2) return h + `<span class="text-emerald-400">✅ 50 級試煉已全數完成（每個角色僅能完成一次）。魔族神殿永久對你開放。</span></div>`;
+    // 🔥 最終兌換可重複：trialStage = 階段數+2 ＝已完成一輪；可回到最終階段再收集兌換
+    if (st >= nStages + 2) {
+        h += `<span class="text-emerald-400">✅ 50 級試煉已完成。魔族神殿維持開放，可再次挑戰最終兌換領獎。</span></div>`;
+        h += `<div class="p-4"><button class="btn bg-amber-800 hover:bg-amber-700 py-2 px-4 font-bold" onclick="trial50Repeat()">再次挑戰最終試煉</button></div>`;
+        return h;
+    }
     let need = cfg.exMatCnt || 1, have = questCountId(cfg.exMat);
-    h += `魔族神殿已對你開放。<br>最終試煉：交付 <b class="text-red-300">${cfg.exMatNm}</b> × ${need}（持有 ${Math.min(have, need)}/${need}·接取階段中擊殺指定怪物必定掉落·達需求即停）<br>一次性換取全部獎勵：${cfg.rewards.map(r => `<b class="text-sky-300">${r.nm}</b>`).join('＋')}`;
+    h += `魔族神殿已對你開放。<br>最終試煉：交付 <b class="text-red-300">${cfg.exMatNm}</b> × ${need}（持有 ${Math.min(have, need)}/${need}·接取階段中擊殺指定怪物必定掉落·達需求即停）<br>換取全部獎勵：${cfg.rewards.map(r => `<b class="text-sky-300">${r.nm}</b>`).join('＋')}`;
     h += `</div>`;
     if (have < need) { let _lkEx = lockedCountId(cfg.exMat); return h + `<div class="px-4 pb-4 text-red-400 text-sm">需要 ${need} 個 ${cfg.exMatNm} 才能完成試煉。${_lkEx > 0 ? `<span class="text-slate-400">（另有 ${_lkEx} 個已上鎖不計）</span>` : ''}</div>`; }   // 🔒 v3.5.87　⚡ v3.5.89 收成區域變數（原本同行呼叫兩次）
     h += `<div class="p-4"><div class="flex flex-wrap gap-2">`;
@@ -1071,7 +1081,7 @@ function trial50TurnIn() {
     purgeCompletedElfWhisper();   // 🔥 交付精靈的私語階段完成 → 自動清除剩餘的精靈的私語
     saveGame(); closeNpcInteraction();
 }
-function trial50Complete() {   // 🔥 v3.0.78 最終兌換一次性·全拿；🚫 v3.2.16 移除席琳完成（原參數 sherine 廢止）
+function trial50Complete() {   // 🔥 最終兌換可重複；🚫 v3.2.16 移除席琳完成（原參數 sherine 廢止）
     let cfg = TRIAL_50_CFG[player.cls];
     if (!cfg) return;
     if (typeof currentRoleIsMercenary === 'function' && currentRoleIsMercenary()) { logSys('<span class="text-amber-300">此角色正在擔任傭兵，請由隊長在傭兵公會完成試煉並領取獎勵。</span>'); return; }
@@ -1084,10 +1094,23 @@ function trial50Complete() {   // 🔥 v3.0.78 最終兌換一次性·全拿；�
     try {
         cfg.rewards.forEach(r => { gainItem(r.id, 1, false, false); });
     } finally { _tradLootCtx = _sv; }
-    player.trialStage = nStages + 2;   // ✅ 全數完成（demonTempleOpen 維持 true）
+    player.trialStage = nStages + 2;   // ✅ 本輪完成（demonTempleOpen 維持 true·可再挑戰）
+    player.demonTempleOpen = true;
     saveGame();
-    logSys(`<span class="c-legend font-bold">${cfg.npc}：你完成了 50 級試煉的全部考驗！</span><span class="text-amber-200">獲得 ${cfg.rewards.map(r => r.nm).join('、')}。（此試煉已完成，無法再次兌換）</span>`);
+    logSys(`<span class="c-legend font-bold">${cfg.npc}：你完成了 50 級試煉的全部考驗！</span><span class="text-amber-200">獲得 ${cfg.rewards.map(r => r.nm).join('、')}。（可再次挑戰最終兌換）</span>`);
     closeNpcInteraction(); renderTabs();
+}
+function trial50Repeat() {
+    let cfg = TRIAL_50_CFG[player.cls];
+    if (!cfg) return;
+    if (typeof currentRoleIsMercenary === 'function' && currentRoleIsMercenary()) { logSys('<span class="text-amber-300">此角色正在擔任傭兵，請由隊長在傭兵公會操作試煉。</span>'); return; }
+    let nStages = cfg.stages.length;
+    if ((player.trialStage || 0) < nStages + 2) return;
+    player.trialStage = nStages + 1;
+    player.demonTempleOpen = true;
+    saveGame();
+    logSys(`<span class="text-amber-300 font-bold">${cfg.npc}：再次挑戰開始！</span>去收集 ${cfg.exMatNm}×${cfg.exMatCnt || 1} 吧。`);
+    closeNpcInteraction();
 }
 // 🔮 希蓮恩（希培利亞村莊）：幻術士的試煉道具兌換 + 50 級試煉（時空裂痕碎片→魔族神殿、翼龍之血→藍寶石奇古獸）
 // 🔮 希蓮恩（希培利亞村莊）：幻術士 15/30/45 級試煉（接取制）＋ 50 級試煉（統一走 TRIAL_50_CFG）

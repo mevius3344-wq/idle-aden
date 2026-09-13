@@ -15,15 +15,22 @@
     }
   }
 
-  function _xhrJson(method, url, body, sync) {
+  function _xhrJson(method, url, body, sync, timeoutMs) {
     var xhr = new XMLHttpRequest();
     xhr.open(method, url, !sync);
     if (body != null) xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+    var limit = timeoutMs == null ? (sync ? 1500 : 0) : timeoutMs;
+    if (limit > 0) {
+      try { xhr.timeout = limit; } catch (eT) {}
+    }
     if (sync) {
       try {
         xhr.send(body != null ? body : null);
       } catch (e) {
-        return { ok: false, status: 0, data: null };
+        return { ok: false, status: 0, data: null, timedOut: true };
+      }
+      if (xhr.status === 0 && (!xhr.responseText || xhr.responseText === '')) {
+        return { ok: false, status: 0, data: null, timedOut: true };
       }
       var data = null;
       try {
@@ -187,25 +194,28 @@
   function desktopPullBeforeLoad(slot) {
     if (!desktopPlayerReady()) return false;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
+    // 本機桌面：只同步該槽位；倉庫／寵物改背景，避免進角連打 3 次同步 XHR
     var pulled = desktopPullSlotIntoStorage(slot);
-    try {
-      var classicGuess = false;
+    setTimeout(function () {
       try {
-        var raw = typeof _lzGet === 'function' ? _lzGet('lineage_idle_save_' + slot) : null;
-        var d = _parseLzPayload(raw);
-        classicGuess = !!(d && d.p && d.p.classicMode);
-      } catch (e) {}
-      var wName = classicGuess ? 'warehouse_classic' : 'warehouse';
-      var wKey =
-        (typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse') +
-        (classicGuess ? '_classic' : '');
-      desktopPullSharedIntoStorage(wName, wKey);
-      var pName = classicGuess ? 'pets_classic' : 'pets';
-      var pKey =
-        (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') +
-        (classicGuess ? '_classic' : '');
-      desktopPullSharedIntoStorage(pName, pKey);
-    } catch (e2) {}
+        var classicGuess = false;
+        try {
+          var raw = typeof _lzGet === 'function' ? _lzGet('lineage_idle_save_' + slot) : null;
+          var d = _parseLzPayload(raw);
+          classicGuess = !!(d && d.p && d.p.classicMode);
+        } catch (e) {}
+        var wName = classicGuess ? 'warehouse_classic' : 'warehouse';
+        var wKey =
+          (typeof WH_KEY !== 'undefined' ? WH_KEY : 'lineage_idle_warehouse') +
+          (classicGuess ? '_classic' : '');
+        desktopPullSharedIntoStorage(wName, wKey);
+        var pName = classicGuess ? 'pets_classic' : 'pets';
+        var pKey =
+          (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') +
+          (classicGuess ? '_classic' : '');
+        desktopPullSharedIntoStorage(pName, pKey);
+      } catch (e2) {}
+    }, 80);
     return pulled;
   }
 

@@ -4,22 +4,26 @@
 const CLAN_STATE_KEY = 'fb5_clan_state_v1';
 const CLAN_LOCK_KEY = 'fb5_clan_state_v1_lock';
 const CLAN_CREATE_COST = 30000;
-const CLAN_BUFF_HOUR_MS = 60 * 60 * 1000;
-const CLAN_BUFF_HOUR_COST = 5;
-const CLAN_LEVEL_COSTS = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000, 250000];
-const CLAN_BUFF_BY_LEVEL = [
-    null,
-    { hp:20,  mp:5,  extraDmg:1, extraHit:1, mr:1,  magicDmg:1, hpR:1,  mpR:1,  ac:-1 },
-    { hp:30,  mp:5,  extraDmg:1, extraHit:1, mr:2,  magicDmg:1, hpR:2,  mpR:2,  ac:-1 },
-    { hp:40,  mp:10, extraDmg:2, extraHit:2, mr:3,  magicDmg:2, hpR:3,  mpR:3,  ac:-2 },
-    { hp:50,  mp:15, extraDmg:2, extraHit:2, mr:4,  magicDmg:2, hpR:4,  mpR:4,  ac:-2 },
-    { hp:60,  mp:20, extraDmg:3, extraHit:3, mr:5,  magicDmg:3, hpR:5,  mpR:5,  ac:-3 },
-    { hp:70,  mp:25, extraDmg:3, extraHit:3, mr:6,  magicDmg:3, hpR:6,  mpR:6,  ac:-3 },
-    { hp:80,  mp:30, extraDmg:4, extraHit:4, mr:7,  magicDmg:4, hpR:7,  mpR:7,  ac:-4 },
-    { hp:100, mp:35, extraDmg:4, extraHit:4, mr:8,  magicDmg:4, hpR:8,  mpR:8,  ac:-4 },
-    { hp:120, mp:40, extraDmg:5, extraHit:5, mr:9,  magicDmg:5, hpR:9,  mpR:9,  ac:-5 },
-    { hp:150, mp:50, extraDmg:5, extraHit:5, mr:10, magicDmg:5, hpR:10, mpR:10, ac:-5 }
+/** 黃金平衡版：單次捐獻固定 100,000 金幣 */
+const CLAN_DONATE_GOLD = 100000;
+const CLAN_DONATE_CONTRIB = 1;
+const CLAN_DONATE_EXP = 10;
+/** 血盟等級 1→2…4→5 所需累積 clanTotalExp（絕對門檻） */
+const CLAN_LEVEL_EXP_THRESHOLDS = [0, 1000, 5000, 20000, 100000];
+const CLAN_MAX_LEVEL = 5;
+const CLAN_STATUS_COUNT = 4;
+const CLAN_STATUS_PURCHASE_COST = 1;
+const CLAN_STATUS_ADD_MS = 3600 * 1000;
+const CLAN_STATUS_MAX_MS = 43200 * 1000;
+/** [statusId][levelIndex 0=Lv1..4=Lv5] 僅限時生效的 % 加成 */
+const CLAN_STATUS_MATRIX = [
+    [0.020, 0.025, 0.030, 0.040, 0.050], // 0 世界樹祝福：回血回魔
+    [0.015, 0.020, 0.030, 0.040, 0.050], // 1 十字軍壁壘：傷害減免
+    [0.020, 0.030, 0.040, 0.050, 0.060], // 2 天鷹之眼：命中
+    [0.020, 0.030, 0.040, 0.050, 0.060]  // 3 戰神狂怒：最終傷害
 ];
+const CLAN_STATUS_NAMES = ['世界樹祝福', '十字軍壁壘', '天鷹之眼', '戰神狂怒'];
+const CLAN_STATUS_DESCS = ['回血回魔', '傷害減免', '命中率', '最終傷害'];
 const CLAN_CLASS_NAMES = {
     royal:'王族', knight:'騎士', elf:'妖精', mage:'法師', dark:'黑暗妖精',
     dragon:'龍騎士', warrior:'戰士', illusion:'幻術士'
@@ -139,13 +143,31 @@ let _rtClanFetchPromise = null;
 
 function _clanDefaultState() {
     return {
-        v:2,
+        v:3,
         xp:0,
         modes:{ normal:null, classic:null },
         members:{},
         npcWorlds:{ normal:null, classic:null },
         updatedAt:Date.now()
     };
+}
+
+function _clanEmptyStatusRemain() {
+    return [0, 0, 0, 0];
+}
+
+function _clanNormalizeMember(m) {
+    let mode = m && m.mode === 'classic' ? 'classic' : 'normal';
+    let contribution = Math.max(0, Math.min(1000000000000, Math.floor(Number(m && m.contribution) || 0)));
+    let statusRemainMs = _clanEmptyStatusRemain();
+    if (m && Array.isArray(m.statusRemainMs)) {
+        for (let i = 0; i < CLAN_STATUS_COUNT; i++) {
+            statusRemainMs[i] = Math.max(0, Math.min(CLAN_STATUS_MAX_MS, Math.floor(Number(m.statusRemainMs[i]) || 0)));
+        }
+    }
+    // 舊版 buffOn 連續 Buff → 遷移時關閉（改為限時購買制）
+    let settledAt = Math.max(0, Math.floor(Number(m && m.statusSettledAt) || 0));
+    return { mode:mode, contribution:contribution, statusRemainMs:statusRemainMs, statusSettledAt:settledAt };
 }
 
 function clanModeKey(p) {
@@ -358,13 +380,7 @@ function _clanNormalizeState(raw) {
         Object.keys(raw.members).slice(0, 128).forEach(id => {
             let m = raw.members[id];
             if (!m || typeof m !== 'object') return;
-            let buffAt = Math.max(0, Math.floor(Number(m.buffAt) || 0));
-            out.members[String(id).slice(0, 96)] = {
-                mode:m.mode === 'classic' ? 'classic' : 'normal',
-                contribution:Math.max(0, Math.min(1000000000000, Math.floor(Number(m.contribution) || 0))),
-                buffOn:!!m.buffOn && buffAt > 0,
-                buffAt:buffAt
-            };
+            out.members[String(id).slice(0, 96)] = _clanNormalizeMember(m);
         });
     }
     out.npcWorlds.normal = _npcClanNormalizeWorld(raw.npcWorlds && raw.npcWorlds.normal);
@@ -1503,14 +1519,20 @@ function npcClanWorldTick() {
 
 function clanLevelInfo(xp) {
     xp = Math.max(0, Math.floor(Number(xp) || 0));
-    let level = 1, spent = 0;
-    for (let i = 0; i < CLAN_LEVEL_COSTS.length; i++) {
-        if (xp - spent < CLAN_LEVEL_COSTS[i]) break;
-        spent += CLAN_LEVEL_COSTS[i];
-        level++;
+    let level = 1;
+    for (let lv = 1; lv < CLAN_MAX_LEVEL; lv++) {
+        if (xp < CLAN_LEVEL_EXP_THRESHOLDS[lv]) break;
+        level = lv + 1;
     }
-    let next = level >= 10 ? 0 : CLAN_LEVEL_COSTS[level - 1];
-    return { level:level, current:Math.max(0, xp - spent), next:next, total:xp };
+    let nextNeed = level >= CLAN_MAX_LEVEL ? 0 : CLAN_LEVEL_EXP_THRESHOLDS[level];
+    let prevNeed = level <= 1 ? 0 : CLAN_LEVEL_EXP_THRESHOLDS[level - 1];
+    return {
+        level:level,
+        current:Math.max(0, xp - prevNeed),
+        next:nextNeed ? Math.max(0, nextNeed - prevNeed) : 0,
+        needTotal:nextNeed,
+        total:xp
+    };
 }
 
 function clanGetModeInfo(p) {
@@ -1651,7 +1673,7 @@ function clanSyncCurrentPlayer() {
     if (st.members[id] && st.members[id].mode === mode) return true;
     _clanWithLock(live => {
         if (!live.modes[mode]) return { commit:false, error:'血盟已不存在。' };
-        if (!live.members[id]) live.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+        if (!live.members[id]) live.members[id] = _clanNormalizeMember({ mode:mode });
         else live.members[id].mode = mode; // 舊 normal 成員併入 classic
         return {};
     });
@@ -1819,7 +1841,7 @@ function rtClanJoin(clanId) {
                     };
                 }
                 if (id) {
-                    if (!st.members[id]) st.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+                    if (!st.members[id]) st.members[id] = _clanNormalizeMember({ mode:mode });
                     else st.members[id].mode = mode;
                 }
                 return {};
@@ -1889,7 +1911,7 @@ function clanCreateFromInput() {
                 createdAt: Date.now(),
                 castle: (st.modes[mode] && st.modes[mode].castle) || null
             };
-            if (!st.members[leaderId]) st.members[leaderId] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+            if (!st.members[leaderId]) st.members[leaderId] = _clanNormalizeMember({ mode:mode });
             else st.members[leaderId].mode = mode;
             return {};
         });
@@ -1954,7 +1976,7 @@ function clanCreateFromInput() {
         let result = _clanWithLock(st => {
             if (st.modes[mode]) return { commit:false, error:'此模式已經創立血盟。' };
             st.modes[mode] = { name:name, leaderId:leaderId, faction:faction, createdAt:Date.now(), castle:null };
-            if (!st.members[leaderId]) st.members[leaderId] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+            if (!st.members[leaderId]) st.members[leaderId] = _clanNormalizeMember({ mode:mode });
             return {};
         });
         if (!result.ok) {
@@ -1976,35 +1998,42 @@ function _clanAdjustContribution(points) {
     let id = clanRoleId(player);
     return _clanWithLock(st => {
         if (!st.modes[mode]) return { commit:false, error:'你尚未加入血盟。' };
-        let member = st.members[id] || (st.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 });
-        if (member.mode !== mode) member = st.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 };
+        let member = st.members[id] || (st.members[id] = _clanNormalizeMember({ mode:mode }));
+        if (member.mode !== mode) member = st.members[id] = _clanNormalizeMember({ mode:mode });
         if (points < 0 && member.contribution < -points) return { commit:false, error:'貢獻度不足。' };
         member.contribution = Math.max(0, member.contribution + points);
-        st.xp = Math.max(0, st.xp + points);
         return { contribution:member.contribution, xp:st.xp };
     });
 }
 
 function clanDonateGold() {
-    let el = document.getElementById('clan-gold-donate');
-    let amount = Math.floor(Number(el && el.value) || 0);
-    if (amount < 10000 || amount % 10000 !== 0) { alert('金幣捐獻需為 10,000 的整數倍。'); return; }
-    if ((player.gold || 0) < amount) { alert('金幣不足。'); return; }
-    let points = amount / 10000;
+    let amount = CLAN_DONATE_GOLD;
+    if ((player.gold || 0) < amount) { alert('金幣不足，需要 100,000 金幣。'); return; }
     player.gold -= amount;
-    let result = _clanAdjustContribution(points);
+    let result = _clanWithLock(st => {
+        let mode = clanModeKey(player), id = clanRoleId(player);
+        if (!st.modes[mode]) return { commit:false, error:'你尚未加入血盟。' };
+        let member = st.members[id] || (st.members[id] = _clanNormalizeMember({ mode:mode }));
+        if (member.mode !== mode) member = st.members[id] = _clanNormalizeMember({ mode:mode });
+        member.contribution = Math.max(0, member.contribution + CLAN_DONATE_CONTRIB);
+        st.xp = Math.max(0, st.xp + CLAN_DONATE_EXP);
+        return { contribution:member.contribution, xp:st.xp };
+    });
     if (!result.ok) { player.gold += amount; alert(result.error || '捐獻失敗。'); return; }
     if (typeof saveGame === 'function' && saveGame() !== true) {
-        let rb = _clanAdjustContribution(-points);   // 可能撞多分頁鎖失敗：如實回報，勿默默當作已回滾
+        _clanWithLock(st => {
+            let mode = clanModeKey(player), id = clanRoleId(player);
+            let member = st.members[id];
+            if (member) member.contribution = Math.max(0, (member.contribution || 0) - CLAN_DONATE_CONTRIB);
+            st.xp = Math.max(0, (st.xp || 0) - CLAN_DONATE_EXP);
+            return {};
+        });
         player.gold += amount;
-        // ⚠️ v3.6.01 saveGame() 回 false ≠ 沒寫入（角色檔先落地）：還原金幣後必須補存（比照 whTxnCommit v3.5.92）
         let restored = (typeof saveGame === 'function') && saveGame() === true;
-        alert('角色存檔失敗，本次捐獻已取消'
-            + (rb && rb.ok ? '' : '（貢獻回滾失敗，本次貢獻與血盟經驗已保留）')
-            + (restored ? '，金幣未扣除。' : '；金幣已在記憶體中還原但尚未寫入存檔，請勿繼續操作並重新整理頁面。'));
+        alert('角色存檔失敗，本次捐獻已取消' + (restored ? '，金幣未扣除。' : '；金幣已還原於記憶體。'));
         return;
     }
-    if (typeof logSys === 'function') logSys(`<span class="text-amber-300">捐獻 ${amount.toLocaleString()} 金幣，獲得 ${points.toLocaleString()} 貢獻與血盟經驗。</span>`);
+    if (typeof logSys === 'function') logSys('<span class="text-amber-300">捐獻 100,000 金幣：個人貢獻 +1、血盟經驗 +10。</span>');
     if (typeof updateUI === 'function') updateUI();
     renderClanTab();
 }
@@ -2019,11 +2048,11 @@ function clanDonateDiamonds() {
     let points = amount * 100;
     let result = _clanAdjustContribution(points);
     if (!result.ok) {
-        let refund = window.pandoraAdjustSharedDiamonds(amount);   // 退鑽也可能失敗（共用桶寫入異常）：如實回報，勿讓鑽石默默蒸發
-        alert((result.error || '捐獻失敗。') + ((refund && refund.ok) ? '' : ' 且龍之鑽石退回失敗，請重新整理後於黑市確認鑽石數量。'));
+        let refund = window.pandoraAdjustSharedDiamonds(amount);
+        alert((result.error || '捐獻失敗。') + ((refund && refund.ok) ? '' : ' 且龍之鑽石退回失敗。'));
         return;
     }
-    if (typeof logSys === 'function') logSys(`<span class="text-cyan-300">捐獻 ${amount.toLocaleString()} 顆龍之鑽石，獲得 ${points.toLocaleString()} 貢獻與血盟經驗。</span>`);
+    if (typeof logSys === 'function') logSys('<span class="text-cyan-300">捐獻 ' + amount.toLocaleString() + ' 顆龍之鑽石，獲得 ' + points.toLocaleString() + ' 貢獻（不加血盟經驗）。</span>');
     if (typeof updateUI === 'function') updateUI();
     renderClanTab();
 }
@@ -2033,80 +2062,109 @@ function _clanSettleRole(p) {
     let mode = clanModeKey(p), id = clanRoleId(p), now = Date.now();
     let preview = _clanReadState();
     let member = preview && preview.members[id];
-    if (!preview || !preview.modes[mode] || !member || member.mode !== mode || !member.buffOn) return { changed:false };
-    let elapsed = Math.floor((now - (member.buffAt || now)) / CLAN_BUFF_HOUR_MS);
-    if (member.contribution >= CLAN_BUFF_HOUR_COST && elapsed < 1) return { changed:false };
+    if (!preview || !preview.modes[mode] || !member || member.mode !== mode) return { changed:false };
+    let hasActive = (member.statusRemainMs || []).some(function (ms) { return ms > 0; });
+    if (!hasActive) return { changed:false };
     return _clanWithLock(st => {
         let live = st.members[id];
-        if (!st.modes[mode] || !live || live.mode !== mode || !live.buffOn) return { commit:false, changed:false };
-        let due = Math.max(0, Math.floor((now - (live.buffAt || now)) / CLAN_BUFF_HOUR_MS));
-        let affordable = Math.floor(live.contribution / CLAN_BUFF_HOUR_COST);
-        let paid = Math.min(due, affordable);
-        if (paid > 0) {
-            live.contribution -= paid * CLAN_BUFF_HOUR_COST;
-            live.buffAt = (live.buffAt || now) + paid * CLAN_BUFF_HOUR_MS;
+        if (!st.modes[mode] || !live || live.mode !== mode) return { commit:false, changed:false };
+        if (!Array.isArray(live.statusRemainMs) || live.statusRemainMs.length !== CLAN_STATUS_COUNT) {
+            live.statusRemainMs = _clanEmptyStatusRemain();
         }
-        let stop = live.contribution < CLAN_BUFF_HOUR_COST || paid < due;
-        if (stop) { live.buffOn = false; live.buffAt = 0; }
-        if (!paid && !stop) return { commit:false, changed:false };
-        return { changed:true, turnedOff:stop, paid:paid, contribution:live.contribution };
+        let last = live.statusSettledAt || now;
+        let elapsed = Math.max(0, now - last);
+        live.statusSettledAt = now;
+        if (elapsed <= 0) return { commit:false, changed:false };
+        let turnedOff = [];
+        let changed = false;
+        for (let i = 0; i < CLAN_STATUS_COUNT; i++) {
+            let before = live.statusRemainMs[i] || 0;
+            if (before <= 0) continue;
+            let after = Math.max(0, before - elapsed);
+            live.statusRemainMs[i] = after;
+            changed = true;
+            if (before > 0 && after <= 0) turnedOff.push(i);
+        }
+        if (!changed) return { commit:false, changed:false };
+        return { changed:true, turnedOff:turnedOff, contribution:live.contribution };
     });
 }
 
-function getClanBuffStats(p) {
+function getClanTimedEffects(p) {
     p = p || player;
-    if (!p || !p.cls) return null;
+    let empty = { regen:0, dr:0, hit:0, finalDmg:0 };
+    if (!p || !p.cls) return empty;
     let id = clanRoleId(p);
     let now = Date.now();
-    if (id && now - (Number(_clanLastSettleByRole[id]) || 0) >= 30000) {
+    if (id && now - (Number(_clanLastSettleByRole[id]) || 0) >= 15000) {
         _clanLastSettleByRole[id] = now;
         let settled = _clanSettleRole(p);
-        if (settled && settled.ok && settled.turnedOff && typeof logSys === 'function' &&
-            !(typeof _recomputingAlly !== 'undefined' && _recomputingAlly)) {
-            logSys('<span class="text-amber-300">血盟貢獻不足，血盟 Buff 已自動關閉。</span>');
+        if (settled && settled.ok && settled.turnedOff && settled.turnedOff.length && typeof logSys === 'function') {
+            settled.turnedOff.forEach(function (sid) {
+                logSys('<span class="text-amber-300">【' + CLAN_STATUS_NAMES[sid] + '】時效已結束。</span>');
+            });
+            let tab = document.getElementById('tab-clan');
+            if (tab && !tab.classList.contains('hidden')) renderClanTab();
         }
     }
     let st = _clanReadState();
     let mode = clanModeKey(p);
     let member = st && st.members[id];
-    if (!st || !st.modes[mode] || !member || member.mode !== mode || !member.buffOn || member.contribution < CLAN_BUFF_HOUR_COST) return null;
+    if (!st || !st.modes[mode] || !member || member.mode !== mode) return empty;
     let level = clanLevelInfo(st.xp).level;
-    return Object.assign({}, CLAN_BUFF_BY_LEVEL[level]);
+    let li = Math.max(0, Math.min(CLAN_MAX_LEVEL - 1, level - 1));
+    let remain = member.statusRemainMs || _clanEmptyStatusRemain();
+    let out = { regen:0, dr:0, hit:0, finalDmg:0 };
+    if ((remain[0] || 0) > 0) out.regen = CLAN_STATUS_MATRIX[0][li];
+    if ((remain[1] || 0) > 0) out.dr = CLAN_STATUS_MATRIX[1][li];
+    if ((remain[2] || 0) > 0) out.hit = CLAN_STATUS_MATRIX[2][li];
+    if ((remain[3] || 0) > 0) out.finalDmg = CLAN_STATUS_MATRIX[3][li];
+    return out;
 }
 
-function clanToggleBuff(on) {
+function getClanBuffStats(p) { return null; }
+
+function clanActivateStatus(statusId) {
+    statusId = Math.floor(Number(statusId));
+    if (statusId < 0 || statusId >= CLAN_STATUS_COUNT) { alert('無效的狀態選項。'); return; }
     let mode = clanModeKey(player), id = clanRoleId(player);
     let result = _clanWithLock(st => {
         if (!st.modes[mode]) return { commit:false, error:'你尚未加入血盟。' };
-        let member = st.members[id] || (st.members[id] = { mode:mode, contribution:0, buffOn:false, buffAt:0 });
-        if (on && member.contribution < CLAN_BUFF_HOUR_COST) return { commit:false, error:'至少需要 5 點貢獻才能開啟血盟 Buff。' };
-        let partialCharged = false;
-        if (!on && member.buffOn && member.buffAt > 0) {
-            // 💰 v3.6.01 關閉結算（用戶拍板）：先收滿已經過的整點時數，再對「未滿 1 小時」的殘餘照收 5 點。
-            //    否則每 59 分鐘關開一次即可永遠躲過整點扣款＝5 點貢獻蹭永久 Buff。
-            let now = Date.now();
-            let due = Math.max(0, Math.floor((now - member.buffAt) / CLAN_BUFF_HOUR_MS));
-            let affordable = Math.floor(member.contribution / CLAN_BUFF_HOUR_COST);
-            let paid = Math.min(due, affordable);
-            member.contribution -= paid * CLAN_BUFF_HOUR_COST;
-            member.buffAt += paid * CLAN_BUFF_HOUR_MS;
-            if (paid >= due && now > member.buffAt) {
-                member.contribution = Math.max(0, member.contribution - CLAN_BUFF_HOUR_COST);
-                partialCharged = true;
-            }
+        let member = st.members[id] || (st.members[id] = _clanNormalizeMember({ mode:mode }));
+        if (member.mode !== mode) member = st.members[id] = _clanNormalizeMember({ mode:mode });
+        if (!Array.isArray(member.statusRemainMs)) member.statusRemainMs = _clanEmptyStatusRemain();
+        let cur = member.statusRemainMs[statusId] || 0;
+        if (cur + CLAN_STATUS_ADD_MS > CLAN_STATUS_MAX_MS) {
+            return { commit:false, error:'警告！【' + CLAN_STATUS_NAMES[statusId] + '】該狀態已達 12 小時累積上限！' };
         }
-        member.buffOn = !!on;
-        member.buffAt = on ? Date.now() : 0;
-        return { partialCharged:partialCharged, contribution:member.contribution };
+        if (member.contribution < CLAN_STATUS_PURCHASE_COST) {
+            return { commit:false, error:'個人貢獻度不足，需要 1 點才能購買。' };
+        }
+        member.contribution -= CLAN_STATUS_PURCHASE_COST;
+        member.statusRemainMs[statusId] = cur + CLAN_STATUS_ADD_MS;
+        member.statusSettledAt = Date.now();
+        let level = clanLevelInfo(st.xp).level;
+        let li = Math.max(0, Math.min(CLAN_MAX_LEVEL - 1, level - 1));
+        return { contribution:member.contribution, remainMs:member.statusRemainMs[statusId], pct:CLAN_STATUS_MATRIX[statusId][li], level:level };
     });
-    if (!result.ok) { alert(result.error || '血盟 Buff 設定失敗。'); renderClanTab(); return; }
+    if (!result.ok) { alert(result.error || '購買失敗。'); renderClanTab(); return; }
     delete _clanLastSettleByRole[id];
     if (typeof calcStats === 'function') calcStats();
     if (typeof updateUI === 'function') updateUI();
-    if (typeof logSys === 'function') logSys(on ? '<span class="text-green-300">血盟 Buff 已開啟，每小時消耗 5 點貢獻（關閉時未滿 1 小時亦計收 5 點）。</span>'
-        : `<span class="text-slate-300">血盟 Buff 已關閉。${result.partialCharged ? '未滿 1 小時的使用時間已計收 5 點貢獻。' : ''}</span>`);
+    if (typeof logSys === 'function') {
+        let sec = Math.ceil((result.remainMs || 0) / 1000);
+        let h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+        let clock = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        logSys('<span class="text-green-300">購買成功！【' + CLAN_STATUS_NAMES[statusId] + '】' + CLAN_STATUS_DESCS[statusId] + ' +' + (result.pct * 100).toFixed(1) + '%（Lv.' + result.level + '），剩餘 ' + clock + '／上限 12 小時。</span>');
+    }
     renderClanTab();
 }
+
+function clanToggleBuff(on) {
+    alert('血盟狀態已改為限時購買制：請在下方四個狀態中點選購買（1 貢獻＝1 小時，最高累加 12 小時）。');
+    renderClanTab();
+}
+
 
 // 👑 v3.6.01 血盟改名（用戶需求）：僅創立血盟的王族盟主本人可改；只動共用狀態的 name，貢獻/經驗/城堡不變。
 function clanRenameFromInput() {
@@ -2161,9 +2219,40 @@ function _clanRoleDisplayName(p) {
     return name || CLAN_CLASS_NAMES[p && p.cls] || '角色';
 }
 
-function _clanBuffText(buff) {
-    if (!buff) return '';
-    return `HP +${buff.hp}、MP +${buff.mp}、額外傷害 +${buff.extraDmg}、額外命中 +${buff.extraHit}、魔法防禦 +${buff.mr}、魔法傷害 +${buff.magicDmg}、HP/MP 自然恢復 +${buff.hpR}、防禦 ${buff.ac}`;
+function _clanBuffText(level) {
+    level = Math.max(1, Math.min(CLAN_MAX_LEVEL, Math.floor(Number(level) || 1)));
+    let li = level - 1;
+    return CLAN_STATUS_NAMES.map((n, i) =>
+        `${n}（${CLAN_STATUS_DESCS[i]} +${(CLAN_STATUS_MATRIX[i][li] * 100).toFixed(1)}%）`
+    ).join('、');
+}
+
+function _clanFormatRemain(ms) {
+    let sec = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+    let h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function _clanStatusPanelHtml(current, levelInfo) {
+    let li = Math.max(0, Math.min(CLAN_MAX_LEVEL - 1, (levelInfo.level || 1) - 1));
+    let remain = (current && current.statusRemainMs) || _clanEmptyStatusRemain();
+    let cards = '';
+    for (let i = 0; i < CLAN_STATUS_COUNT; i++) {
+        let active = (remain[i] || 0) > 0;
+        let pct = (CLAN_STATUS_MATRIX[i][li] * 100).toFixed(1);
+        let clock = active ? _clanFormatRemain(remain[i]) : '未開啟';
+        let gray = active ? '' : 'opacity-70';
+        cards += `<div class="flex flex-col gap-1 p-2 rounded border ${active ? 'border-emerald-600 bg-emerald-950/40' : 'border-slate-700 bg-slate-900/50'} ${gray}">
+            <div class="flex items-center justify-between gap-2">
+                <div class="font-bold text-slate-100 text-sm">${clanEsc(CLAN_STATUS_NAMES[i])}</div>
+                <div class="text-xs ${active ? 'text-emerald-300' : 'text-slate-500'}">${clock}</div>
+            </div>
+            <div class="text-xs text-slate-400">${clanEsc(CLAN_STATUS_DESCS[i])} +${pct}%（Lv.${levelInfo.level}）</div>
+            <button class="btn py-1.5 text-sm font-bold ${active ? 'bg-amber-900 border-amber-600 text-amber-100' : 'bg-slate-800 border-slate-600 text-slate-200'}" onclick="clanActivateStatus(${i})">${active ? '續購 +1 小時（1 貢獻）' : '購買（1 貢獻／1 小時）'}</button>
+        </div>`;
+    }
+    return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${cards}</div>
+        <div class="text-xs text-slate-400 mt-2">可多選自由開啟；單次 +1 小時；單一狀態最高累加 12 小時。加成僅在時效內依血盟等級動態生效（無永久被動）。</div>`;
 }
 
 function setClanPanelView(view) {
@@ -2355,9 +2444,9 @@ function renderClanTab() {
         return;
     }
     let levelInfo = clanLevelInfo(st.xp);
-    let buff = CLAN_BUFF_BY_LEVEL[levelInfo.level];
     let id = clanRoleId(player);
-    let current = st.members[id] || { contribution:0, buffOn:false };
+    let current = st.members[id] || _clanNormalizeMember({ mode:mode });
+    // settle 已在上方 _clanSettleRole(player) 處理
     let memberRows = '';
     if (_rtClan && Array.isArray(_rtClan.members) && _rtClan.members.length) {
         memberRows = _rtClan.members.map(m => {
@@ -2387,7 +2476,9 @@ function renderClanTab() {
             </div>`;
         }).join('');
     }
-    let xpText = levelInfo.level >= 10 ? `${st.xp.toLocaleString()}（最高等級）` : `${levelInfo.current.toLocaleString()} / ${levelInfo.next.toLocaleString()}`;
+    let xpText = levelInfo.level >= CLAN_MAX_LEVEL
+        ? `${st.xp.toLocaleString()}（最高等級 Lv.${CLAN_MAX_LEVEL}）`
+        : `${st.xp.toLocaleString()} / ${(levelInfo.needTotal || 0).toLocaleString()}`;
     let diamonds = typeof window.pandoraGetSharedDiamonds === 'function' ? Number(window.pandoraGetSharedDiamonds()) || 0 : 0;
     let castle = (localInfo && localInfo.castle) ? CLAN_CASTLE_NAMES[localInfo.castle] : '尚未佔領';
     let leaderLabel = (_rtClan && _rtClan.leaderName) ? _rtClan.leaderName : clanLeaderDisplayName(player);
@@ -2414,29 +2505,22 @@ function renderClanTab() {
                 </div>
             </div>
             <div>
-                <div class="flex items-center justify-between gap-3 mb-2">
-                    <div>
-                        <div class="text-slate-100 font-bold">血盟 Buff</div>
-                        <div class="text-xs text-slate-400">每小時消耗 5 貢獻（關閉時未滿 1 小時亦計 5 點），目前 ${current.contribution.toLocaleString()} 貢獻</div>
-                    </div>
-                    <label class="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-                        <input type="checkbox" ${current.buffOn ? 'checked' : ''} onchange="clanToggleBuff(this.checked)">
-                        <span>${current.buffOn ? '已開啟' : '已關閉'}</span>
-                    </label>
+                <div class="mb-2">
+                    <div class="text-slate-100 font-bold">血盟限時狀態</div>
+                    <div class="text-xs text-slate-400">目前 ${current.contribution.toLocaleString()} 貢獻　｜　預覽 Lv.${levelInfo.level}：${_clanBuffText(levelInfo.level)}</div>
                 </div>
-                <div class="text-sm text-emerald-200 leading-relaxed border-l-2 border-emerald-700 pl-3">${_clanBuffText(buff)}</div>
+                ${_clanStatusPanelHtml(current, levelInfo)}
             </div>
             <div class="border-t border-slate-700 pt-3">
                 <div class="text-slate-100 font-bold mb-2">捐獻</div>
                 <div class="flex gap-2 mb-2">
-                    <input id="clan-gold-donate" type="number" min="10000" step="10000" value="10000" class="min-w-0 flex-1 bg-slate-900 border border-slate-600 text-white px-2 py-2 rounded">
-                    <button class="btn px-3 py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanDonateGold()">捐金幣</button>
+                    <button class="btn flex-1 py-2 font-bold bg-amber-800 border-amber-500 text-amber-100" onclick="clanDonateGold()">捐 100,000 金幣（貢獻 +1／經驗 +10）</button>
                 </div>
                 <div class="flex gap-2">
                     <input id="clan-diamond-donate" type="number" min="1" step="1" value="1" class="min-w-0 flex-1 bg-slate-900 border border-slate-600 text-white px-2 py-2 rounded">
                     <button class="btn px-3 py-2 font-bold bg-cyan-900 border-cyan-600 text-cyan-100" onclick="clanDonateDiamonds()">捐龍鑽（持有 ${diamonds.toLocaleString()}）</button>
                 </div>
-                <div class="text-xs text-slate-400 mt-2">10,000 金幣 = 1 貢獻；1 龍之鑽石 = 100 貢獻。貢獻會增加等量的全模式共用血盟經驗。</div>
+                <div class="text-xs text-slate-400 mt-2">金幣捐獻固定 100,000＝貢獻 +1、血盟經驗 +10。龍鑽只加貢獻（1 鑽＝100 貢獻），不加經驗。人數無上限。</div>
             </div>
             <div class="border-t border-slate-700 pt-3">
                 <div class="text-slate-100 font-bold mb-1">血盟成員</div>
@@ -2477,26 +2561,16 @@ function clanRestoreSharedState(snapshot) {
 
 function _clanBuffTimerTick() {
     if (!player || !player.cls) return;
-    let main = player;
-    let roles = [main].concat(Array.isArray(main.allies) ? main.allies.filter(a => a && !a._downed) : []);
-    let changedMain = false, changedAllies = [];
-    roles.forEach((role, index) => {
-        let result = _clanSettleRole(role);
-        if (!result || !result.ok || !result.changed) return;
-        let id = clanRoleId(role);
-        if (id) _clanLastSettleByRole[id] = Date.now();
-        if (index === 0) {
-            changedMain = true;
-            if (result.turnedOff && typeof logSys === 'function') logSys('<span class="text-amber-300">血盟貢獻不足，血盟 Buff 已自動關閉。</span>');
-        } else {
-            changedAllies.push(role);
-        }
-    });
-    if (!changedMain && !changedAllies.length) return;
-    if (changedMain && typeof calcStats === 'function') calcStats();
-    changedAllies.forEach(ally => {
-        try { if (typeof _allyLevelRecompute === 'function') _allyLevelRecompute(ally); } catch (e) {}
-    });
+    let result = _clanSettleRole(player);
+    if (!result || !result.ok || !result.changed) return;
+    let id = clanRoleId(player);
+    if (id) _clanLastSettleByRole[id] = Date.now();
+    if (result.turnedOff && result.turnedOff.length && typeof logSys === 'function') {
+        result.turnedOff.forEach(function (sid) {
+            logSys('<span class="text-amber-300">【' + CLAN_STATUS_NAMES[sid] + '】時效已結束。</span>');
+        });
+    }
+    if (typeof calcStats === 'function') calcStats();
     if (typeof updateUI === 'function') updateUI();
     let tab = document.getElementById('tab-clan');
     if (tab && !tab.classList.contains('hidden')) renderClanTab();

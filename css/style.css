@@ -525,6 +525,44 @@
         #player-morph-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         #player-morph-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         #player-morph-sprite .pm-shadow { mix-blend-mode: multiply; }
+        /* 👤 戰場人物：男女必須一眼可辨（不同色調＋輪廓比例；女角無 *_f Q 包時走 classanim） */
+        #player-morph-sprite.pm-gender-f.q-chibi-actor > .pm-body,
+        #player-morph-sprite.pm-gender-f.q-chibi-actor > .pm-weapon {
+            filter: hue-rotate(-48deg) saturate(1.35) brightness(1.12) contrast(1.05);
+            transform: scaleX(0.92) scaleY(1.06);
+            transform-origin: center bottom;
+        }
+        #player-morph-sprite.pm-gender-m.q-chibi-actor > .pm-body,
+        #player-morph-sprite.pm-gender-m.q-chibi-actor > .pm-weapon {
+            filter: saturate(0.88) contrast(1.1) brightness(0.97) hue-rotate(8deg);
+            transform: scaleX(1.04) scaleY(0.98);
+            transform-origin: center bottom;
+        }
+        /* 女角職業動畫（classanim）也加輕微性別標記，避免與男角混淆 */
+        #player-morph-sprite.pm-gender-f:not(.q-chibi-actor) > .pm-body {
+            filter: saturate(1.12) brightness(1.05);
+        }
+        #player-morph-sprite.pm-gender-m:not(.q-chibi-actor) > .pm-body {
+            filter: saturate(0.95) contrast(1.04);
+        }
+        .party-sprite.pm-gender-f.q-chibi-actor > .pm-body,
+        .party-sprite.pm-gender-f.q-chibi-actor > .pm-weapon {
+            filter: hue-rotate(-48deg) saturate(1.35) brightness(1.12);
+            transform: scaleX(0.92) scaleY(1.06);
+            transform-origin: center bottom;
+        }
+        .party-sprite.pm-gender-m.q-chibi-actor > .pm-body,
+        .party-sprite.pm-gender-m.q-chibi-actor > .pm-weapon {
+            filter: saturate(0.88) contrast(1.1) brightness(0.97);
+            transform: scaleX(1.04) scaleY(0.98);
+            transform-origin: center bottom;
+        }
+        #status-panel.avatar-gender-f {
+            box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.45);
+        }
+        #status-panel.avatar-gender-m {
+            box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+        }
         /* 🤝 v3.0.70 隊員戰場 sprite（結構同 #player-morph-sprite·bottom/z-index 由 JS 依招募順序固定站位·v3.6.89 取消權重排位） */
         .party-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
@@ -563,30 +601,435 @@
             color: #fecaca;
             border-color: #ef4444;
         }
-        .explore-portal {
-            position: absolute; top: 42%; z-index: 40;
-            transform: translateY(-50%);
-            padding: 0.45rem 0.7rem; font-size: 0.75rem; font-weight: 700;
-            border-radius: 0.4rem; border: 1px solid rgba(125, 211, 252, 0.55);
-            background: rgba(8, 30, 48, 0.82); color: #bae6fd;
-            text-shadow: 0 1px 2px #000; cursor: pointer;
-            max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            opacity: 0.55; transition: opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-        }
-        .explore-portal-left { left: 0.5rem; }
-        .explore-portal-right { right: 0.5rem; }
-        .explore-portal.is-ready {
-            opacity: 1;
-            border-color: #fde68a; color: #fef3c7; background: rgba(60, 40, 8, 0.88);
-            box-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
-        }
-        #battle-view.portal-ready-left .explore-portal-left,
-        #battle-view.portal-ready-right .explore-portal-right { opacity: 1; }
+        .explore-portal,
+        .explore-exit-layer,
+        .explore-exit { display: none !important; }
         .explore-hint {
+            display: none !important; /* 2D 戰鬥畫面上方提示字關閉 */
             position: absolute; top: 0.45rem; left: 50%; transform: translateX(-50%);
             z-index: 39; font-size: 0.7rem; color: #94a3b8;
             background: rgba(15, 23, 42, 0.72); padding: 0.15rem 0.55rem; border-radius: 999px;
             pointer-events: none; white-space: nowrap;
+        }
+        /* 🗺️ v3.8.223 真・2D 正俯視無縫生態瓦（森林／沙漠／地監／海／火…） */
+        #explore-world-bg-far.explore-world-bg-far,
+        .explore-world-bg-far {
+            position: absolute;
+            inset: -22%;
+            z-index: 0; pointer-events: none;
+            display: none !important; /* 正俯視不用異速遠景，避免拼湊 */
+        }
+        #explore-world-bg.explore-world-bg,
+        .explore-world-bg {
+            position: absolute;
+            inset: -28%;
+            z-index: 1; pointer-events: none;
+            background-repeat: repeat;
+            background-position: 0 0;
+            background-size: 880px 880px;
+            filter: contrast(1.04) saturate(1.08) brightness(1.02);
+            transform: none !important;
+            transition: background-position 0.05s linear;
+            will-change: background-position;
+            box-shadow: none;
+            -webkit-mask-image: none;
+            mask-image: none;
+            opacity: 1;
+        }
+        #explore-world-bg.explore-world-bg.is-topdown-floor,
+        .explore-world-bg.is-topdown-floor {
+            inset: -28%;
+            background-repeat: repeat;
+            background-size: 880px 880px;
+            -webkit-mask-image: none;
+            mask-image: none;
+            opacity: 1;
+        }
+        /* 同圖半格錯位 soft-light：再削殘餘接縫 */
+        #explore-world-bg-blend.explore-world-bg-blend,
+        .explore-world-bg-blend {
+            position: absolute;
+            inset: -28%;
+            z-index: 2; pointer-events: none;
+            background-repeat: repeat;
+            background-size: 880px 880px;
+            opacity: 0.26;
+            mix-blend-mode: soft-light;
+            filter: blur(0.35px) saturate(0.95);
+            transform: none !important;
+            transition: background-position 0.05s linear;
+            will-change: background-position;
+        }
+        #explore-world-bg.explore-world-bg.is-ground-tile,
+        .explore-world-bg.is-ground-tile,
+        #explore-world-bg.explore-world-bg.is-map-scene,
+        .explore-world-bg.is-map-scene {
+            inset: -28%;
+            background-repeat: repeat;
+            background-size: 880px 880px;
+            -webkit-mask-image: none;
+            mask-image: none;
+            opacity: 1;
+        }
+        /* 🌿 地圖點綴：與 #mob-list 同綁 --wx/--wy，世界座標不搶打怪區 */
+        #explore-prop-layer.explore-prop-layer,
+        .explore-prop-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            pointer-events: none;
+            overflow: visible;
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear;
+            will-change: transform;
+        }
+        .explore-prop {
+            position: absolute;
+            left: 50%;
+            bottom: 50%;
+            width: 72px;
+            height: 72px;
+            margin-left: 0;
+            transform: translateX(-50%) scale(var(--ps, 1)) rotate(var(--prot, 0deg));
+            transform-origin: center bottom;
+            pointer-events: none;
+            filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+            opacity: 0.92;
+        }
+        .explore-prop img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center bottom;
+            pointer-events: none;
+            user-select: none;
+        }
+        .explore-prop--path {
+            width: 110px;
+            height: 70px;
+            margin-left: 0;
+            opacity: 0.72;
+            filter: none;
+            z-index: 1;
+        }
+        .explore-prop--tree {
+            width: 96px;
+            height: 110px;
+            margin-left: 0;
+            opacity: 0.95;
+        }
+        .explore-prop--bush {
+            width: 78px;
+            height: 70px;
+            margin-left: 0;
+        }
+        .explore-prop--rock {
+            width: 64px;
+            height: 54px;
+            margin-left: 0;
+            opacity: 0.88;
+        }
+        #battle-view.is-explore-combat .explore-prop {
+            opacity: 0.78;
+        }
+        #battle-view.explore-bg-scroll {
+            background-image: none !important;
+            background-color: #121816;
+        }
+        #battle-view.explore-bg-scroll.has-scenic-bg {
+            background-color: #121816;
+        }
+        #battle-view.explore-bg-scroll.has-bg {
+            transition: none;
+        }
+        #battle-view.has-scenic-bg .explore-world-bg-blend {
+            display: none !important;
+        }
+        #battle-view.is-explore-combat .explore-world-bg.is-topdown-floor {
+            filter: contrast(1.05) saturate(1.06) brightness(1.02);
+        }
+        #battle-view.is-explore-combat .explore-world-bg.is-map-scene {
+            filter: contrast(1.05) saturate(1.06) brightness(1.02);
+        }
+        .explore-atmosphere {
+            position: absolute; inset: 0; z-index: 3; pointer-events: none;
+            background:
+                radial-gradient(ellipse at 50% 48%, transparent 44%, rgba(10, 14, 12, 0.16) 78%, rgba(6, 8, 8, 0.3) 100%);
+            opacity: 0.82;
+            animation: none;
+        }
+        #battle-view.has-scenic-bg .explore-atmosphere {
+            background:
+                radial-gradient(ellipse at 50% 48%, transparent 44%, rgba(10, 14, 12, 0.16) 78%, rgba(6, 8, 8, 0.3) 100%);
+            opacity: 0.82;
+        }
+        .explore-mist,
+        .explore-light {
+            display: none !important;
+        }
+        .explore-dust {
+            position: absolute; inset: 0;
+            z-index: 4; pointer-events: none;
+            background-image:
+                radial-gradient(1.2px 1.2px at 18% 40%, rgba(255,255,255,0.08), transparent),
+                radial-gradient(1px 1px at 52% 62%, rgba(255,255,255,0.06), transparent),
+                radial-gradient(1.2px 1.2px at 78% 34%, rgba(255,255,255,0.07), transparent);
+            background-size: 100% 100%;
+            opacity: 0.1;
+            animation: exploreDustDrift 28s linear infinite;
+        }
+        #battle-view.has-scenic-bg .explore-dust {
+            opacity: 0.1;
+        }
+        #battle-view.is-explore-walking .explore-dust,
+        #battle-view.is-explore-combat .explore-dust {
+            opacity: 0.16;
+            animation-duration: 14s;
+        }
+        @keyframes exploreDustDrift {
+            0% { background-position: 0 0, 0 0, 0 0; }
+            100% { background-position: 28px 16px, -20px 12px, 18px -10px; }
+        }
+        /* 生態：輕調色溫（原場景為主，略微色偏） */
+        #battle-view.explore-biome-dungeon .explore-world-bg {
+            filter: contrast(1.06) saturate(0.92) brightness(0.94);
+        }
+        #battle-view.explore-biome-tower .explore-world-bg {
+            filter: contrast(1.05) saturate(1.06) brightness(1.02) sepia(0.08);
+        }
+        #battle-view.explore-biome-desert .explore-world-bg,
+        #battle-view.explore-biome-heat .explore-world-bg {
+            filter: contrast(1.05) saturate(1.12) brightness(1.04) sepia(0.1);
+        }
+        #battle-view.explore-biome-snow .explore-world-bg,
+        #battle-view.explore-biome-cold .explore-world-bg {
+            filter: contrast(1.04) saturate(0.9) brightness(1.06);
+        }
+        #battle-view.explore-biome-forest .explore-world-bg {
+            filter: contrast(1.06) saturate(1.1) brightness(0.98);
+        }
+        #battle-view.explore-biome-lava .explore-world-bg {
+            filter: contrast(1.1) saturate(1.2) brightness(1.0);
+        }
+        #battle-view.explore-biome-swamp .explore-world-bg {
+            filter: contrast(1.04) saturate(1.05) brightness(0.96) hue-rotate(8deg);
+        }
+        #battle-view.explore-biome-crystal .explore-world-bg {
+            filter: contrast(1.08) saturate(1.15) brightness(0.97) hue-rotate(-8deg);
+        }
+        #battle-view.explore-biome-coast .explore-world-bg,
+        #battle-view.explore-biome-mist .explore-world-bg {
+            filter: contrast(1.03) saturate(1.08) brightness(1.05);
+        }
+        #battle-view.explore-biome-wild .explore-world-bg {
+            filter: contrast(1.04) saturate(1.06) brightness(1.01);
+        }
+        #battle-view.has-scenic-bg.explore-biome-dungeon .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-tower .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-desert .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-heat .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-snow .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-cold .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-forest .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-lava .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-swamp .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-crystal .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-coast .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-mist .explore-world-bg.is-map-scene,
+        #battle-view.has-scenic-bg.explore-biome-wild .explore-world-bg.is-map-scene {
+            filter: contrast(1.04) saturate(1.08) brightness(1.01);
+        }
+        #battle-view.is-topdown-map .explore-ground {
+            display: none !important;
+        }
+        .explore-ground {
+            position: absolute; left: -20%; right: -20%; bottom: 0; height: 32%;
+            z-index: 4; pointer-events: none;
+            display: none;
+        }
+        .explore-vignette {
+            position: absolute; inset: 0; z-index: 5; pointer-events: none;
+            background: radial-gradient(ellipse at 50% 50%,
+                rgba(0, 0, 0, 0) 52%,
+                rgba(0, 0, 0, 0.12) 80%,
+                rgba(0, 0, 0, 0.28) 100%);
+        }
+        /* 🗺️ v3.8.191 走道練功點標記 */
+        .explore-grind-layer {
+            position: absolute; inset: 0; z-index: 7; pointer-events: none;
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear;
+            will-change: transform;
+        }
+        .explore-grind-mark {
+            position: absolute;
+            transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+            opacity: 0.45;
+            transition: opacity 0.15s ease;
+        }
+        .explore-grind-mark.is-near { opacity: 0.95; }
+        .explore-grind-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(253, 230, 138, 0.95) 0%, rgba(180, 83, 9, 0.35) 55%, transparent 70%);
+            box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+        }
+        .explore-grind-label {
+            display: none !important; /* 練功點文字標籤關閉 */
+            font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em;
+            color: #fde68a; text-shadow: 0 1px 2px #000;
+            background: rgba(20, 14, 8, 0.72);
+            padding: 0.08rem 0.4rem; border-radius: 999px;
+            border: 1px solid rgba(253, 230, 138, 0.28);
+            white-space: nowrap;
+        }
+        /* 世界座標石牆＋牆外虛空（走近即見） */
+        .explore-bound-layer {
+            position: absolute; inset: 0; z-index: 6; pointer-events: none;
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear;
+            will-change: transform;
+        }
+        .explore-void {
+            position: absolute;
+            background:
+                linear-gradient(90deg, #050607 0%, #0a0c0e 55%, #12151a 100%);
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.85);
+        }
+        .explore-void-west {
+            background: linear-gradient(90deg, #030405 0%, #080a0c 70%, rgba(10, 12, 14, 0.92) 100%);
+        }
+        .explore-void-east {
+            background: linear-gradient(270deg, #030405 0%, #080a0c 70%, rgba(10, 12, 14, 0.92) 100%);
+        }
+        .explore-void-north {
+            background: linear-gradient(0deg, rgba(10, 12, 14, 0.92) 0%, #080a0c 40%, #030405 100%);
+        }
+        .explore-void-south {
+            background: linear-gradient(180deg, rgba(10, 12, 14, 0.92) 0%, #080a0c 40%, #030405 100%);
+        }
+        .explore-bound {
+            position: absolute;
+            background:
+                repeating-linear-gradient(
+                    90deg,
+                    #3f3a34 0px, #3f3a34 28px,
+                    #2c2823 28px, #2c2823 30px
+                ),
+                linear-gradient(180deg, #5a534a 0%, #3a3530 38%, #1c1916 100%);
+            background-blend-mode: multiply, normal;
+            border: 2px solid rgba(20, 16, 12, 0.95);
+            box-shadow:
+                inset 0 2px 0 rgba(255, 255, 255, 0.14),
+                inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+                0 0 18px rgba(0, 0, 0, 0.55);
+        }
+        .explore-bound-west,
+        .explore-bound-east {
+            background:
+                repeating-linear-gradient(
+                    0deg,
+                    #454038 0px, #454038 22px,
+                    #2a2621 22px, #2a2621 24px
+                ),
+                linear-gradient(90deg, #1a1714 0%, #4a433c 22%, #2e2a25 78%, #12100e 100%);
+            background-blend-mode: multiply, normal;
+        }
+        .explore-bound-west {
+            border-right: 3px solid rgba(120, 110, 95, 0.55);
+            box-shadow:
+                inset -8px 0 12px rgba(0, 0, 0, 0.35),
+                inset 4px 0 0 rgba(255, 255, 255, 0.08),
+                4px 0 22px rgba(0, 0, 0, 0.5);
+        }
+        .explore-bound-east {
+            border-left: 3px solid rgba(120, 110, 95, 0.55);
+            box-shadow:
+                inset 8px 0 12px rgba(0, 0, 0, 0.35),
+                inset -4px 0 0 rgba(255, 255, 255, 0.08),
+                -4px 0 22px rgba(0, 0, 0, 0.5);
+        }
+        .explore-bound-north {
+            border-bottom: 3px solid rgba(120, 110, 95, 0.55);
+            box-shadow:
+                inset 0 8px 12px rgba(0, 0, 0, 0.35),
+                inset 0 -3px 0 rgba(255, 255, 255, 0.1),
+                0 4px 22px rgba(0, 0, 0, 0.5);
+        }
+        .explore-bound-south {
+            border-top: 3px solid rgba(120, 110, 95, 0.55);
+            box-shadow:
+                inset 0 -8px 12px rgba(0, 0, 0, 0.35),
+                inset 0 3px 0 rgba(255, 255, 255, 0.1),
+                0 -4px 22px rgba(0, 0, 0, 0.5);
+        }
+        /* 🗺️ v3.8.219 邊界提示＋頂死加強 */
+        .explore-edge-layer {
+            position: absolute; inset: 0; z-index: 38; pointer-events: none;
+        }
+        .explore-edge {
+            position: absolute;
+            font-size: 0.82rem; font-weight: 800;
+            letter-spacing: 0.03em;
+            color: #e7e5e4; text-shadow: 0 1px 3px #000;
+            background: rgba(41, 37, 36, 0.92);
+            border: 2px solid rgba(168, 162, 158, 0.55);
+            padding: 0.35rem 0.75rem; border-radius: 0.35rem;
+            opacity: 0.92;
+            transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+        }
+        .explore-edge.is-near {
+            border-color: rgba(214, 211, 209, 0.8);
+            color: #fafaf9;
+        }
+        .explore-edge.is-end,
+        .explore-edge.is-wall {
+            opacity: 1;
+            font-size: 0.95rem;
+            color: #fafaf9;
+            border-color: #a8a29e;
+            background: linear-gradient(180deg, rgba(68, 64, 60, 0.98), rgba(28, 25, 23, 0.98));
+            box-shadow: 0 0 0 2px rgba(12, 10, 9, 0.7), inset 0 1px 0 rgba(255,255,255,0.14);
+            animation: none;
+        }
+        .explore-edge-west { left: 0.35rem; top: 50%; transform: translateY(-50%); }
+        .explore-edge-east { right: 0.35rem; top: 50%; transform: translateY(-50%); }
+        .explore-edge-north { top: 2.15rem; left: 50%; transform: translateX(-50%); }
+        .explore-edge-south { bottom: 0.45rem; left: 50%; transform: translateX(-50%); }
+        #battle-view.near-map-edge::before {
+            content: '';
+            position: absolute; inset: 0; z-index: 36; pointer-events: none;
+            box-shadow: inset 0 0 48px rgba(12, 10, 9, 0.45);
+        }
+        #battle-view.at-map-edge::after {
+            content: '';
+            position: absolute; inset: 0; z-index: 37; pointer-events: none;
+            box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.62);
+        }
+        /* 頂死時再加一層貼牆壓暗 */
+        #battle-view.map-walled.edge-w {
+            box-shadow: inset 36px 0 0 rgba(28, 25, 23, 0.88), inset 70px 0 48px rgba(0, 0, 0, 0.55);
+        }
+        #battle-view.map-walled.edge-e {
+            box-shadow: inset -36px 0 0 rgba(28, 25, 23, 0.88), inset -70px 0 48px rgba(0, 0, 0, 0.55);
+        }
+        #battle-view.map-walled.edge-n {
+            box-shadow: inset 0 36px 0 rgba(28, 25, 23, 0.88), inset 0 70px 48px rgba(0, 0, 0, 0.55);
+        }
+        #battle-view.map-walled.edge-s {
+            box-shadow: inset 0 -36px 0 rgba(28, 25, 23, 0.88), inset 0 -70px 48px rgba(0, 0, 0, 0.55);
+        }
+        #battle-view.map-walled.edge-w.edge-n {
+            box-shadow: inset 36px 36px 0 rgba(28, 25, 23, 0.88), inset 70px 70px 52px rgba(0, 0, 0, 0.6);
+        }
+        #battle-view.map-walled.edge-e.edge-n {
+            box-shadow: inset -36px 36px 0 rgba(28, 25, 23, 0.88), inset -70px 70px 52px rgba(0, 0, 0, 0.6);
+        }
+        #battle-view.map-walled.edge-w.edge-s {
+            box-shadow: inset 36px -36px 0 rgba(28, 25, 23, 0.88), inset 70px -70px 52px rgba(0, 0, 0, 0.6);
+        }
+        #battle-view.map-walled.edge-e.edge-s {
+            box-shadow: inset -36px -36px 0 rgba(28, 25, 23, 0.88), inset -70px -70px 52px rgba(0, 0, 0, 0.6);
         }
         /* 🗺️ v3.8.182 角色鎖中央：--wx/--wy 驅動世界層反向平移 */
         #battle-view.is-world-scroll {
@@ -602,18 +1045,307 @@
             transition: transform 0.05s linear;
             will-change: transform;
         }
+        /* 🗺️ v3.8.185 場戰：#mob-list 鋪滿戰鬥框，怪絕對定位散佈 */
+        #battle-view.is-world-scroll #mob-list.is-field-combat {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
+            align-items: unset !important;
+            justify-content: unset !important;
+            pointer-events: none;
+            z-index: 8;
+            overflow: visible;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target {
+            position: absolute !important;
+            width: auto;
+            min-width: 72px;
+            max-width: 140px;
+            height: auto !important;
+            min-height: 0 !important;
+            pointer-events: auto;
+            transform: translateX(-50%);
+            transform-origin: bottom center;
+            z-index: 9;
+            transition: transform 0.05s linear, left 0s, bottom 0s;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob {
+            margin: 0;
+            /* 腳錨：圖在底，名／血條疊在圖上，避免整卡把腳抬離地面 */
+            display: flex !important;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-name,
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-badge-row {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: 130px;
+            z-index: 4;
+            margin: 0 !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-name {
+            bottom: calc(100% - 6px);
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-badge-row {
+            bottom: calc(100% + 14px);
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-img-wrap {
+            position: relative;
+            margin: 0 !important;
+            z-index: 2;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > div:nth-child(4) {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 4px;
+            z-index: 3;
+            margin: 0 !important;
+            height: auto !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-hp-bar {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: -2px;
+            z-index: 3;
+            margin: 0 !important;
+        }
+        /* 貼地接觸影子（場怪） */
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner {
+            position: relative;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: 1px;
+            width: 52%;
+            height: 11px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 72%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        /* 主角／本地傭兵接觸影子加強 */
+        #battle-view.is-world-scroll > #player-morph-sprite::after,
+        #battle-view.is-world-scroll > .party-sprite:not(.remote-party)::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 46%;
+            height: 10px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.18) 50%, transparent 72%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage .mob-img-inner {
+            filter: none;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage .mob-img-wrap {
+            filter: drop-shadow(0 0 0 2px #fda4af);
+        }
+        /* 🎨 v3.8.207：經典怪不再套 q-classic-chibi 壓扁；僅真 Q 包怪用 .q-mob-art */
+        #battle-view.q-chibi .mob-img-inner.q-classic-chibi {
+            transform-origin: bottom center;
+        }
+        #battle-view.q-chibi .mob-img-inner.q-classic-chibi > img:not(.mob-anim-shadow) {
+            /* 已停用壓扁：保留選擇器以免舊 DOM class 殘留報錯，但不改比例 */
+            transform: none;
+            transform-origin: bottom center;
+            image-rendering: inherit;
+            filter: none !important;
+        }
+        /* 人物 Q 只走 .q-chibi-actor；整場 .q-chibi 不再強制改 morph／職業圖 */
+        #battle-view.q-chibi #player-morph-sprite:not(.q-chibi-actor),
+        #battle-view.q-chibi .party-sprite:not(.q-chibi-actor) {
+            transform: none !important;
+        }
+        #battle-view.q-chibi #player-morph-sprite:not(.q-chibi-actor) img,
+        #battle-view.q-chibi .party-sprite:not(.q-chibi-actor) img {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            filter: none !important;
+        }
+        #battle-view.q-chibi .mob-img-inner.q-mob-art > img {
+            width: 96px !important;
+            height: 96px !important;
+            max-height: 96px !important;
+            object-fit: contain;
+            image-rendering: auto;
+            filter: none !important;
+            animation: qChibiBob 1.6s ease-in-out infinite;
+            transform-origin: bottom center;
+        }
+        #battle-view.q-chibi .mob-front .mob-img-inner.q-mob-art > img { width: 108px !important; height: 108px !important; max-height: 108px !important; }
+        #battle-view.q-chibi .boss-zoom .mob-img-inner.q-mob-art > img,
+        #battle-view.q-chibi .boss-slot .mob-img-inner.q-mob-art > img {
+            width: 140px !important; height: 140px !important; max-height: 140px !important;
+        }
+        @keyframes qChibiBob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+        @keyframes qChibiWalk {
+            /* 腳步感：左右微傾＋輕踩起伏，不蓋掉 walk 幀本身 */
+            0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+            25% { transform: translateY(-2px) rotate(0deg); }
+            50% { transform: translateY(0) rotate(1.2deg); }
+            75% { transform: translateY(-2px) rotate(0deg); }
+        }
+        @keyframes qChibiAttack {
+            0%   { transform: translate(0, 0) scale(1); }
+            35%  { transform: translate(4px, -3px) scale(1.04); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes qChibiSkill {
+            0%   { transform: translate(0, 0) scale(1, 1); filter: drop-shadow(0 4px 3px rgba(0,0,0,.35)); }
+            35%  { transform: translate(0, -12px) scale(0.92, 1.12); filter: drop-shadow(0 0 10px rgba(147,197,253,.95)) brightness(1.15); }
+            70%  { transform: translate(0, -16px) scale(0.9, 1.16) rotate(4deg); filter: drop-shadow(0 0 14px rgba(196,181,253,.95)) brightness(1.25); }
+            100% { transform: translate(0, 0) scale(1, 1); filter: drop-shadow(0 4px 3px rgba(0,0,0,.35)); }
+        }
+        @keyframes qChibiHurt {
+            0%, 100% { transform: translate(0, 0); filter: drop-shadow(0 4px 3px rgba(0,0,0,.35)); }
+            30% { transform: translate(-8px, 2px) rotate(-8deg); filter: brightness(1.4) drop-shadow(0 0 6px #fff); }
+            60% { transform: translate(6px, 0) rotate(4deg); filter: brightness(1.15); }
+        }
+        @keyframes qChibiDeath {
+            0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            55%  { transform: translate(-6px, 8px) rotate(-55deg); opacity: 0.85; }
+            100% { transform: translate(-2px, 14px) rotate(-88deg); opacity: 0.55; }
+        }
+        @keyframes qFaceTurn {
+            0% { transform: scaleX(var(--q-face, 1)) scaleY(1.04); }
+            100% { transform: scaleX(var(--q-face, 1)) scaleY(1); }
+        }
+        #player-morph-sprite.q-chibi-actor,
+        .party-sprite.q-chibi-actor {
+            width: 68px !important;
+            height: 78px;
+            transform-origin: bottom center;
+            transform-style: preserve-3d;
+            transition: transform 0.2s ease-out;
+        }
+        /* 🧭 八角度（0=NW…7=W·與 _vec2dir 同羅盤）；單向圖用透視模擬 */
+        #player-morph-sprite.q-chibi-actor.q-face-d0 { transform: perspective(420px) rotateY(42deg) rotateX(-14deg) scaleX(-1); }
+        #player-morph-sprite.q-chibi-actor.q-face-d1 { transform: perspective(420px) rotateY(52deg) rotateX(-6deg) scale(0.9); }
+        #player-morph-sprite.q-chibi-actor.q-face-d2 { transform: perspective(420px) rotateY(-24deg) rotateX(-14deg); }
+        #player-morph-sprite.q-chibi-actor.q-face-d3 { transform: perspective(420px) rotateY(-6deg) rotateX(-2deg); }
+        #player-morph-sprite.q-chibi-actor.q-face-d4 { transform: perspective(420px) rotateY(-20deg) rotateX(14deg); }
+        #player-morph-sprite.q-chibi-actor.q-face-d5 { transform: perspective(420px) rotateY(-46deg) rotateX(8deg) scale(1.08); }
+        #player-morph-sprite.q-chibi-actor.q-face-d6 { transform: perspective(420px) rotateY(24deg) rotateX(14deg) scaleX(-1); }
+        #player-morph-sprite.q-chibi-actor.q-face-d7 { transform: perspective(420px) rotateY(8deg) rotateX(2deg) scaleX(-1); }
+        #player-morph-sprite.q-chibi-actor .pm-body,
+        .party-sprite.q-chibi-actor .pm-body {
+            width: 68px !important;
+            height: auto !important;
+            max-height: 78px;
+            object-fit: contain;
+            image-rendering: auto;
+            filter: drop-shadow(0 4px 3px rgba(0,0,0,.35));
+            animation: qChibiBob 0.55s ease-in-out infinite;
+            transform-origin: bottom center;
+            background: transparent !important;
+        }
+        #player-morph-sprite.q-chibi-actor.q-act-walk .pm-body {
+            animation: qChibiWalk 0.32s ease-in-out infinite;
+        }
+        #player-morph-sprite.q-chibi-actor.q-act-attack .pm-body {
+            animation: qChibiAttack 0.28s ease-out;
+        }
+        #player-morph-sprite.q-chibi-actor.q-act-skill .pm-body {
+            animation: qChibiSkill 0.45s ease-out;
+        }
+        #player-morph-sprite.q-chibi-actor.q-act-hurt .pm-body {
+            animation: qChibiHurt 0.35s ease-out;
+        }
+        #player-morph-sprite.q-chibi-actor.q-act-death .pm-body {
+            animation: qChibiDeath 0.55s ease-in forwards;
+        }
+        #player-morph-sprite.q-chibi-actor .pm-shadow,
+        #player-morph-sprite.q-chibi-actor .pm-weapon,
+        .party-sprite.q-chibi-actor .pm-shadow,
+        .party-sprite.q-chibi-actor .pm-weapon {
+            display: none !important;
+        }
+        #battle-view.q-chibi .mob-name,
+        #battle-view.q-chibi .mob-name span {
+            color: #5b21b6 !important;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.85) !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.02em;
+        }
+        #battle-view.q-chibi .mob-name span.mob-name-boss {
+            color: #be123c !important;
+            text-shadow: 0 1px 0 #fff !important;
+        }
+        #battle-view.q-chibi #mob-list.is-field-combat > .mob-target.field-mob > .mob-name {
+            background: linear-gradient(180deg, #fff7fb, #fce7f3);
+            border: 2px solid var(--skin-rim, #f9a8d4);
+            border-radius: 999px;
+            padding: 0.15rem 0.55rem;
+            box-shadow: 0 2px 0 rgba(244, 114, 182, 0.25);
+        }
+        #battle-view.q-chibi #mob-list.is-field-combat > .mob-target.field-mob > .mob-hp-bar > div {
+            background: #fff !important;
+            border: 2px solid #fda4af;
+            border-radius: 999px;
+            overflow: hidden;
+            box-shadow: none;
+        }
+        #battle-view.q-chibi #mob-list.is-field-combat > .mob-target.field-mob > .mob-hp-bar > div > div {
+            background: linear-gradient(90deg, #fb7185, #f472b6) !important;
+        }
+        #status-panel.q-skin-portrait {
+            background-size: contain !important;
+            background-repeat: no-repeat !important;
+            background-position: top center !important;
+            filter: none;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.pointer-events-none {
+            pointer-events: none !important;
+            opacity: 0;
+            width: 0 !important;
+            min-width: 0 !important;
+            height: 0 !important;
+            overflow: hidden;
+        }
+        .explore-gold-pop {
+            position: absolute; z-index: 50; pointer-events: none;
+            font-weight: 800; font-size: 0.85rem; color: #fde68a;
+            text-shadow: 0 1px 2px #000, 0 0 8px rgba(251, 191, 36, 0.55);
+            animation: exploreGoldPop 0.9s ease-out forwards;
+        }
+        @keyframes exploreGoldPop {
+            0% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -36px); }
+        }
         /* 遠端玩家死綁世界座標（隨捲動甩出／滑入） */
         #battle-view.is-world-scroll > .party-sprite.remote-party {
             transform: translate3d(var(--wx), var(--wy), 0);
             transition: transform 0.05s linear, left 0s, bottom 0s;
             will-change: transform;
         }
-        /* 主角／本地傭兵／寵物層：不套世界平移，留在畫面中央一帶 */
+        /* 主角／本地傭兵／寵物層：不套世界平移，留在畫面正中央 */
         #battle-view.is-world-scroll > #player-morph-sprite,
         #battle-view.is-world-scroll > .party-sprite:not(.remote-party),
         #battle-view.is-world-scroll > #pet-layer {
             transform: none !important;
             transition: none !important;
+            z-index: 20;
+        }
+        #battle-view.is-world-scroll > #player-morph-sprite {
+            z-index: 36;
         }
         #battle-view.is-world-scroll.has-bg {
             transition: background-position 0.05s linear;
@@ -747,13 +1479,7 @@
         .status-vitals-row > .compact-vital-bar .bar-text { font-size: 8px; line-height: 1; top: 50%; transform: translateY(-50%); }
         .compact-vital-bar { height: 17px; min-width: 0; }
         .compact-vital-bar .bar-text { font-size: 11px; line-height: 17px; }
-        /* 傭兵卡頭列：經驗條固定 110px（不因名稱長短/職業而變）；名字欄改彈性、過長以省略號截斷（.ally-compact-name 已有 ellipsis）。 */
-        .ally-compact-head { display: grid; grid-template-columns: minmax(0, 1fr) auto 110px; align-items: center; gap: 6px; }
-        .ally-compact-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        /* 傭兵經驗條：高度/字級對齊主角經驗條（.status-exp-bar 9px/8px），寬度維持撐滿本欄不變。 */
-        .ally-exp-bar { height: 9px; min-width: 0; }
-        .ally-exp-bar .bar-text { font-size: 8px; line-height: 9px; }
-        /* 傭兵 HP／MP：與主角內條同為 9px、沿用相同紅藍漸層；不套主角的雙條底框圖片。 */
+        /* 隊伍面板 HP／MP（寵物等）：與主角內條同為 9px、沿用相同紅藍漸層。 */
         .compact-team-bar { height: 9px; min-width: 0; }
         .compact-team-bar .bar-text { font-size: 8px; line-height: 9px; }
         /* 🛡️ 裝備可用職業 logo：細金邊、無發光特效 */
@@ -833,7 +1559,7 @@
         /* ⚔️ 戰鬥日誌來源過濾：點亮(顯示)/點暗(隱藏) 敵人/玩家/傭兵/召喚/夥伴 */
         .cf-pill { font-size: 0.7rem; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 9999px; border: 1px solid; cursor: pointer; user-select: none; transition: opacity .15s, filter .15s; white-space: nowrap; }
         .cf-pill.cf-off { opacity: 0.4; filter: grayscale(0.85); }
-        #combat-log.cf-hide-enemy [data-src="enemy"], #combat-log.cf-hide-player [data-src="player"], #combat-log.cf-hide-mercenary [data-src="mercenary"], #combat-log.cf-hide-summon [data-src="summon"], #combat-log.cf-hide-pet [data-src="pet"] { display: none; }
+        #combat-log.cf-hide-enemy [data-src="enemy"], #combat-log.cf-hide-player [data-src="player"], #combat-log.cf-hide-summon [data-src="summon"], #combat-log.cf-hide-pet [data-src="pet"] { display: none; }
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .anim-flash { animation: flash 1s infinite; }
         
@@ -1052,6 +1778,76 @@
         .vfx-lvring { position: absolute; border-radius: 50%; transform: translate(-50%,-50%); border: 3px solid #ffd54f; box-shadow: 0 0 18px #ffca28, inset 0 0 18px #ffca28; will-change: transform,opacity; }
         @keyframes vfxLvRing { 0% { opacity: 1; transform: translate(-50%,-50%) scale(.15); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1); } }
         .vfx-lvtext { position: absolute; transform: translate(-50%,-50%); font-weight: 900; font-family: 'Arial Black','Segoe UI',system-ui,sans-serif; color: #ffe082; text-shadow: 0 0 9px #ff9800, 0 2px 3px rgba(0,0,0,.9); white-space: nowrap; will-change: transform,opacity; }
+        /* 🗺️ 地面掉落物層：與 #mob-list 同綁 --wx/--wy，玩家移動時寶物留在世界座標被甩開 */
+        .explore-loot-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 12;
+            pointer-events: none;
+            overflow: visible;
+            transform: translate3d(var(--wx), var(--wy), 0);
+            transition: transform 0.05s linear;
+            will-change: transform;
+        }
+        .explore-loot-layer.hidden { display: none !important; }
+        /* 💰 擊殺掉落物：金幣／裝備圖標拋物線噴出 */
+        .vfx-drop-loot {
+            position: absolute;
+            z-index: 48;
+            width: 28px;
+            height: 28px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            will-change: transform, opacity;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,.85));
+        }
+        .vfx-drop-loot.is-world {
+            transform: none;
+            z-index: 12;
+        }
+        .vfx-drop-loot-inner {
+            width: 100%;
+            height: 100%;
+            transform: translate(-50%, 0);
+            transform-origin: center bottom;
+            will-change: transform, opacity;
+        }
+        .vfx-drop-loot.is-world .vfx-drop-loot-inner {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+        }
+        .vfx-drop-loot img,
+        .vfx-drop-loot-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .vfx-drop-loot.is-gold {
+            width: 24px;
+            height: 24px;
+        }
+        .vfx-drop-loot.is-landed {
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,.75));
+        }
+        .vfx-drop-coin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #ffe9a8 0%, #f0c14a 42%, #b8860b 78%, #6b4e0a 100%);
+            border: 1px solid rgba(255, 236, 170, 0.85);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 0 8px rgba(251, 191, 36, 0.45);
+            color: #5a3d08;
+            font-size: 11px;
+            font-weight: 900;
+            line-height: 1;
+            text-shadow: 0 1px 0 rgba(255,255,255,.25);
+        }
         @keyframes vfxLvText { 0% { opacity: 0; transform: translate(-50%,-30%) scale(.6); } 20% { opacity: 1; transform: translate(-50%,-72%) scale(1.18); } 75% { opacity: 1; transform: translate(-50%,-120%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-160%) scale(.95); } }
         .vfx-areaflash { position: absolute; border-radius: 10px; will-change: opacity; }
         @keyframes vfxLvFlash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
@@ -1332,7 +2128,7 @@
 /* 🔤 v3.4.22 標題字級改用 cqw（跟隨標題框寬度）而非 vw：修正「寬而矮視窗下框縮小但字仍撐到 vw 上限→標題超框」；並整體略縮 */
 #login-title-layer .login-title-row { display:flex; align-items:flex-end; justify-content:center; gap:4px; margin-bottom:2.5%; }
 #login-title-layer h1 { margin:0; font-size:clamp(13px,8cqw,30px); line-height:1.15; color:#f5d46c; }
-#login-title-layer .login-title-goblin-dead { width:clamp(40px,12cqw,64px); height:auto; image-rendering:pixelated; image-rendering:crisp-edges; flex-shrink:0; transform:translateY(3px); pointer-events:none; user-select:none; filter:drop-shadow(0 2px 3px #000); }
+#login-title-layer .login-title-goblin-dead { display:none; }
 #login-title-layer p { margin:0; font-size:clamp(9px,1.05vw,16px); color:#e7d7b5; }
 #main-menu { position:absolute; z-index:4; left:50.4%; top:48.5%; width:25%; margin:0 !important; display:flex; flex-direction:column; align-items:stretch; gap:clamp(10px,1.45vw,22px) !important; }
 #main-menu.hidden { display:none !important; }
@@ -2027,18 +2823,121 @@ button.classic-skill-cell { cursor:pointer; }
     font-size:11px;
     font-weight:600;
 }
-/* 🧑‍🤝‍🧑 v3.7.85 「擔任傭兵」＝受僱為別人的傭兵（只能待安全區）。單行 <strong> 徽章，置於立繪頭頂正中。
-   🗑️ v3.7.94 離線掛機移除後，本檔的 .load-slot-badge 只剩這一種用途（原綠色「掛機中」已刪）；
-   幾何/字級/RWD 仍留在上方 .load-slot-badge（含 @media 縮小規則），此處只覆寫配色。 */
-.load-slot-badge.load-badge-party {
-    border-color:rgba(192,132,252,.8);
-    background:rgba(26,8,42,.9);
-    color:#e9d5ff;
-    box-shadow:0 2px 5px rgba(0,0,0,.82), inset 0 1px 0 rgba(255,255,255,.08);
-    text-shadow:0 1px 2px #000, 0 0 6px rgba(168,85,247,.6);
+.load-slot-card.selected {
+    outline:2px solid rgba(241,199,92,.92);
+    outline-offset:-2px;
+    box-shadow:
+        inset 0 0 0 1px rgba(255,232,167,.22),
+        0 0 18px rgba(216,160,55,.28);
 }
 .load-slot-card.selected::after {
     display:none;
+}
+.load-slot-caption {
+    position:absolute;
+    z-index:3;
+    left:4%;
+    right:4%;
+    bottom:4%;
+    padding:5px 6px 4px;
+    border:1px solid rgba(168,132,68,.55);
+    border-radius:3px;
+    background:linear-gradient(180deg, rgba(18,14,8,.88), rgba(6,5,3,.94));
+    color:#f3e6c0;
+    text-align:center;
+    pointer-events:none;
+    box-shadow:0 2px 8px rgba(0,0,0,.55);
+}
+.load-slot-caption strong {
+    display:block;
+    font-size:clamp(10px,1.05vw,14px);
+    font-weight:800;
+    letter-spacing:.04em;
+    line-height:1.2;
+    text-shadow:0 1px 2px #000;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.load-slot-caption small {
+    display:block;
+    margin-top:2px;
+    font-size:clamp(8px,.78vw,11px);
+    color:#c8b890;
+    letter-spacing:.02em;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.load-slot-caption.empty {
+    border-color:rgba(120,100,70,.45);
+    background:rgba(8,8,8,.72);
+    color:#b8a888;
+}
+.load-slot-caption.empty strong { color:#d8c8a2; font-weight:700; }
+#load-select-heading {
+    display:none;
+}
+#load-btn-enter {
+    border-color:rgba(232,176,72,.95) !important;
+    color:#ffe9a8 !important;
+    background:linear-gradient(180deg, rgba(92,62,18,.98), rgba(36,22,6,.98)) !important;
+}
+#load-btn-enter:hover:not(:disabled) {
+    color:#fff8d6 !important;
+    border-color:#f3c86a !important;
+    background:linear-gradient(180deg, rgba(118,78,22,.98), rgba(48,30,8,.98)) !important;
+}
+#load-btn-delete {
+    color:#e7a09a !important;
+    border-color:rgba(151,61,52,.82) !important;
+}
+.login-menu-btn {
+    width:100% !important;
+    max-width:280px;
+    min-height:48px;
+    padding:12px 10px !important;
+    border:1px solid rgba(198,156,74,.82) !important;
+    border-radius:3px !important;
+    background:linear-gradient(180deg, rgba(42,32,16,.98), rgba(12,8,4,.98)) !important;
+    color:#f7e79d !important;
+    font-family:Georgia, "Times New Roman", "Microsoft JhengHei", serif;
+    font-size:16px !important;
+    font-weight:800;
+    letter-spacing:.14em;
+    line-height:1.15;
+    text-shadow:0 1px 2px #000, 0 0 7px rgba(231,194,91,.35);
+    box-shadow:inset 0 1px 0 rgba(255,232,167,.14), inset 0 -10px 14px rgba(0,0,0,.28), 0 2px 10px rgba(0,0,0,.5);
+    cursor:pointer;
+}
+.login-menu-btn:hover {
+    color:#fff1ba !important;
+    border-color:rgba(241,199,92,.95) !important;
+    background:linear-gradient(180deg, rgba(58,44,20,.98), rgba(18,12,6,.98)) !important;
+}
+.login-menu-btn-primary {
+    border-color:rgba(232,176,72,.95) !important;
+    color:#ffe9a8 !important;
+    background:linear-gradient(180deg, rgba(92,62,18,.98), rgba(36,22,6,.98)) !important;
+}
+.login-menu-btn-primary:hover {
+    color:#fff8d6 !important;
+    border-color:#f3c86a !important;
+    background:linear-gradient(180deg, rgba(118,78,22,.98), rgba(48,30,8,.98)) !important;
+    box-shadow:inset 0 1px 0 rgba(255,232,167,.28), 0 0 18px rgba(232,176,72,.35);
+}
+.login-menu-btn-ghost {
+    opacity:.92;
+    background:linear-gradient(180deg, rgba(28,24,18,.92), rgba(10,8,6,.96)) !important;
+    border-color:rgba(140,118,78,.55) !important;
+    color:#d8c8a2 !important;
+}
+.auth-welcome {
+    margin:0 0 4px !important;
+    color:#e7d7b5 !important;
+    font-size:13px !important;
+    letter-spacing:.06em;
+    text-shadow:0 1px 3px #000;
 }
 #load-info-panel {
     position:absolute;
@@ -2233,7 +3132,7 @@ button.classic-skill-cell { cursor:pointer; }
 #town-view > #town-interaction-container.hidden { display: none !important; }
 
 /* ===== Mobile game layout (desktop rules remain unchanged) ===== */
-@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+@media all { /* desktop=mobile unified layout */
     body { overflow: hidden; }
 
     #game-screen {
@@ -2359,19 +3258,21 @@ button.classic-skill-cell { cursor:pointer; }
         top: auto !important;
         left: auto !important;
         width: 100% !important;
-        height: 9px !important;
-        min-height: 9px !important;
+        height: 15px !important;
+        min-height: 15px !important;
         transform: none !important;
-        border: 1px solid #334155;
-        border-radius: 999px;
-        background: rgba(15, 23, 42, 0.85);
-        box-shadow: none;
+        border: 1px solid rgba(120, 90, 50, 0.55);
+        border-radius: 3px;
+        background: rgba(15, 12, 8, 0.88);
+        box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.1);
     }
     #status-panel .status-vitals-row > .compact-vital-bar .bar-text {
-        font-size: 8px !important;
-        line-height: 9px !important;
+        font-size: 11px !important;
+        line-height: 15px !important;
+        font-weight: 700;
         top: 50%;
         transform: translateY(-50%);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
     }
     /* 經驗條維持原高度／樣式 */
     #status-panel .status-exp-bar {
@@ -2404,14 +3305,14 @@ button.classic-skill-cell { cursor:pointer; }
     #map-view-panel > .panel-header #map-select { flex: 1 1 calc(62% - 2px); }
     #map-view-panel > .panel-header #pride-floor-indicator { flex: 1 0 100%; padding: 2px 4px !important; text-align: center; font-size: 11px !important; }
 
-    /* 狩獵／城鎮框：地圖欄精簡後加大戰鬥畫面 */
+    /* 狩獵／城鎮框：戰場優先（探索需較高可視區） */
     #battle-view.area-fit:not(.hidden),
     #battle-view:not(.area-fit):not(.hidden) {
         width: 100%;
         max-width: 100%;
         aspect-ratio: 16 / 9;
         height: auto;
-        max-height: min(64vw, 310px);
+        max-height: min(82vw, 440px);
         min-height: 0;
     }
     #town-view:not(.hidden) {
@@ -2419,14 +3320,14 @@ button.classic-skill-cell { cursor:pointer; }
         max-width: 100%;
         aspect-ratio: 16 / 9;
         height: auto;
-        max-height: min(64vw, 310px);
-        min-height: min(36vw, 200px);
+        max-height: min(82vw, 440px);
+        min-height: min(40vw, 220px);
     }
     #battle-view { padding: 4px !important; }
     #battle-view.area-fit:has(.boss-slot) { padding: 0 !important; }
     #battle-view.area-fit #mob-list,
     #battle-view.area-fit #mob-list:has(.boss-slot),
-    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(120px, 44vw, 210px); gap: 2px !important; }
+    #battle-view.area-fit #mob-list:has(.mob-back) { height: clamp(150px, 52vw, 250px); gap: 2px !important; }
     #battle-view.area-fit .mob-target { padding: 2px; min-width: 0; }
     #battle-view .mob-name { font-size: 10px; line-height: 1.1; }
     #town-npc-map { inset: 0; width: auto; height: auto; }
@@ -2439,7 +3340,8 @@ button.classic-skill-cell { cursor:pointer; }
 
     #log-row {
         flex: 0 0 auto !important;
-        min-height: min(46dvh, 420px) !important;
+        min-height: min(22dvh, 210px) !important;
+        max-height: min(34dvh, 300px);
         height: auto !important;
         flex-direction: column;
         gap: 0 !important;
@@ -2448,12 +3350,12 @@ button.classic-skill-cell { cursor:pointer; }
         flex: 1 1 auto !important;
         width: 100%;
         height: auto !important;
-        min-height: min(42dvh, 380px) !important;
+        min-height: min(18dvh, 180px) !important;
         max-height: none !important;
     }
     #unified-log-body {
         flex: 1 1 auto !important;
-        min-height: min(30dvh, 280px) !important;
+        min-height: min(12dvh, 120px) !important;
     }
     #syslog-panel.hidden { display: none !important; height: 0 !important; min-height: 0 !important; flex: none !important; }
     #log-row .panel-header { padding: 4px 7px; font-size: 12px !important; }
@@ -2549,7 +3451,16 @@ button.classic-skill-cell { cursor:pointer; }
     #tab-stats { padding: 8px !important; gap: 8px !important; font-size: 13px !important; }
     #tab-stats > .grid { gap: 5px 8px !important; }
 
-    #town-interaction-container:not(.hidden) { width: calc(100vw - 10px); height: calc(100dvh - 10px); max-width: none; max-height: none; border-width: 2px; }
+    #town-interaction-container:not(.hidden) {
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(400px, calc(100vw - 20px));
+        height: min(62dvh, 480px);
+        max-width: min(400px, calc(100vw - 20px));
+        max-height: min(70dvh, 520px);
+        border-width: 2px;
+    }
     #town-interaction-container:not(.hidden) > div:first-child { margin-bottom: 6px !important; padding: 8px !important; }
 
     /* 帳號登入框：手機縮小（沿用古典金飾風格） */
@@ -2571,7 +3482,7 @@ button.classic-skill-cell { cursor:pointer; }
 }
 
 /* ===== Mobile login / character select / character creation ===== */
-@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+@media all { /* desktop=mobile unified layout */
     #creation-screen {
         width: 100vw;
         height: 100dvh;
@@ -3280,7 +4191,7 @@ button.classic-skill-cell { cursor:pointer; }
 .pandora-relic-cancel { color: #b58b8b; font-size: 9px !important; text-decoration: underline; }
 .pandora-relic-cd { color: #d6b46f !important; font-size: 10px !important; }
 
-@media (max-width: 720px) {
+@media all {
     .pandora-market-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
     .pandora-relic-grid { grid-template-columns: minmax(0,1fr); }
     .pandora-buybar { grid-template-columns: auto minmax(0,1fr) auto; }
@@ -3289,9 +4200,6 @@ button.classic-skill-cell { cursor:pointer; }
     .pandora-buy-comma { display: none; }
     .pandora-relic-board-head { display: block; }
     .pandora-relic-board-head span { display: block; margin-top: 3px; text-align: left; }
-}
-@media (max-width: 430px) {
-    .pandora-market-grid { grid-template-columns: minmax(0,1fr); }
     .pandora-market-title > span { display: block; margin: 5px 0 0; }
 }
 
@@ -3706,7 +4614,7 @@ button.classic-skill-cell { cursor:pointer; }
 /* 🏘️ v3.2.88 NPC 功能改成與倉庫相同的「浮動視窗」：position:fixed 脫離會塌陷的 town-view(不再點了沒顯示)·z-index 73 高於動態 sprite 圖層(map z:1) 與倉庫(72) */
 #town-interaction-container:not(.hidden) {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: min(82vw, 900px); max-width: 96vw; height: min(88vh, 640px); max-height: 92vh;
+    width: min(400px, calc(100vw - 20px)); max-width: min(400px, calc(100vw - 20px)); height: min(62dvh, 480px); max-height: min(70dvh, 520px);
     z-index: 73; pointer-events: auto; margin: 0 !important;
     display: flex; flex-direction: column;
     background: #111925fc; border: 3px solid #8b6a2f; border-radius: 13px;
@@ -3749,16 +4657,20 @@ button.classic-skill-cell { cursor:pointer; }
 }
 
 /* ===== Mobile floating-window bounds (desktop remains untouched) ===== */
-@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+@media all { /* desktop=mobile unified layout */
     #item-modal:not(.hidden) {
         position: fixed !important;
-        inset: 8px !important;
+        left: 50% !important;
+        top: 50% !important;
+        right: auto !important;
+        bottom: auto !important;
+        inset: auto !important;
         z-index: 100 !important;
-        width: auto !important;
-        height: auto !important;
-        max-width: none !important;
-        max-height: none !important;
-        transform: none !important;
+        width: min(400px, calc(100vw - 20px)) !important;
+        height: min(70dvh, 540px) !important;
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(78dvh, 580px) !important;
+        transform: translate(-50%, -50%) !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
@@ -3781,9 +4693,9 @@ button.classic-skill-cell { cursor:pointer; }
 
     .equipment-window-frame,
     .equipment-window-frame.side-open {
-        width: min(calc(100vw - 16px), calc((100dvh - 16px) * 1084 / 1447)) !important;
-        max-width: calc(100vw - 16px) !important;
-        max-height: calc(100dvh - 16px) !important;
+        width: min(400px, calc(100vw - 20px)) !important;
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(78dvh, 580px) !important;
     }
     .equipment-window-frame.side-open .equipment-side-panel {
         left: 4% !important;
@@ -3800,14 +4712,14 @@ button.classic-skill-cell { cursor:pointer; }
     .equipment-side-item img { width: 38px; height: 38px; }
 
     #warehouse-window-frame {
-        left: 8px !important;
-        top: 8px !important;
-        transform: none !important;
-        width: calc(100vw - 16px) !important;
-        height: calc(100dvh - 16px) !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(400px, calc(100vw - 20px)) !important;
+        height: min(70dvh, 540px) !important;
         min-width: 0 !important;
-        max-width: none !important;
-        max-height: none !important;
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(78dvh, 580px) !important;
     }
     #warehouse-window-drag { flex-basis: 62px; padding: 7px 9px !important; cursor: default; }
     #warehouse-window-drag h2 { font-size: 18px; }
@@ -3818,19 +4730,21 @@ button.classic-skill-cell { cursor:pointer; }
     #warehouse-window-content #wh-store-list { max-height: none !important; }
 
     #town-interaction-container:not(.hidden) {
-        left: 8px !important;
-        top: 8px !important;
-        transform: none !important;
-        width: calc(100vw - 16px) !important;
-        height: calc(100dvh - 16px) !important;
-        max-width: none !important;
-        max-height: none !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(400px, calc(100vw - 20px)) !important;
+        height: min(62dvh, 480px) !important;
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(70dvh, 520px) !important;
         margin: 0 !important;
         overflow: hidden !important;
+        border-radius: 10px !important;
     }
     #town-interaction-container:not(.hidden) > div:first-child { flex-wrap: wrap; gap: 7px !important; padding: 9px !important; }
-    #interaction-npc-name { font-size: 18px !important; }
+    #interaction-npc-name { font-size: 17px !important; }
     #interaction-npc-title { font-size: 11px !important; }
+    #town-interaction-close { min-width: 56px; min-height: 36px; font-size: 13px !important; }
     #interaction-content { min-width: 0; padding: 0 8px 8px 8px !important; overflow-x: hidden !important; overflow-y: auto !important; }
     #interaction-content > * { max-width: 100%; box-sizing: border-box; }
 
@@ -3847,11 +4761,8 @@ button.classic-skill-cell { cursor:pointer; }
         #card-book > div, #equip-book > div, #misc-book > div, #relic-book > div,
         #collection-panel > div) {
         width: 100% !important;
-        max-width: calc(100vw - 16px) !important;
-        max-height: calc(100dvh - 16px) !important;
-        box-sizing: border-box !important;
-    }
-    #autosell-rule-modal .as-box { padding: 12px !important; overflow-x: hidden !important; overflow-y: auto !important; }
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(78dvh, 580px) !important;
     #autosell-rule-modal .as-head { font-size: 19px !important; }
     #autosell-rule-modal .as-sec { padding: 9px !important; }
     #autosell-rule-modal .as-row { max-width: 100%; }
@@ -3866,8 +4777,8 @@ button.classic-skill-cell { cursor:pointer; }
 
     .game-tooltip,
     .cdd-pop {
-        max-width: calc(100vw - 16px) !important;
-        max-height: calc(100dvh - 16px) !important;
+        max-width: min(400px, calc(100vw - 20px)) !important;
+        max-height: min(60dvh, 420px) !important;
         box-sizing: border-box !important;
         overflow: auto !important;
     }
@@ -4010,7 +4921,7 @@ button.classic-skill-cell { cursor:pointer; }
     background: rgba(15,23,42,.95); border: 1px solid #0f766e; border-radius: 8px;
     padding: 10px 12px; color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,.45);
 }
-@media (max-width: 768px) {
+@media all { /* desktop=mobile */
     .rt-party-invite-toast { right: 8px; left: 8px; max-width: none; bottom: 72px; }
 }
 
@@ -4078,26 +4989,18 @@ button.classic-skill-cell { cursor:pointer; }
 }
 .account-auth-game-title {
   margin: 0;
-  font-size: clamp(1.45rem, 3.2vw, 2.05rem);
+  font-size: clamp(1.55rem, 3.4vw, 2.2rem);
   font-weight: 800;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.28em;
   line-height: 1.2;
   color: #f5d46c;
   text-shadow:
     0 1px 0 #5a3d0e,
     0 2px 4px rgba(0, 0, 0, 0.9),
-    0 0 18px rgba(231, 180, 70, 0.35);
+    0 0 22px rgba(231, 180, 70, 0.42);
 }
 .account-auth-goblin-dead {
-  width: clamp(52px, 9vw, 76px);
-  height: auto;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  flex-shrink: 0;
-  transform: translateY(4px);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85));
-  pointer-events: none;
-  user-select: none;
+  display: none;
 }
 .account-auth-tagline {
   margin: 6px 0 0;
@@ -4132,15 +5035,16 @@ button.classic-skill-cell { cursor:pointer; }
   width: 100%;
   box-sizing: border-box;
   padding: 22px 20px 16px;
-  border-radius: 6px;
-  border: 1px solid rgba(198, 156, 74, 0.78);
+  border-radius: 8px;
+  border: 1px solid rgba(214, 170, 78, 0.88);
   background:
-    linear-gradient(180deg, rgba(36, 28, 16, 0.94) 0%, rgba(12, 9, 5, 0.96) 55%, rgba(8, 6, 3, 0.98) 100%);
+    linear-gradient(180deg, rgba(48, 36, 18, 0.96) 0%, rgba(16, 12, 7, 0.97) 48%, rgba(8, 6, 3, 0.99) 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 232, 167, 0.08) inset,
-    0 18px 40px rgba(0, 0, 0, 0.72),
-    0 0 28px rgba(180, 130, 40, 0.12);
-  backdrop-filter: blur(2px);
+    0 0 0 1px rgba(255, 232, 167, 0.1) inset,
+    0 1px 0 rgba(255, 220, 140, 0.18) inset,
+    0 18px 42px rgba(0, 0, 0, 0.78),
+    0 0 32px rgba(180, 130, 40, 0.16);
+  backdrop-filter: blur(3px);
   text-align: center;
   overflow: hidden;
 }
@@ -4149,7 +5053,15 @@ button.classic-skill-cell { cursor:pointer; }
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(247, 218, 140, 0.55), transparent);
+  background: linear-gradient(90deg, transparent, rgba(247, 218, 140, 0.65), transparent);
+  pointer-events: none;
+}
+.account-auth-box::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(198, 156, 74, 0.22);
+  border-radius: 5px;
   pointer-events: none;
 }
 .account-auth-box-ornament {
@@ -4595,7 +5507,7 @@ button.classic-skill-cell { cursor:pointer; }
     .talent-node-short { font-size: 9px; }
 }
 /* 📱 直立手機：說明固定底部可捲，避免被技能樹蓋住／捲到看不見 */
-@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+@media all { /* desktop=mobile unified layout */
     #tab-talent:not(.hidden),
     #col-right.mobile-tab-open #tab-talent:not(.hidden) {
         display: flex !important;

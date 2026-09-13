@@ -11,3 +11,6 @@ data/cloud/
 data/accounts.json
 data/char-names.json
 .vercel
+
+data/account-sessions.json
+tools/node_modules/

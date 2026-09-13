@@ -51,6 +51,8 @@
                 lv: m.lv || 1,
                 hp: Math.max(0, Math.floor(Number(m.hp) || 0)),
                 mhp: Math.max(1, Math.floor(Number(m.mhp) || 1)),
+                wx: Math.round(Number(m.wx) || 0),
+                wy: Math.round(Number(m.wy) || 0),
                 online: m.online !== false,
                 party: !!m.party,
                 pvpOn: !!m.pvpOn

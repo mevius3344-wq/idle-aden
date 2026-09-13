@@ -1,6 +1,6 @@
 ﻿/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.8.183';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.8.262';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '躺著變強';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -298,6 +298,7 @@ function _expReqOldV1(lv) {
     return EXP_T[lv];
 }
 function getExpGainMult(lv) { return lv >= 100 ? 0 : 1; }   // ⚠️v2.6.40 取消高等經驗遞減（恆全額）；滿等(100)仍不獲得。遞減效果改由 getExpReq 提高需求承擔。
+const GAME_EXP_MULT = 5;   // 全域擊殺經驗倍率（玩家／傭兵／寵物共用·在 killMob 的 _expEach 一次套用）
 
 const DB = {
         items: {
@@ -1172,7 +1173,7 @@ const DB = {
         "scroll_poly": { n: "變形卷軸", type: "scroll", req: "all", p: 1300, c: "text-gray-300", d: "記載古老變形術的卷軸，能讓使用者暫時化為與自身歷練相稱的姿態。", eff: "poly", dur: 1800, gachaWeight: 0 },
         "scroll_magicbarrier": { n: "魔法卷軸(魔法屏障)", type: "scroll", req: "all", p: 1500, c: "text-cyan-300", d: "封存魔法屏障的卷軸，展開後能抵擋一次來襲的技能。", eff: "magicbarrier", gachaWeight: 0 },
         "scroll_teleport": { n: "瞬間移動卷軸", type: "scroll", req: "all", p: 82, c: "text-sky-300", d: "使用後發動傳送術", eff: "teleport_scroll", gachaWeight: 0 },
-        "scroll_revive": { n: "復活卷軸", type: "scroll", req: "all", p: 1000, c: "text-yellow-300", d: "蘊藏復甦之力的神聖卷軸，能使倒下的冒險者或傭兵在原地重新站起。", gachaWeight: 0 },
+        "scroll_revive": { n: "復活卷軸", type: "scroll", req: "all", p: 1000, c: "text-yellow-300", d: "蘊藏復甦之力的神聖卷軸，能使倒下的傭兵或寵物在原地重新站起。玩家本人死亡後請祈求復活回村。", gachaWeight: 0 },
         "item_blueflute": { n: "藍色長笛", p: 1, c: "text-blue-300", d: "試煉所需的材料。", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
         "item_ancientkey": { n: "古代鑰匙", p: 1, c: "text-blue-300", d: "試煉所需的材料。", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
         "item_nightvision": { n: "夜之視野", p: 1, c: "text-blue-300", d: "凝視黑暗也不失方向的祕術之眼，試煉所需的材料。", gachaWeight: 0 },
@@ -1529,7 +1530,6 @@ const DB = {
         "bk_warrior_endurance": { type: "skillbk", n: "戰士的印記(體能強化)", p: 43200, sk: "sk_warrior_endurance", gachaWeight: 1, d: "記載著「體能強化」術式的古老魔法書，研讀後可將咒文銘刻於記憶。" },
         "bk_warrior_outlaw": { type: "skillbk", n: "戰士的印記(亡命之徒)", p: 43200, sk: "sk_warrior_outlaw", gachaWeight: 1, d: "記載著「亡命之徒」術式的古老魔法書，研讀後可將咒文銘刻於記憶。" },
         "bk_royal_precise":    { type: "skillbk", n: "魔法書(精準目標)", p: 4800,  sk: "sk_royal_precise",    gachaWeight: 30, d: "場上所有敵人受到的傷害增加 [1+(玩家等級/15)]%，持續 16 秒（結束才再施放）。可學等級 15。" },
-        "bk_royal_callally":   { type: "skillbk", n: "魔法書(呼喚盟友)", p: 12400, sk: "sk_royal_callally",   gachaWeight: 30, d: "所有傭兵立即發動一次額外攻擊。可學等級 30。" },
         "bk_royal_burnweapon": { type: "skillbk", n: "魔法書(灼熱武器)", p: 12400, sk: "sk_royal_burnweapon", gachaWeight: 0,  d: "可學等級 40。" },
         "bk_royal_bravewill":  { type: "skillbk", n: "魔法書(勇猛意志)", p: 12400, sk: "sk_royal_bravewill",  gachaWeight: 0,  d: "可學等級 50。" },
         "bk_royal_shield":     { type: "skillbk", n: "魔法書(閃亮之盾)", p: 12400, sk: "sk_royal_shield",     gachaWeight: 0,  d: "可學等級 50。" },
@@ -2991,7 +2991,6 @@ const DB = {
         "sk_warrior_outlaw":      { n: "亡命之徒", type: "buff", label: "增益", cat: "rage", reqW: 60, mp: 10, dur: 60, noRefresh: true, msg: "你豁出性命，攻勢勢在必中。" },
         // 👑 王族魔法（reqRoy；cat:'royal' → 技能欄「王族魔法」分區）
         "sk_royal_precise":    { n: "精準目標", type: "buff", label: "增益", cat: "royal", reqRoy: 15, mp: 2, dur: 16, noRefresh: true, msg: "你鎖定全場敵人，使其露出破綻。" },
-        "sk_royal_callally":   { n: "呼喚盟友", type: "atk", label: "攻擊", cat: "royal", reqRoy: 30, mp: 30, callAllies: true },
         "sk_royal_burnweapon": { n: "灼熱武器", type: "buff", label: "增益", cat: "royal", reqRoy: 40, mp: 25, dur: 640, noRefresh: true, d: { extraDmg: 5, extraHit: 5 }, msg: "灼熱之炎籠罩全隊武器，所有隊員的額外傷害與命中提升。" },
         "sk_royal_bravewill":  { n: "勇猛意志", type: "buff", label: "增益", cat: "royal", reqRoy: 50, mp: 25, dur: 640, noRefresh: true, msg: "勇猛的意志充盈你的全身。" },
         "sk_royal_shield":     { n: "閃亮之盾", type: "buff", label: "增益", cat: "royal", reqRoy: 50, mp: 25, dur: 640, noRefresh: true, d: { ac: 8 }, msg: "閃亮的護盾環繞全隊，使所有隊員的防禦提升。" },
