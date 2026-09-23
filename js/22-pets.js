@@ -1181,18 +1181,33 @@ function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryP
     let pdef = DB.items[potId];
     if (!pdef || pdef.val == null) return;   // 只認固定 val 的治癒藥水（紅/橙/白）
     let stack = player.inv && player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
-    if (!stack) {
-        let _buyChk = (typeof document !== 'undefined') ? document.getElementById('set-auto-buy-pot') : null;
-        if (!_buyChk || !_buyChk.checked) return;
-        let _unit = (typeof shopPrice === 'function') ? shopPrice(pdef.p || 0) : (pdef.p || 0);
-        let _need = 100;
-        if ((player.gold || 0) < _need * _unit) return;
-        player.gold -= _need * _unit;
-        gainItem(potId, _need, true, true);
-        logSys(`自動消耗 ${_need * _unit} 金幣購買了 ${_need} 瓶${pdef.n}（供寵物飲用）。`);
-        stack = player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
-        if (!stack) return;
+    // 🩹 v3.8.448：寵物喝水前同樣補至 100（可部分購買）
+    let _buyChk = (typeof document !== 'undefined') ? document.getElementById('set-auto-buy-pot') : null;
+    if (_buyChk && _buyChk.checked) {
+        let _have = 0;
+        if (player.inv) {
+            for (let _i = 0; _i < player.inv.length; _i++) {
+                if (player.inv[_i] && player.inv[_i].id === potId) _have += (Number(player.inv[_i].cnt) || 0);
+            }
+        }
+        if (_have < 100) {
+            let _unit = (typeof shopPrice === 'function') ? shopPrice(pdef.p || 0) : (pdef.p || 0);
+            _unit = Math.max(0, Math.floor(Number(_unit) || 0));
+            if (_unit > 0) {
+                let _need = 100 - _have;
+                let _can = Math.floor(Math.max(0, Number(player.gold) || 0) / _unit);
+                let _buy = Math.min(_need, _can);
+                if (_buy > 0) {
+                    player.gold -= _buy * _unit;
+                    gainItem(potId, _buy, true, true);
+                    logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${pdef.n}（供寵物／補至 ${_have + _buy}/100）。`);
+                    try { if (typeof updateUI === 'function') updateUI(); } catch (eG2) {}
+                }
+            }
+        }
+        stack = player.inv && player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
     }
+    if (!stack) return;
     stack.cnt--; if (stack.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== stack.uid);   // 🛡️ v3.2.42 稽核修：只移除喝空的那疊（原全背包 filter 會誤刪 cnt 為 undefined 的舊物品）
     let h = Math.max(1, Math.floor(potionHealBase(pdef) * (1 + getConPotionPct((player.d && player.d.con) || 0) / 100)));
     if (p._statuses && p._statuses.potionFrost > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌅 藥水霜化：寵物也以自己的 MR/狀態判定，不再借用主角色結果

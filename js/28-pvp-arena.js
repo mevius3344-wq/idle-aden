@@ -692,8 +692,8 @@
         window.useItem = function (itemUid) {
             let it = (typeof player !== 'undefined' && player && Array.isArray(player.inv)) ? player.inv.find(function (x) { return x && x.uid === itemUid; }) : null;
             let dd = it && typeof DB !== 'undefined' && DB.items ? DB.items[it.id] : null;
-            if (pvpArenaTravelLocked() && dd && dd.eff === 'teleport_scroll') {
-                try { logSys('<span class="text-red-400">決鬥進行中無法使用瞬間移動卷軸；可按「投降」結束本場。</span>'); } catch (e) {}
+            if (pvpArenaTravelLocked() && dd && (dd.eff === 'teleport_scroll' || dd.eff === 'town_recall')) {
+                try { logSys('<span class="text-red-400">決鬥進行中無法使用傳送類卷軸；可按「投降」結束本場。</span>'); } catch (e) {}
                 return false;
             }
             return _pvpOrigUseItem.apply(this, arguments);

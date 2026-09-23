@@ -20,6 +20,7 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     crystal_cave1: 'assets/area/水晶洞穴.jpg', crystal_cave2: 'assets/area/水晶洞穴.jpg', crystal_cave3: 'assets/area/水晶洞穴.jpg',   // 💎 水晶洞穴（地監·3樓共用）
     fire_dragon: 'assets/area/火龍窟.jpg',   // 🔥 火龍窟（野外）
     elf_forest: 'assets/area/森林.jpg', zone_01: 'assets/area/森林.jpg', mirror_forest: 'assets/area/森林.jpg',   // 🌲 妖魔森林/妖精森林周邊/鏡子森林（野外·共用森林背景）
+    silver_knight: 'assets/area/1920x1080/銀騎士地區.jpg',   // 🛡️ v3.8.468 銀騎士地區直指 1920
     zone_15: 'assets/area/洞窟.jpg', zone_16: 'assets/area/洞窟.jpg',   // 🕳️ 眠龍洞穴1~2樓
     zone_17: 'assets/area/龍之谷地監深層.jpg',   // 🐉 眠龍洞穴3樓（改龍之谷地監深層·area-fit）
     zone_22: 'assets/area/洞窟.jpg', zone_23: 'assets/area/洞窟.jpg', zone_24: 'assets/area/洞窟.jpg', zone_25: 'assets/area/洞窟.jpg',   // 🕳️ 沙漠地監1~4樓
@@ -37,11 +38,13 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     windwood: 'assets/area/沙漠.jpg',   // 🏜️ 風木（野外·共用沙漠背景）
     windwood_dungeon: 'assets/area/地監.jpg',   // 🏰 風木地監（攻城獲勝後開放的城堡狩獵區）：實際取此 fallback＝地監.jpg（經 upgradeAreaPath 升級成 1920×1080 版）。下方 applyAreaBackground 雖仍把顯示名補成「風木地監」，但該名不在 AREA_1920 → 不會有同名圖；日後真的放了 assets/area/1920x1080/風木地監.jpg，記得把檔名加進 AREA_1920 才會被採用
     gludio: 'assets/area/城鎮周邊.jpg', kent: 'assets/area/城鎮周邊.jpg', giran: 'assets/area/城鎮周邊.jpg',   // 🏙️ 古魯丁/肯特/奇岩（野外·城鎮周邊·≠村莊周邊）
-    training: 'assets/area/村莊周邊.jpg',   // 🆕 新兵修鍊場（套 area-fit·與其餘野外共用村莊周邊背景）
+    training: 'assets/area/1920x1080/新兵修練場.jpg',   // 🪵 v3.8.468 直指 1920（根目錄無舊檔）
     dream_island: 'assets/area/夢幻之島.jpg',   // 🆕 夢幻之島（套 area-fit·專屬背景）
     zone_02: 'assets/area/歐瑞.jpg', zone_03: 'assets/area/歐瑞雪原.jpg', zone_05: 'assets/area/歐瑞.jpg',   // 🗺️ 歐瑞周邊／歐瑞雪原／國境要塞（雪原專屬 1920）
     zone_04: 'assets/area/艾爾摩.jpg',   // ⚔️ 艾爾摩激戰地（野外·專屬背景）
-    zone_09: 'assets/area/地監深層.jpg', zone_10: 'assets/area/地監深層.jpg', zone_11: 'assets/area/地監深層.jpg', zone_12: 'assets/area/地監深層.jpg', zone_14: 'assets/area/地監深層.jpg',   // 🕳️ 古魯丁地監4~7樓＋說話之島地監2樓（改深層背景·area-fit）
+    zone_09: 'assets/area/地監深層.jpg', zone_10: 'assets/area/地監深層.jpg', zone_11: 'assets/area/地監深層.jpg', zone_12: 'assets/area/地監深層.jpg',   // 🕳️ 古魯丁地監4~7樓（深層背景·area-fit）
+    zone_13: 'assets/area/說話之島地監1樓.jpg',   // 🕳️ 說話之島地監1樓
+    zone_14: 'assets/area/說話之島地監2樓.jpg',   // 🕳️ 說話之島地監2樓
     dragon_valley: 'assets/area/龍之谷.jpg', twilight_mt: 'assets/area/龍之谷.jpg',   // 🐉 龍之谷/黃昏山脈（野外·共用龍之谷背景；地監龍之谷 zone_26~31 仍為洞窟.jpg）
     elf_grave: 'assets/area/拉斯塔巴德.jpg', hidden_cave: 'assets/area/拉斯塔巴德.jpg', giant_tomb: 'assets/area/拉斯塔巴德.jpg',   // 🏚️ 精靈墓穴/大洞穴隱遁者村莊地區/古代巨人之墓（野外·拉斯塔巴德背景）
     rastabad_cave1: 'assets/area/拉斯塔巴德.jpg', rastabad_cave2: 'assets/area/拉斯塔巴德.jpg', rastabad_cave3: 'assets/area/拉斯塔巴德.jpg', rastabad_gate: 'assets/area/拉斯塔巴德.jpg', rastabad_beast: 'assets/area/拉斯塔巴德.jpg', dark_magic_lab: 'assets/area/拉斯塔巴德.jpg', necro_training: 'assets/area/拉斯塔巴德.jpg',   // 🏚️ 拉斯塔巴德地下洞穴1~3樓/正門/魔獸訓練場/黑魔法研究室/冥法軍訓練場（地監·拉斯塔巴德背景）
@@ -94,6 +97,46 @@ AREA_1920.add('決鬥競技場');
 ['侵蝕的安塔瑞斯巢穴入口','侵蝕的安塔瑞斯巢穴通道','侵蝕的安塔瑞斯巢穴深處','侵蝕的安塔瑞斯棲息地'].forEach(name => AREA_1920.add(name));   // 🐉 v3.7.58 安塔瑞斯副本 4 區專屬背景（名稱對應 js/05 ANTHARAS_AREA_NAMES）
 function areaBg1920(name) { return (name && AREA_1920.has(name)) ? ('assets/area/1920x1080/' + name + '.jpg') : null; }   // 名稱→1920 路徑(存在才回傳)
 function upgradeAreaPath(path) { if (!path) return path; let m = /^assets\/area\/([^\/]+)\.jpg$/.exec(path); return (m && AREA_1920.has(m[1])) ? ('assets/area/1920x1080/' + m[1] + '.jpg') : path; }   // 舊 assets/area/<名>.jpg fallback 路徑就地升級到 1920×1080(若有新圖)；非此格式(如 castle.png)原樣
+/** CSS url()：中文檔名分段 encode，避免背景圖請求失敗 */
+function areaBgCssUrl(src) {
+    if (!src) return '';
+    let enc = String(src).split('/').map(function (seg) { return encodeURIComponent(seg); }).join('/');
+    return 'url("' + enc + '")';
+}
+/** 🪵 新兵修練場：強制重套斜視練武場背景（防探索圖層／contain／空 var 把圖弄沒） */
+function ensureTrainingYardBackground(bv) {
+    let el = bv || document.getElementById('battle-view');
+    if (!el) return false;
+    let cur = '';
+    try { cur = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : ''; } catch (e) {}
+    if (cur !== 'training') return false;
+    let src = (SPECIAL_AREA_BG && SPECIAL_AREA_BG.training)
+        || areaBg1920('新兵修練場')
+        || 'assets/area/1920x1080/新兵修練場.jpg';
+    let cssUrl = areaBgCssUrl(src);
+    el.classList.remove('hidden', 'is-world-scroll', 'is-exploring', 'is-real-map', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll', 'is-scenic-3d');
+    el.classList.add('training-yard', 'area-fit', 'has-bg');
+    el.classList.remove('has-ground-plane', 'ground-wild', 'ground-dungeon', 'ground-desert', 'ground-snow', 'ground-default');
+    el.style.setProperty('--chud-battle-bg', cssUrl);
+    el.style.setProperty('background-image', cssUrl, 'important');
+    el.style.setProperty('background-size', 'cover', 'important');
+    el.style.setProperty('background-position', 'center center', 'important');
+    el.style.setProperty('background-repeat', 'no-repeat', 'important');
+    el.style.setProperty('background-color', '#1c2416', 'important');
+    try {
+        ['explore-world-bg', 'explore-world-bg-far', 'explore-world-bg-blend', 'explore-prop-layer', 'explore-sea-mask', 'explore-bound-layer'].forEach(function (id) {
+            let n = document.getElementById(id);
+            if (n) {
+                n.classList.add('hidden');
+                n.style.backgroundImage = 'none';
+            }
+        });
+        let ml = document.getElementById('mob-list');
+        if (ml) ml.classList.remove('is-field-combat');
+    } catch (eHide) {}
+    return true;
+}
+try { window.ensureTrainingYardBackground = ensureTrainingYardBackground; } catch (eExp) {}
 // 🏙️ v3.2.80 安全區逐城 1920×1080 背景(town id → 檔名)：命名差異(村/村莊/城鎮/full-width括號)以此表精準對應；未列者(攻城城堡 town_*_castle 等)退回舊 assets/background 通用圖
 const TOWN_BG_1920 = {
     town_aden: '亞丁城鎮', town_giran: '奇岩城鎮', town_heine: '海音城鎮', town_oren: '歐瑞村莊',
@@ -111,10 +154,18 @@ function applyAreaBackground() {
         let _wbe = wbEntryByMap(cur);
         if (_wbe && _wbe.srcMap) cur = _wbe.srcMap;   // 👑 世界王欄位：背景沿用原出沒地圖
     }
-    let ov = a => `linear-gradient(rgba(15,23,42,${a}), rgba(15,23,42,${a}))`;
     let bv = document.getElementById('battle-view');
-    if (bv && cur.startsWith('town_')) {   // 🏙️ v2.6.0：安全區(town_)戰鬥框恆隱藏、絕不套狩獵背景。必須清掉 area-fit/has-bg——否則 CSS `#battle-view.area-fit{display:flex}`(1,1,0) 會蓋過 `.hidden`(0,1,0) 使隱藏的戰鬥框又顯示、露出與安全區同名的狩獵圖(如象牙塔/傲慢之塔安全區顯示名＝有同名 assets/area/<名>.jpg)。
-        bv.style.backgroundImage = ''; bv.style.backgroundSize = ''; bv.classList.remove('area-fit'); bv.classList.remove('has-bg');
+    let _clearGround = (el) => {
+        if (!el) return;
+        el.classList.remove('has-ground-plane', 'ground-wild', 'ground-dungeon', 'ground-desert', 'ground-snow', 'ground-default');
+    };
+    if (bv && cur.startsWith('town_')) {   // 🏙️ 安全區：戰鬥框強制隱藏＋清 area-fit（防蓋住村莊地圖）
+        bv.classList.add('hidden');
+        bv.style.backgroundImage = ''; bv.style.backgroundSize = ''; bv.style.removeProperty('--chud-battle-bg');
+        bv.classList.remove('area-fit'); bv.classList.remove('has-bg');
+        bv.classList.remove('training-yard');
+        bv.classList.remove('is-world-scroll', 'is-exploring', 'is-real-map', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll', 'is-scenic-3d');
+        _clearGround(bv);
     } else if (bv) {
         let fbImg = SPECIAL_AREA_BG[cur] || CATEGORY_AREA_BG[cat] || null;   // 既有設定圖(fallback)：特殊地圖逐張優先，否則依分類(野外/地監/攻城)
         let useSrc = null, useFit = false;
@@ -126,14 +177,60 @@ function applyAreaBackground() {
         let _s1920 = areaBg1920(_nm);   // 🖼️ v3.2.80 新版 1920×1080 同名場景圖(同步判定·優先於分類 fallback)
         if (_s1920) { useSrc = _s1920; useFit = true; }
         else if (fbImg) { let _fb = upgradeAreaPath(fbImg); useSrc = _fb.indexOf('/') >= 0 ? _fb : `assets/background/${_fb}`; useFit = !AREA_BG_NOFIT.has(fbImg); }   // ⚔️ 預設 area-fit，僅舊 castle.png/Rift.png 例外；🖼️ fallback 圖亦經 upgradeAreaPath 升級 1920×1080(若有新圖)
-        if (useSrc) { bv.style.backgroundImage = `url("${useSrc}")`; bv.style.backgroundSize = useFit ? 'cover' : ''; bv.classList.toggle('area-fit', useFit); bv.classList.add('has-bg'); }   // 🖥️ 條狀比例背景改 cover＋area-fit(戰鬥框由 flex 吃滿地圖面板·背景滿版置中裁切)、其餘清空 inline 回退 CSS 的 cover
-        else { bv.style.backgroundImage = ''; bv.style.backgroundSize = ''; bv.classList.remove('area-fit'); bv.classList.remove('has-bg'); }
+        if (useSrc) {
+            let _cssBg = areaBgCssUrl(useSrc);
+            bv.style.backgroundImage = _cssBg;
+            bv.style.setProperty('--chud-battle-bg', _cssBg);
+            bv.style.backgroundSize = useFit ? 'cover' : '';
+            bv.classList.toggle('area-fit', useFit);
+            bv.classList.add('has-bg');
+        } else {
+            bv.style.backgroundImage = '';
+            bv.style.removeProperty('--chud-battle-bg');
+            bv.style.backgroundSize = '';
+            bv.classList.remove('area-fit');
+            bv.classList.remove('has-bg');
+        }
+        bv.classList.toggle('training-yard', cur === 'training' && bv.classList.contains('area-fit'));   // 🪵 新兵修練場專用版面
+        // 🩹 v3.8.328／485：修練場禁用場戰捲動，並強制重套斜視背景
+        if (cur === 'training') {
+            ensureTrainingYardBackground(bv);
+        } else if (!cur.startsWith('town_')) {
+            // 非真地圖狩獵也清殘留（避免從銀騎士地區帶 is-real-map）
+            try {
+                if (typeof exploreIsRealMap === 'function' && !exploreIsRealMap(cur)) {
+                    bv.classList.remove('is-real-map', 'is-topdown-3d', 'has-scenic-bg');
+                }
+            } catch (eRm) {}
+        }
+        // 🦶 v3.8.275 地形地面氛圍（依地圖分類上色，讓怪貼在地面上）
+        _clearGround(bv);
+        // 🪵 修練場：不要地面漸層蓋在斜視圖上
+        if (cur !== 'training' && bv.classList.contains('has-bg') && bv.classList.contains('area-fit')) {
+            bv.classList.add('has-ground-plane');
+            let g = 'ground-default';
+            let nm = String(_nm || '') + '|' + String(cur || '') + '|' + String(cat || '');
+            if (/dungeon|地監|洞穴|塔|象牙|傲慢|炎魔|封印|蟻/i.test(nm) || cat === 'dungeon') g = 'ground-dungeon';
+            else if (/desert|沙漠|熱砂|亞丁沙漠/i.test(nm)) g = 'ground-desert';
+            else if (/snow|冰|雪|凍|冰原|女王/i.test(nm)) g = 'ground-snow';
+            else if (/wild|野外|森林|村莊周邊|銀騎士|說話|修練|島/i.test(nm) || cat === 'wild') g = 'ground-wild';
+            bv.classList.add(g);
+        }
     }
     let tv = document.getElementById('town-view');
     if (tv) {
-        // 🏘️ v3.2.84 城鎮改地圖式 NPC 後，場景背景改由 #town-npc-map(800×450·自帶 _townMapBg) 承載
-        //   → town-view 不再鋪舊的半透明底圖與 has-bg 圓角框（移除城鎮舊 assets/background 底圖與框架，只保留新區域）
-        tv.style.backgroundImage = ''; tv.classList.remove('has-bg');
+        // 🩹 v3.8.480：安全區背景必須重套（勿清空後不管 → 村莊變黑底）
+        if (cur.startsWith('town_')) {
+            tv.classList.remove('has-bg');
+            try {
+                if (typeof ensureTownMapBackground === 'function') ensureTownMapBackground(cur);
+                else if (typeof renderTownNPCMap === 'function') renderTownNPCMap(cur);
+            } catch (eTownBg) {}
+        } else {
+            tv.style.backgroundImage = '';
+            tv.style.removeProperty('background-image');
+            tv.classList.remove('has-bg');
+        }
     }
 }
 function applyElfBorder() {
@@ -176,30 +273,44 @@ function renderElionUI(div) {
 function chooseElfElement(ele) {
     if(player.cls !== 'elf' || player.lv < 30 || !ELF_ELE[ele]) return;
     if(player.elfEle === ele) return;
+    function finishElf(paid) {
+        if (paid) logSys(`你花費 ${ELF_SWITCH_COST.toLocaleString()} 金幣，屬性轉換為 <span class="${ELF_ELE[ele].cls}">${ELF_ELE[ele].name}屬性</span>。`);
+        else if (!player.elfEle) logSys(`你選擇了 <span class="${ELF_ELE[ele].cls}">${ELF_ELE[ele].name}屬性</span>。`);
+        player.elfEle = ele;
+        // 🧝 v3.2.42 稽核修：換屬性時在場屬性精靈立即收回（保留自動重施開關→下個 tick 以新屬性重新現身；原本舊屬性精靈會一直打到死/到期）
+        if ((player._summonV2Sk === 'sk_elf_summon' || player._summonV2Sk === 'sk_elf_summon2')
+            && typeof summonV2List === 'function' && summonV2List().length && typeof summonV2DismissAll === 'function') {
+            const _on = player._summonV2On;
+            summonV2DismissAll(true);
+            player._summonV2On = _on;
+        }
+        if (typeof calcStats === 'function') calcStats();
+        if (typeof applyElfBorder === 'function') applyElfBorder();
+        if (typeof renderTabs === 'function') renderTabs();
+        if (typeof renderSkillSelects === 'function') renderSkillSelects();
+        if (typeof updateUI === 'function') updateUI();
+        if (typeof saveGame === 'function') saveGame();
+        let el = document.getElementById('interaction-content');
+        if (el && typeof renderElionUI === 'function') renderElionUI(el);
+        else if (el && typeof renderElfMentor === 'function') renderElfMentor(el);
+        else if (el && typeof renderElfElement === 'function') renderElfElement(el);
+    }
     if(player.elfEle) {
         if(player.gold < ELF_SWITCH_COST) { logSys('金幣不足，無法轉換屬性。'); return; }
         if(!confirm(`確定花費 ${ELF_SWITCH_COST.toLocaleString()} 金幣將屬性轉換為「${ELF_ELE[ele].name}」？`)) return;
+        if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            rtEconSinkSecure('elf_switch').then(function (r) {
+                if (r === null) { player.gold -= ELF_SWITCH_COST; finishElf(true); return; }
+                if (r === false) return;
+                finishElf(true);
+            });
+            return;
+        }
         player.gold -= ELF_SWITCH_COST;
-        logSys(`你花費 ${ELF_SWITCH_COST.toLocaleString()} 金幣，屬性轉換為 <span class="${ELF_ELE[ele].cls}">${ELF_ELE[ele].name}屬性</span>。`);
-    } else {
-        logSys(`你選擇了 <span class="${ELF_ELE[ele].cls}">${ELF_ELE[ele].name}屬性</span>。`);
+        finishElf(true);
+        return;
     }
-    player.elfEle = ele;
-    // 🧝 v3.2.42 稽核修：換屬性時在場屬性精靈立即收回（保留自動重施開關→下個 tick 以新屬性重新現身；原本舊屬性精靈會一直打到死/到期）
-    if ((player._summonV2Sk === 'sk_elf_summon' || player._summonV2Sk === 'sk_elf_summon2')
-        && typeof summonV2List === 'function' && summonV2List().length && typeof summonV2DismissAll === 'function') {
-        const _on = player._summonV2On;
-        summonV2DismissAll(true);
-        player._summonV2On = _on;
-        logSys('屬性精靈隨著屬性的轉換而消散——牠將以新屬性重新現身。');
-    }
-    applyElfBorder();
-    calcStats();
-    renderTabs();
-    renderSkillSelects();
-    let div = document.getElementById('interaction-content');
-    if(div) renderElionUI(div);
-    updateUI();
+    finishElf(false);
 }
 
 // ========== 村莊商店 ─ 單頁捲動版 ==========
@@ -207,18 +318,18 @@ let _currentShopNpc = ''; // 用來記住目前是哪位商人
 
 // 根據 NPC ID 取得該商人販售的所有物品
 const SHOP_LISTS = {
-    npc_boni: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_revive','wpn_5','wpn_22','candle'],   // 🏴‍☠️ 波尼（海賊島村莊 雜貨商人）·🚫 v3.2.17 肉已移除
+    npc_boni: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle'],   // 🏴‍☠️ 波尼（海賊島村莊 雜貨商人）·🚫 v3.2.17 肉已移除
     npc_linda: ['bk_elf_mr','bk_elf_mind','bk_elf_worldtree','bk_elf_purify','bk_elf_firewpn','bk_elf_windshot','bk_elf_earthguard','bk_elf_eleres','bk_elf_singleres'],
     npc_bayes: ['bk_fireball','bk_vampire','bk_rock_prison','bk_thunder','bk_ice_spike','bk_bless_wpn'],
     npc_gilen: ['bk_heal1','bk_sunlight','bk_shield','bk_lightarrow','bk_teleport','bk_icearrow','bk_windblade','bk_holy_wpn','bk_antidote','bk_cold_shiver','bk_poison_curse','bk_ench_wpn','bk_reveal','bk_load_up','bk_firearrow','bk_hell_fang','bk_heal_mid','bk_shield2','bk_energy_sense','bk_chill','bk_aurora','bk_dark_blind','bk_undead_bane'],
     npc_vangil: ['arm_103','arm_105','arm_108','arm_42','arm_43','hlm_mr','arm_68','arm_66','arm_67','amr_robe','arm_65','arm_63','arm_69','arm_60','arm_61','arm_62','amr_plate'],
     npc_evert: ['new_item_189','new_item_188','new_item_187'],
     npc_wino: ['wpn_shortsword','wpn_9','wpn_scimitar','wpn_37','wpn_invader','wpn_longsword','wpn_damascus','wpn_silversword','wpn_2hsword','wpn_katana','wpn_10','wpn_13','wpn_1','wpn_battleaxe','wpn_19','wpn_38','wpn_20','wpn_silveraxe','wpn_witchwand','wpn_18','wpn_giantaxe','wpn_28','wpn_14','wpn_6','wpn_3','wpn_17','wpn_15','wpn_7','wpn_21','wpn_16','wpn_halberd','wpn_12'],
-    npc_skvati: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_revive','wpn_5','wpn_22','candle','wpn_claw_bronze','wpn_claw_steel','wpn_claw_shadow','wpn_claw_damascus','wpn_dual_bronze','wpn_dual_steel','wpn_dual_shadow','wpn_dual_damascus'],
+    npc_skvati: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle','wpn_claw_bronze','wpn_claw_steel','wpn_claw_shadow','wpn_claw_damascus','wpn_dual_bronze','wpn_dual_steel','wpn_dual_shadow','wpn_dual_damascus'],
     npc_saedia: ['bk_dark_str','bk_dark_mrup','bk_dark_stealth','bk_dark_poison','bk_dark_refine','bk_dark_dex','bk_dark_poisonres','bk_dark_burn','bk_dark_walkhaste'],
     npc_sphere: ['mem_confuse','mem_mirror','mem_crush','mem_ogre','mem_focus','mem_skullbreak','mem_lich','mem_endure'],   // 🔮 史菲爾只販賣這 8 種記憶水晶；其餘水晶改由掉落/製作/兌換取得（日光術改由吉蘭購得）
     npc_sempal: ['bk_dragon_guardbreak','bk_dragon_slaughter','bk_dragon_flameslash','bk_dragon_terror'],   // 🐉 森帕爾：4 種龍騎士書板（消滅者鎖鏈劍改為潘朵拉/普洛凱爾試煉取得）
-    default: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','potion_brave','new_item_140','new_item_139','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_revive','wpn_5','wpn_22','candle']   // 🚫 v3.2.17 哨子/肉已隨舊項圈系統移除
+    default: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','potion_brave','new_item_140','new_item_139','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle']   // 🚫 v3.2.17 哨子/肉已隨舊項圈系統移除
 };
 // 🔧 商店販售清單（單一來源）：getShopItemsForNpc 與潘朵拉權重覆寫共用此表
 function getShopItemsForNpc(npcId) {
@@ -385,6 +496,7 @@ function _summaryFromRaw(s){
             lv: p.lv || 1,
             gold: p.gold || 0,
             classic: !!p.classicMode,
+            alignment: (typeof pvpClampAlignment === "function") ? pvpClampAlignment(p.alignmentValue) : (Number(p.alignmentValue) || 0),
             avatar: p.avatar || null,
             enSeed: p.enSeed || '',
             roleFp: _roleFingerprint(p),
@@ -538,10 +650,13 @@ function _migrateAllSavesToClassicMode(){
 }
 /** 🎁 新手啟程禮包已移除（v3.8.170）：不再對舊存檔重發限時裝 */
 function _migrateAllSavesNewbieEmbark(){ /* no-op */ }
-if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('DOMContentLoaded', function(){
+function _bootMigrateClassicSaves() {
     try { _migrateAllSavesToClassicMode(); } catch (e) {}
-    // 新手啟程禮包遷移已停用
-});
+}
+if (typeof window !== 'undefined') {
+    if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', _bootMigrateClassicSaves);
+    else _bootMigrateClassicSaves();
+}
 
 // ===== 角色多開／刪除保護 =====
 // 每個正在遊戲中的分頁每 2 秒留下心跳。刪角時只要還有其他活躍分頁就拒絕，
@@ -1106,34 +1221,48 @@ function loadBackToMenu(){
 
 function returnToCharacterSelect(){
     if(typeof player === 'undefined' || !player || !player.cls) return false;
-    if (typeof window.offlinePrepareCharacterSelect === 'function') {
-        window.offlinePrepareCharacterSelect();
-    } else {
-        _flushSaveNow();
-    }
-
-    if(typeof stopGameTimers === 'function') stopGameTimers();
+    // 🩹 v3.8.377：先停計時並藏起 game-screen，讓探索立刻失效，再存檔／畫選角（避免卡死）
+    try { if(typeof stopGameTimers === 'function') stopGameTimers(); } catch(eT0) {}
     if(typeof state !== 'undefined' && state) state.running = false;
-    try { _roleSessionForget(); } catch(e) {}
-    try { if(typeof _vfxClearAll === 'function') _vfxClearAll(); } catch(e) {}
 
     const game = document.getElementById('game-screen');
     const creationScreen = document.getElementById('creation-screen');
     const main = document.getElementById('main-menu');
     const creation = document.getElementById('creation-panel');
     const load = document.getElementById('load-select-panel');
-    if(game) game.classList.add('hidden');
+    if(game) {
+        game.classList.add('hidden');
+        game.classList.remove('sheet-open');
+    }
+    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad', 'mobile-sheet-open');
+    try {
+        var bv = document.getElementById('battle-view');
+        if (bv) {
+            bv.classList.remove('is-world-scroll', 'is-exploring', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll');
+        }
+    } catch(eBv) {}
+    try { if(typeof exploreReset === 'function') exploreReset('map'); } catch(eEx) {}
+    try { if(typeof _vfxClearAll === 'function') _vfxClearAll(); } catch(e) {}
+    try { _roleSessionForget(); } catch(e) {}
+
+    try {
+        if (typeof window.offlinePrepareCharacterSelect === 'function') {
+            window.offlinePrepareCharacterSelect();
+        } else if (typeof _flushSaveNow === 'function') {
+            _flushSaveNow();
+        }
+    } catch(eSave) {}
+
     if(creationScreen) creationScreen.classList.remove('hidden');
     if(main) main.classList.add('hidden');
     if(creation) creation.classList.add('hidden');
     if(load) load.classList.remove('hidden');
-    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad');
 
     _loadLastClickSlot = 0;
     _loadLastClickAt = 0;
     _loadPage = currentSlot > 4 ? 1 : 0;
     _loadSelectedSlot = currentSlot;
-    renderLoadSelect(true);
+    try { renderLoadSelect(true); } catch(eR) {}
     requestAnimationFrame(function () {
         setTimeout(function () {
             try { _purgeClosedClassesThrottled(); } catch (eP) {}
@@ -1220,7 +1349,17 @@ function updateLoadInfo(){
     set('load-info-name', empty ? '' : (sum.name || '未命名'));
     set('load-info-pledge', empty ? '' : ({ tros:'特羅斯', esti:'依詩蒂' }[sum.pledge] || sum.pledge || '-'));
     set('load-info-class', empty ? '' : sum.cls);
-    set('load-info-alignment', empty ? '' : '經典');
+    set('load-info-alignment', empty ? '' : (((typeof pvpAlignmentLabel === 'function') ? pvpAlignmentLabel(sum.alignment) : '中立') + ' ' + (Number(sum.alignment) || 0)));
+    { const el = document.getElementById('load-info-alignment');
+      if (el) {
+        if (empty) { el.style.color = ''; el.title = ''; }
+        else {
+          const av = Number(sum.alignment) || 0;
+          el.style.color = (typeof pvpAlignmentColor === 'function') ? pvpAlignmentColor(av) : '';
+          el.title = '正義值 ' + av;
+        }
+      }
+    }
     set('load-info-hp', empty ? '' : `${Math.floor(sum.hp || 0)} / ${Math.floor(sum.mhp || 0)}`);
     set('load-info-mp', empty ? '' : `${Math.floor(sum.mp || 0)} / ${Math.floor(sum.mmp || 0)}`);
     set('load-info-ac', empty ? '' : (sum.ac === '' ? '-' : sum.ac));
@@ -1295,12 +1434,44 @@ function loadEnterSelected(){
             enterBtn.classList.add('is-entering');
         }
     } catch (eBtn) {}
-    // 先讓按鈕／畫面重繪，再跑 loadGame（避免同步雲端 XHR 卡到「沒反應」）
-    requestAnimationFrame(function () {
-        setTimeout(function () {
-            try { loadGame(); }
-            catch (eLoad) { console.warn('loadGame', eLoad); }
-            finally {
+    // 🩹 v3.8.338：先確保動畫／特效模組就緒，失敗則提示（勿裸進場導致無動作）
+    var go = function () {
+        requestAnimationFrame(function () {
+            setTimeout(function () {
+                try { loadGame(); }
+                catch (eLoad) { console.warn('loadGame', eLoad); }
+                finally {
+                    try { if (typeof window.__kickBattleVisuals === 'function') window.__kickBattleVisuals(); } catch (eKick) {}
+                    loadEnterSelected._busy = false;
+                    try {
+                        if (enterBtn) {
+                            enterBtn.disabled = false;
+                            enterBtn.textContent = prevLabel || '進入遊戲';
+                            enterBtn.classList.remove('is-entering');
+                        }
+                    } catch (eBtn2) {}
+                }
+            }, 0);
+        });
+    };
+    try {
+        if (typeof window.__ensurePlayModules === 'function') {
+            Promise.resolve(window.__ensurePlayModules()).then(function (ok) {
+                if (!ok) {
+                    try { alert('戰鬥動畫模組載入未完成，請再按一次「進入遊戲」。'); } catch (eA) {}
+                    loadEnterSelected._busy = false;
+                    try {
+                        if (enterBtn) {
+                            enterBtn.disabled = false;
+                            enterBtn.textContent = prevLabel || '進入遊戲';
+                            enterBtn.classList.remove('is-entering');
+                        }
+                    } catch (eBtn3) {}
+                    return;
+                }
+                go();
+            }).catch(function () {
+                try { alert('戰鬥動畫模組載入失敗，請重新整理後再試。'); } catch (eA2) {}
                 loadEnterSelected._busy = false;
                 try {
                     if (enterBtn) {
@@ -1308,10 +1479,12 @@ function loadEnterSelected(){
                         enterBtn.textContent = prevLabel || '進入遊戲';
                         enterBtn.classList.remove('is-entering');
                     }
-                } catch (eBtn2) {}
-            }
-        }, 0);
-    });
+                } catch (eBtn4) {}
+            });
+            return;
+        }
+    } catch (ePlay) {}
+    go();
 }
 function loadImportSelected(){ /* 匯入進度已移除 */ }
 function loadExportSelected(){ /* 匯出進度已移除 */ }
@@ -1425,6 +1598,11 @@ function deleteCurrentCharacter(){
     }
     try { _roleSessionForget(); } catch(e) {}
     try { if(typeof _vfxClearAll === 'function') _vfxClearAll(); } catch(e) {}
+    try {
+        var bv = document.getElementById('battle-view');
+        if (bv) bv.classList.remove('is-world-scroll', 'is-exploring', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll');
+    } catch(eBv) {}
+    try { if(typeof exploreReset === 'function') exploreReset('map'); } catch(eEx) {}
     const game = document.getElementById('game-screen');
     const creationScreen = document.getElementById('creation-screen');
     const main = document.getElementById('main-menu');
@@ -1435,12 +1613,16 @@ function deleteCurrentCharacter(){
     if(main) main.classList.add('hidden');
     if(creation) creation.classList.add('hidden');
     if(load) load.classList.remove('hidden');
-    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad');
+    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad', 'mobile-sheet-open');
+    try {
+        var screen = document.getElementById('game-screen');
+        if (screen) screen.classList.remove('sheet-open');
+    } catch(eSh) {}
     _loadLastClickSlot = 0;
     _loadLastClickAt = 0;
     _loadPage = slot > 4 ? 1 : 0;
     _loadSelectedSlot = slot;
-    renderLoadSelect();
+    renderLoadSelect(true);
     try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
     alert(`角色「${r.name}」已刪除。現在可以在此欄位創建新角色。`);
 }
@@ -1606,10 +1788,12 @@ function setCreationClassAnimation(c){
     }
     requestAnimationFrame(tick);
 })();
-if (typeof document !== 'undefined' && document.addEventListener) {
-    document.addEventListener('DOMContentLoaded', function () {
+if (typeof document !== 'undefined') {
+    function _bootCreationClassAvail() {
         try { applyCreationClassAvailability(); } catch (e) {}
-    });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _bootCreationClassAvail);
+    else _bootCreationClassAvail();
 }
 function showCreation() {
     const main = document.getElementById('main-menu');
@@ -1793,6 +1977,15 @@ function startGame() {
     document.getElementById('creation-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
     try { if (typeof enableCombatHud === 'function') enableCombatHud(); } catch (eHud) {}
+    try {
+        if (typeof window.__ensurePlayModules === 'function') {
+            Promise.resolve(window.__ensurePlayModules()).then(function () {
+                try { if (typeof window.__kickBattleVisuals === 'function') window.__kickBattleVisuals(); } catch (eK) {}
+            }).catch(function () {});
+        } else if (typeof window.__kickBattleVisuals === 'function') {
+            window.__kickBattleVisuals();
+        }
+    } catch (ePlayStart) {}
     document.body.classList.add('game-bg-dim');   // 正式遊戲後：背景淡化
     if (typeof mercLedgerPurgeSlot === 'function') { try { mercLedgerPurgeSlot(currentSlot); } catch (e) {} }   // 🩹 v3.0.108 新角色覆蓋此存檔位→清除前一個角色的待領傭兵經驗（新角色不繼承）
     if (typeof petReleaseSlotAssignments === 'function') { try { petReleaseSlotAssignments(currentSlot); } catch (e) { console.warn('pet slot ownership cleanup', e); } }   // 🐾 覆蓋角色時，舊角色出戰寵物回保管，避免卡在不存在的角色名下
@@ -2207,13 +2400,16 @@ function loadGame() {
         state.ticks = d.ticks || 0;   // 🔧 還原 tick 計數：讓召喚物/迷魅以絕對 tick 記錄的 endTick 在重載後仍然有效
         // 修復：自動存檔可能在「死亡放置」期間把 player.dead=true 寫入存檔。
         // 讀檔一律以「在村莊甦醒、存活」載入，否則 tick() 會因 player.dead 提早 return，
-        // 導致載入後不出怪、且無復活按鈕可按而卡死。後續進村流程會補滿 HP/MP 並清除異常狀態。
+        // 導致載入後不出怪、且無復活按鈕可按而卡死。
         player.dead = false;
+        // 🪦 v3.8.302：若存檔殘留 hp=0（死亡未補血），讀檔視為甦醒並在 calcStats 後補滿（見下方）
+        if (!(Number(player.hp) > 0)) player._needTownWakeHeal = true;
         { let b1 = document.getElementById('btn-revive'); if(b1) b1.classList.add('hidden');
           let b2 = document.getElementById('btn-revive-inplace'); if(b2) b2.classList.add('hidden'); }
         document.getElementById('creation-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
         try { if (typeof enableCombatHud === 'function') enableCombatHud(); } catch (eHud2) {}
+        try { if (typeof window.__kickBattleVisuals === 'function') window.__kickBattleVisuals(); } catch (eKick2) {}
         document.body.classList.add('game-bg-dim');   // 正式遊戲後：背景淡化
         
         player.inv.forEach(i => { if(i.lock === undefined) i.lock = false; });
@@ -2446,6 +2642,11 @@ function loadGame() {
         }
         syncShahaArrow();   // 🏝️ 沙哈之弓：載入時校正無限箭狀態
         calcStats();
+        if (player._needTownWakeHeal) {
+            player.hp = player.mhp;
+            player.mp = player.mmp;
+            delete player._needTownWakeHeal;
+        }
         try { if (typeof _petEnforceCarry === 'function') { _petEnforceCarry(); if (_petRosterDirty) petRosterSave(); } } catch (e) { console.warn('pet carry enforcement', e); }
         if (typeof purgeSherineContent === 'function') purgeSherineContent();
         if (mapState && mapState.current === 'town_sherine') {
@@ -2524,6 +2725,14 @@ function loadGame() {
         // 計時器統一由 startGameTimers() 註冊（內含去重），含每 5 分鐘自動存檔。
         startGameTimers();
         logSys(`===== 歡迎回來 =====`);
+        try {
+            if (typeof econProbeStatus === 'function') econProbeStatus();
+            if (typeof rtWalletPull === 'function') {
+                setTimeout(function () {
+                    try { rtWalletPull(); } catch (eW) {}
+                }, 400);
+            }
+        } catch (eEconLoad) {}
         if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
             let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
             logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);

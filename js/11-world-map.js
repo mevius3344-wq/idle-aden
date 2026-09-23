@@ -87,7 +87,7 @@ const MAP_CATEGORIES = {
 //  ⚠️新增地圖時：除了加進 MAP_CATEGORIES，也要在此對應地區補一筆，否則該圖不會出現在下拉。
 const MAP_REGIONS = [
     { key: 'silverknight', label: '銀騎士村', maps: [
-        {v:'town_silver_knight', t:'銀騎士村莊'}, {v:'silver_knight', t:'銀騎士村周邊'}, {v:'training', t:'新兵修練場'}
+        {v:'town_silver_knight', t:'銀騎士村莊'}, {v:'silver_knight', t:'銀騎士地區'}, {v:'training', t:'新兵修練場'}
     ]},
     { key: 'fairyforest', label: '妖精森林', maps: [
         {v:'town_elf', t:'妖精森林村莊'}, {v:'zone_01', t:'妖精森林周邊'},
@@ -530,11 +530,11 @@ function getLastTown() {
     return t;
 }
 function returnToTown() {
-    if (state.riftRun && mapState.current === 'rift_battle') { logSys('<span class="text-violet-300">扭曲的時空緊緊纏繞著你，無法回村——唯有戰死方能離開時空裂痕。</span>'); return; }   // 🌀 裂痕內不可回村
+    if (state.riftRun && mapState.current === 'rift_battle') { logSys('<span class="text-violet-300">扭曲的時空緊緊纏繞著你，無法回村——唯有戰死方能離開時空裂痕。</span>'); return false; }   // 🌀 裂痕內不可回村
     // 與切換地圖相同的受控限制（石化／麻痺／冰凍／暈眩時無法回村）
     if (player.statuses && (player.statuses.stone > 0 || player.statuses.paralyze > 0 || player.statuses.freeze > 0 || player.statuses.stun > 0 || player.statuses.sleep > 0)) {
         logSys('你目前無法行動（石化／麻痺／冰凍／暈眩），無法回村。');
-        return;
+        return false;
     }
     let _wasKingRoom = !!KING_ROOMS[mapState.current];   // 🔧 記住離開前是否在軍王之室
     let _kingRegion = _wasKingRoom && typeof mapRegionOf === 'function' ? mapRegionOf(mapState.current) : null;   // 🗝️ 離場前先取得該軍王之室所屬地區（changeMap 後 mapState.current 已變）
@@ -546,6 +546,7 @@ function returnToTown() {
     // 🗝️ 離開軍王之室：清掉該「地區」的最後位置記憶，否則下次在下拉選同一地區會自動再進 BOSS 房、白扣一把軍王的鑰匙。
     //    （舊寫法寫的是 lastMapByCat.special，但分類改用 MAP_REGIONS 後 'special' 不再是任何鍵＝死碼。）
     if (_wasKingRoom) { if (!player.lastMapByCat) player.lastMapByCat = {}; if (_kingRegion) delete player.lastMapByCat[_kingRegion]; saveGame(); }
+    return true;
 }
 
 // ===== ⌨️ 鍵盤快捷鍵（v3.1.13）=====
@@ -897,13 +898,26 @@ function obelStartTracking() {
     if(!_obelSel.mob || !_obelSel.map) return;
     const TRACKING_GOLD_COST = 100000;
     if ((player.gold || 0) < TRACKING_GOLD_COST) { alert(`金幣不足，追蹤需要 ${TRACKING_GOLD_COST.toLocaleString()} 金幣。`); return; }
+    let mapId = _obelSel.map, mobId = _obelSel.mob;
+    function finishTrack() {
+        player.tracking = { map: mapId, mob: mobId, until: Date.now() + 8 * 3600 * 1000 };
+        _obelSel = { map: '', mob: '' };
+        renderTabs(); saveGame();
+        logSys(`花費 ${TRACKING_GOLD_COST.toLocaleString()} 金幣，奧貝勒開始追蹤 <span class="text-amber-300 font-bold">${(DB.mobs[player.tracking.mob] || {}).n}</span>，持續 8 小時。`);
+        let el = document.getElementById('interaction-content'); if(el) renderObelNPC(el);
+        updateUI();
+    }
+    // 🌐 Sprint3：權威扣款
+    if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        rtEconSinkSecure('obel_track').then(function (r) {
+            if (r === null) { player.gold -= TRACKING_GOLD_COST; finishTrack(); return; }
+            if (r === false) return;
+            finishTrack();
+        });
+        return;
+    }
     player.gold -= TRACKING_GOLD_COST;
-    player.tracking = { map: _obelSel.map, mob: _obelSel.mob, until: Date.now() + 8 * 3600 * 1000 };
-    _obelSel = { map: '', mob: '' };
-    renderTabs(); saveGame();
-    logSys(`花費 ${TRACKING_GOLD_COST.toLocaleString()} 金幣，奧貝勒開始追蹤 <span class="text-amber-300 font-bold">${(DB.mobs[player.tracking.mob] || {}).n}</span>，持續 8 小時。`);
-    let el = document.getElementById('interaction-content'); if(el) renderObelNPC(el);
-    updateUI();
+    finishTrack();
 }
 function obelCancelTracking() {
     if(!confirm('確定要取消追蹤嗎？（已支付的金幣不會退還）')) return;
@@ -1231,6 +1245,21 @@ function doBianUncurse(slotKey) {
     if (sc && sc.cnt >= 1) {
         sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
     } else if ((player.gold || 0) >= 1000000) {
+        function doUncurse() {
+            item.bless = false;
+            calcStats(); updateUI(); renderTabs(true); saveGame();
+            logSys(`碧恩為你的裝備解除了詛咒 → ${getItemFullName(item)}。`);
+            let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
+        }
+        if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            rtEconSinkSecure('uncurse_gold').then(function (r) {
+                if (r === null) { player.gold -= 1000000; logSys('花費 1,000,000 金幣請碧恩淨化詛咒。'); doUncurse(); return; }
+                if (r === false) return;
+                logSys('花費 1,000,000 金幣請碧恩淨化詛咒。');
+                doUncurse();
+            });
+            return;
+        }
         player.gold -= 1000000;
         logSys('花費 1,000,000 金幣請碧恩淨化詛咒。');
     } else {
@@ -1467,6 +1496,32 @@ function changeMap(force) {
             }
         } else {
             try { if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current) && typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (eWb) {}
+            // 🛡️ v3.8.307：進場戰圖強制恢復戰鬥迴圈（否則 spawnAt 永遠不消化＝空地圖）
+            try {
+                if (typeof state !== 'undefined' && state && typeof player !== 'undefined' && player && player.cls && !player.dead) {
+                    if (state.autoHunt !== false) {
+                        state.running = true;
+                        if (typeof startGameTimers === 'function') startGameTimers();
+                    }
+                }
+            } catch (eRunMap) {}
+        }
+        // 🪵 v3.8.449／488 新兵修練場：個人練習區（本地木頭人，不同步他人）
+        if (mapState.current === 'training') {
+            try {
+                mapState.mobs = [null, null, null, null, null];
+                spawnMob(1);
+                mapState.spawnAt = [null, null, null, null, null];
+                mapState.targetIdx = 1;
+                try {
+                    var _tm = mapState.mobs[1];
+                    if (_tm) _tm.trainingDummy = true;
+                } catch (eSid) {}
+            } catch (eTrSpawn) {}
+        } else if (_fieldInited) {
+            setTimeout(function () {
+                try { if (typeof rtWorldPushRoster === 'function') rtWorldPushRoster(); } catch (eFr) {}
+            }, 600);
         }
         mapState.suppressSiegeBoss = true;   // 初次進場：必定不出現肯特城門/守護塔
         // 🏛️ 雙BOSS祭壇：進場立即生成兩隻BOSS（之後不逐格補怪，兩隻皆亡才會在 15 秒後同時復活）
@@ -1550,9 +1605,24 @@ function chooseMastery(id) {
         }
         // 更換前確認
         if (!confirm(`確定要將精通由「${md.list[player.mastery].n}」更換為「${md.list[id].n}」嗎？\n將消耗 ${cost.gold.toLocaleString()} 金幣。`)) return;
+        function afterPay() {
+            player.masteryChangeCnt = (player.masteryChangeCnt || 0) + 1;
+            _applyMasteryChoice(id, md);
+        }
+        if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            rtEconSinkSecure('mastery_switch').then(function (r) {
+                if (r === null) { player.gold -= cost.gold; afterPay(); return; }
+                if (r === false) return;
+                afterPay();
+            });
+            return;
+        }
         player.gold -= cost.gold;
         player.masteryChangeCnt = (player.masteryChangeCnt || 0) + 1;
     }
+    _applyMasteryChoice(id, md);
+}
+function _applyMasteryChoice(id, md) {
     let prev = player.mastery;
     player.mastery = id;
     // 🏅 切換副作用
@@ -1848,7 +1918,7 @@ function arkataBuyback(i) {
     renderArkataBuyback(document.getElementById('interaction-content'));
 }
 
-// 🏴 潘朵拉黑市快捷鍵：不切換地圖，直接沿用村莊 NPC 的同一個浮動視窗與市場狀態。
+// 🏴 潘朵拉抽抽樂快捷鍵：不切換地圖，直接沿用村莊 NPC 的同一個浮動視窗。
 // 浮動視窗原本位於 #town-view；狩獵中父層會隱藏，因此首次使用時移至 body，之後所有 NPC 互動仍共用此視窗。
 function openPandoraShortcut() {
     let panel = document.getElementById('town-interaction-container');
@@ -2522,18 +2592,43 @@ function _townWanderingBuyerPositions(vis, townId, pos, overrides) {
     return out;
 }
 
-// 城鎮地圖背景：沿用 TOWN_BG_1920/SPECIAL_TOWN_BG/TOWN_AREA_BG 解析，但用較淡遮罩(場景清楚)
+// 城鎮地圖背景：沿用 TOWN_BG_1920/SPECIAL_TOWN_BG/TOWN_AREA_BG；路徑 encode 防中文 404
 function _townMapBg(townId) {
     let cat = (typeof mapCategoryOf === 'function') ? mapCategoryOf(townId) : null;
-    let ov = 'linear-gradient(rgba(15,23,42,.12), rgba(15,23,42,.30))';
+    let ov = 'linear-gradient(rgba(15,23,42,.10), rgba(15,23,42,.22))';
     try {
-        if (typeof TOWN_BG_1920 !== 'undefined' && TOWN_BG_1920[townId])
-            return ov + ', url("assets/area/1920x1080/' + TOWN_BG_1920[townId] + '.jpg")';
+        if (typeof TOWN_BG_1920 !== 'undefined' && TOWN_BG_1920[townId]) {
+            let n = TOWN_BG_1920[townId];
+            return ov + ', url("assets/area/1920x1080/' + encodeURIComponent(n) + '.jpg")';
+        }
         let timg = ((typeof SPECIAL_TOWN_BG !== 'undefined') && SPECIAL_TOWN_BG[townId])
             || ((typeof TOWN_AREA_BG !== 'undefined') && cat && TOWN_AREA_BG[cat]) || null;
-        if (timg) return ov + ', url("assets/background/' + timg + '")';
+        if (timg) return ov + ', url("assets/background/' + encodeURIComponent(timg) + '")';
     } catch (e) {}
     return 'linear-gradient(#334155, #1e293b)';
+}
+/** 🩹 v3.8.480：強制把村莊場景圖寫回 #town-npc-map（與 CSS 脫鉤，避免再消失） */
+function ensureTownMapBackground(townId) {
+    let id = townId || (typeof mapState !== 'undefined' && mapState ? mapState.current : '');
+    if (!id || String(id).indexOf('town_') !== 0) return false;
+    let map = document.getElementById('town-npc-map');
+    if (!map) return false;
+    let _tbg = _townMapBg(id);
+    map.style.setProperty('background-image', _tbg, 'important');
+    map.style.setProperty('background-size', 'cover', 'important');
+    map.style.setProperty('background-position', 'center', 'important');
+    map.style.setProperty('background-repeat', 'no-repeat', 'important');
+    map.style.setProperty('--chud-town-bg', _tbg);
+    map.classList.remove('hidden');
+    try {
+        let tv = document.getElementById('town-view');
+        if (tv) {
+            tv.style.setProperty('background-image', _tbg, 'important');
+            tv.style.setProperty('background-size', 'cover', 'important');
+            tv.style.setProperty('background-position', 'center', 'important');
+        }
+    } catch (eTv) {}
+    return true;
 }
 
 let _townNpcSprites = [];
@@ -2584,7 +2679,7 @@ function renderTownNPCMap(townId) {
     map.classList.remove('hidden');
     map.innerHTML = '';
     _townNpcSprites = [];
-    try { map.style.backgroundImage = _townMapBg(townId); } catch (e) {}
+    try { ensureTownMapBackground(townId); } catch (e) {}
     try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會(協力)」改成創立血盟
     let td = DB.towns[townId];
     if (!td) return;

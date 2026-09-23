@@ -4,12 +4,13 @@
   --chud-safe-b: env(safe-area-inset-bottom, 0px);
   --chud-safe-l: env(safe-area-inset-left, 0px);
   --chud-safe-r: env(safe-area-inset-right, 0px);
-  --chud-log-h: 44px;
+  --chud-log-h: 0px;
+  --chud-dock-h: 0px;
   --chud-ctrl-gap: 10px;
   display: block !important;
   position: fixed !important;
-  inset: 0 !important;
-  left: 50% !important;
+  inset: 0 auto 0 max(0px, calc(50% - min(480px, 100vw) / 2)) !important;
+  left: max(0px, calc(50% - min(480px, 100vw) / 2)) !important;
   right: auto !important;
   width: min(480px, 100vw) !important;
   max-width: min(480px, 100vw) !important;
@@ -17,10 +18,20 @@
   margin: 0 !important;
   padding: 0 !important;
   gap: 0 !important;
-  transform: translateX(-50%) !important;
+  /* 🩹 v3.8.321：勿用 transform 置中——會建立 containing block，把 #vfx-layer 傷害數字壓到整屏後面 */
+  transform: none !important;
   overflow: hidden !important;
   background: #0a0c0e !important;
   z-index: 40;
+}
+/* 傷害數字／濺血必須進 combat-hud stacking context，才蓋得過戰場、又不蓋收藏／控制列 */
+#game-screen.combat-hud > #vfx-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 38 !important;
+  /* 🩹 v3.9.1：勿 overflow:hidden——落雷／火球／技能投射物會被 480 欄裁掉看起來像「特效壞了」 */
+  overflow: visible !important;
+  pointer-events: none;
 }
 
 #game-screen.combat-hud #col-left,
@@ -63,7 +74,7 @@
 #game-screen.combat-hud #map-view-panel > .panel-header {
   position: absolute !important;
   top: calc(8px + var(--chud-safe-t));
-  left: calc(156px + var(--chud-safe-l));
+  left: calc(176px + var(--chud-safe-l));
   right: calc(60px + var(--chud-safe-r));
   transform: none;
   width: auto;
@@ -111,8 +122,21 @@
 #game-screen.combat-hud #map-select {
   display: none !important;
 }
-#game-screen.combat-hud.chud-in-town #btn-return-town {
+/* 🩹 v3.8.397：戰鬥 HUD 頂部不再放回村／PK（PK 改下方） */
+#game-screen.combat-hud #btn-return-town,
+#game-screen.combat-hud #btn-field-pvp {
   display: none !important;
+}
+/* 頂列無指示時整條隱藏，避免空框 */
+#game-screen.combat-hud #map-view-panel > .panel-header:not(:has(#pride-floor-indicator:not(.hidden))):not(:has(#map-pop-indicator:not(.hidden))) {
+  display: none !important;
+}
+
+/* 🩹 v3.8.475：.hidden 必須勝過 area-fit（否則村莊時戰鬥框仍 display:flex 蓋住地圖） */
+#game-screen.combat-hud #battle-view.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* 戰場鋪滿（僅戰鬥框） */
@@ -142,6 +166,109 @@
   height: clamp(180px, 38%, 280px) !important;
 }
 
+/* 🗺️ v3.8.312：場戰鋪滿＋不吃 --wx/--wy（怪用相機相對座標） */
+#game-screen.combat-hud #battle-view.is-world-scroll #mob-list.is-field-combat,
+#game-screen.combat-hud #battle-view.area-fit.is-world-scroll #mob-list.is-field-combat {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  align-items: unset !important;
+  transform: none !important;
+}
+
+/* 狩獵側視圖才貼底裁切；修練場是整張斜視練武場，勿 center bottom */
+#game-screen.combat-hud #battle-view.has-bg:not(.training-yard) {
+  background-size: cover !important;
+  background-position: center bottom !important;
+  background-repeat: no-repeat !important;
+}
+/* 🩹 v3.8.485：新兵修練場＝滿版 cover 置中（斜視練武場）；勿 contain（直式 HUD 會縮成細帶＝看起來沒圖） */
+#game-screen.combat-hud #battle-view.training-yard,
+#game-screen.combat-hud #battle-view.training-yard.has-bg {
+  /* 不強制 var()：var 空值會把整條宣告廢掉 → 背景變 none */
+  background-color: #1c2416 !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  overflow: hidden !important;
+}
+/* 修練場：徹底關掉探索俯視圖層，避免黑／綠蓋住側視背景 */
+#game-screen.combat-hud #battle-view.training-yard > #explore-world-bg,
+#game-screen.combat-hud #battle-view.training-yard > #explore-world-bg-far,
+#game-screen.combat-hud #battle-view.training-yard > #explore-world-bg-blend,
+#game-screen.combat-hud #battle-view.training-yard > #explore-prop-layer,
+#game-screen.combat-hud #battle-view.training-yard > #explore-sea-mask,
+#game-screen.combat-hud #battle-view.training-yard > #explore-bound-layer,
+#game-screen.combat-hud #battle-view.training-yard > .explore-atmosphere,
+#game-screen.combat-hud #battle-view.training-yard > .explore-dust,
+#game-screen.combat-hud #battle-view.training-yard > .explore-mist,
+#game-screen.combat-hud #battle-view.training-yard > .explore-light,
+#game-screen.combat-hud #battle-view.training-yard > .explore-ground,
+#game-screen.combat-hud #battle-view.training-yard > .explore-vignette {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  background-image: none !important;
+}
+#game-screen.combat-hud #battle-view.training-yard #player-morph-sprite,
+#game-screen.combat-hud #battle-view.training-yard #player-morph-sprite.q-chibi-actor {
+  transform: none !important;
+  transform-origin: bottom center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 20 !important;
+}
+#game-screen.combat-hud #battle-view.training-yard #player-morph-sprite .pm-body,
+#game-screen.combat-hud #battle-view.training-yard #player-morph-sprite.q-chibi-actor .pm-body {
+  max-height: 168px !important;
+  max-width: 140px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+#game-screen.combat-hud #battle-view.training-yard .mob-target.training-fixed {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: 200px !important;
+  min-width: 120px !important;
+  z-index: 18 !important;
+}
+#game-screen.combat-hud #battle-view.training-yard .mob-target.training-fixed .mob-img-inner.mob-anim img,
+#game-screen.combat-hud #battle-view.training-yard .mob-target.training-fixed img {
+  max-height: 180px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+/* 🩹 v3.8.480：村莊背景用 JS inline（勿 var(...,none)!important——變數未設＝整片黑底） */
+#game-screen.combat-hud #town-npc-map {
+  background-color: #1a1f2a !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  z-index: 1 !important;
+}
+#game-screen.combat-hud #town-npc-map .town-npc {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+#game-screen.combat-hud #town-npc-map .town-npc .tn-body {
+  max-height: min(132px, 26vh) !important;
+  width: auto !important;
+  height: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+#game-screen.combat-hud #town-npc-map .town-npc .tn-label .tn-name {
+  font-size: 13px !important;
+}
+
 /* 村莊：全螢幕 cover，避免 16:9 擠壓破圖 */
 #game-screen.combat-hud #town-view:not(.hidden) {
   position: absolute !important;
@@ -165,7 +292,8 @@
   z-index: 2;
   overflow: hidden !important;
   border-radius: 0 !important;
-  background: #0a0c0e !important;
+  background-color: #0a0c0e !important;
+  /* 🩹 v3.8.480：勿用 background 縮寫（會清掉 background-image） */
   pointer-events: auto;
   box-shadow: none;
 }
@@ -192,82 +320,274 @@
   pointer-events: auto;
 }
 
-/* 左上狀態＝迷你 HUD */
+/* 🩹 v3.8.469：左上狀態＝頭像＋名稱（ID）＋緊湊等級；血條滿寬 */
 #game-screen.combat-hud #col-left {
-  top: calc(8px + var(--chud-safe-t));
+  top: calc(4px + var(--chud-safe-t));
   bottom: auto !important;
-  left: calc(8px + var(--chud-safe-l));
+  left: var(--chud-safe-l) !important;
   z-index: 46;
-  width: min(148px, 40vw) !important;
+  width: min(168px, 44vw) !important;
   pointer-events: none;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
 }
 #game-screen.combat-hud #status-panel {
   pointer-events: auto;
   position: relative !important;
   top: auto !important;
-  border-radius: 12px !important;
-  overflow: hidden;
-  background-color: rgba(10, 12, 16, 0.7) !important;
-  border: 1px solid rgba(212, 175, 110, 0.32) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  background-size: cover !important;
-  background-position: top center !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  max-width: none !important;
+  min-width: 0;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  background-blend-mode: normal !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  display: grid !important;
+  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  padding: 0 !important;
+  margin: 0 !important;
+  align-items: start;
+}
+#game-screen.combat-hud #status-panel::after {
+  display: none !important;
+  content: none !important;
+}
+/* 🩹 v3.8.479：大頭照強制可見（蓋過 .status-avatar{display:none}） */
+#game-screen.combat-hud #status-panel > .status-avatar,
+#game-screen.combat-hud img#status-avatar.status-avatar {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  grid-column: 1;
+  grid-row: 1;
+  width: 64px !important;
+  height: 64px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
+  max-width: 64px !important;
+  max-height: 64px !important;
+  z-index: 8 !important;
+  border-radius: 50%;
+  object-fit: cover !important;
+  object-position: center 10% !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  border: 2px solid rgba(232, 200, 130, 0.9) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5) !important;
+  background: rgba(30, 26, 20, 0.55) !important;
+  pointer-events: none;
+  user-select: none;
+  image-rendering: auto;
+}
+#game-screen.combat-hud #status-panel.avatar-gender-f > .status-avatar {
+  border-color: rgba(244, 114, 182, 0.8);
+}
+#game-screen.combat-hud #status-panel.avatar-gender-m > .status-avatar {
+  border-color: rgba(96, 165, 250, 0.75);
 }
 #game-screen.combat-hud #status-panel .panel-header {
-  font-size: 11px !important;
-  padding: 3px 8px !important;
-  background: rgba(0, 0, 0, 0.4) !important;
+  display: none !important;
 }
-#game-screen.combat-hud #status-panel .panel-header #st-class {
-  font-size: 12px !important;
-  min-width: 0 !important;
-  padding: 0 4px !important;
+#game-screen.combat-hud #status-panel .panel-header,
+#game-screen.combat-hud #status-panel .panel-header > span:first-child,
+#game-screen.combat-hud #status-panel .panel-header #st-classname,
+#game-screen.combat-hud #status-panel .panel-header #classic-badge,
+#game-screen.combat-hud #status-panel .panel-header #victory-badge,
+#game-screen.combat-hud #status-panel .panel-header #st-class,
+#game-screen.combat-hud #status-panel .panel-header #victory-badge-crown {
+  display: none !important;
 }
 #game-screen.combat-hud #status-panel .status-compact-body {
-  padding: 4px 8px 6px !important;
-  gap: 3px !important;
-  background: linear-gradient(180deg, rgba(8, 10, 14, 0.2), rgba(8, 10, 14, 0.78));
+  grid-column: 2;
+  grid-row: 1;
+  flex: none !important;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 1px !important;
+  background: transparent !important;
+  position: relative;
+  z-index: 1;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+#game-screen.combat-hud #status-panel .status-name-row {
+  display: block !important;
+  max-width: 100%;
+  line-height: 1.15;
+  pointer-events: none;
+}
+#game-screen.combat-hud #status-panel #st-hud-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  color: #f8fafc !important;
+  text-shadow: 0 1px 3px #000, 0 0 5px #000;
+}
+/* 🩹 v3.8.472：左上狀態永不顯示角色 ID（改人物頭上） */
+#game-screen.combat-hud #status-panel .status-name-row,
+#game-screen.combat-hud #status-panel #st-hud-name {
+  display: none !important;
+}
+#game-screen.combat-hud #status-panel .status-level-row,
+#game-screen.combat-hud #status-panel .status-defense-row,
+#game-screen.combat-hud #status-panel .status-gold-row {
+  padding-left: 0 !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-content: flex-start !important;
 }
 #game-screen.combat-hud #status-panel .status-level-row {
-  font-size: 11px !important;
-  margin-bottom: 0 !important;
+  position: static !important;
+  font-size: 10px !important;
+  display: inline-flex !important;
+  align-items: baseline !important;
+  gap: 4px !important;
+  text-shadow: 0 1px 3px #000, 0 0 5px #000;
+  color: #cbd5e1 !important;
+  pointer-events: none;
 }
 #game-screen.combat-hud #status-panel .status-level-row #st-lv {
-  font-size: 14px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #f8fafc !important;
+  margin: 0 !important;
 }
 #game-screen.combat-hud #status-panel .status-defense-row,
 #game-screen.combat-hud #status-panel .status-gold-row {
   font-size: 10px !important;
-  margin-bottom: 0 !important;
-  opacity: 0.9;
+  opacity: 1;
+  text-shadow: 0 1px 3px #000, 0 0 5px #000;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+}
+#game-screen.combat-hud #status-panel .status-defense-row .status-stat {
+  justify-content: flex-start !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+}
+#game-screen.combat-hud #status-panel #st-ac,
+#game-screen.combat-hud #status-panel #st-mr,
+#game-screen.combat-hud #status-panel #st-gold {
+  font-weight: 800 !important;
+  color: #f1f5f9 !important;
+  text-shadow: 0 1px 3px #000, 0 0 5px #000;
+}
+#game-screen.combat-hud #status-panel #st-gold {
+  color: #fde68a !important;
 }
 #game-screen.combat-hud #status-panel .status-vitals-row {
-  gap: 4px !important;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 3px !important;
+  aspect-ratio: auto !important;
+  background: none !important;
+  position: relative !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 2px 0 0 0 !important;
+  padding: 0 !important;
 }
 #game-screen.combat-hud #status-panel .status-vitals-row > .compact-vital-bar {
-  height: 11px !important;
-  min-height: 11px !important;
+  position: relative !important;
+  top: auto !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 13px !important;
+  min-height: 13px !important;
+  transform: none !important;
+  margin: 0 !important;
+  border: 1px solid rgba(232, 200, 130, 0.55) !important;
+  border-radius: 999px !important;
+  background: rgba(0, 0, 0, 0.42) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+#game-screen.combat-hud #status-panel .status-vitals-row > .compact-vital-bar .bar-fill {
+  left: 0 !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
 }
 #game-screen.combat-hud #status-panel .status-vitals-row > .compact-vital-bar .bar-text {
   font-size: 9px !important;
-  line-height: 11px !important;
+  line-height: 13px !important;
+  font-weight: 800 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  padding: 0 6px !important;
+  box-sizing: border-box;
+  transform: none !important;
+  text-align: center !important;
+  text-shadow: 0 0 2px #000, 0 1px 2px #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000 !important;
 }
 #game-screen.combat-hud #status-panel .status-exp-bar {
-  height: 8px !important;
-  min-height: 8px !important;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  height: 10px !important;
+  min-height: 10px !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: stretch !important;
+  border-radius: 999px !important;
+  background: rgba(0, 0, 0, 0.42) !important;
+  border: 1px solid rgba(232, 200, 130, 0.45) !important;
+  overflow: hidden !important;
 }
 #game-screen.combat-hud #status-panel .status-exp-bar .bar-text {
   font-size: 8px !important;
+  line-height: 10px !important;
+  font-weight: 700 !important;
+  color: #fff8e7 !important;
+  text-shadow: 0 0 2px #000, 0 1px 2px #000, 1px 0 #000, -1px 0 #000 !important;
 }
 #game-screen.combat-hud #squad-panel {
   display: none !important;
 }
 
-/* 日誌＝最底一排；技能／AUTO 疊在日誌上方 */
+/* 日誌＝可收納；展開時抬高下方按鍵（dock-h＝log-h），勿蓋住技能／AUTO */
 #game-screen.combat-hud.log-open {
   --chud-log-h: min(34dvh, 280px);
+  --chud-dock-h: min(34dvh, 280px);
+}
+/* 村莊：日誌略高，頻道／聊天較好用 */
+#game-screen.combat-hud.chud-in-town.log-open {
+  --chud-log-h: min(36dvh, 300px);
+  --chud-dock-h: min(36dvh, 300px);
 }
 #game-screen.combat-hud #log-row {
   position: absolute !important;
@@ -281,12 +601,17 @@
   min-height: 0 !important;
   height: var(--chud-log-h) !important;
   max-height: var(--chud-log-h) !important;
-  transition: height 0.22s ease, max-height 0.22s ease;
-  pointer-events: auto;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition: height 0.22s ease, max-height 0.22s ease, opacity 0.18s ease;
 }
 #game-screen.combat-hud.log-open #log-row {
   height: var(--chud-log-h) !important;
   max-height: var(--chud-log-h) !important;
+  opacity: 1;
+  pointer-events: auto;
+  overflow: hidden;
 }
 #game-screen.combat-hud #combat-log-panel {
   min-height: 0 !important;
@@ -298,25 +623,34 @@
   backdrop-filter: blur(8px);
   overflow: hidden;
 }
-#game-screen.combat-hud:not(.log-open) #combat-log-panel .panel-header {
-  border-bottom: 0 !important;
-  min-height: 40px !important;
-  align-items: center !important;
-}
+#game-screen.combat-hud:not(.log-open) #combat-log-panel .panel-header > div:last-child,
 #game-screen.combat-hud:not(.log-open) #unified-log-body,
 #game-screen.combat-hud:not(.log-open) #world-input-row,
 #game-screen.combat-hud:not(.log-open) #sys-log-pins,
 #game-screen.combat-hud:not(.log-open) #combat-filter-pills {
   display: none !important;
 }
+#game-screen.combat-hud #combat-log-panel .panel-header .logtab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 11px !important;
+  padding: 3px 7px !important;
+}
 
-/* 右側＝圖示軌道；分頁內容改底部 sheet */
+/* 日誌 FAB：展開時標成「收合」 */
+#game-screen.combat-hud.log-open .chud-fab-log {
+  color: #0f172a;
+  background: linear-gradient(160deg, #f6e2a8, #d4a84a);
+  border-color: rgba(250, 204, 21, 0.85);
+}
+
+/* 右側＝可收合選單（能力／裝備／設定／社交） */
 #game-screen.combat-hud #col-right {
   top: calc(56px + var(--chud-safe-t));
   right: calc(6px + var(--chud-safe-r));
-  bottom: calc(var(--chud-log-h) + 64px + var(--chud-safe-b));
+  bottom: calc(var(--chud-dock-h) + 64px + var(--chud-safe-b));
   z-index: 46;
-  width: 52px !important;
+  width: 56px !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch;
@@ -329,19 +663,55 @@
   flex-direction: column !important;
   gap: 6px !important;
   padding: 6px 4px !important;
-  background: rgba(10, 12, 16, 0.55) !important;
-  border: 1px solid rgba(212, 175, 110, 0.28) !important;
+  background: rgba(10, 12, 16, 0.62) !important;
+  border: 1px solid rgba(212, 175, 110, 0.32) !important;
   border-radius: 16px !important;
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
+#game-screen.combat-hud #btn-chud-menu,
+#game-screen.combat-hud .chud-menu-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+  color: #fde68a !important;
+  background: linear-gradient(160deg, rgba(90, 60, 20, 0.95), rgba(40, 28, 12, 0.95)) !important;
+  border: 1px solid rgba(212, 175, 110, 0.65) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.2), 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+#game-screen.combat-hud #col-right.chud-menu-expanded #btn-chud-menu {
+  color: #0f172a !important;
+  background: linear-gradient(160deg, #f6e2a8, #d4a84a) !important;
+  border-color: rgba(250, 204, 21, 0.85) !important;
+}
+/* 預設收合：只留「選單」鈕 */
 #game-screen.combat-hud #col-right > .tab-bar .tab-bar-buttons {
   display: none !important;
 }
 #game-screen.combat-hud #col-right > .tab-bar .mobile-tab-primary {
-  display: flex !important;
+  display: none !important;
   flex-direction: column !important;
   gap: 6px !important;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.18s ease;
+}
+#game-screen.combat-hud #col-right.chud-menu-expanded > .tab-bar .mobile-tab-primary {
+  display: flex !important;
+  max-height: 280px;
+  opacity: 1;
+  overflow: visible;
 }
 #game-screen.combat-hud #col-right > .tab-bar .mobile-tab-sub {
   display: none !important;
@@ -351,7 +721,7 @@
 #game-screen.combat-hud #col-right.mobile-tab-open #mobile-tab-sub,
 #game-screen.combat-hud.sheet-open #mobile-tab-sub {
   display: flex !important;
-  position: fixed !important;
+  position: absolute !important;
   top: calc(52px + var(--chud-safe-t)) !important;
   left: 8px !important;
   right: 60px !important;
@@ -359,21 +729,28 @@
   transform: none !important;
   width: auto !important;
   max-width: none !important;
-  z-index: 55 !important;
-  gap: 6px !important;
+  z-index: 52 !important;
+  gap: 4px !important;
   flex-wrap: wrap !important;
   justify-content: flex-start !important;
   align-items: center !important;
-  padding: 8px !important;
-  border-radius: 12px !important;
+  padding: 6px !important;
+  border-radius: 10px !important;
   background: rgba(8, 10, 14, 0.92) !important;
   border: 1px solid rgba(212, 175, 110, 0.4) !important;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   pointer-events: auto !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  max-height: 30dvh;
+  max-height: 22dvh;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+/* 未開 sheet 時子選單必須真隱藏，避免殘留遮擋戰場 */
+#game-screen.combat-hud:not(.sheet-open) #mobile-tab-sub,
+#game-screen.combat-hud #col-right:not(.mobile-tab-open) #mobile-tab-sub {
+  display: none !important;
+  pointer-events: none !important;
 }
 #game-screen.combat-hud #col-right > .tab-bar .mobile-tab-group-btn {
   width: 42px !important;
@@ -401,11 +778,11 @@
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  min-height: 36px !important;
-  padding: 6px 12px !important;
-  border-radius: 999px !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
+  min-height: 30px !important;
+  padding: 4px 10px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
   background: rgba(30, 41, 59, 0.98) !important;
   border: 1px solid rgba(148, 163, 184, 0.45) !important;
   color: #f1f5f9 !important;
@@ -428,29 +805,73 @@
   border-radius: 999px !important;
   background: rgba(12, 14, 18, 0.7) !important;
 }
-#game-screen.combat-hud #tab-content-panel {
-  position: fixed !important;
-  left: 50% !important;
-  transform: translateX(-50%);
-  width: min(480px, 100vw) !important;
+#game-screen.combat-hud #tab-content-panel,
+#game-screen.combat-hud > #tab-content-panel {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: none !important;
   bottom: 0 !important;
   top: auto !important;
   height: 0 !important;
   min-height: 0 !important;
   max-height: 0 !important;
-  z-index: 60;
-  border-radius: 16px 16px 0 0 !important;
+  z-index: 58;
+  border-radius: 14px 14px 0 0 !important;
   overflow: hidden !important;
   transition: max-height 0.22s ease, height 0.22s ease;
-  pointer-events: none;
+  pointer-events: none !important;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.55);
+  background: rgba(10, 12, 16, 0.96) !important;
+  border: 1px solid rgba(212, 175, 110, 0.35) !important;
+  border-bottom: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  opacity: 0;
+  visibility: hidden;
 }
-#game-screen.combat-hud #col-right.mobile-tab-open #tab-content-panel,
-#game-screen.combat-hud.sheet-open #tab-content-panel {
-  height: min(72dvh, 620px) !important;
-  max-height: min(72dvh, 620px) !important;
-  min-height: 280px !important;
-  pointer-events: auto;
+/* 🩹 v3.8.327：停在 52px 右欄時絕對不可展開（否則細條擋操作） */
+#game-screen.combat-hud #col-right #tab-content-panel {
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+/* 只有掛成 game-screen 直屬子層才展開滿寬 sheet */
+#game-screen.combat-hud.sheet-open > #tab-content-panel {
+  height: min(62dvh, 520px) !important;
+  max-height: min(62dvh, 520px) !important;
+  min-height: 240px !important;
+  pointer-events: auto !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+/* 背包類：內部 viewport 捲動，外層裁切 */
+#game-screen.combat-hud.sheet-open > #tab-content-panel > .classic-inventory-tab,
+#game-screen.combat-hud.sheet-open > #tab-content-panel > #tab-items,
+#game-screen.combat-hud.sheet-open > #tab-content-panel > #tab-weapons,
+#game-screen.combat-hud.sheet-open > #tab-content-panel > #tab-armors,
+#game-screen.combat-hud.sheet-open > #tab-content-panel > #tab-equip,
+#game-screen.combat-hud.sheet-open > #tab-content-panel > #tab-talent:not(.hidden) {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+/* 🩹 v3.8.382：掛機／自動化等長內容分頁必須可捲，勿 overflow:hidden 裁底 */
+#game-screen.combat-hud.sheet-open > #tab-content-panel > [id^="tab-"]:not(.hidden):not(.classic-inventory-tab):not(#tab-talent) {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* ===== 新增操控層 ===== */
@@ -464,32 +885,132 @@
 #game-screen.combat-hud #combat-hud-controls {
   display: block;
 }
-/* 村莊：關掉戰鬥操控，避免擋 NPC／破圖 */
+/* 村莊：關掉戰鬥操控，保留日誌鈕（頻道可開關） */
 #game-screen.combat-hud.chud-in-town #combat-hud-controls {
-  display: none !important;
+  display: block !important;
 }
 #game-screen.combat-hud.chud-in-town .chud-dps,
 #game-screen.combat-hud.chud-in-town .chud-auto,
+#game-screen.combat-hud.chud-in-town .chud-pvp,
 #game-screen.combat-hud.chud-in-town .chud-hotbar,
-#game-screen.combat-hud.chud-in-town .chud-fab-log {
+#game-screen.combat-hud.chud-in-town .chud-fab-town,
+#game-screen.combat-hud.chud-in-town .chud-target,
+#game-screen.combat-hud.chud-in-town .chud-joystick {
   display: none !important;
 }
+#game-screen.combat-hud.chud-in-town .chud-fab-log {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
 
-/* MMORPG 搖桿：左下常駐淡色底座；拖曳時加深＋跟隨 */
-.chud-joystick {
+/* 🩹 v3.8.442：鎖定目標列（頂部中央） */
+.chud-target {
   pointer-events: none;
   position: absolute;
-  left: calc(28px + var(--chud-safe-l));
+  top: calc(10px + var(--chud-safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 44;
+  width: min(260px, 62vw);
+  padding: 6px 10px 7px;
+  border-radius: 12px;
+  background: rgba(10, 12, 16, 0.78);
+  border: 1px solid rgba(212, 175, 110, 0.42);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+.chud-target.is-show { display: flex; }
+.chud-target.is-boss {
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 14px rgba(248, 113, 113, 0.18);
+}
+.chud-target-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f8fafc;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chud-target-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(120, 90, 50, 0.55);
+  overflow: hidden;
+}
+.chud-target-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b91c1c 0%, #ef4444 45%, #fbbf24 100%);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+  transition: width 0.12s linear;
+}
+.chud-target.is-boss .chud-target-fill {
+  background: linear-gradient(90deg, #7f1d1d 0%, #dc2626 40%, #f59e0b 100%);
+}
+.chud-target-hp {
+  font-size: 10px;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-align: center;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px #000;
+}
+
+/* 低血警示：頭像邊框閃紅（面板已無黑底） */
+#game-screen.combat-hud.chud-low-hp #status-panel > .status-avatar,
+#game-screen.combat-hud #status-panel.is-low-hp > .status-avatar {
+  border-color: rgba(248, 113, 113, 0.9) !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.55), 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+#game-screen.combat-hud.chud-crit-hp #status-panel > .status-avatar,
+#game-screen.combat-hud #status-panel.is-crit-hp > .status-avatar {
+  animation: chudLowHpPulse 0.9s ease-in-out infinite;
+}
+#game-screen.combat-hud.chud-low-hp #status-panel,
+#game-screen.combat-hud #status-panel.is-low-hp,
+#game-screen.combat-hud.chud-crit-hp #status-panel,
+#game-screen.combat-hud #status-panel.is-crit-hp {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  animation: none !important;
+}
+@keyframes chudLowHpPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35), 0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.75), 0 2px 10px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* MMORPG 搖桿：左下常駐底座；拖曳時加深＋可跟手（v3.8.344 加大觸控） */
+.chud-joystick {
+  --chud-joy-size: 152px;
+  --chud-joy-knob: 58px;
+  pointer-events: none;
+  position: absolute;
+  left: calc(18px + var(--chud-safe-l));
   top: auto;
-  bottom: calc(var(--chud-log-h) + 72px + var(--chud-safe-b));
-  width: 118px;
-  height: 118px;
+  bottom: calc(var(--chud-dock-h) + 108px + var(--chud-safe-b));
+  width: var(--chud-joy-size);
+  height: var(--chud-joy-size);
   margin: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.18) 58%, rgba(0, 0, 0, 0.28));
-  border: 1px solid rgba(226, 232, 240, 0.16);
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.28);
-  opacity: 0.35;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.22) 58%, rgba(0, 0, 0, 0.34));
+  border: 1.5px solid rgba(226, 232, 240, 0.28);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.2);
+  opacity: 0.58;
   visibility: visible;
   transform: none;
   transition: opacity 0.12s ease, border-color 0.12s ease, background 0.12s ease;
@@ -499,37 +1020,48 @@
   display: none !important;
 }
 .chud-joystick.is-show {
-  opacity: 0.95;
+  opacity: 0.96;
   visibility: visible;
-  border-color: rgba(226, 232, 240, 0.35);
-  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.3) 58%, rgba(0, 0, 0, 0.5));
+  border-color: rgba(226, 232, 240, 0.42);
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.32) 58%, rgba(0, 0, 0, 0.52));
 }
 .chud-joystick.is-dock {
   /* 常駐底座：固定左下，尚未拖曳 */
+}
+.chud-joystick.is-free {
+  transform: translate(-50%, -50%);
 }
 .chud-joystick-knob {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 48px;
-  height: 48px;
-  margin: -24px 0 0 -24px;
+  width: var(--chud-joy-knob);
+  height: var(--chud-joy-knob);
+  margin: calc(var(--chud-joy-knob) / -2) 0 0 calc(var(--chud-joy-knob) / -2);
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255, 248, 230, 0.92), rgba(180, 140, 70, 0.8) 55%, rgba(80, 55, 25, 0.88));
-  border: 1px solid rgba(255, 230, 180, 0.5);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 248, 230, 0.95), rgba(180, 140, 70, 0.85) 55%, rgba(80, 55, 25, 0.9));
+  border: 1px solid rgba(255, 230, 180, 0.55);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   will-change: transform;
-  opacity: 0.55;
+  opacity: 0.7;
 }
 .chud-joystick.is-show .chud-joystick-knob {
   opacity: 1;
+}
+@media (pointer: coarse), (max-width: 900px) {
+  .chud-joystick {
+    --chud-joy-size: 168px;
+    --chud-joy-knob: 64px;
+    opacity: 0.66;
+    bottom: calc(var(--chud-dock-h) + 118px + var(--chud-safe-b));
+  }
 }
 
 .chud-auto {
   pointer-events: auto;
   position: absolute;
   left: calc(52px + var(--chud-safe-l));
-  bottom: calc(var(--chud-log-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
+  bottom: calc(var(--chud-dock-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
   transform: none;
   z-index: 5;
   width: 52px;
@@ -568,35 +1100,80 @@
   white-space: nowrap;
 }
 
+/* 🩹 v3.8.397：PK 圓鈕＝AUTO 右側（原頂部 PK） */
+.chud-pvp {
+  pointer-events: auto;
+  position: absolute;
+  left: calc(110px + var(--chud-safe-l));
+  bottom: calc(var(--chud-dock-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
+  z-index: 5;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.55);
+  background: radial-gradient(circle at 35% 28%, #64748b 0%, #334155 50%, #0f172a 100%);
+  color: #e2e8f0;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 230, 180, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+  touch-action: manipulation;
+}
+.chud-pvp.is-on {
+  background: radial-gradient(circle at 35% 28%, #ef4444 0%, #991b1b 48%, #450a0a 100%);
+  border-color: rgba(252, 165, 165, 0.75);
+  color: #fecaca;
+}
+.chud-pvp-sub {
+  font-size: 8px;
+  font-weight: 700;
+  opacity: 0.9;
+  margin-top: 1px;
+}
+
 .chud-hotbar {
   pointer-events: auto;
   position: absolute;
-  left: calc(118px + var(--chud-safe-l));
+  left: calc(168px + var(--chud-safe-l));
   right: calc(8px + var(--chud-safe-r));
-  bottom: calc(var(--chud-log-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
+  bottom: calc(var(--chud-dock-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
   z-index: 5;
   display: flex;
-  gap: 5px;
+  gap: 6px;
   align-items: flex-end;
   justify-content: flex-end;
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow: visible;
 }
 .chud-hot-slot {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  flex: 0 0 40px;
-  border-radius: 11px;
-  border: 1px solid rgba(212, 175, 110, 0.4);
-  background: rgba(12, 14, 18, 0.72);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 110, 0.45);
+  background: rgba(12, 14, 18, 0.82);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 236, 190, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   padding: 0;
   touch-action: manipulation;
+  transition: transform 0.08s ease, border-color 0.12s ease, filter 0.12s ease;
+}
+.chud-hot-slot:active:not(.is-cd):not(:disabled) {
+  transform: scale(0.94);
+  filter: brightness(1.12);
 }
 .chud-hot-slot img {
   width: 78%;
@@ -608,25 +1185,48 @@
   opacity: 0.35;
 }
 .chud-hot-slot.is-atk {
-  border-color: rgba(248, 113, 113, 0.55);
+  border-color: rgba(248, 113, 113, 0.6);
+  background: linear-gradient(180deg, rgba(60, 20, 20, 0.9), rgba(12, 14, 18, 0.85));
+  color: #fecaca;
+  font-size: 18px;
 }
+.chud-hot-slot.is-cd {
+  filter: grayscale(0.35) brightness(0.72);
+  border-color: rgba(100, 116, 139, 0.55);
+}
+.chud-hot-cd {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.62);
+  color: #fde68a;
+  font-size: 13px;
+  font-weight: 900;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
+.chud-hot-cd[hidden] { display: none !important; }
 
 .chud-dps {
   pointer-events: none;
   position: absolute;
   left: 50%;
-  bottom: calc(var(--chud-log-h) + 58px + var(--chud-safe-b));
+  bottom: calc(var(--chud-dock-h) + 58px + var(--chud-safe-b));
   transform: translateX(-50%);
   display: flex;
   gap: 10px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(8, 10, 14, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #e2e8f0;
-  font-size: 11px;
+  background: rgba(8, 10, 14, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
+  opacity: 0.88;
 }
 .chud-dps span em {
   font-style: normal;
@@ -634,21 +1234,89 @@
   margin-left: 2px;
 }
 
-.chud-fab-log {
+.chud-auto,
+.chud-pvp,
+.chud-hotbar,
+.chud-fab-log,
+.chud-fab-town,
+.chud-joystick,
+.chud-dps {
+  transition: bottom 0.22s ease;
+}
+.chud-fab-log,
+.chud-fab-town {
   pointer-events: auto;
   position: absolute;
-  left: calc(8px + var(--chud-safe-l));
-  bottom: calc(var(--chud-log-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
   z-index: 5;
   width: 40px;
   height: 40px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(12, 14, 18, 0.7);
+  background: rgba(12, 14, 18, 0.78);
   color: #e2e8f0;
   font-size: 11px;
   font-weight: 800;
   touch-action: manipulation;
+}
+.chud-fab-log {
+  left: calc(8px + var(--chud-safe-l));
+  bottom: calc(var(--chud-dock-h) + var(--chud-ctrl-gap) + var(--chud-safe-b));
+}
+.chud-fab-town {
+  left: calc(8px + var(--chud-safe-l));
+  bottom: calc(var(--chud-dock-h) + 52px + var(--chud-safe-b));
+  border-color: rgba(110, 200, 150, 0.45);
+  color: #bbf7d0;
+  background: rgba(12, 28, 20, 0.78);
+}
+
+/* 🩹 v3.8.473：附加能力圖示＝右上貼齊（勿再留 58px 空檔） */
+#game-screen.combat-hud #status-icon-bar,
+#game-screen.combat-hud > #status-icon-bar.chud-status-icons {
+  position: absolute !important;
+  top: calc(8px + var(--chud-safe-t)) !important;
+  right: calc(4px + var(--chud-safe-r)) !important;
+  left: unset !important;
+  bottom: unset !important;
+  width: max-content !important;
+  max-width: min(240px, 52vw) !important;
+  z-index: 47 !important;
+  display: flex !important;
+  flex-flow: row-reverse wrap !important;
+  align-content: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  pointer-events: none;
+  /* 🩹 v3.9.5：拿掉增益列最外圈底框（半透明底板＋金邊）——只留圖示本身 */
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+}
+#game-screen.combat-hud #status-icon-bar:empty {
+  display: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#game-screen.combat-hud #status-icon-bar .status-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  opacity: 0.92;
+  pointer-events: auto;
+  /* 同 style.css：裁掉圖檔四角框線 */
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 2px;
+}
+#game-screen.combat-hud #status-icon-bar .status-icon:hover {
+  opacity: 1;
 }
 
 /* 桌機預覽：戰鬥 HUD 比舊 430 略寬，更接近參考圖視野 */
@@ -683,3 +1351,26 @@
 .tp-map-btn:hover:not(:disabled) { border-color: rgba(212, 175, 110, 0.55); background: rgba(30, 41, 59, 0.95); }
 .tp-map-btn:disabled { opacity: 0.4; color: #64748b; cursor: not-allowed; }
 .tp-map-btn.is-here { border-color: rgba(52, 211, 153, 0.55); color: #6ee7b7; }
+
+/* 🩹 v3.9.3：頂部 #chud-target 已有目標名＋血量，怪卡上鎖定目標勿再疊怪名（上下重複） */
+#game-screen.combat-hud .mob-target.active > .mob-name {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+#game-screen.combat-hud .mob-target.active:has(.mob-img-wrap:hover) > .mob-name,
+#game-screen.combat-hud .mob-target.active.name-show > .mob-name {
+  opacity: 1 !important;
+}
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+#game-screen.combat-hud .mob-hp-bar > div > div,
+#game-screen.combat-hud .mob-hp-bar .mob-hp-fill {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}

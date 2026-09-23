@@ -169,12 +169,24 @@ function openMiscBook() {
     if (!player.miscDex) player.miscDex = {};
     if (typeof mergeSharedIntoPlayer === 'function' && mergeSharedIntoPlayer('misc') && typeof calcStats === 'function') calcStats();   // 🔄 多開兜底：開書前併入其他分頁的道具進度；⚠️ MISC_CAT_BONUS 有加成（負重+10／MP恢復+3／藥水恢復%），合併後要重算（比照 js/15 openCardBook）
     if (typeof closeModal === 'function') closeModal();
+    try { closeCollectionPanel(); } catch (e) {}
     _miscBookOpen = true;
     var el = document.getElementById('misc-book'); if (!el) return;
     el.classList.remove('hidden');
+    el.style.display = '';
+    el.style.pointerEvents = '';
+    el.style.visibility = '';
     renderMiscBook();
 }
-function closeMiscBook() { _miscBookOpen = false; var el = document.getElementById('misc-book'); if (el) el.classList.add('hidden'); }
+function closeMiscBook() {
+    _miscBookOpen = false;
+    var el = document.getElementById('misc-book');
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+    }
+}
 function miscBookTab(key) { _miscBookCat = key; renderMiscBook(); }
 function miscBookBackdrop(ev) { if (ev && ev.target && ev.target.id === 'misc-book') closeMiscBook(); }
 
@@ -217,8 +229,48 @@ function renderMiscBook() {
 }
 
 // ===== 📦 收藏面板（裝備 / 道具 / 怪物 三大入口）=====
-function openCollectionPanel() { var el = document.getElementById('collection-panel'); if (el) el.classList.remove('hidden'); }
-function closeCollectionPanel() { var el = document.getElementById('collection-panel'); if (el) el.classList.add('hidden'); }
+function closeAllCollectionOverlays() {
+    try { closeCollectionPanel(); } catch (e) {}
+    try { if (typeof closeEquipBook === 'function') closeEquipBook(); } catch (e2) {}
+    try { closeMiscBook(); } catch (e3) {}
+    try { if (typeof closeCardBook === 'function') closeCardBook(); } catch (e4) {}
+    try { if (typeof closeRelicBook === 'function') closeRelicBook(); } catch (e5) {}
+}
+function closeCollectionPanel() {
+    var el = document.getElementById('collection-panel');
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+        el.style.visibility = 'hidden';
+        try { el.style.removeProperty('z-index'); } catch (eZ) {}
+    }
+    // 🩹 v3.8.374：關閉後把子選高亮拉回能力（勿停在收藏）
+    try {
+        if (typeof _mobileTabGroup !== 'undefined' && _mobileTabGroup === 'ability') {
+            var pref = (typeof _mobileTabSubByGroup !== 'undefined' && _mobileTabSubByGroup.ability) || 'stats';
+            if (pref === 'collection') pref = 'stats';
+            if (typeof _mobileTabSubKey !== 'undefined') _mobileTabSubKey = pref;
+            if (typeof renderMobileTabSub === 'function') renderMobileTabSub();
+        }
+    } catch (eR) {}
+}
+function openCollectionPanel() {
+    try { if (typeof closeEquipBook === 'function') closeEquipBook(); } catch (e) {}
+    try { closeMiscBook(); } catch (e2) {}
+    try { if (typeof closeCardBook === 'function') closeCardBook(); } catch (e3) {}
+    try { if (typeof closeRelicBook === 'function') closeRelicBook(); } catch (e4) {}
+    // 🩹 v3.8.327：開收藏前強制收合能力 sheet，避免底部 sheet／細條擋死收藏
+    try { if (typeof setMobileTabPanelOpen === 'function') setMobileTabPanelOpen(false); } catch (e5) {}
+    var el = document.getElementById('collection-panel');
+    if (el) {
+        el.classList.remove('hidden');
+        el.style.display = 'flex';
+        el.style.pointerEvents = 'auto';
+        el.style.visibility = 'visible';
+        el.style.zIndex = '70';
+    }
+}
 function collectionPanelBackdrop(ev) { if (ev && ev.target && ev.target.id === 'collection-panel') closeCollectionPanel(); }
 function collectionOpenEquip() { closeCollectionPanel(); if (typeof openEquipBook === 'function') openEquipBook(); }
 function collectionOpenMisc() { closeCollectionPanel(); openMiscBook(); }

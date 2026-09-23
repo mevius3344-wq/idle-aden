@@ -204,12 +204,24 @@ function openEquipBook() {
     if (!player.equipDex) player.equipDex = {};
     if (typeof mergeSharedIntoPlayer === 'function' && mergeSharedIntoPlayer('equip') && typeof calcStats === 'function') calcStats();   // 🔄 多開兜底：開書前先併入其他分頁的裝備進度。⚠️ 裝備冊「有」加成（EQUIP_CAT_BONUS 28 筆經 equipCollectionBonus 套 HP/MP/dr/mr/AC/負重…），合併後必須重算，否則 UI 立刻顯示「（已啟用）」但衍生值要等下次 calcStats 才生效（比照 js/15 openCardBook）
     if (typeof closeModal === 'function') closeModal();   // 先關物品操作彈窗(z-50)，避免書頁(z-45)開在後方
+    try { if (typeof closeCollectionPanel === 'function') closeCollectionPanel(); } catch (e) {}
     _equipBookOpen = true;
     let el = document.getElementById('equip-book'); if (!el) return;
     el.classList.remove('hidden');
+    el.style.display = '';
+    el.style.pointerEvents = '';
+    el.style.visibility = '';
     renderEquipBook();
 }
-function closeEquipBook() { _equipBookOpen = false; let el = document.getElementById('equip-book'); if (el) el.classList.add('hidden'); }
+function closeEquipBook() {
+    _equipBookOpen = false;
+    let el = document.getElementById('equip-book');
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+    }
+}
 function equipBookTab(key) { _equipBookCat = key; renderEquipBook(); }
 function equipBookBackdrop(ev) { if (ev && ev.target && ev.target.id === 'equip-book') closeEquipBook(); }
 

@@ -54,14 +54,26 @@
     }
 
     function fpUpdateToggleUi() {
-        var btn = document.getElementById('btn-field-pvp');
-        if (!btn) return;
         var on = fpSelfOn();
-        btn.classList.toggle('is-on', on);
-        btn.textContent = on ? '⚔️ PK 開' : '⚔️ PK 關';
-        btn.title = on
-            ? '野外 PK 開啟：可攻擊同圖玩家；對方未開則無法還手（不掉裝）'
-            : '點擊開啟野外 PK（單方開即可攻擊；未開不能還手）';
+        var btn = document.getElementById('btn-field-pvp');
+        if (btn) {
+            btn.classList.toggle('is-on', on);
+            btn.textContent = on ? '⚔️ PK 開' : '⚔️ PK 關';
+            btn.title = on
+                ? '野外 PK 開啟：可攻擊同圖玩家；對方未開則無法還手（不掉裝）'
+                : '點擊開啟野外 PK（單方開即可攻擊；未開不能還手）';
+        }
+        // 🩹 v3.8.397：戰鬥 HUD 下方 PK 鈕同步
+        var chud = document.getElementById('chud-pvp');
+        if (chud) {
+            chud.classList.toggle('is-on', on);
+            chud.setAttribute('aria-pressed', on ? 'true' : 'false');
+            chud.title = on
+                ? '野外 PK 開啟：可攻擊同圖玩家'
+                : '點擊開啟野外 PK';
+            var sub = chud.querySelector('.chud-pvp-sub');
+            if (sub) sub.textContent = on ? '開' : '關';
+        }
     }
 
     function fpSelectTarget(key, name) {

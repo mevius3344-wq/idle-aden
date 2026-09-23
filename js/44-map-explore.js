@@ -3,115 +3,281 @@
 (function () {
     'use strict';
 
-    var CAM_MAX_X = 2200;
-    var CAM_MAX_Y = 900;
-    var CAM_STEP = 14;
-    var TICK_MS = 50;
-    var BG_FAR_X = 1.0;
-    var BG_FAR_Y = 1.0;
+    var CAM_MAX_X_FIELD = 2200;
+    var CAM_MAX_Y_FIELD = 900;
+    var CAM_MAX_X_SCENIC = 1200; // 🩹 v3.8.376：對齊鳥視圖景固體／海岸，避免圖小於世界＝地圖跑掉
+    var CAM_MAX_Y_SCENIC = 800;
+    var CAM_MAX_X = CAM_MAX_X_FIELD;
+    var CAM_MAX_Y = CAM_MAX_Y_FIELD;
+    var CAM_STEP = 24;       // 相容舊常數（距離基準）
+    var CAM_LERP = 1.0;
+    var CAM_ACCEL = 1.0;     // 未使用（等速走路）
+    var CAM_FRICTION = 0;    // 鬆鍵即停，無滑行
+    // 🩹 v3.8.409：真地圖鏡頭硬跟人物（死區＝偏離中央）
+    var CAM_DEAD_X = 0;
+    var CAM_DEAD_Y = 0;
+    var CAM_FOLLOW_REAL = 1.0;
+    var TICK_MS = 33;
+    var BG_FAR_X = 0.22;
+    var BG_FAR_Y = 0.08;
     var BG_MID_X = 1.0;
     var BG_MID_Y = 1.0;
-    var TILE_PX = 880;        // 🌿 略放大瓦面，降低草原接縫重複感（原 720）
+    var TILE_PX = 512;
     var WALL_THICK = 96;
     var VOID_EXT = 520;
-    var ENGAGE_PX = 175;      // 含點內 4 怪散開距離，站點心也能交戰
-    var APPROACH_WORLD = 340; // 世界座標：靠近練功點即自動朝怪拉近
-    var PICKUP_PX = 88;       // 🗺️ 地上掉落撿取距離（需靠近，不可遠距自動入帳）
-    var CHASE_PULL = 2.8;
-    var CHASE_RANGE = 340;
-    var COMBAT_CAM_PULL = 3.6;
-    var COMBAT_MOB_PULL = 3.6;
-    var LEASH = 190;
-    var SIM_PX = 720;         // 🚀 場戰模擬半徑：圈外怪不跑 AI／狀態（省主因卡頓）
-    var RENDER_PX = 980;      // 🚀 場戰繪製半徑：只畫鏡頭附近怪
-    var EDGE_WARN = 380;      // 提早看到盡頭圍牆接近
-    var FIELD_LAYOUT = 'g214';
-    var GROUND_Y_DESIGN = 186; // 腳錨設計值（800×450、Q≈78 → (450-78)/2）
-    var GROUND_Y_REF_H = 450;  // 設計基準戰場高度
-    var DEPTH_MAX = 900;      // 須涵蓋最遠練功點 y
+    // 🩹 v3.8.416：等速真實走路＋明顯步伐（禁站姿滑行感）
+    var GRID_PX = 24;          // 仍作距離基準（交戰／閒逛半徑）
+    var PLAYER_SPEED = 152; // v3.8.478 人物 px/秒（等速）
+    var MOB_SPEED = 38;        // 🩹 v3.8.426：怪閒逛再慢
+    var MOB_CHASE_SPEED = 52;  // 🩹 v3.8.426：怪追擊再慢
+    var ENGAGE_MELEE = 48;     // 🩹 v3.8.423：對齊九宮格（鄰格含斜角可交戰）
+    var ENGAGE_RANGED = GRID_PX * 8;
+    var ENGAGE_PX = ENGAGE_MELEE;
+    var APPROACH_WORLD = 420;
+    var PICKUP_PX = 88;
+    var CHASE_PULL = 4.0;
+    var MOB_SIGHT = 78;       // 🩹 v3.8.426：主動仇恨視野縮小
+    var MOB_SIGHT_PASSIVE = 48; // 被動怪滿血視野更短
+    var CHASE_RANGE = 150;     // 追丟距離隨視野略縮
+    var COMBAT_CAM_PULL = 1.7;
+    var COMBAT_STAND_OFF = 22;
+    var COMBAT_MOB_PULL = 1.6;
+    var MOB_MELEE_GAP = 32;
+    var SURROUND_CELL = 32;    // 🩹 v3.8.423：九宮格邊長（玩家中心、怪佔周圍格）
+    var MOB_SEP_R = SURROUND_CELL;
+    var MOB_SEP_PUSH = 0.35;
+    var MOB_STRIDE = GRID_PX;  // 相容舊常數
+    var MOB_STRIDE_MS = 0;     // 關閉舊滑步節奏
+    var MOB_WALK_PHASE_K = 1.35;
+    var MOB_FACE_STICK_MS = 50;
+    var MOB_FACE_TURN_MS = 0;
+    var MOB_FACE_CHASE_STICK_MS = 40;
+    var MOB_FACE_CHASE_TURN_MS = 0;
+    var MOB_MOVE_STICK_MS = 160;
+    var MOB_BOB_PX = 4.2;
+    var LEASH = 150;
+    var WANDER_R = 88;
+    var WANDER_STEP = GRID_PX;
+    var WANDER_PAUSE_MIN = 900;
+    var WANDER_PAUSE_MAX = 2800;
+    var FIELD_MARGIN = 48;
+    var SIM_PX = 640;          // 遠於此＝簡化 AI／凍結動畫
+    var RENDER_PX = 820;       // 進入繪製
+    var RENDER_HIDE_PX = 1180; // 離開繪製（滯後＝防邊界閃進出）
+    var EDGE_WARN = 380;
+    var FIELD_LAYOUT = 'g391';
+    // 場戰開啟＝地上怪卡；造型另由 MOB_USE_LEGACY_LINEAGE 決定（舊版天堂圖）
+    var FIELD_COMBAT_ENABLED = true;
+    var GROUND_Y_DESIGN = 186;
+    var GROUND_Y_REF_H = 450;
+    var DEPTH_MAX = 900;
+    var FOOT_CONTACT_SINK = 34; // 🩹 v3.8.399：腳再沉一點＝貼地（對齊放大後體型）
+    var _footSign = 0;
+    var _footPlantUntil = 0;
 
-    /** 依目前 #battle-view 高度等比換算腳錨（手機矮框不再把人頂到上方） */
+    /** 腳錨：戰場垂直中央（正俯視） */
     function exploreGroundYLive() {
         var bv = document.getElementById('battle-view');
         var h = (bv && bv.clientHeight) || GROUND_Y_REF_H;
-        if (!(h > 40)) h = GROUND_Y_REF_H;
-        return Math.max(28, Math.round(h * (GROUND_Y_DESIGN / GROUND_Y_REF_H)));
+        if (!(h > 80)) h = GROUND_Y_REF_H;
+        return Math.max(80, Math.round(h * 0.48));
     }
-    var PACK_PER_SPOT = 4;
+    var PACK_PER_SPOT = 2; // v3.8.478 denser walk space
     var PORTAL_HOLD_TICKS = 8;
     var _portalBusy = false;
     var _portalHoldL = 0;
     var _portalHoldR = 0;
 
-    // 5×4＝20 點：間距約 1000／420，補正中與南北，避免大片空曠
+    // 🩹 v3.8.478：3×3＝9 點×2 隻＝18（原 80），走路有空檔
     var GRIND_SPOTS = [
-        { id: 0, x: -2000, y: 630, label: '西北' },
-        { id: 1, x: -1000, y: 630, label: '北偏西' },
-        { id: 2, x: 0, y: 630, label: '正北' },
-        { id: 3, x: 1000, y: 630, label: '北偏東' },
-        { id: 4, x: 2000, y: 630, label: '東北' },
-        { id: 5, x: -2000, y: 210, label: '西偏北' },
-        { id: 6, x: -1000, y: 210, label: '中西北' },
-        { id: 7, x: 0, y: 210, label: '中北' },
-        { id: 8, x: 1000, y: 210, label: '中東北' },
-        { id: 9, x: 2000, y: 210, label: '東偏北' },
-        { id: 10, x: -2000, y: -210, label: '西偏南' },
-        { id: 11, x: -1000, y: -210, label: '中西南' },
-        { id: 12, x: 0, y: -210, label: '中南' },
-        { id: 13, x: 1000, y: -210, label: '中東南' },
-        { id: 14, x: 2000, y: -210, label: '東偏南' },
-        { id: 15, x: -2000, y: -630, label: '西南' },
-        { id: 16, x: -1000, y: -630, label: '南偏西' },
-        { id: 17, x: 0, y: -630, label: '正南' },
-        { id: 18, x: 1000, y: -630, label: '南偏東' },
-        { id: 19, x: 2000, y: -630, label: '東南' }
+        { id: 0, x: -1600, y: 480, label: '西北' },
+        { id: 1, x: 0, y: 480, label: '正北' },
+        { id: 2, x: 1600, y: 480, label: '東北' },
+        { id: 3, x: -1600, y: 0, label: '正西' },
+        { id: 4, x: 0, y: 0, label: '中央' },
+        { id: 5, x: 1600, y: 0, label: '正東' },
+        { id: 6, x: -1600, y: -480, label: '西南' },
+        { id: 7, x: 0, y: -480, label: '正南' },
+        { id: 8, x: 1600, y: -480, label: '東南' }
     ];
     var PACK_OFFSETS = [
-        { fx: -90, fy: -58 },
-        { fx: 90, fy: -48 },
-        { fx: -100, fy: 58 },
-        { fx: 100, fy: 64 }
+        { fx: -110, fy: -70 },
+        { fx: 110, fy: 78 }
     ];
     var FIELD_SLOT_COUNT = GRIND_SPOTS.length * PACK_PER_SPOT;
-    var CORRIDOR_BG_WILD = 'assets/area/俯視野外.png';
-    var CORRIDOR_BG_DUNGEON = 'assets/area/俯視地監.png';
-    var WALKWAY_BG_WILD = 'assets/area/俯視野外.png';
-    var WALKWAY_BG_DUNGEON = 'assets/area/俯視地監.png';
-    /** 正俯視無縫生態地板（同圖作底，避免異圖雙層拼湊） */
-    var TOPDOWN_STYLES = {
-        wild:    { floor: 'assets/area/俯視野外.png' },
-        dungeon: { floor: 'assets/area/俯視地監.png' },
-        desert:  { floor: 'assets/area/俯視沙漠.png' },
-        snow:    { floor: 'assets/area/俯視雪原.png' },
-        forest:  { floor: 'assets/area/俯視密林.png' },
-        lava:    { floor: 'assets/area/俯視熔岩.png' },
-        swamp:   { floor: 'assets/area/俯視沼澤.png' },
-        crystal: { floor: 'assets/area/俯視水晶.png' },
-        coast:   { floor: 'assets/area/俯視海岸.png' },
-        tower:   { floor: 'assets/area/俯視高塔.png' }
-    };
+    function exploreFloorVer() {
+        return (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.360');
+    }
+    function exploreSeamlessFloorUrl(biome) {
+        var id = String(biome || 'wild').replace(/[^a-z]/gi, '') || 'wild';
+        return 'assets/area/seamless/' + id + '.png?v=' + exploreFloorVer();
+    }
+    /** 真地圖：MapDef.floor 正俯視專用圖（1:1 對齊世界） */
+    function exploreMapFloorOverride(mapId) {
+        try {
+            if (typeof mapdefOf === 'function') {
+                var d = mapdefOf(mapId);
+                if (d && d.floor) return String(d.floor) + '?v=' + exploreFloorVer();
+            }
+        } catch (eFl) {}
+        return '';
+    }
+    /** 有專用俯視地板＝鳥視圖景模式（鏡頭／遠景） */
+    function exploreIsScenicMap(mapId) {
+        if (exploreMapFloorOverride(mapId)) return true;
+        try {
+            if (typeof mapdefIsReal === 'function' && mapdefIsReal(mapId)) return true;
+        } catch (eSc) {}
+        return false;
+    }
+    /** 依地圖刷新可走邊界（真地圖讀 MapDef；圖景對齊地板像素） */
+    function exploreRefreshCamLimits() {
+        var mid = '';
+        try {
+            mid = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+        } catch (eMid) {}
+        var def = null;
+        try {
+            if (typeof mapdefOf === 'function') def = mapdefOf(mid);
+        } catch (eDef) {}
+        if (def && def.real && def.maxX != null && def.maxY != null) {
+            CAM_MAX_X = def.maxX;
+            CAM_MAX_Y = def.maxY;
+        } else {
+            var scenic = false;
+            try { scenic = exploreIsScenicMap(mid); } catch (eLim) {}
+            CAM_MAX_X = scenic ? CAM_MAX_X_SCENIC : CAM_MAX_X_FIELD;
+            CAM_MAX_Y = scenic ? CAM_MAX_Y_SCENIC : CAM_MAX_Y_FIELD;
+        }
+        CAM_MAX = CAM_MAX_X;
+        if (_cx < -CAM_MAX_X) _cx = -CAM_MAX_X;
+        if (_cx > CAM_MAX_X) _cx = CAM_MAX_X;
+        if (_cy < -CAM_MAX_Y) _cy = -CAM_MAX_Y;
+        if (_cy > CAM_MAX_Y) _cy = CAM_MAX_Y;
+        if (_tx < -CAM_MAX_X) _tx = -CAM_MAX_X;
+        if (_tx > CAM_MAX_X) _tx = CAM_MAX_X;
+        if (_ty < -CAM_MAX_Y) _ty = -CAM_MAX_Y;
+        if (_ty > CAM_MAX_Y) _ty = CAM_MAX_Y;
+    }
+    function exploreScenicFarUrl(mapId) {
+        if (!exploreIsScenicMap(mapId)) return '';
+        try {
+            if (typeof mapdefOf === 'function') {
+                var d = mapdefOf(mapId);
+                if (d && d.scenicFar) {
+                    var far = String(d.scenicFar);
+                    return far + (far.indexOf('?') >= 0 ? '' : ('?v=' + exploreFloorVer()));
+                }
+            }
+        } catch (eFar) {}
+        var sc = '';
+        try { sc = exploreMapSceneBgUrl() || ''; } catch (eSc) {}
+        if (!sc) sc = 'assets/area/1920x1080/' + encodeURIComponent('說話之島周邊') + '.jpg?v=' + exploreFloorVer();
+        return sc;
+    }
+    function exploreTopdownStyles() {
+        return {
+            wild:    { floor: exploreSeamlessFloorUrl('wild') },
+            dungeon: { floor: exploreSeamlessFloorUrl('dungeon') },
+            desert:  { floor: exploreSeamlessFloorUrl('desert') },
+            snow:    { floor: exploreSeamlessFloorUrl('snow') },
+            forest:  { floor: exploreSeamlessFloorUrl('forest') },
+            lava:    { floor: exploreSeamlessFloorUrl('lava') },
+            swamp:   { floor: exploreSeamlessFloorUrl('swamp') },
+            crystal: { floor: exploreSeamlessFloorUrl('crystal') },
+            coast:   { floor: exploreSeamlessFloorUrl('coast') },
+            tower:   { floor: exploreSeamlessFloorUrl('tower') }
+        };
+    }
+    var TOPDOWN_STYLES = exploreTopdownStyles();
+    var CORRIDOR_BG_WILD = TOPDOWN_STYLES.wild.floor;
+    var CORRIDOR_BG_DUNGEON = TOPDOWN_STYLES.dungeon.floor;
+    var WALKWAY_BG_WILD = CORRIDOR_BG_WILD;
+    var WALKWAY_BG_DUNGEON = CORRIDOR_BG_DUNGEON;
     var CAM_MAX = CAM_MAX_X;
 
     var _cx = 0;
     var _cy = 0;
+    var _tx = 0;              // 人物世界座標（等速移動）
+    var _ty = 0;
     var _keys = Object.create(null);
     var _vStick = { dx: 0, dy: 0, active: false };
+    var _tapMove = { active: false, tx: 0, ty: 0 };
+    var _vx = 0;
+    var _vy = 0;
     var _moving = false;
     var _faceD = 5;
     var _facePending = 5;
-    var _faceHold = 0;        // 轉向滯後：同一方向連續 tick 才套用，減少斜走抖向
+    var _faceHold = 0;
     var _tickTimer = null;
+    var _tickN = 0;
     var _lastMap = '';
+    var _pendingSpawn = null;
     var _walkPhase = 0;
-    var _camMoved = false;    // 本 tick 是否因交戰／接近被相機拉動（也算走動）
-    var FACE_HOLD_TICKS = 2;  // ≈100ms 穩定後才換向（大轉彎立即換）
-    var WALK_PHASE_KEY = 0.72;
-    var WALK_PHASE_CAM = 0.48;
+    var _camMoved = false;
+    var FACE_HOLD_TICKS = 4;     // 🩹 v3.8.447：相鄰轉向需連續確認（原 1＝搖桿微抖狂換 dN→閃圖）
+    var WALK_PHASE_DIST = 0.055; // 🩹 v3.8.447：放慢走路換幀（原 0.12 過快＝閃圖）
+    var WALK_PHASE_KEY = 0.22;
+    var WALK_PHASE_CAM = 0.1;
+    var TAP_ARRIVE = 14;
+    var MOB_GAIT_PX = 5;         // 🩹 v3.8.424：怪每走約 5px 換一幀（左右腳）
+    var PLAYER_BOB_PX = 5.2;     // 人物踩地起伏（真地圖）
+    var PLAYER_BOB_PX_SOFT = 2.4;
 
     /** 手動精選相鄰＋各分類自動串鏈；場上左右盡頭可傳送 */
     var MAP_PORTAL_LINKS = {
         talking_island: { left: 'town_talking', right: 'talking_island_port' },
         talking_island_port: { left: 'talking_island', right: null },
+        zone_13: { left: 'talking_island', right: 'zone_14' },
+        zone_14: { left: 'zone_13', right: null },
+        zone_06: { left: 'gludio', right: 'zone_07' },
+        zone_07: { left: 'zone_06', right: 'zone_08' },
+        zone_08: { left: 'zone_07', right: 'zone_09' },
+        zone_09: { left: 'zone_08', right: 'zone_10' },
+        zone_10: { left: 'zone_09', right: 'zone_11' },
+        zone_11: { left: 'zone_10', right: 'zone_12' },
+        zone_12: { left: 'zone_11', right: null },
+        zone_18: { left: 'giran', right: 'zone_19' },
+        zone_19: { left: 'zone_18', right: 'zone_20' },
+        zone_20: { left: 'zone_19', right: 'zone_21' },
+        zone_21: { left: 'zone_20', right: null },
+        zone_22: { left: 'desert', right: 'zone_23' },
+        zone_23: { left: 'zone_22', right: 'zone_24' },
+        zone_24: { left: 'zone_23', right: 'zone_25' },
+        zone_25: { left: 'zone_24', right: null },
+        zone_26: { left: 'dragon_valley', right: 'zone_27' },
+        zone_27: { left: 'zone_26', right: 'zone_28' },
+        zone_28: { left: 'zone_27', right: 'zone_29' },
+        zone_29: { left: 'zone_28', right: 'zone_30' },
+        zone_30: { left: 'zone_29', right: 'zone_31' },
+        zone_31: { left: 'zone_30', right: null },
+        zone_15: { left: 'zone_01', right: 'zone_16' },
+        zone_16: { left: 'zone_15', right: 'zone_17' },
+        zone_17: { left: 'zone_16', right: null },
+        crystal_cave1: { left: 'zone_02', right: 'crystal_cave2' },
+        crystal_cave2: { left: 'crystal_cave1', right: 'crystal_cave3' },
+        crystal_cave3: { left: 'crystal_cave2', right: 'shadow_temple' },
+        shadow_temple: { left: 'crystal_cave3', right: null },
+        zone_32: { left: 'desert', right: 'zone_33' },
+        zone_33: { left: 'zone_32', right: null },
+        zone_34: { left: 'heine', right: 'zone_35' },
+        zone_35: { left: 'zone_34', right: 'zone_36' },
+        zone_36: { left: 'zone_35', right: 'eva_kingdom' },
+        eva_kingdom: { left: 'zone_36', right: null },
+        zone_37: { left: 'zone_02', right: 'zone_38' },
+        zone_38: { left: 'zone_37', right: 'zone_39' },
+        zone_39: { left: 'zone_38', right: 'zone_40' },
+        zone_40: { left: 'zone_39', right: 'zone_41' },
+        zone_41: { left: 'zone_40', right: null },
+        rastabad_cave1: { left: 'giant_tomb', right: 'rastabad_cave2' },
+        rastabad_cave2: { left: 'rastabad_cave1', right: 'rastabad_cave3' },
+        rastabad_cave3: { left: 'rastabad_cave2', right: 'rastabad_gate' },
+        rastabad_gate: { left: 'rastabad_cave3', right: 'rastabad_beast' },
+        rastabad_beast: { left: 'rastabad_gate', right: 'elder_room' },
+        elder_room: { left: 'rastabad_beast', right: null },
+        dark_magic_lab: { left: 'rastabad_gate', right: 'demon_temple' },
+        demon_temple: { left: 'dark_magic_lab', right: null },
+        necro_training: { left: 'rastabad_gate', right: null },
         silver_knight: { left: 'town_silver_knight', right: 'zone_01' },
         zone_01: { left: 'silver_knight', right: 'elf_forest' },
         elf_forest: { left: 'zone_01', right: 'gludio' },
@@ -121,18 +287,18 @@
         kent: { left: 'desert', right: 'dragon_valley' },
         dragon_valley: { left: 'kent', right: 'fire_dragon' },
         fire_dragon: { left: 'dragon_valley', right: 'giran' },
-        giran: { left: 'town_giran', right: 'heine' },
+        giran: { left: 'fire_dragon', right: 'heine' },
         heine: { left: 'giran', right: 'twilight_mt' },
         twilight_mt: { left: 'heine', right: 'mirror_forest' },
         mirror_forest: { left: 'twilight_mt', right: 'zone_02' },
-        zone_02: { left: 'town_oren', right: 'zone_03' },
+        zone_02: { left: 'mirror_forest', right: 'zone_03' },
         zone_03: { left: 'zone_02', right: 'zone_04' },
         zone_04: { left: 'zone_03', right: 'zone_05' },
         zone_05: { left: 'zone_04', right: 'silent_outer' },
         silent_outer: { left: 'zone_05', right: 'elf_grave' },
         elf_grave: { left: 'silent_outer', right: 'hidden_cave' },
         hidden_cave: { left: 'elf_grave', right: 'giant_tomb' },
-        giant_tomb: { left: 'hidden_cave', right: null },
+        giant_tomb: { left: 'hidden_cave', right: 'rastabad_cave1' },
         pirate_wild: { left: 'town_pirate_village', right: 'pirate_dungeon' },
         pirate_dungeon: { left: 'pirate_wild', right: null },
         thebes_desert: { left: 'town_rift', right: 'thebes_pyramid' },
@@ -145,10 +311,20 @@
         sunrise_east: { left: 'sunrise_castle', right: 'sunrise_west' },
         sunrise_west: { left: 'sunrise_east', right: 'sunrise_north' },
         sunrise_north: { left: 'sunrise_west', right: null },
-        dream_island: { left: null, right: null },
+        dream_island: { left: 'twilight_mt', right: null },
         antaras_lair: { left: null, right: null },
         fafurion_lair: { left: null, right: null },
-        valakas_lair: { left: null, right: null }
+        valakas_lair: { left: null, right: null },
+        pride_2_10: { left: 'town_pride', right: 'pride_11_20' },
+        pride_11_20: { left: 'pride_2_10', right: 'pride_21_30' },
+        pride_21_30: { left: 'pride_11_20', right: 'pride_31_40' },
+        pride_31_40: { left: 'pride_21_30', right: 'pride_41_50' },
+        pride_41_50: { left: 'pride_31_40', right: 'pride_51_60' },
+        pride_51_60: { left: 'pride_41_50', right: 'pride_61_70' },
+        pride_61_70: { left: 'pride_51_60', right: 'pride_71_80' },
+        pride_71_80: { left: 'pride_61_70', right: 'pride_81_90' },
+        pride_81_90: { left: 'pride_71_80', right: 'pride_91_100' },
+        pride_91_100: { left: 'pride_81_90', right: null }
     };
 
     function exploreLinkPortal(cur, left, right) {
@@ -237,6 +413,9 @@
 
     function exploreAllowed() {
         try {
+            // 🩹 v3.8.377：回選角／game-screen 隱藏後不可再跑探索（否則每 66ms 重繪＝頁面卡死）
+            var gs = document.getElementById('game-screen');
+            if (!gs || gs.classList.contains('hidden')) return false;
             if (typeof mapState === 'undefined' || !mapState || !mapState.current) return false;
             var id = String(mapState.current);
             if (id.indexOf('town_') === 0) return false;
@@ -293,8 +472,34 @@
     }
     function exploreCamX() { return _cx; }
     function exploreCamY() { return _cy; }
+    /** 🩹 v3.8.383：人物世界座標（真相）；相機 _cx/_cy 只跟隨 */
+    function explorePlayerX() { return _tx; }
+    function explorePlayerY() { return _ty; }
+    function exploreActiveMapDef() {
+        try {
+            var id = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+            return (typeof mapdefOf === 'function') ? mapdefOf(id) : null;
+        } catch (eD) { return null; }
+    }
+    function exploreIsRealMap(mapId) {
+        if (typeof mapdefIsReal === 'function') {
+            try { return !!mapdefIsReal(mapId != null ? mapId : ((mapState && mapState.current) || '')); } catch (eR) {}
+        }
+        return false;
+    }
+    function exploreActiveGrindSpots() {
+        try {
+            var id = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+            if (typeof mapdefSpawns === 'function') {
+                var sp = mapdefSpawns(id);
+                if (sp && sp.length) return sp;
+            }
+        } catch (eG) {}
+        return GRIND_SPOTS;
+    }
 
     function exploreFieldCombatActive() {
+        if (!FIELD_COMBAT_ENABLED) return false;
         if (!exploreAllowed()) return false;
         try {
             if (typeof BOSS_BIG_MAPS !== 'undefined' && BOSS_BIG_MAPS.indexOf(mapState.current) >= 0) return false;
@@ -311,6 +516,10 @@
 
     function exploreFieldSlotCount() {
         if (!exploreFieldCombatActive()) return 0;
+        try {
+            var spots = exploreActiveGrindSpots();
+            if (spots && spots.length) return spots.length * PACK_PER_SPOT;
+        } catch (eF) {}
         return FIELD_SLOT_COUNT;
     }
 
@@ -321,18 +530,18 @@
      */
     function exploreInitFieldSpawns(t0) {
         if (!exploreFieldCombatActive()) return false;
-        var n = FIELD_SLOT_COUNT;
+        var n = exploreFieldSlotCount();
+        if (!(n > 0)) n = FIELD_SLOT_COUNT;
         var mobs = new Array(n);
         var spawnAt = new Array(n);
         var base = Math.max(0, Math.floor(Number(t0) || 0));
+        var spots = exploreActiveGrindSpots();
+        var spotN = Math.max(1, spots.length);
         for (var i = 0; i < n; i++) {
             mobs[i] = null;
-            var spot = Math.floor(i / PACK_PER_SPOT);
+            var spot = Math.floor(i / PACK_PER_SPOT) % spotN;
             var mem = i % PACK_PER_SPOT;
-            var gx = spot % 5;
-            var gy = Math.floor(spot / 5);
-            // 越靠近地圖中心越早出現；同點 4 隻再微錯開
-            var distFromCenter = Math.abs(gx - 2) + Math.abs(gy - 2);
+            var distFromCenter = Math.abs(spot % 3 - 1) + Math.floor(spot / 3);
             var delay = 18 + distFromCenter * 10 + mem * 5 + (spot % 3) * 2;
             spawnAt[i] = base + delay;
         }
@@ -350,6 +559,12 @@
     }
 
     function exploreCorridorBgUrl() {
+        try {
+            var mid = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+            var ov = exploreMapFloorOverride(mid);
+            if (ov) return ov;
+        } catch (eOv) {}
+        TOPDOWN_STYLES = exploreTopdownStyles();
         var st = exploreTopdownStyle();
         return (st && st.floor) || CORRIDOR_BG_WILD;
     }
@@ -362,33 +577,35 @@
     /**
      * 地圖 → 正俯視生態（森林／沙漠／地監／海／火 為主軸）
      * 優先看地圖 id 關鍵字，再依分類。
+     * 🩹 v3.8.381：海岸洞窟／法利昂洞窟先於熔岩；風木綠洲偏森林
      */
     function exploreBiomeOf(mapId) {
         try {
             var id = String(mapId || '');
             var cat = (typeof mapCategoryOf === 'function') ? mapCategoryOf(id) : '';
-            // 🔥 火／熔岩
-            if (/fire_dragon|valakas|antaras|dragon_valley|fafurion|lava|immortal_land|hell|balrog/.test(id)) return 'lava';
-            // 🌊 海／海岸
-            if (/heine|eva_kingdom|pirate_|talking_island_port|sunrise_|fafurion_cave|coast|sea|ocean/.test(id)) return 'coast';
-            // 🏜️ 沙漠
-            if (/desert|thebes|windwood|tikal_/.test(id)) return 'desert';
-            // 🌲 密林（真森林；銀騎士／說話之島周邊改走草原 wild）
-            if (/elf_forest|zone_01|mirror_forest|twilight_mt|forest/.test(id)) return 'forest';
+            // 🌊 海／海岸（含 *_cave 海系洞穴；須在熔岩關鍵字之前）
+            if (/heine|eva_kingdom|pirate_|talking_island_port|sunrise_|fafurion_cave|coast|sea|ocean|port$/.test(id)) return 'coast';
+            // 🔥 火／熔岩（不含 fafurion_cave）
+            if (/fire_dragon|valakas|antaras|dragon_valley|fafurion$|lava|immortal_land|hell|balrog/.test(id)) return 'lava';
+            // 🏜️ 沙漠（風木綠林改 forest）
+            if (/desert|thebes|tikal_/.test(id)) return 'desert';
+            // 🌲 密林
+            if (/elf_forest|zone_01|mirror_forest|twilight_mt|forest|windwood|orcforest/.test(id)) return 'forest';
             // 🌿 草原／村莊周邊野外
-            if (/silver_knight|talking_island$|training|gludio$|kent$|giran$|dream_island|wilderness|grass/.test(id)) return 'wild';
+            if (/dream_island/.test(id)) return 'mist';
+            if (/silver_knight|talking_island$|training|gludio$|kent$|giran$|wilderness|grass/.test(id)) return 'wild';
             // ❄️ 雪
             if (id === 'zone_03' || /snow|oren|hyperia/.test(id)) return 'snow';
             // 💎 水晶／闇
             if (/crystal|silent|shadow_temple|dark_magic|necro_training|rastabad/.test(id)) return 'crystal';
             // 🏛️ 高塔
             if (cat === 'tower' || id.indexOf('pride_') === 0 || /ivory|tower/.test(id)) return 'tower';
+            // 沼澤／濕地（先於泛用地監）
+            if (/swamp|marsh/.test(id)) return 'swamp';
             // 🏰 地監
-            if (cat === 'dungeon' || cat === 'siege' || id.indexOf('dungeon') >= 0 || id.indexOf('_cave') >= 0) return 'dungeon';
+            if (cat === 'dungeon' || cat === 'siege' || id.indexOf('dungeon') >= 0 || id.indexOf('_cave') >= 0 || /^zone_1[34]$/.test(id)) return 'dungeon';
             var zm = id.match(/^zone_(\d+)$/);
             if (zm && Number(zm[1]) >= 6) return 'dungeon';
-            // 沼澤／濕地
-            if (/swamp|marsh/.test(id)) return 'swamp';
             if (cat === 'wild' || cat === 'rift' || cat === 'pirate_island' || cat === 'special') return 'wild';
         } catch (e) {}
         return 'wild';
@@ -426,40 +643,247 @@
     /** 每點連續填滿 4 隻；點有 x/y（俯視網格） */
     function exploreAssignFieldPos(mob, idx) {
         if (!mob || !exploreFieldCombatActive()) return;
-        if (mob._fx != null && mob._fy != null && mob._fieldMap === mapState.current && mob._fieldLayout === FIELD_LAYOUT) return;
+        var spots = exploreActiveGrindSpots();
+        var def = exploreActiveMapDef();
+        var layoutKey = (def && def.layout) ? def.layout : FIELD_LAYOUT;
+        if (mob._fx != null && mob._fy != null && mob._fieldMap === mapState.current && mob._fieldLayout === layoutKey) return;
         var slot = Math.max(0, idx | 0);
-        var spot = GRIND_SPOTS[Math.floor(slot / PACK_PER_SPOT) % GRIND_SPOTS.length];
+        var spot = spots[Math.floor(slot / PACK_PER_SPOT) % spots.length];
         var member = slot % PACK_PER_SPOT;
         var off = PACK_OFFSETS[member] || PACK_OFFSETS[0];
         var h = exploreHashStr(mob.uid || idx);
         var jx = ((h % 17) - 8) * 2;
         var jy = (((h >> 3) % 9) - 4) * 2;
         mob._grindSpot = spot.id;
+        mob._packMem = member;
         // 出生點夾在可行走範圍內（避免貼牆／掉到虛空）
         var hx = Math.max(-CAM_MAX_X + 120, Math.min(CAM_MAX_X - 120, spot.x + off.fx + jx));
         var hy = Math.max(-CAM_MAX_Y + 80, Math.min(CAM_MAX_Y - 80, (spot.y || 0) + off.fy + jy));
+        if (def && typeof mapdefResolveMove === 'function') {
+            var fixed = mapdefResolveMove(def, 0, 0, hx, hy);
+            hx = fixed.x;
+            hy = fixed.y;
+            if (!mapdefWalkable(def, hx, hy)) {
+                hx = spot.x;
+                hy = spot.y || 0;
+            }
+        }
         mob._homeFx = hx;
         mob._homeFy = Math.max(-DEPTH_MAX, Math.min(DEPTH_MAX, hy));
         mob._fx = mob._homeFx;
         mob._fy = mob._homeFy;
+        mob._gridFx = mob._fx;
+        mob._gridFy = mob._fy;
+        mob._slideStart = 0;
         mob._fieldMap = mapState.current;
-        mob._fieldLayout = FIELD_LAYOUT;
+        mob._fieldLayout = layoutKey;
+        try { if (typeof rtWorldSeedMob === 'function') rtWorldSeedMob(mob); } catch (eSeed) {}
     }
 
-    /** 腳底：俯視用腳錨＋世界 y（可為負＝偏南） */
+    /** 🩹 v3.8.423：九宮格包圍偏移（ring1＝8 格；溢出進外圈） */
+    var SURROUND_RING1 = [
+        { ox: -1, oy: -1 }, { ox: 0, oy: -1 }, { ox: 1, oy: -1 },
+        { ox: -1, oy: 0 },                     { ox: 1, oy: 0 },
+        { ox: -1, oy: 1 },  { ox: 0, oy: 1 },  { ox: 1, oy: 1 }
+    ];
+    function exploreSurroundCellCenter(ox, oy) {
+        var cell = SURROUND_CELL;
+        var pcx = Math.round(_tx / cell) * cell;
+        var pcy = Math.round(_ty / cell) * cell;
+        return { x: pcx + ox * cell, y: pcy + oy * cell };
+    }
+    function exploreBuildSurroundSlots(need) {
+        var out = [];
+        var i, ox, oy, ring, maxR;
+        for (i = 0; i < SURROUND_RING1.length; i++) out.push(SURROUND_RING1[i]);
+        maxR = 4;
+        for (ring = 2; out.length < need && ring <= maxR; ring++) {
+            for (oy = -ring; oy <= ring; oy++) {
+                for (ox = -ring; ox <= ring; ox++) {
+                    if (ox === 0 && oy === 0) continue;
+                    if (Math.max(Math.abs(ox), Math.abs(oy)) !== ring) continue;
+                    out.push({ ox: ox, oy: oy });
+                }
+            }
+        }
+        return out;
+    }
+    /** 追擊／交戰怪各佔一格：玩家中心，周圍九宮格包圍 */
+    function exploreAssignSurroundSlots() {
+        if (!exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return;
+        var list = mapState.mobs;
+        var candidates = [];
+        var i, m, d;
+        for (i = 0; i < list.length; i++) {
+            m = list[i];
+            if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
+            d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
+            if (d > CHASE_RANGE + 40) {
+                m._surOx = null;
+                m._surOy = null;
+                m._surGx = null;
+                m._surGy = null;
+                continue;
+            }
+            if (!(m._aggro || (mapState.targetIdx === i) || d <= MOB_SIGHT)) {
+                m._surOx = null;
+                m._surOy = null;
+                m._surGx = null;
+                m._surGy = null;
+                continue;
+            }
+            candidates.push(m);
+        }
+        if (!candidates.length) return;
+        candidates.sort(function (a, b) {
+            var da = Math.hypot((a._fx || 0) - _tx, (a._fy || 0) - _ty);
+            var db = Math.hypot((b._fx || 0) - _tx, (b._fy || 0) - _ty);
+            if (da !== db) return da - db;
+            return String(a.uid || '').localeCompare(String(b.uid || ''));
+        });
+        var slots = exploreBuildSurroundSlots(candidates.length);
+        var taken = {};
+        for (i = 0; i < candidates.length; i++) {
+            m = candidates[i];
+            var best = -1;
+            var bestD = Infinity;
+            var si, sl, cen, dd, key;
+            // 已佔格仍空閒 → 黏住（防每 tick 換位晃）
+            if (m._surOx != null && m._surOy != null) {
+                key = m._surOx + ',' + m._surOy;
+                if (!taken[key]) {
+                    taken[key] = true;
+                    cen = exploreSurroundCellCenter(m._surOx, m._surOy);
+                    m._surGx = cen.x;
+                    m._surGy = cen.y;
+                    continue;
+                }
+            }
+            for (si = 0; si < slots.length; si++) {
+                sl = slots[si];
+                key = sl.ox + ',' + sl.oy;
+                if (taken[key]) continue;
+                cen = exploreSurroundCellCenter(sl.ox, sl.oy);
+                dd = Math.hypot((m._fx || 0) - cen.x, (m._fy || 0) - cen.y);
+                if (dd < bestD) {
+                    bestD = dd;
+                    best = si;
+                }
+            }
+            if (best < 0) {
+                m._surOx = null;
+                m._surOy = null;
+                m._surGx = null;
+                m._surGy = null;
+                continue;
+            }
+            sl = slots[best];
+            taken[sl.ox + ',' + sl.oy] = true;
+            m._surOx = sl.ox;
+            m._surOy = sl.oy;
+            cen = exploreSurroundCellCenter(sl.ox, sl.oy);
+            m._surGx = cen.x;
+            m._surGy = cen.y;
+        }
+    }
+    function exploreMobOrbitGoal(m, radius) {
+        if (m && m._surGx != null && m._surGy != null) {
+            return { x: m._surGx, y: m._surGy };
+        }
+        var r = Math.max(SURROUND_CELL, Number(radius) || MOB_MELEE_GAP);
+        var dx = (m._fx || 0) - _tx;
+        var dy = (m._fy || 0) - _ty;
+        var toP = Math.hypot(dx, dy) || 1;
+        return {
+            x: _tx + (dx / toP) * r,
+            y: _ty + (dy / toP) * r
+        };
+    }
+
+    /** 🩹 v3.8.423：同格／過近必推開（一格一怪） */
+    function exploreMobSeparateTick() {
+        if (!exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return;
+        var list = mapState.mobs;
+        var n = list.length;
+        var hard = SURROUND_CELL * 0.92;
+        var hard2 = hard * hard;
+        for (var i = 0; i < n; i++) {
+            var a = list[i];
+            if (!a || a._dead || !(a.curHp > 0) || a._fx == null) continue;
+            var aToP = Math.hypot(a._fx - _tx, (a._fy || 0) - _ty);
+            if (aToP > 360) continue;
+            for (var j = i + 1; j < n; j++) {
+                var b = list[j];
+                if (!b || b._dead || !(b.curHp > 0) || b._fx == null) continue;
+                var bToP = Math.hypot(b._fx - _tx, (b._fy || 0) - _ty);
+                if (bToP > 360) continue;
+                var dx = a._fx - b._fx;
+                var dy = (a._fy || 0) - (b._fy || 0);
+                var d2 = dx * dx + dy * dy;
+                if (d2 >= hard2) continue;
+                var d = Math.sqrt(Math.max(d2, 0.0001));
+                var nx = dx / d;
+                var ny = dy / d;
+                if (d2 < 0.25) {
+                    var h = ((String(a.uid || i).charCodeAt(0) || 1) + (String(b.uid || j).charCodeAt(0) || 2)) % 628 / 100;
+                    nx = Math.cos(h);
+                    ny = Math.sin(h);
+                    d = 0.5;
+                }
+                var push = (hard - d) * MOB_SEP_PUSH;
+                if (push < 0.8) push = 0.8;
+                if (push > 14) push = 14;
+                var ax = nx * push * 0.5;
+                var ay = ny * push * 0.5;
+                a._fx += ax;
+                a._fy = (a._fy || 0) + ay;
+                b._fx -= ax;
+                b._fy = (b._fy || 0) - ay;
+                a._gridFx = a._fx;
+                a._gridFy = a._fy;
+                b._gridFx = b._fx;
+                b._gridFy = b._fy;
+            }
+        }
+    }
+
+    /** 腳底：腳錨＋世界 y − 接觸沉入 */
     function exploreFieldFootBottom(fy) {
-        return exploreGroundYLive() + (Number(fy) || 0);
+        return exploreGroundYLive() + (Number(fy) || 0) - FOOT_CONTACT_SINK;
+    }
+    function exploreMobScreenBottom(fy) {
+        return exploreGroundYLive() + (Number(fy) || 0) - _cy - FOOT_CONTACT_SINK;
+    }
+    function exploreFieldScreenX(fx) {
+        return (Number(fx) || 0) - _cx;
+    }
+    function explorePlayerDepthZ() {
+        // 🩹 v3.8.383：依人物世界 Y 景深（腳底越南越高）
+        return Math.max(30, Math.min(90, Math.round(50 - _ty * 0.06)));
+    }
+
+    function explorePlayerScreenX() {
+        // 🩹 v3.8.396：亞像素＝避免整數格跳
+        return (Number(_tx) || 0) - (Number(_cx) || 0);
+    }
+    /** 🩹 v3.8.446：取消 HUD 鏡頭右偏（v3.8.444 過度補正→人物跑到右邊）；置中改只靠本體實際寬 */
+    function exploreViewCenterBiasX() {
+        return 0;
+    }
+    function explorePlayerScreenBottom() {
+        return exploreMobScreenBottom(_ty);
     }
 
     function exploreFieldDepthStyle(fy) {
-        var t = Math.max(0, Math.min(1, (Math.abs(Number(fy) || 0)) / Math.max(1, DEPTH_MAX)));
-        var scale = (1.05 - t * 0.08).toFixed(3);
-        var z = String(Math.round(28 - (Number(fy) || 0) * 0.04));
+        var worldY = Number(fy) || 0;
+        // 與人物同一套腳底 Y 排序
+        var z = Math.max(16, Math.min(92, Math.round(50 - worldY * 0.06)));
         return {
-            transform: 'translateX(-50%) scale(' + scale + ')',
-            zIndex: z,
-            scale: scale,
-            bottom: exploreFieldFootBottom(fy)
+            transform: 'translateX(-50%)',
+            zIndex: String(z),
+            scale: '1',
+            bottom: exploreMobScreenBottom(fy),
+            screenX: 0
         };
     }
 
@@ -498,33 +922,55 @@
             }
         } catch (e) {}
         if (mob._fx == null || mob._fy == null) return Infinity;
-        return Math.hypot(mob._fx - _cx, mob._fy - _cy);
+        return Math.hypot(mob._fx - _tx, mob._fy - _ty);
+    }
+
+    function exploreEngageLimit() {
+        try {
+            if (typeof isRangedArmed === 'function' && typeof player !== 'undefined' && isRangedArmed(player)) {
+                return ENGAGE_RANGED;
+            }
+        } catch (eR) {}
+        return ENGAGE_MELEE;
+    }
+
+    function exploreMobWorldDist(mob) {
+        if (!mob || mob._fx == null) return Infinity;
+        return Math.hypot(mob._fx - _tx, (mob._fy || 0) - _ty);
     }
 
     function exploreMobInEngageRange(mob) {
         if (!exploreFieldCombatActive()) return true;
         if (!mob || mob._dead || !(mob.curHp > 0)) return false;
-        // 世界座標為準（不受 DOM／transform 干擾）；畫面距離僅作輔助
-        if (mob._fx != null) {
-            var wd = Math.hypot(mob._fx - _cx, (mob._fy || 0) - _cy);
-            if (wd <= ENGAGE_PX) return true;
-            if (wd > ENGAGE_PX + 80) return false;
-        }
-        return exploreMobScreenDistPx(mob) <= ENGAGE_PX;
+        // 🩹 v3.8.403：世界腳距 strictly；近戰須貼近
+        if (mob._fx == null) return false;
+        return exploreMobWorldDist(mob) <= exploreEngageLimit();
     }
 
     /** 場戰：是否在模擬半徑內（AI／狀態／音效觸發） */
     function exploreMobShouldSim(mob) {
         if (!exploreFieldCombatActive()) return true;
         if (!mob) return false;
-        return exploreMobScreenDistPx(mob) <= SIM_PX;
+        return exploreMobWorldDist(mob) <= SIM_PX;
     }
 
-    /** 場戰：是否在繪製半徑內（DOM／動畫） */
+    /** 場戰：繪製滯後——進 RENDER_PX、出 RENDER_HIDE_PX，避免邊界閃進出 */
     function exploreMobShouldRender(mob) {
         if (!exploreFieldCombatActive()) return true;
         if (!mob) return false;
-        return exploreMobScreenDistPx(mob) <= RENDER_PX;
+        var d = exploreMobWorldDist(mob);
+        if (mob._renderOn) {
+            if (d > RENDER_HIDE_PX) {
+                mob._renderOn = false;
+                return false;
+            }
+            return true;
+        }
+        if (d <= RENDER_PX) {
+            mob._renderOn = true;
+            return true;
+        }
+        return false;
     }
 
     function exploreNearestEngageIdx() {
@@ -535,81 +981,273 @@
             if (!m || m._dead || !(m.curHp > 0)) continue;
             if (!exploreMobInEngageRange(m)) continue;
             var d = (m._fx != null)
-                ? Math.hypot(m._fx - _cx, (m._fy || 0) - _cy)
+                ? Math.hypot(m._fx - _tx, (m._fy || 0) - _ty)
                 : exploreMobScreenDistPx(m);
             if (d < bestD) { bestD = d; best = i; }
         }
         return best;
     }
 
+    /** 🩹 v3.8.417：追擊也黏滯面向（即時換 dN＝影子圖重載＝黑影跳） */
+    function exploreMobSetMoveFace(m, mdx, mdy, now, chase) {
+        if (!m || typeof _vec2dir !== 'function') return;
+        if (!(Math.abs(mdx) > 0.12 || Math.abs(mdy) > 0.12)) return;
+        try {
+            var nd = _vec2dir(mdx, -mdy);
+            m._fvx = mdx;
+            m._fvy = mdy;
+            var od = (m._moveFace8 != null) ? m._moveFace8 : m._face8;
+            var dlt = (od == null) ? 99 : Math.min((nd - od + 8) % 8, (od - nd + 8) % 8);
+            var age = (m._faceStickAt != null) ? (now - m._faceStickAt) : 9999;
+            var need = chase
+                ? ((dlt >= 2) ? MOB_FACE_CHASE_TURN_MS : MOB_FACE_CHASE_STICK_MS)
+                : ((dlt >= 2) ? MOB_FACE_TURN_MS : MOB_FACE_STICK_MS);
+            if (od == null || (dlt > 0 && age >= need)) {
+                m._moveFace8 = nd;
+                m._face8 = nd;
+                m._faceStickAt = now;
+            } else {
+                m._moveFace8 = od;
+            }
+        } catch (eF) {}
+    }
+    function exploreMobMarkWalking(m, until) {
+        if (!m) return;
+        m._animMoving = true;
+        m._moveStickUntil = Math.max(Number(m._moveStickUntil) || 0, until || (Date.now() + MOB_MOVE_STICK_MS));
+    }
+
+    /** 🩹 v3.8.417：位移換幀保留；影子幾乎定住（禁黑影狂跳） */
+    function exploreMobAdvanceWalkFeel(m, distMoved, now) {
+        if (!m || !(distMoved > 0.05)) return;
+        m._lastStrideAt = now;
+        var add = (distMoved / Math.max(4, MOB_GAIT_PX)) * MOB_WALK_PHASE_K;
+        m._walkPhase = (Number(m._walkPhase) || 0) + add;
+        var wave = Math.sin(m._walkPhase * Math.PI);
+        m._mobBob = wave * MOB_BOB_PX;
+        var plant = Math.max(0, -wave);
+        m._mobPlant = Math.min(1, plant * 0.85);
+        // 接觸影幾乎恆定（僅微調），避免 scale/opacity 跳動
+        m._mobShadow = 0.94 + plant * 0.04;
+        var prev = Number(m._walkSign) || 0;
+        var crossed = (prev <= 0 && wave > 0.4) || (prev >= 0 && wave < -0.4);
+        m._walkSign = wave;
+        if (crossed && (!m._nextPuffAt || now >= m._nextPuffAt)) {
+            m._nextPuffAt = now + 180;
+            if (Math.hypot(m._fx - _tx, (m._fy || 0) - _ty) < 420) {
+                try { exploreSpawnMobGrassPuff(m); } catch (eP) {}
+            }
+        }
+    }
+
+    /** 步間／黏滯期間也推進腳步相位（否則只瞬移＝飄） */
+    function exploreMobTickWalkAnim(m, now) {
+        if (!m || !m._animMoving) return;
+        var prev = Number(m._walkFeelAt) || now;
+        var dt = Math.max(0, Math.min(80, now - prev));
+        m._walkFeelAt = now;
+        if (dt < 1) return;
+        exploreMobAdvanceWalkFeel(m, (dt / 1000) * MOB_SPEED, now);
+    }
+
+    function exploreSpawnMobGrassPuff(m) {
+        var bv = document.getElementById('battle-view');
+        if (!bv || !m || m._fx == null) return;
+        var sx = exploreFieldScreenX(m._fx);
+        var sy = exploreMobScreenBottom(m._fy);
+        for (var i = 0; i < 2; i++) {
+            var el = document.createElement('span');
+            el.className = 'explore-grass-puff' + (i === 1 ? ' is-dust' : '');
+            var ang = (Math.random() - 0.5) * 1.5;
+            var dist = 8 + Math.random() * 14;
+            el.style.setProperty('--gx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+            el.style.setProperty('--gy', (-6 - Math.random() * 12).toFixed(1) + 'px');
+            el.style.bottom = (sy + (Math.random() * 3 - 1)) + 'px';
+            el.style.left = 'calc(50% + ' + (sx + (Math.random() - 0.5) * 16).toFixed(1) + 'px)';
+            el.style.marginLeft = '0';
+            bv.appendChild(el);
+            setTimeout(function (node) {
+                try { if (node && node.parentNode) node.parentNode.removeChild(node); } catch (eR) {}
+            }, 560, el);
+        }
+    }
+
+    /** 🩹 v3.8.393：巢穴內隨機閒逛目標（含 MapDef 可行走） */
+    function exploreMobPickWanderGoal(m, now) {
+        if (!m || m._homeFx == null) return;
+        var seed = exploreHashStr(String(m.uid || '') + ':' + String(now | 0) + ':' + String((m._wandN || 0)));
+        m._wandN = (m._wandN || 0) + 1;
+        var ang = (seed % 6283) / 1000;
+        var rad = 36 + (seed % Math.max(20, WANDER_R - 36));
+        var wx = m._homeFx + Math.cos(ang) * rad;
+        var wy = (m._homeFy || 0) + Math.sin(ang) * rad * 0.88;
+        var def = exploreActiveMapDef();
+        if (def && typeof mapdefResolveMove === 'function') {
+            var fixed = mapdefResolveMove(def, m._homeFx, m._homeFy || 0, wx, wy);
+            wx = fixed.x;
+            wy = fixed.y;
+        }
+        var dx = wx - m._homeFx;
+        var dy = wy - (m._homeFy || 0);
+        var d = Math.hypot(dx, dy);
+        if (d > WANDER_R) {
+            wx = m._homeFx + (dx / d) * WANDER_R;
+            wy = (m._homeFy || 0) + (dy / d) * WANDER_R;
+        }
+        m._wandFx = wx;
+        m._wandFy = wy;
+        m._wandMode = 'go';
+        m._wandPauseUntil = 0;
+    }
+
+    /** 巢穴閒逛：走一小段→停→張望→再走（沒人追時有生命感） */
+    function exploreMobWanderTick(m, now) {
+        if (!m || m._homeFx == null) return;
+        if (!m._wandMode || m._wandFx == null) {
+            exploreMobPickWanderGoal(m, now);
+        }
+        if (m._wandMode === 'pause') {
+            if (now >= (m._wandPauseUntil || 0)) {
+                exploreMobPickWanderGoal(m, now);
+            } else {
+                // 停駐時偶發轉頭
+                if (!m._fidgetAt || now >= m._fidgetAt) {
+                    m._fidgetAt = now + 800 + (exploreHashStr(String(m.uid) + now) % 1400);
+                    var fa = ((exploreHashStr(String(m.uid) + ':' + m._fidgetAt) % 628) / 100);
+                    exploreMobSetMoveFace(m, Math.cos(fa) * 8, Math.sin(fa) * 8, now);
+                }
+                m._mobBob = 0;
+                m._mobPlant = 0;
+                m._mobShadow = 1;
+            }
+            return;
+        }
+        var dx = m._wandFx - m._fx;
+        var dy = m._wandFy - (m._fy || 0);
+        var dist = Math.hypot(dx, dy);
+        if (dist < 14) {
+            m._wandMode = 'pause';
+            var hold = WANDER_PAUSE_MIN + (exploreHashStr(String(m.uid) + ':' + now) % (WANDER_PAUSE_MAX - WANDER_PAUSE_MIN));
+            m._wandPauseUntil = now + hold;
+            m._mobBob = 0;
+            m._mobPlant = 0;
+            m._mobShadow = 1;
+            return;
+        }
+        var moved = exploreMobWalkStep(m, dx, dy, MOB_SPEED);
+        if (moved < 0.05) {
+            exploreMobPickWanderGoal(m, now);
+            return;
+        }
+        if (Math.hypot((m._fx || 0) - m._homeFx, (m._fy || 0) - (m._homeFy || 0)) > WANDER_R + 24) {
+            exploreMobPickWanderGoal(m, now);
+            return;
+        }
+        exploreMobMarkWalking(m, now + MOB_MOVE_STICK_MS);
+        exploreMobSetMoveFace(m, dx, dy, now);
+    }
+
     /** 練功點內追逐：靠近點內怪會追；離巢太遠回家；不跨點亂追 */
     function exploreMobChaseTick() {
         if (!exploreFieldCombatActive()) return;
         if (typeof mapState === 'undefined' || !mapState.mobs) return;
+        try { exploreAssignSurroundSlots(); } catch (eAs) {}
         var tgt = null;
         try { tgt = mapState.mobs[mapState.targetIdx]; } catch (e0) {}
         if (tgt && (tgt._dead || !(tgt.curHp > 0))) tgt = null;
+        var now = Date.now();
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0)) continue;
+            // 移動旗標黏滯：停走邊界不狂切 walk/idle
+            m._animMoving = !!(m._moveStickUntil && now < m._moveStickUntil);
+            if (m._animMoving) {
+                try { exploreMobTickWalkAnim(m, now); } catch (eTw) {}
+            }
             exploreAssignFieldPos(m, i);
             // 🚀 巢穴離鏡頭很遠且未交戰 → 不每 tick 微移（省 80 隻迴圈）
             if (m._homeFx != null) {
-                var homeCam = Math.hypot(m._homeFx - _cx, (m._homeFy || 0) - _cy);
-                if (homeCam > SIM_PX + 80) continue;
-            }
-            if (m._homeFx == null) continue;
-            var homeDist = Math.hypot(m._fx - m._homeFx, (m._fy || 0) - (m._homeFy || 0));
-            var toPlayer = Math.hypot(m._fx - _cx, (m._fy || 0) - _cy);
-            var engaged = !!(tgt && m === tgt && exploreMobInEngageRange(m));
-            var playerNearHome = Math.hypot(_cx - m._homeFx, _cy - (m._homeFy || 0)) <= CHASE_RANGE;
-            var playerNearMob = toPlayer <= CHASE_RANGE;
-
-            // 拴繩：離巢太遠 → 回家
-            if (homeDist > LEASH) {
-                var hx = m._homeFx - m._fx;
-                var hy = (m._homeFy || 0) - (m._fy || 0);
-                var hd = Math.hypot(hx, hy) || 1;
-                m._fx += (hx / hd) * Math.min(4.2, hd * 0.2);
-                m._fy += (hy / hd) * Math.min(2.2, hd * 0.15);
-                continue;
-            }
-
-            if (!engaged && m.beh === '被動' && m.curHp >= (m.hp || 1)) {
-                // 被動閒置：慢慢回巢位（玩家靠近點時仍會在下方改追）
-                if (!(playerNearHome || playerNearMob)) {
-                    if (homeDist > 4) {
-                        m._fx += (m._homeFx - m._fx) * 0.06;
-                        m._fy += ((m._homeFy || 0) - (m._fy || 0)) * 0.06;
-                    }
+                var homeCam = Math.hypot(m._homeFx - _tx, (m._homeFy || 0) - _ty);
+                if (homeCam > SIM_PX + 80) {
+                    m._animMoving = false;
+                    m._moveStickUntil = 0;
+                    m._mobBob = 0;
                     continue;
                 }
             }
+            if (m._homeFx == null) continue;
+            var homeDist = Math.hypot((m._fx || 0) - m._homeFx, (m._fy || 0) - (m._homeFy || 0));
+            var toPlayer = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
+            var engaged = !!(tgt && m === tgt && exploreMobInEngageRange(m));
 
-            // 玩家不在此練功點附近且未交戰 → 回巢
-            if (!engaged && !playerNearHome && !playerNearMob) {
-                if (homeDist > 3) {
-                    m._fx += (m._homeFx - m._fx) * 0.08;
-                    m._fy += ((m._homeFy || 0) - (m._fy || 0)) * 0.08;
+            // 拴繩：離巢太遠 → 回家
+            if (homeDist > LEASH) {
+                m._aggro = false;
+                var hx = m._homeFx - (m._fx || 0);
+                var hy = (m._homeFy || 0) - (m._fy || 0);
+                if (Math.hypot(hx, hy) > 2) {
+                    exploreMobWalkStep(m, hx, hy, MOB_CHASE_SPEED);
+                    exploreMobMarkWalking(m, now + MOB_MOVE_STICK_MS);
+                    exploreMobSetMoveFace(m, hx, hy, now, true);
                 }
+                m._wandMode = null;
                 continue;
             }
 
-            // 玩家手動移動中且尚未交戰：仍可小幅靠近（避免永遠追不上）
-            var dx = _cx - m._fx;
-            var dy = _cy - (m._fy || 0);
+            // 🩹 v3.8.407／415：視野＝離本體夠近才進仇恨
+            var wantChase = !!engaged;
+            var passiveFull = (m.beh === '被動' && m.curHp >= (m.hp || 1));
+            var sight = passiveFull ? MOB_SIGHT_PASSIVE : MOB_SIGHT;
+            if (m._aggro) {
+                if (toPlayer > CHASE_RANGE) m._aggro = false;
+                else wantChase = true;
+            }
+            if (!wantChase && toPlayer <= sight) {
+                m._aggro = true;
+                wantChase = true;
+            }
+            if (engaged) m._aggro = true;
+
+            if (!wantChase) {
+                exploreMobWanderTick(m, now);
+                continue;
+            }
+            m._wandMode = null;
+
+            var goal = exploreMobOrbitGoal(m, engaged ? MOB_MELEE_GAP : Math.max(MOB_MELEE_GAP + 6, ENGAGE_PX * 0.6));
+            var dx = goal.x - (m._fx || 0);
+            var dy = goal.y - (m._fy || 0);
             var dist = Math.hypot(dx, dy);
-            if (dist < (engaged ? 18 : 16)) continue;
-            if (toPlayer > CHASE_RANGE && !engaged && !playerNearHome) continue;
-            var pull = engaged ? COMBAT_MOB_PULL : (_moving ? CHASE_PULL * 0.55 : CHASE_PULL);
-            var step = Math.min(pull, dist * (engaged ? 0.14 : 0.1));
-            var nextFx = m._fx + (dx / dist) * step;
-            var nextFy = (m._fy || 0) + (dy / dist) * step * 0.85;
-            if (Math.hypot(nextFx - m._homeFx, nextFy - (m._homeFy || 0)) <= LEASH) {
-                m._fx = nextFx;
-                m._fy = nextFy;
+            var stopAt = SURROUND_CELL * 0.35;
+            if (dist < stopAt) {
+                // 已到圍攻位：站定交戰、面朝玩家（真戰鬥感）
+                m._animMoving = false;
+                m._moveStickUntil = 0;
+                m._mobBob = 0;
+                m._mobPlant = 0;
+                m._mobShadow = 1;
+                exploreMobSetMoveFace(m, _tx - m._fx, _ty - (m._fy || 0), now, true);
+                continue;
+            }
+            if (toPlayer > CHASE_RANGE && !engaged) {
+                m._aggro = false;
+                exploreMobWanderTick(m, now);
+                continue;
+            }
+            // 等速追擊
+            var movedC = exploreMobWalkStep(m, dx, dy, MOB_CHASE_SPEED);
+            if (movedC > 0.05) {
+                exploreMobMarkWalking(m, now + MOB_MOVE_STICK_MS);
+                if (m._animAct && (m._animAct.k === 'attack' || m._animAct.k === 'skill') && !engaged) {
+                    m._animAct = null;
+                }
+                exploreMobSetMoveFace(m, dx, dy, now, true);
+            } else {
+                exploreMobSetMoveFace(m, _tx - m._fx, _ty - (m._fy || 0), now, true);
             }
         }
+        // 站定交戰時微推開，避免重疊成一團
+        try { exploreMobSeparateTick(); } catch (eSep) {}
     }
 
     /** 最近可接近之怪（世界座標）；供靠近練功點自動追怪 */
@@ -620,28 +1258,29 @@
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
-            var d = Math.hypot(m._fx - _cx, (m._fy || 0) - _cy);
+            var d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
             if (d <= lim && d < bestD) { bestD = d; best = i; }
         }
         return best;
     }
 
-    /** 交戰／靠近追逐：死亡不拉；手動按鍵時不搶控制（勿用 _moving，否則自動走近會自鎖） */
-    function exploreCombatCamChaseTick(keyMoving) {
-        if (!exploreFieldCombatActive() || keyMoving || explorePlayerDead()) return;
-        // AUTO OFF：不自動拉鏡頭追怪（玩家用手搖／鍵盤靠近）
+    /**
+     * 自動掛機走近：等速追怪，進交戰距離硬停。
+     */
+    function exploreCombatCamChaseTick(manualControl) {
+        if (!exploreFieldCombatActive() || manualControl || explorePlayerDead()) return false;
         try {
-            if (typeof state !== 'undefined' && state && state.autoHunt === false) return;
+            if (typeof state !== 'undefined' && state && state.autoHunt === false) return false;
         } catch (eA) {}
-        if (typeof mapState === 'undefined' || !mapState.mobs) return;
+        if (typeof mapState === 'undefined' || !mapState.mobs) return false;
         var t = mapState.mobs[mapState.targetIdx];
         if (!t || t._dead || !(t.curHp > 0) || t._fx == null) t = null;
         var engaged = !!(t && exploreMobInEngageRange(t));
         if (!engaged) {
             var ai = exploreNearestApproachIdx(APPROACH_WORLD);
-            if (ai < 0) return;
+            if (ai < 0) return false;
             t = mapState.mobs[ai];
-            if (!t || t._fx == null) return;
+            if (!t || t._fx == null) return false;
             try {
                 if (mapState.targetIdx !== ai) {
                     if (typeof setTarget === 'function') setTarget(ai);
@@ -649,23 +1288,125 @@
                 }
             } catch (eSet) { mapState.targetIdx = ai; }
         }
-        var dx = t._fx - _cx;
-        var dy = (t._fy || 0) - _cy;
+        var dx = t._fx - _tx;
+        var dy = (t._fy || 0) - _ty;
         var dist = Math.hypot(dx, dy);
-        if (dist < 14) return;
-        if (!engaged && dist > APPROACH_WORLD) return;
-        var pull = engaged ? COMBAT_CAM_PULL : COMBAT_CAM_PULL * 0.9;
-        var step = Math.min(pull, dist * (engaged ? 0.08 : 0.1));
-        if (dist > 8) {
-            _cx += (dx / dist) * step;
-            _cy += (dy / dist) * step;
-            if (_cx < -CAM_MAX_X) _cx = -CAM_MAX_X;
-            if (_cx > CAM_MAX_X) _cx = CAM_MAX_X;
-            if (_cy < -CAM_MAX_Y) _cy = -CAM_MAX_Y;
-            if (_cy > CAM_MAX_Y) _cy = CAM_MAX_Y;
-            _camMoved = true;
-            exploreSetFaceFromVec(dx, -dy);
+        if (!(dist > 1)) return false;
+        var dirx = dx / dist;
+        var diry = dy / dist;
+        if (dist <= COMBAT_STAND_OFF) {
+            _vx = 0;
+            _vy = 0;
+            exploreSetFaceFromVec(dirx, -diry);
+            return false;
         }
+        if (!engaged && dist > APPROACH_WORLD) return false;
+        exploreSetFaceFromVec(dirx, -diry);
+        return explorePlayerWalkStep(dirx, diry) > 0.08;
+    }
+
+    /** 8 向量化（世界座標） */
+    function exploreQuantize8(wx, wy) {
+        var ax = Math.abs(wx) > 0.28 ? (wx > 0 ? 1 : -1) : 0;
+        var ay = Math.abs(wy) > 0.28 ? (wy > 0 ? 1 : -1) : 0;
+        if (!ax && !ay) return { x: 0, y: 0 };
+        var len = Math.hypot(ax, ay) || 1;
+        return { x: ax / len, y: ay / len };
+    }
+
+    /**
+     * 🩹 v3.8.415：等速位移＋碰撞解析（真走路）
+     * @returns {{ x:number, y:number, moved:number, hit:boolean }}
+     */
+    function exploreTryMoveFrom(ox, oy, dirx, diry, dist) {
+        var ox0 = Number(ox) || 0;
+        var oy0 = Number(oy) || 0;
+        var d = Math.max(0, Number(dist) || 0);
+        if (!(d > 0.001) || !(Math.abs(dirx) > 0.001 || Math.abs(diry) > 0.001)) {
+            return { x: ox0, y: oy0, moved: 0, hit: false };
+        }
+        var len = Math.hypot(dirx, diry) || 1;
+        var nx = ox0 + (dirx / len) * d;
+        var ny = oy0 + (diry / len) * d;
+        if (nx < -CAM_MAX_X) nx = -CAM_MAX_X;
+        if (nx > CAM_MAX_X) nx = CAM_MAX_X;
+        if (ny < -CAM_MAX_Y) ny = -CAM_MAX_Y;
+        if (ny > CAM_MAX_Y) ny = CAM_MAX_Y;
+        var def = exploreActiveMapDef();
+        if (def && typeof mapdefResolveMove === 'function') {
+            var r = mapdefResolveMove(def, ox0, oy0, nx, ny);
+            return {
+                x: r.x,
+                y: r.y,
+                moved: Math.hypot(r.x - ox0, r.y - oy0),
+                hit: !!r.hit
+            };
+        }
+        // 無 MapDef：用固體解析
+        var saveTx = _tx;
+        var saveTy = _ty;
+        _tx = nx;
+        _ty = ny;
+        exploreApplySolidMove(ox0, oy0);
+        var fx = _tx;
+        var fy = _ty;
+        _tx = saveTx;
+        _ty = saveTy;
+        return {
+            x: fx,
+            y: fy,
+            moved: Math.hypot(fx - ox0, fy - oy0),
+            hit: Math.hypot(fx - nx, fy - ny) > 0.5
+        };
+    }
+
+    /** 人物本 tick 等速走一步（加速／疾走生效；變身 wlk 不拖慢場走） */
+    function explorePlayerSpeedMult() {
+        var m = 1;
+        try {
+            var p = (typeof player !== 'undefined') ? player : null;
+            if (!p) return 1;
+            var buffs = p.buffs || {};
+            if (buffs.haste > 0 || p._equipHaste) m *= 1.33;
+            if (buffs.brave > 0) m *= 1.33;
+            var windDash = (buffs.sk_elf_winddash || 0) > 0;
+            if (windDash || (buffs.sk_holy_dash || 0) > 0) m *= 1.33;
+            if (buffs.elfcookie > 0 && !windDash) m *= 1.15;
+            if ((buffs.sk_dark_walkhaste || 0) > 0) m *= 1.15;
+            var equipPct = (p.d && p.d.moveSpeedPct) ? Math.max(-95, Number(p.d.moveSpeedPct) || 0) : 0;
+            if (equipPct) m *= (1 + equipPct / 100);
+        } catch (eM) {}
+        return Math.max(0.25, Math.min(2.8, m));
+    }
+    function explorePlayerWalkStep(dirx, diry) {
+        var step = PLAYER_SPEED * (TICK_MS / 1000) * explorePlayerSpeedMult();
+        var r = exploreTryMoveFrom(_tx, _ty, dirx, diry, step);
+        _tx = r.x;
+        _ty = r.y;
+        if (r.moved > 0.08) {
+            _walkPhase += r.moved * WALK_PHASE_DIST;
+            _moving = true;
+        }
+        return r.moved;
+    }
+
+    /** 怪等速移動（回傳實際位移） */
+    function exploreMobWalkStep(m, dirx, diry, speed) {
+        if (!m) return 0;
+        var sp = Math.max(10, Number(speed) || MOB_SPEED);
+        var step = sp * (TICK_MS / 1000);
+        var ox = Number(m._fx) || 0;
+        var oy = Number(m._fy) || 0;
+        var r = exploreTryMoveFrom(ox, oy, dirx, diry, step);
+        m._fx = r.x;
+        m._fy = r.y;
+        m._gridFx = r.x;
+        m._gridFy = r.y;
+        m._slideStart = 0;
+        if (r.moved > 0.08) {
+            exploreMobAdvanceWalkFeel(m, r.moved, Date.now());
+        }
+        return r.moved;
     }
 
     /** 距離開戰器：鎖最近交戰圈內目標（不改攻速算式） */
@@ -740,12 +1481,14 @@
             }
             if (mid) {
                 mid.classList.add('hidden');
-                mid.classList.remove('is-map-scene', 'is-ground-tile', 'is-topdown-floor');
+                mid.classList.remove('is-map-scene', 'is-ground-tile', 'is-topdown-floor', 'is-scenic-topdown');
             }
             var blendOff = document.getElementById('explore-world-bg-blend');
             if (blendOff) blendOff.classList.add('hidden');
             var propOff = document.getElementById('explore-prop-layer');
             if (propOff) propOff.classList.add('hidden');
+            var seaOff = document.getElementById('explore-sea-mask');
+            if (seaOff) seaOff.classList.add('hidden');
             var boundOff = document.getElementById('explore-bound-layer');
             if (boundOff) boundOff.classList.add('hidden');
             if (atmo) atmo.classList.add('hidden');
@@ -755,40 +1498,106 @@
             if (ground) ground.classList.add('hidden');
             if (vig) vig.classList.add('hidden');
             biomeCls.forEach(function (c) { bv.classList.remove(c); });
-            bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg');
+            bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg');
+            bv.style.backgroundColor = '';
+            // 🩹 v3.8.475／485：離開場戰／真地圖後，若在修練場把側視背景加回來
+            try {
+                if (typeof mapState !== 'undefined' && mapState && mapState.current === 'training') {
+                    if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
+                    else {
+                        var _cbg = bv.style.getPropertyValue('--chud-battle-bg');
+                        if (_cbg) bv.style.backgroundImage = _cbg;
+                        bv.style.backgroundSize = 'cover';
+                        bv.style.backgroundPosition = 'center center';
+                        bv.classList.add('training-yard', 'has-bg', 'area-fit');
+                        bv.classList.remove('is-world-scroll', 'is-exploring');
+                    }
+                }
+            } catch (eTrBg) {}
             return;
         }
         var mapId = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
         var biome = exploreBiomeOf(mapId);
+        var scenic = exploreIsScenicMap(mapId);
+        var realMap = exploreIsRealMap(mapId);
         biomeCls.forEach(function (c) { bv.classList.remove(c); });
         bv.classList.add('explore-biome-' + biome);
 
-        // 真・2D 正俯視：只用對應生態的無縫俯視瓦（不用側視 1920）
-        bv.classList.add('is-topdown-map');
-        bv.classList.remove('has-scenic-bg');
         var floor = exploreCorridorBgUrl();
         var blend = document.getElementById('explore-world-bg-blend');
         var midImg = floor ? ('url("' + floor + '")') : '';
         if (!midImg) midImg = exploreReadBgImage(bv, mid);
 
+        // 🩹 v3.8.360：正俯視捲動；說話之島＝俯視圖景＋遠景 3D 氛圍（取消側視 rotateX）
+        bv.classList.add('is-topdown-map', 'explore-bg-scroll');
+        bv.classList.remove('is-scenic-3d');
+        bv.classList.toggle('is-topdown-3d', !!scenic);
+        bv.classList.toggle('has-scenic-bg', !!scenic);
+
+        // 🩹 v3.8.385：真地圖／鳥視啟用時關掉側視 has-bg（否則看起來「地圖沒變」）
+        if (scenic || realMap) {
+            try {
+                bv.style.backgroundImage = 'none';
+                bv.style.backgroundSize = '';
+            } catch (eBg) {}
+        }
+
+        // 🩹 v3.8.406：真地圖圖景＝世界×2（對齊 1024 地板，勿過度墊邊拉伸）
+        exploreRefreshCamLimits();
+        var tileSz = TILE_PX;
+        var def = exploreActiveMapDef();
+        var scenicPadX = realMap ? 0 : 360;
+        var scenicPadY = realMap ? 0 : 300;
+        var scenicW = CAM_MAX_X * 2 + scenicPadX * 2;
+        var scenicH = CAM_MAX_Y * 2 + scenicPadY * 2;
+        if (def && realMap) {
+            scenicW = def.maxX * 2 + scenicPadX * 2;
+            scenicH = def.maxY * 2 + scenicPadY * 2;
+        }
+        var grassUrl = exploreSeamlessFloorUrl('wild');
         if (midImg) {
+            if (mid) {
+                if (scenic) {
+                    mid.style.backgroundImage = midImg;
+                    mid.style.backgroundSize = scenicW + 'px ' + scenicH + 'px';
+                    mid.style.backgroundRepeat = 'no-repeat';
+                    mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'hidden');
+                    mid.classList.add('is-topdown-floor', 'is-scenic-topdown');
+                    // 墊底草地：永遠 repeat，圖景外不再露出深藍黑底
+                    if (blend) {
+                        blend.style.backgroundImage = 'url("' + grassUrl + '")';
+                        blend.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
+                        blend.style.backgroundRepeat = 'repeat';
+                        blend.classList.remove('hidden');
+                        blend.classList.add('is-topdown-underfill', 'is-scenic-underfill');
+                        // 蓋過 CSS display:none !important（僅鳥視墊底需要）
+                        blend.style.setProperty('display', 'block', 'important');
+                        blend.style.setProperty('opacity', '1', 'important');
+                    }
+                    bv.style.backgroundColor = '#3a6b32';
+                } else {
+                    mid.style.backgroundImage = midImg;
+                    mid.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
+                    mid.style.backgroundRepeat = 'repeat';
+                    mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'is-scenic-topdown', 'hidden');
+                    mid.classList.add('is-topdown-floor');
+                    if (blend) {
+                        blend.classList.add('hidden');
+                        blend.classList.remove('is-topdown-underfill', 'is-scenic-underfill');
+                        blend.style.backgroundImage = '';
+                        blend.style.removeProperty('display');
+                        blend.style.removeProperty('opacity');
+                    }
+                    bv.style.backgroundColor = '';
+                }
+                mid.classList.remove('hidden');
+            }
+            // 俯視圖景不再疊側視遠景（會破圖／黑帶）
             if (far) {
                 far.classList.add('hidden');
                 far.classList.remove('is-scenic-far');
+                far.style.backgroundImage = '';
             }
-            if (mid) {
-                mid.style.backgroundImage = midImg;
-                mid.style.backgroundSize = TILE_PX + 'px ' + TILE_PX + 'px';
-                mid.classList.remove('is-ground-tile', 'is-map-scene');
-                mid.classList.add('is-topdown-floor');
-                mid.classList.remove('hidden');
-            }
-            if (blend) {
-                blend.style.backgroundImage = midImg;
-                blend.style.backgroundSize = TILE_PX + 'px ' + TILE_PX + 'px';
-                blend.classList.remove('hidden');
-            }
-            bv.classList.add('explore-bg-scroll');
         } else {
             if (far) {
                 far.classList.add('hidden');
@@ -796,29 +1605,44 @@
             }
             if (mid) {
                 mid.classList.add('hidden');
-                mid.classList.remove('is-topdown-floor', 'is-map-scene');
+                mid.classList.remove('is-topdown-floor', 'is-map-scene', 'is-scenic-ground', 'is-scenic-topdown');
             }
-            if (blend) blend.classList.add('hidden');
-            bv.classList.remove('explore-bg-scroll', 'has-scenic-bg');
+            if (blend) {
+                blend.classList.add('hidden');
+                blend.classList.remove('is-topdown-underfill');
+            }
+            bv.classList.remove('explore-bg-scroll', 'has-scenic-bg', 'is-topdown-3d');
+            bv.style.backgroundColor = '';
         }
 
-        var half = (TILE_PX * 0.5).toFixed(1) + 'px';
-        var midX = (-_cx * BG_MID_X).toFixed(1) + 'px';
-        var midY = (_cy * BG_MID_Y).toFixed(1) + 'px';
-        var blendX = ((-_cx * BG_MID_X) + TILE_PX * 0.5).toFixed(1) + 'px';
-        var blendY = ((_cy * BG_MID_Y) + TILE_PX * 0.5).toFixed(1) + 'px';
-        if (mid) {
-            mid.style.backgroundPosition = midX + ' ' + midY;
-            mid.style.transform = 'none';
-            mid.style.setProperty('--tile-x', midX);
-            mid.style.setProperty('--tile-y', midY);
-            mid.style.setProperty('--tile-half', half);
-        }
-        if (blend) {
-            blend.style.backgroundPosition = blendX + ' ' + blendY;
-            blend.style.transform = 'none';
+        {
+            var half = (tileSz * 0.5).toFixed(1) + 'px';
+            var midX, midY;
+            if (scenic) {
+                // 置中對齊世界原點，相機平移＝圖景反移
+                midX = 'calc(50% + ' + (-_cx * BG_MID_X).toFixed(1) + 'px)';
+                midY = 'calc(50% + ' + (_cy * BG_MID_Y).toFixed(1) + 'px)';
+            } else {
+                midX = (-_cx * BG_MID_X).toFixed(1) + 'px';
+                midY = (_cy * BG_MID_Y).toFixed(1) + 'px';
+            }
+            if (mid) {
+                mid.style.backgroundPosition = midX + ' ' + midY;
+                mid.style.transform = 'none';
+                mid.style.setProperty('--tile-x', midX);
+                mid.style.setProperty('--tile-y', midY);
+                mid.style.setProperty('--tile-half', half);
+            }
+            if (blend && scenic) {
+                blend.style.backgroundPosition = (-_cx * BG_MID_X).toFixed(1) + 'px ' + (_cy * BG_MID_Y).toFixed(1) + 'px';
+                blend.style.transform = 'none';
+            } else if (blend && !scenic) {
+                blend.style.backgroundPosition = (((-_cx * BG_MID_X) + tileSz * 0.5).toFixed(1) + 'px') + ' ' + (((_cy * BG_MID_Y) + tileSz * 0.5).toFixed(1) + 'px');
+                blend.style.transform = 'none';
+            }
         }
         if (ground) ground.classList.add('hidden');
+
         if (mist) mist.classList.add('hidden');
         if (light) light.classList.add('hidden');
         if (atmo) atmo.classList.remove('hidden');
@@ -826,7 +1650,34 @@
         if (vig) vig.classList.remove('hidden');
         exploreSyncBoundWalls(on);
         exploreSyncProps(on, biome, mapId);
+        exploreUpdatePropOcclusion();
         bv.classList.toggle('is-explore-walking', !!_moving);
+        // 🩹 v3.8.416：步伐相位用 π＝兩幀一步，踩地起伏明顯（消滑冰）
+        var bob = 0;
+        var shScale = 1;
+        var footPlant = 0;
+        var realFeel = exploreIsRealMap();
+        if (_moving) {
+            var wave = Math.sin(_walkPhase * Math.PI);
+            bob = realFeel ? (wave * PLAYER_BOB_PX) : (wave * PLAYER_BOB_PX_SOFT);
+            var plant = Math.max(0, -wave);
+            footPlant = realFeel ? Math.min(1, plant * 1.45) : Math.min(1, plant * 0.85);
+            shScale = realFeel
+                ? (0.68 + 0.42 * plant + 0.12 * (0.5 + 0.5 * Math.sin(_walkPhase * Math.PI + 0.6)))
+                : (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(_walkPhase * Math.PI + 0.6)));
+            if (realFeel) exploreMaybeFootPlant(wave);
+            bv.style.setProperty('--walk-squash', (1 - plant * 0.06).toFixed(3));
+            bv.style.setProperty('--walk-sway', (Math.sin(_walkPhase * Math.PI * 0.5) * 1.8).toFixed(2) + 'px');
+        } else {
+            _footSign = 0;
+            bv.style.setProperty('--walk-squash', '1');
+            bv.style.setProperty('--walk-sway', '0px');
+        }
+        bv.style.setProperty('--walk-bob', bob.toFixed(2) + 'px');
+        bv.style.setProperty('--walk-shadow-scale', shScale.toFixed(3));
+        bv.style.setProperty('--foot-plant', footPlant.toFixed(3));
+        bv.classList.toggle('is-foot-plant', !!(realFeel && footPlant > 0.55));
+        exploreSyncFootPatch(!!(realFeel && _moving));
         var inCombat = false;
         try {
             var t = mapState.mobs && mapState.mobs[mapState.targetIdx];
@@ -835,30 +1686,162 @@
         bv.classList.toggle('is-explore-combat', inCombat);
     }
 
-    /** 🌿 點綴物：石頭／矮樹／灌木／路徑；與怪同世界層（--wx/--wy），避開練功點 */
+    /** 🩹 v3.8.387：步伐過零點＝踩地 → 草屑／塵土 */
+    function exploreMaybeFootPlant(wave) {
+        var now = Date.now();
+        var crossed = (_footSign <= 0 && wave > 0.35) || (_footSign >= 0 && wave < -0.35);
+        _footSign = wave;
+        if (!crossed || now < _footPlantUntil) return;
+        _footPlantUntil = now + 120;
+        exploreSpawnGrassPuff();
+    }
+    function exploreSyncFootPatch(on) {
+        var bv = document.getElementById('battle-view');
+        var patch = document.getElementById('explore-foot-patch');
+        if (!patch || !bv) return;
+        if (!exploreIsRealMap()) {
+            patch.classList.add('hidden');
+            return;
+        }
+        patch.classList.toggle('hidden', !on);
+        // 🩹 v3.8.389：腳印跟著人物螢幕座標（真走在圖上）
+        patch.style.left = 'calc(50% + ' + explorePlayerScreenX().toFixed(1) + 'px)';
+        patch.style.bottom = (explorePlayerScreenBottom() - 2).toFixed(1) + 'px';
+    }
+    function exploreSpawnGrassPuff() {
+        var bv = document.getElementById('battle-view');
+        if (!bv || !exploreIsRealMap()) return;
+        var baseY = explorePlayerScreenBottom();
+        var baseX = explorePlayerScreenX();
+        for (var i = 0; i < 3; i++) {
+            var el = document.createElement('span');
+            el.className = 'explore-grass-puff' + (i === 2 ? ' is-dust' : '');
+            var ang = (Math.random() - 0.5) * 1.4;
+            var dist = 10 + Math.random() * 18;
+            el.style.setProperty('--gx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+            el.style.setProperty('--gy', (-8 - Math.random() * 16).toFixed(1) + 'px');
+            el.style.bottom = (baseY + (Math.random() * 4 - 1)) + 'px';
+            el.style.left = 'calc(50% + ' + (baseX + (Math.random() - 0.5) * 22).toFixed(1) + 'px)';
+            el.style.marginLeft = '0';
+            bv.appendChild(el);
+            setTimeout(function (node) {
+                try { if (node && node.parentNode) node.parentNode.removeChild(node); } catch (eR) {}
+            }, 620, el);
+        }
+    }
+
+    /** 🌿 點綴物：依 biome 專屬 palette／密度／圖資（缺圖 fallback 共用 props） */
     var _propCacheKey = '';
     var PROP_CLEAR_R = 220;   // 練功點／出生點淨空半徑（排除打怪異常）
-    var PROP_SRC = {
-        rock: 'assets/area/props/rock.png?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.251'),
-        bush: 'assets/area/props/bush.png?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.251'),
-        tree: 'assets/area/props/tree.png?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.251'),
-        path: 'assets/area/props/path.png?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.251')
+    var PROP_SRC_FALLBACK = {
+        rock: 'assets/area/props/rock.png',
+        bush: 'assets/area/props/bush.png',
+        tree: 'assets/area/props/tree.png',
+        path: 'assets/area/props/path.png'
     };
+    // 🩹 v3.8.381：各地形類別點綴設定（一眼可辨）
+    var BIOME_PROP_CONFIG = {
+        wild: {
+            palette: ['tree', 'bush', 'rock', 'path', 'bush'],
+            count: 22,
+            pathCount: 12,
+            pathAmp: 55,
+            cluster: 0.18,
+            edgeBias: 0
+        },
+        forest: {
+            palette: ['tree', 'tree', 'bush', 'tree', 'path', 'rock', 'bush'],
+            count: 36,
+            pathCount: 10,
+            pathAmp: 40,
+            cluster: 0.42,
+            edgeBias: 0
+        },
+        desert: {
+            palette: ['rock', 'rock', 'bush', 'path', 'rock'],
+            count: 18,
+            pathCount: 14,
+            pathAmp: 70,
+            cluster: 0.08,
+            edgeBias: 0
+        },
+        snow: {
+            palette: ['tree', 'rock', 'path', 'bush', 'rock'],
+            count: 20,
+            pathCount: 12,
+            pathAmp: 50,
+            cluster: 0.2,
+            edgeBias: 0
+        },
+        coast: {
+            palette: ['rock', 'bush', 'path', 'rock', 'tree'],
+            count: 20,
+            pathCount: 10,
+            pathAmp: 60,
+            cluster: 0.12,
+            edgeBias: 0.55   // 礁岩偏南／邊緣
+        },
+        swamp: {
+            palette: ['bush', 'bush', 'path', 'rock', 'tree', 'bush'],
+            count: 30,
+            pathCount: 8,
+            pathAmp: 35,
+            cluster: 0.35,
+            edgeBias: 0
+        },
+        lava: {
+            palette: ['rock', 'rock', 'path', 'rock'],
+            count: 16,
+            pathCount: 10,
+            pathAmp: 45,
+            cluster: 0.05,
+            edgeBias: 0
+        },
+        crystal: {
+            palette: ['rock', 'rock', 'path', 'bush'],
+            count: 18,
+            pathCount: 9,
+            pathAmp: 40,
+            cluster: 0.15,
+            edgeBias: 0
+        },
+        dungeon: {
+            palette: ['rock', 'rock', 'path', 'rock'],
+            count: 16,
+            pathCount: 11,
+            pathAmp: 30,
+            cluster: 0.1,
+            edgeBias: 0
+        },
+        tower: {
+            palette: ['rock', 'path', 'rock', 'rock'],
+            count: 14,
+            pathCount: 10,
+            pathAmp: 25,
+            cluster: 0.08,
+            edgeBias: 0
+        }
+    };
+    function exploreBiomePropConfig(biome) {
+        return BIOME_PROP_CONFIG[biome] || BIOME_PROP_CONFIG.wild;
+    }
+    function explorePropSrc(biome, kind) {
+        var ver = (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.381');
+        var b = String(biome || 'wild').replace(/[^a-z]/gi, '') || 'wild';
+        var k = String(kind || 'rock').replace(/[^a-z]/gi, '') || 'rock';
+        // 專屬圖優先；執行期不探測 404，由建圖腳本保證存在（缺則與共用同內容）
+        return 'assets/area/props/' + b + '/' + k + '.png?v=' + ver;
+    }
     function explorePropPalette(biome) {
-        if (biome === 'desert') return ['rock', 'rock', 'path', 'bush'];
-        if (biome === 'snow') return ['rock', 'tree', 'path', 'bush'];
-        if (biome === 'lava') return ['rock', 'rock', 'path'];
-        if (biome === 'forest') return ['tree', 'tree', 'bush', 'path', 'rock'];
-        if (biome === 'coast') return ['rock', 'bush', 'path', 'tree'];
-        if (biome === 'swamp') return ['bush', 'bush', 'path', 'rock'];
-        if (biome === 'dungeon' || biome === 'tower' || biome === 'crystal') return ['rock', 'rock', 'path'];
-        return ['tree', 'bush', 'rock', 'path', 'bush'];
+        var cfg = exploreBiomePropConfig(biome);
+        return (cfg.palette && cfg.palette.length) ? cfg.palette.slice() : ['tree', 'bush', 'rock', 'path'];
     }
     /** 是否落在練功點／地圖中心交戰淨空區 */
     function explorePropInCombatClear(wx, wy) {
         if (Math.hypot(wx, wy) < PROP_CLEAR_R) return true;
-        for (var i = 0; i < GRIND_SPOTS.length; i++) {
-            var s = GRIND_SPOTS[i];
+        var spots = exploreActiveGrindSpots();
+        for (var i = 0; i < spots.length; i++) {
+            var s = spots[i];
             if (Math.hypot(wx - s.x, wy - (s.y || 0)) < PROP_CLEAR_R) return true;
         }
         return false;
@@ -870,40 +1853,70 @@
             seed = (seed * 1664525 + 1013904223) >>> 0;
             return seed / 4294967296;
         }
+        var cfg = exploreBiomePropConfig(biome);
         var palette = explorePropPalette(biome);
         var list = [];
+        var pathCount = Math.max(4, cfg.pathCount | 0);
+        var pathAmp = Number(cfg.pathAmp) || 50;
         // 路徑走練功點「之間」的走廊，不穿越點心
         var pathY = -420 + rnd() * 120;
         if (Math.abs(pathY) < 120) pathY = (pathY < 0 ? -1 : 1) * (140 + rnd() * 80);
-        for (var pi = 0; pi < 16; pi++) {
-            var px = -CAM_MAX_X + 200 + pi * ((CAM_MAX_X * 2 - 400) / 15);
-            var py = pathY + Math.sin(pi * 0.55 + rnd()) * 55 + (rnd() - 0.5) * 30;
+        for (var pi = 0; pi < pathCount; pi++) {
+            var px = -CAM_MAX_X + 200 + pi * ((CAM_MAX_X * 2 - 400) / Math.max(1, pathCount - 1));
+            var py = pathY + Math.sin(pi * 0.55 + rnd()) * pathAmp + (rnd() - 0.5) * 30;
             if (explorePropInCombatClear(px, py)) continue;
             list.push({
                 kind: 'path',
+                biome: biome,
                 wx: Math.max(-CAM_MAX_X + 80, Math.min(CAM_MAX_X - 80, px)),
                 wy: Math.max(-CAM_MAX_Y + 60, Math.min(CAM_MAX_Y - 60, py)),
-                s: 0.75 + rnd() * 0.55,
-                rot: (rnd() - 0.5) * 50,
+                s: 0.7 + rnd() * 0.5,
+                rot: (rnd() - 0.5) * 48,
                 z: 1
             });
         }
-        var n = biome === 'lava' || biome === 'dungeon' ? 20 : 28;
+        var n = Math.max(8, cfg.count | 0);
+        if (String(mapId) === 'dream_island' && biome === 'mist') n = Math.max(n, 28);
+        if (String(mapId) === 'talking_island' && biome === 'wild') n = Math.max(n, 26);
+        if (String(mapId) === 'talking_island_port' && biome === 'coast') n = Math.max(n, 18);
+        if ((String(mapId) === 'zone_13' || String(mapId) === 'zone_14' || /^zone_0[6-9]$/.test(String(mapId)) || String(mapId) === 'zone_10' || String(mapId) === 'zone_11' || String(mapId) === 'zone_12' || /^zone_1[8-9]$/.test(String(mapId)) || String(mapId) === 'zone_20' || String(mapId) === 'zone_21' || /^zone_2[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_30' || String(mapId) === 'zone_31' || /^zone_1[5-7]$/.test(String(mapId)) || /^zone_3[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_40' || String(mapId) === 'zone_41' || /^crystal_cave/.test(String(mapId)) || /^rastabad_/.test(String(mapId)) || String(mapId) === 'eva_kingdom' || String(mapId) === 'dark_magic_lab' || String(mapId) === 'necro_training' || String(mapId) === 'elder_room' || String(mapId) === 'demon_temple' || String(mapId) === 'shadow_temple') && biome === 'dungeon') n = Math.max(n, 16);
+        if (String(mapId).indexOf('pride_') === 0 && biome === 'tower') n = Math.max(n, 18);
+        if ((String(mapId) === 'pirate_dungeon' || String(mapId) === 'thebes_pyramid' || String(mapId) === 'thebes_temple' || String(mapId) === 'tikal_deep' || String(mapId) === 'tikal_altar') && (biome === 'dungeon' || biome === 'desert' || biome === 'crystal' || biome === 'wild')) n = Math.max(n, 14);
+        if (String(mapId) === 'silver_knight' && biome === 'wild') n = Math.max(n, 22);
+        if ((String(mapId) === 'zone_01' || String(mapId) === 'elf_forest') && biome === 'forest') n = Math.max(n, 24);
         var tries = 0;
-        while (list.length < n + 16 && tries < n * 8) {
+        var cluster = Number(cfg.cluster) || 0;
+        var edgeBias = Number(cfg.edgeBias) || 0;
+        while (list.length < n + pathCount && tries < n * 14) {
             tries++;
             var kind = palette[Math.floor(rnd() * palette.length)] || 'rock';
-            if (kind === 'path') kind = 'rock';
-            var wx = (rnd() - 0.5) * CAM_MAX_X * 1.85;
-            var wy = (rnd() - 0.5) * CAM_MAX_Y * 1.7;
+            if (kind === 'path') kind = (biome === 'lava' || biome === 'dungeon' || biome === 'tower') ? 'rock' : 'bush';
+            var wx = (rnd() - 0.5) * CAM_MAX_X * 1.7;
+            var wy = (rnd() - 0.5) * CAM_MAX_Y * 1.55;
+            // 海岸：礁岩偏南緣
+            if (edgeBias > 0 && (kind === 'rock' || kind === 'bush') && rnd() < edgeBias) {
+                wy = -CAM_MAX_Y * (0.55 + rnd() * 0.35);
+                wx = (rnd() - 0.5) * CAM_MAX_X * 1.8;
+            }
+            if (kind === 'tree' && rnd() < cluster && list.length) {
+                var anchor = list[Math.floor(rnd() * list.length)];
+                if (anchor && anchor.kind === 'tree') {
+                    wx = anchor.wx + (rnd() - 0.5) * 140;
+                    wy = anchor.wy + (rnd() - 0.5) * 110;
+                }
+            }
             if (explorePropInCombatClear(wx, wy)) continue;
+            var depthT = (wy + CAM_MAX_Y) / Math.max(1, CAM_MAX_Y * 2);
+            var scBase = (kind === 'tree' ? 0.92 : (kind === 'bush' ? 0.72 : 0.62)) + rnd() * 0.38;
+            var sc = scBase * (0.88 + 0.22 * depthT);
             list.push({
                 kind: kind,
+                biome: biome,
                 wx: Math.max(-CAM_MAX_X + 60, Math.min(CAM_MAX_X - 60, wx)),
                 wy: Math.max(-CAM_MAX_Y + 50, Math.min(CAM_MAX_Y - 50, wy)),
-                s: (kind === 'tree' ? 0.85 : 0.65) + rnd() * 0.55,
-                rot: (rnd() - 0.5) * 24,
-                z: kind === 'tree' ? 3 : 2
+                s: sc,
+                rot: kind === 'tree' ? ((rnd() - 0.5) * 6) : ((rnd() - 0.5) * 14),
+                z: 2
             });
         }
         return list;
@@ -911,34 +1924,149 @@
     function exploreSyncProps(on, biome, mapId) {
         var layer = document.getElementById('explore-prop-layer');
         if (!layer) return;
-        var show = !!(on && exploreFieldCombatActive());
+        var show = !!(on && exploreAllowed());
         layer.classList.toggle('hidden', !show);
         if (!show) {
             if (layer.childNodes.length) layer.innerHTML = '';
             _propCacheKey = '';
+            _solidList = [];
+            _solidKey = '';
             return;
         }
         var gy = exploreGroundYLive();
-        var key = String(mapId || '') + '|' + String(biome || 'wild') + '|g' + gy + '|' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '');
+        var key = String(mapId || '') + '|' + String(biome || 'wild') + '|g' + gy + '|p381|' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '');
         if (_propCacheKey === key && layer.childNodes.length) return;
         _propCacheKey = key;
         var props = exploreBuildPropList(mapId, biome);
         var html = '';
         for (var i = 0; i < props.length; i++) {
             var p = props[i];
-            var src = PROP_SRC[p.kind] || PROP_SRC.rock;
+            var src = explorePropSrc(biome, p.kind);
             var bot = exploreFieldFootBottom(p.wy);
-            html += '<div class="explore-prop explore-prop--' + p.kind + '" style="left:calc(50% + ' + p.wx.toFixed(1) + 'px);bottom:' + bot + 'px;--ps:' + p.s.toFixed(2) + ';--prot:' + p.rot.toFixed(1) + 'deg;z-index:' + p.z + '">' +
-                '<img src="' + src + '" alt="" draggable="false"></div>';
+            // 🩹 v3.8.386：與人／怪同一套腳底 Y→z（真地圖互遮）
+            var zDepth = Math.max(18, Math.min(88, Math.round(50 - p.wy * 0.06)));
+            if (p.kind === 'tree') zDepth += 2;
+            if (p.kind === 'path') zDepth = 18;
+            html += '<div class="explore-prop explore-prop--' + p.kind + ' explore-prop-biome-' + biome + '" data-kind="' + p.kind + '" data-biome="' + biome + '" data-wx="' + p.wx.toFixed(1) + '" data-wy="' + p.wy.toFixed(1) + '" style="left:calc(50% + ' + p.wx.toFixed(1) + 'px);bottom:' + bot + 'px;--ps:' + p.s.toFixed(2) + ';--prot:' + p.rot.toFixed(1) + 'deg;--near-fade:1;z-index:' + zDepth + '">' +
+                '<span class="explore-prop-shadow" aria-hidden="true"></span>' +
+                '<img src="' + src + '" alt="" draggable="false" onerror="this.onerror=null;this.src=\'' + (PROP_SRC_FALLBACK[p.kind] || PROP_SRC_FALLBACK.rock) + '\'"></div>';
         }
         layer.innerHTML = html;
+        exploreRebuildSolids(mapId, biome, props);
+    }
+
+    /** 🌳 靠近樹／灌木：半透明（可穿過，只當視線遮擋） */
+    var PROP_FADE_START = 150;
+    var PROP_FADE_FULL = 48;
+    function exploreUpdatePropOcclusion() {
+        var layer = document.getElementById('explore-prop-layer');
+        if (!layer || layer.classList.contains('hidden')) return;
+        var kids = layer.children;
+        if (!kids || !kids.length) return;
+        for (var i = 0; i < kids.length; i++) {
+            var el = kids[i];
+            var kind = el.dataset ? el.dataset.kind : '';
+            if (kind !== 'tree' && kind !== 'bush') {
+                el.style.setProperty('--near-fade', '1');
+                el.classList.remove('is-near', 'is-occlude');
+                continue;
+            }
+            var wx = Number(el.dataset.wx || 0);
+            var wy = Number(el.dataset.wy || 0);
+            var d = Math.hypot(wx - _tx, wy - _ty);
+            var fade = 1;
+            if (d < PROP_FADE_START) {
+                var t = Math.max(0, Math.min(1, (d - PROP_FADE_FULL) / Math.max(1, PROP_FADE_START - PROP_FADE_FULL)));
+                // 穿過時更透，最低約 0.18
+                fade = 0.18 + 0.82 * t;
+            }
+            el.style.setProperty('--near-fade', fade.toFixed(3));
+            el.classList.toggle('is-near', d < PROP_FADE_START);
+            el.classList.toggle('is-occlude', d < PROP_FADE_FULL + 20);
+        }
+    }
+
+    /** 🩹 v3.8.383：真地圖＝MapDef 碰撞；其餘保留外框＋說話島海岸圓 */
+    var _solidList = [];
+    var _solidKey = '';
+    var PROP_SOLID_R = { tree: 0, rock: 0, bush: 0, path: 0 };
+    function exploreScenicExtraSolids(mapId) {
+        if (exploreIsRealMap(mapId)) return [];
+        if (String(mapId || '') !== 'talking_island') return [];
+        return [
+            { x: -720, y: -780, r: 70 },
+            { x: -280, y: -800, r: 66 },
+            { x: 180, y: -790, r: 68 },
+            { x: 640, y: -760, r: 72 },
+            { x: 1000, y: -700, r: 64 }
+        ];
+    }
+    function exploreRebuildSolids(mapId, biome, props) {
+        var key = String(mapId || '') + '|' + String(biome || '') + '|real383';
+        if (_solidKey === key && _solidList.length) return;
+        _solidKey = key;
+        var list = [];
+        var extra = exploreScenicExtraSolids(mapId);
+        for (var j = 0; j < extra.length; j++) list.push(extra[j]);
+        _solidList = list;
+    }
+    function exploreEnsureSolids() {
+        if (_solidList && _solidList.length) return;
+        try {
+            var mid = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+            var biome = exploreBiomeOf(mid);
+            exploreRebuildSolids(mid, biome, null);
+        } catch (eS) {}
+    }
+    /** 把座標推出固體；回傳是否有撞到 */
+    function exploreResolveSolids(nx, ny, fromX, fromY) {
+        var def = exploreActiveMapDef();
+        if (def && typeof mapdefResolveMove === 'function') {
+            var ox = (fromX != null) ? fromX : (nx - _vx);
+            var oy = (fromY != null) ? fromY : (ny - _vy);
+            return mapdefResolveMove(def, ox, oy, nx, ny);
+        }
+        exploreEnsureSolids();
+        var x = nx, y = ny, hit = false;
+        var pad = 6;
+        for (var pass = 0; pass < 3; pass++) {
+            var moved = false;
+            for (var i = 0; i < _solidList.length; i++) {
+                var s = _solidList[i];
+                var dx = x - s.x;
+                var dy = y - s.y;
+                var need = s.r + pad;
+                var d2 = dx * dx + dy * dy;
+                if (d2 >= need * need) continue;
+                hit = true;
+                moved = true;
+                var d = Math.sqrt(d2) || 0.001;
+                x = s.x + (dx / d) * need;
+                y = s.y + (dy / d) * need;
+            }
+            if (!moved) break;
+        }
+        if (x < -CAM_MAX_X) x = -CAM_MAX_X;
+        if (x > CAM_MAX_X) x = CAM_MAX_X;
+        if (y < -CAM_MAX_Y) y = -CAM_MAX_Y;
+        if (y > CAM_MAX_Y) y = CAM_MAX_Y;
+        return { x: x, y: y, hit: hit };
+    }
+    function exploreApplySolidMove(fromX, fromY) {
+        var r = exploreResolveSolids(_tx, _ty, fromX, fromY);
+        if (r.hit || r.x !== _tx || r.y !== _ty) {
+            if (Math.abs(r.x - _tx) > 0.2) _vx = 0;
+            if (Math.abs(r.y - _ty) > 0.2) _vy = 0;
+            _tx = r.x;
+            _ty = r.y;
+        }
     }
 
     /** 世界座標外牆＋牆外虛空：走近就看得見，頂死貼牆 */
     function exploreSyncBoundWalls(on) {
         var layer = document.getElementById('explore-bound-layer');
         if (!layer) return;
-        var show = !!(on && exploreFieldCombatActive());
+        var show = !!on;
         layer.classList.toggle('hidden', !show);
         if (!show) return;
         var w = CAM_MAX_X * 2 + WALL_THICK * 2;
@@ -1004,7 +2132,9 @@
     function exploreApplyWorld() {
         var bv = document.getElementById('battle-view');
         if (!bv) return;
+        exploreRefreshCamLimits();
         var on = exploreAllowed();
+        var fieldOn = exploreFieldCombatActive();
         var wx = -_cx;
         var wy = _cy;
         bv.style.setProperty('--wx', wx.toFixed(1) + 'px');
@@ -1014,20 +2144,200 @@
         if (on && bv.classList.contains('has-bg')) {
             bv.style.backgroundPosition = '50% 50%';
         }
-        bv.classList.toggle('is-world-scroll', on);
-        bv.classList.toggle('is-exploring', on && (Math.abs(_cx) > 1 || Math.abs(_cy) > 1));
+        // 🩹 v3.8.364：俯視地圖跟探索開關；場戰關閉仍可走鳥視圖景＋舊版列排怪
+        bv.classList.toggle('is-world-scroll', !!on);
+        bv.classList.toggle('is-real-map', !!(on && exploreIsRealMap()));
+        bv.classList.toggle('is-exploring', on && (Math.abs(_tx) > 1 || Math.abs(_ty) > 1));
         bv.classList.remove('portal-ready-left', 'portal-ready-right');
         exploreSyncWorldBg(bv, on);
-        exploreRenderGrindMarks(on);
+        exploreRenderGrindMarks(fieldOn);
+        exploreSyncPropYSort();
+        try {
+            var pm = document.getElementById('player-morph-sprite');
+            if (pm) pm.style.zIndex = String(explorePlayerDepthZ());
+        } catch (eZ) {}
+    }
+
+    /** 造景依世界 Y 景深；真地圖改相機相對座標以便與人／怪互遮 */
+    function exploreSyncPropYSort() {
+        var layer = document.getElementById('explore-prop-layer');
+        if (!layer || layer.classList.contains('hidden')) return;
+        var real = exploreIsRealMap();
+        layer.classList.toggle('is-cam-rel', !!real);
+        var kids = layer.children;
+        for (var i = 0; i < kids.length; i++) {
+            var el = kids[i];
+            var wx = Number(el.dataset && el.dataset.wx);
+            var wy = Number(el.dataset && el.dataset.wy);
+            if (!(isFinite(wy))) continue;
+            var kind = el.dataset ? el.dataset.kind : '';
+            var z = Math.max(18, Math.min(88, Math.round(50 - wy * 0.06)));
+            if (kind === 'path') z = 18;
+            if (kind === 'tree') z += 2;
+            el.style.zIndex = String(z);
+            if (real) {
+                el.style.left = 'calc(50% + ' + (wx - _cx).toFixed(1) + 'px)';
+                el.style.bottom = exploreMobScreenBottom(wy).toFixed(1) + 'px';
+            }
+        }
+    }
+
+    function exploreConsumePendingSpawn() {
+        var sx = 0;
+        var sy = 0;
+        if (_pendingSpawn) {
+            sx = Number(_pendingSpawn.x) || 0;
+            sy = Number(_pendingSpawn.y) || 0;
+            _pendingSpawn = null;
+        }
+        _tx = sx;
+        _ty = sy;
+        _cx = sx;
+        _cy = sy;
+    }
+
+    /**
+     * 🌀 傳送術／瞬移卷軸：同圖落點（不清換地圖）。
+     * opts.mode：'far'＝手動遠距隨機（預設）｜'near'＝自動逃 BOSS 短距退避
+     * 回 true＝有移動。
+     */
+    function exploreRandomTeleportOnMap(opts) {
+        try {
+            if (!exploreAllowed()) return false;
+            opts = opts || {};
+            var mode = opts.mode || (opts.escape ? 'near' : 'far');
+            exploreRefreshCamLimits();
+            var ox = _tx;
+            var oy = _ty;
+            var def = exploreActiveMapDef();
+            var pool = [];
+            var i, hx, hy, d, spot, spots, fixed, ang, dist, nx, ny;
+
+            function pushIfWalkable(x, y, minD, maxD) {
+                hx = Math.max(-CAM_MAX_X + 120, Math.min(CAM_MAX_X - 120, x));
+                hy = Math.max(-CAM_MAX_Y + 80, Math.min(CAM_MAX_Y - 80, y));
+                // 🌀 v3.8.500：額外遠離邊界／海岸（勿貼牆貼海）
+                if (def) {
+                    var pad = (Number(def.border) || 28) + 48;
+                    var maxX = Number(def.maxX) || CAM_MAX_X;
+                    var maxY = Number(def.maxY) || CAM_MAX_Y;
+                    if (Math.abs(hx) > maxX - pad) return;
+                    if (Math.abs(hy) > maxY - pad) return;
+                    if (!def.noSea && def.seaY != null && hy < (Number(def.seaY) + 72)) return;
+                }
+                if (def && typeof mapdefResolveMove === 'function') {
+                    fixed = mapdefResolveMove(def, ox, oy, hx, hy);
+                    hx = fixed.x; hy = fixed.y;
+                    if (typeof mapdefWalkable === 'function' && !mapdefWalkable(def, hx, hy)) return;
+                    // resolve 後再驗一次海／邊界
+                    if (def && !def.noSea && def.seaY != null && hy < (Number(def.seaY) + 72)) return;
+                    var pad2 = (Number(def.border) || 28) + 40;
+                    if (Math.abs(hx) > (Number(def.maxX) || CAM_MAX_X) - pad2) return;
+                    if (Math.abs(hy) > (Number(def.maxY) || CAM_MAX_Y) - pad2) return;
+                } else {
+                    fixed = exploreResolveSolids(hx, hy, ox, oy);
+                    hx = fixed.x; hy = fixed.y;
+                }
+                d = Math.hypot(hx - ox, hy - oy);
+                if (minD != null && d < minD) return;
+                if (maxD != null && d > maxD) return;
+                pool.push({ x: hx, y: hy, d: d });
+            }
+
+            if (mode === 'near') {
+                // 短距退避：優先背離最近 BOSS，距離約 110~240
+                var awayX = (Math.random() - 0.5);
+                var awayY = (Math.random() - 0.5);
+                try {
+                    if (typeof mapState !== 'undefined' && mapState && mapState.mobs) {
+                        var best = null, bd = 1e9, m, md;
+                        for (i = 0; i < mapState.mobs.length; i++) {
+                            m = mapState.mobs[i];
+                            if (!m || m._dead || !(m.curHp > 0) || !m.boss) continue;
+                            if (m._fx == null) continue;
+                            md = Math.hypot(m._fx - ox, (m._fy || 0) - oy);
+                            if (md < bd) { bd = md; best = m; }
+                        }
+                        if (best) {
+                            awayX = ox - best._fx;
+                            awayY = oy - (best._fy || 0);
+                        }
+                    }
+                } catch (eBoss) {}
+                var alen = Math.hypot(awayX, awayY) || 1;
+                awayX /= alen; awayY /= alen;
+                for (i = 0; i < 20; i++) {
+                    ang = Math.atan2(awayY, awayX) + (Math.random() - 0.5) * 1.2;
+                    dist = 110 + Math.random() * 130;
+                    pushIfWalkable(ox + Math.cos(ang) * dist, oy + Math.sin(ang) * dist, 80, 280);
+                }
+                // 補純隨機短跳
+                for (i = 0; i < 16 && pool.length < 4; i++) {
+                    ang = Math.random() * Math.PI * 2;
+                    dist = 100 + Math.random() * 140;
+                    pushIfWalkable(ox + Math.cos(ang) * dist, oy + Math.sin(ang) * dist, 70, 300);
+                }
+            } else {
+                // 遠距：練功點＋全圖隨機（min ≥ 320）
+                var minDist = 320;
+                spots = exploreActiveGrindSpots() || [];
+                for (i = 0; i < spots.length; i++) {
+                    spot = spots[i];
+                    if (!spot) continue;
+                    nx = Number(spot.x) || 0;
+                    ny = Number(spot.y) || 0;
+                    nx += (Math.random() - 0.5) * 80;
+                    ny += (Math.random() - 0.5) * 60;
+                    pushIfWalkable(nx, ny, minDist, null);
+                }
+                for (i = 0; i < 40; i++) {
+                    pushIfWalkable(
+                        (Math.random() * 2 - 1) * (CAM_MAX_X - 160),
+                        (Math.random() * 2 - 1) * (CAM_MAX_Y - 120),
+                        minDist,
+                        null
+                    );
+                }
+                if (!pool.length) {
+                    for (i = 0; i < 24; i++) {
+                        pushIfWalkable(
+                            (Math.random() * 2 - 1) * (CAM_MAX_X - 200),
+                            (Math.random() * 2 - 1) * (CAM_MAX_Y - 150),
+                            80,
+                            null
+                        );
+                    }
+                }
+            }
+
+            if (!pool.length) return false;
+
+            var pick = pool[(Math.random() * pool.length) | 0];
+            _tx = pick.x;
+            _ty = pick.y;
+            _cx = _tx;
+            _cy = _ty;
+            _vx = 0;
+            _vy = 0;
+            _moving = false;
+            _walkPhase = 0;
+            _tapMove.active = false;
+            try { exploreApplyWorld(); } catch (eAw) {}
+            try { exploreRenderHint(); } catch (eRh) {}
+            return true;
+        } catch (e) { return false; }
     }
 
     function exploreReset(reason) {
-        _cx = 0;
-        _cy = 0;
+        exploreRefreshCamLimits();
+        exploreConsumePendingSpawn();
+        _vx = 0;
+        _vy = 0;
         _moving = false;
         _walkPhase = 0;
         _camMoved = false;
         _faceHold = 0;
+        _tapMove.active = false;
         exploreApplyWorld();
         exploreRenderHint();
         if (reason === 'map' || reason === 'portal') {
@@ -1095,7 +2405,7 @@
             if (el.dataset.ready !== '1' && !el.classList.contains('is-landed')) continue;
             var fx = Number(el.dataset.fx) || 0;
             var fy = Number(el.dataset.fy) || 0;
-            if (Math.hypot(fx - _cx, fy - _cy) > PICKUP_PX) continue;
+            if (Math.hypot(fx - _tx, fy - _ty) > PICKUP_PX) continue;
             if (claimExploreLootEl(el)) picked++;
             if (picked >= 8) break;
         }
@@ -1113,11 +2423,12 @@
         var show = !!(on && exploreFieldCombatActive());
         layer.classList.toggle('hidden', !show);
         if (!show) return;
+        var spots = exploreActiveGrindSpots();
         var kids = layer.querySelectorAll('.explore-grind-mark');
-        if (kids.length !== GRIND_SPOTS.length) {
+        if (kids.length !== spots.length) {
             layer.innerHTML = '';
-            for (var i = 0; i < GRIND_SPOTS.length; i++) {
-                var s = GRIND_SPOTS[i];
+            for (var i = 0; i < spots.length; i++) {
+                var s = spots[i];
                 var el = document.createElement('div');
                 el.className = 'explore-grind-mark';
                 el.setAttribute('data-spot', String(s.id));
@@ -1127,21 +2438,23 @@
             kids = layer.querySelectorAll('.explore-grind-mark');
         }
         for (var k = 0; k < kids.length; k++) {
-            var spot = GRIND_SPOTS[k];
+            var spot = spots[k];
             if (!spot) continue;
-            var near = Math.hypot(_cx - spot.x, _cy - (spot.y || 0)) < 160;
+            var near = Math.hypot(_tx - spot.x, _ty - (spot.y || 0)) < 160;
             kids[k].style.left = 'calc(50% + ' + spot.x + 'px)';
             kids[k].style.bottom = (exploreGroundYLive() + (spot.y || 0)) + 'px';
             kids[k].classList.toggle('is-near', near);
         }
     }
 
-    /** 地圖邊界圍牆（不可傳送）— 接近提示、頂死顯示圍牆 */
+    /** 地圖邊界——v3.8.477 起不再顯示東西南北文字指引（僅保留壓暗 class） */
     function exploreRenderEdges() {
         var layer = document.getElementById('explore-edge-layer');
-        if (!layer) return;
+        if (layer) {
+            layer.classList.add('hidden');
+            layer.style.display = 'none';
+        }
         var on = exploreAllowed() && exploreFieldCombatActive();
-        layer.classList.toggle('hidden', !on);
         if (!on) {
             var bv0 = document.getElementById('battle-view');
             if (bv0) bv0.classList.remove('at-map-edge', 'near-map-edge', 'edge-w', 'edge-e', 'edge-n', 'edge-s', 'portal-ready-left', 'portal-ready-right', 'map-walled');
@@ -1155,19 +2468,6 @@
         var atE = _cx >= CAM_MAX_X - 4;
         var atN = _cy >= CAM_MAX_Y - 4;
         var atS = _cy <= -CAM_MAX_Y + 4;
-        function setEdge(id, show, atEnd, nearLabel, endLabel) {
-            var el = document.getElementById(id);
-            if (!el) return;
-            el.classList.toggle('hidden', !show);
-            el.classList.toggle('is-end', !!atEnd);
-            el.classList.toggle('is-near', !!show && !atEnd);
-            el.classList.toggle('is-wall', !!atEnd);
-            el.textContent = atEnd ? endLabel : nearLabel;
-        }
-        setEdge('explore-edge-west', w, atW, '← 西牆在前方', '⬛ 已到西邊盡頭');
-        setEdge('explore-edge-east', e, atE, '東牆在前方 →', '已到東邊盡頭 ⬛');
-        setEdge('explore-edge-north', n, atN, '↑ 北牆在前方', '⬛ 已到北邊盡頭');
-        setEdge('explore-edge-south', s, atS, '南牆在前方 ↓', '已到南邊盡頭 ⬛');
         var bv = document.getElementById('battle-view');
         if (bv) {
             bv.classList.toggle('near-map-edge', !!(w || e || n || s));
@@ -1181,24 +2481,197 @@
         }
     }
 
-    function exploreDoPortal() { return false; }
+
+    function exploreDoPortal(dest, portalMeta) {
+        if (!dest || _portalBusy) return false;
+        _portalBusy = true;
+        _portalHoldL = 0;
+        _portalHoldR = 0;
+        try {
+            var meta = portalMeta || null;
+            if (meta && (meta.destX != null || meta.destY != null)) {
+                _pendingSpawn = {
+                    x: Number(meta.destX) || 0,
+                    y: Number(meta.destY) || 0
+                };
+            } else {
+                _pendingSpawn = null;
+            }
+            var sel = document.getElementById('map-select');
+            if (sel) {
+                // 確保選單有該選項
+                var ok = false;
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === dest) { ok = true; break; }
+                }
+                if (!ok) {
+                    var opt = document.createElement('option');
+                    opt.value = dest;
+                    opt.textContent = dest;
+                    sel.appendChild(opt);
+                }
+                sel.value = dest;
+            }
+            if (typeof changeMap === 'function') changeMap(true);
+            else if (typeof mapState !== 'undefined') mapState.current = dest;
+            try {
+                if (typeof logSys === 'function') logSys('<span class="text-sky-300">你進入了傳送門。</span>');
+            } catch (eL) {}
+        } catch (eP) {
+            _portalBusy = false;
+            _pendingSpawn = null;
+            return false;
+        }
+        setTimeout(function () { _portalBusy = false; }, 900);
+        return true;
+    }
 
     function exploreRenderHint() {
         var leftBtn = document.getElementById('explore-portal-left');
         var rightBtn = document.getElementById('explore-portal-right');
         var layer = document.getElementById('explore-exit-layer');
         var hint = document.getElementById('explore-hint');
-        if (leftBtn) leftBtn.classList.add('hidden');
-        if (rightBtn) rightBtn.classList.add('hidden');
         if (layer) layer.classList.add('hidden');
-        // 用戶：戰鬥 2D 畫面上方提示字關閉
+        // 🩹 v3.8.406：真地圖狀態列＋傳送提示
+        var portal = null;
+        try {
+            if (exploreIsRealMap() && typeof mapdefPortalAt === 'function') {
+                portal = mapdefPortalAt(mapState.current, _tx, _ty);
+            }
+        } catch (ePr) {}
+        if (leftBtn) {
+            leftBtn.classList.toggle('hidden', !(portal && portal.side === 'west'));
+            if (portal && portal.side === 'west') leftBtn.textContent = portal.label || '← 傳送';
+        }
+        if (rightBtn) {
+            var rightSide = !!(portal && portal.side && portal.side !== 'west');
+            rightBtn.classList.toggle('hidden', !rightSide);
+            if (rightSide) rightBtn.textContent = portal.label || '傳送 →';
+        }
+        // 🩹 v3.8.450：上方位置／狀態列永久關閉（傳送仍靠門口標示與按鍵）
         if (hint) {
             hint.classList.add('hidden');
+            hint.classList.remove('is-real-map-hint');
             hint.textContent = '';
+        }
+        exploreSyncSeaMask();
+        exploreSyncPortalMarkers();
+    }
+
+    /** 南岸海水半透明帶：真地圖視覺可辨（地監 noSea 關閉） */
+    function exploreSyncSeaMask() {
+        var mask = document.getElementById('explore-sea-mask');
+        if (!mask) return;
+        var def = exploreActiveMapDef();
+        var on = exploreAllowed() && exploreIsRealMap() && !(def && def.noSea);
+        mask.classList.toggle('hidden', !on);
+        if (!on) return;
+        var seaY = (def && def.seaY != null) ? def.seaY : -300;
+        var maxX = (def && def.maxX) ? def.maxX : CAM_MAX_X;
+        var maxY = (def && def.maxY) ? def.maxY : CAM_MAX_Y;
+        var h = Math.max(40, (-seaY) + maxY);
+        mask.style.left = 'calc(50% - ' + maxX + 'px)';
+        mask.style.width = (maxX * 2) + 'px';
+        mask.style.bottom = (exploreGroundYLive() - maxY) + 'px';
+        mask.style.height = h + 'px';
+    }
+
+    /** 傳送門視覺分類：地監入口／回村／野外 */
+    function explorePortalKind(p) {
+        var d = String((p && p.dest) || '');
+        if (d.indexOf('town_') === 0) return 'town';
+        if (/^(zone_|crystal_|rastabad_|shadow_|demon_|eva_|pirate_dungeon|pride_|thebes_|tikal_|antaras_|fafurion_|valakas_|elf_grave|giant_tomb|hidden_cave|dark_magic|necro_|elder_room|sunrise_)/.test(d)) return 'dungeon';
+        if (/dungeon|cave|temple|pyramid|altar|lair|tomb|gate|lab|training/.test(d)) return 'dungeon';
+        return 'wild';
+    }
+
+    /** 地圖上標出傳送門入口（相機相對，每幀更新） */
+    function exploreSyncPortalMarkers() {
+        var layer = document.getElementById('explore-portal-markers');
+        if (!layer) return;
+        var on = exploreAllowed() && exploreIsRealMap();
+        layer.classList.toggle('hidden', !on);
+        if (!on) {
+            layer.innerHTML = '';
+            layer.removeAttribute('data-key');
+            return;
+        }
+        var mid = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+        var portals = [];
+        try {
+            if (typeof mapdefPortals === 'function') portals = mapdefPortals(mid) || [];
+        } catch (ePm) {}
+        var key = mid + ':' + portals.length + ':gate441';
+        if (layer.getAttribute('data-key') !== key) {
+            var html = '';
+            for (var i = 0; i < portals.length; i++) {
+                var p = portals[i];
+                if (!p) continue;
+                var side = p.side || 'gate';
+                var kind = explorePortalKind(p);
+                var lab = String(p.label || '傳送門').replace(/</g, '&lt;');
+                html += '<div class="explore-portal-mark explore-portal-mark-' + side
+                    + ' explore-portal-kind-' + kind
+                    + '" data-pi="' + i + '">'
+                    + '<div class="explore-portal-arch" aria-hidden="true">'
+                    + '<span class="explore-portal-pillar explore-portal-pillar-l"></span>'
+                    + '<span class="explore-portal-mouth"><span class="explore-portal-mist"></span></span>'
+                    + '<span class="explore-portal-pillar explore-portal-pillar-r"></span>'
+                    + '<span class="explore-portal-lintel"></span>'
+                    + '<span class="explore-portal-steps"></span>'
+                    + '</div>'
+                    + '<div class="explore-portal-label">' + lab + '</div>'
+                    + '</div>';
+            }
+            layer.innerHTML = html;
+            layer.setAttribute('data-key', key);
+        }
+        var kids = layer.children;
+        for (var j = 0; j < kids.length; j++) {
+            var el = kids[j];
+            var idx = parseInt(el.getAttribute('data-pi'), 10) || 0;
+            var pt = portals[idx];
+            if (!pt) continue;
+            var cx = pt.x + (pt.w || 40) * 0.5;
+            var cy = pt.y + (pt.h || 40) * 0.5;
+            el.style.left = 'calc(50% + ' + exploreFieldScreenX(cx).toFixed(1) + 'px)';
+            el.style.bottom = exploreMobScreenBottom(cy).toFixed(1) + 'px';
+            // 走近入口時加強存在感
+            var near = false;
+            try {
+                if (typeof mapdefPortalAt === 'function') {
+                    var hit = mapdefPortalAt(mid, _tx, _ty);
+                    near = !!(hit && hit.id === pt.id);
+                }
+            } catch (eN) {}
+            el.classList.toggle('is-near', near);
         }
     }
 
-    function exploreTryPortal() { return false; }
+    /** 走進傳送門熱區並停留 → 切圖 */
+    function exploreTryPortal() {
+        if (!exploreAllowed() || explorePlayerDead() || _portalBusy) return false;
+        if (!exploreIsRealMap()) return false;
+        var portal = null;
+        try {
+            if (typeof mapdefPortalAt === 'function') portal = mapdefPortalAt(mapState.current, _tx, _ty);
+        } catch (eT) {}
+        if (!portal || !portal.dest) {
+            _portalHoldL = 0;
+            _portalHoldR = 0;
+            return false;
+        }
+        if (portal.side === 'west') {
+            _portalHoldL++;
+            _portalHoldR = 0;
+            if (_portalHoldL >= PORTAL_HOLD_TICKS) return exploreDoPortal(portal.dest, portal);
+        } else {
+            _portalHoldR++;
+            _portalHoldL = 0;
+            if (_portalHoldR >= PORTAL_HOLD_TICKS) return exploreDoPortal(portal.dest, portal);
+        }
+        return true;
+    }
 
     function exploreSetVirtualStick(dx, dy, active) {
         _vStick.dx = Number(dx) || 0;
@@ -1207,7 +2680,31 @@
         if (!_vStick.active) {
             _vStick.dx = 0;
             _vStick.dy = 0;
+        } else {
+            _tapMove.active = false;
         }
+    }
+
+    function exploreClearTapMove() {
+        _tapMove.active = false;
+    }
+
+    /** 點螢幕／戰場＝走向該世界座標（相對相機） */
+    function exploreSetTapMoveFromScreen(clientX, clientY) {
+        if (!exploreAllowed() || explorePlayerDead()) return;
+        var bv = document.getElementById('battle-view');
+        if (!bv) return;
+        var r = bv.getBoundingClientRect();
+        if (!(r.width > 40 && r.height > 40)) return;
+        var sx = clientX - (r.left + r.width * 0.5);
+        var syUp = (r.top + r.height * 0.5) - clientY;
+        _tapMove.tx = _cx + sx;
+        _tapMove.ty = _cy + syUp * 0.9;
+        if (_tapMove.tx < -CAM_MAX_X) _tapMove.tx = -CAM_MAX_X;
+        if (_tapMove.tx > CAM_MAX_X) _tapMove.tx = CAM_MAX_X;
+        if (_tapMove.ty < -CAM_MAX_Y) _tapMove.ty = -CAM_MAX_Y;
+        if (_tapMove.ty > CAM_MAX_Y) _tapMove.ty = CAM_MAX_Y;
+        _tapMove.active = true;
     }
 
     function exploreReadInput() {
@@ -1217,33 +2714,70 @@
         var d = !!( _keys.ArrowDown || _keys.s || _keys.S );
         var dx = (r ? 1 : 0) - (l ? 1 : 0);
         var dy = (d ? 1 : 0) - (u ? 1 : 0);
+        var manual = !!(dx || dy);
+        if (manual) _tapMove.active = false;
         if (_vStick.active && (Math.abs(_vStick.dx) > 0.01 || Math.abs(_vStick.dy) > 0.01)) {
             dx = _vStick.dx;
             dy = _vStick.dy;
+            manual = true;
+            _tapMove.active = false;
+        }
+        var fromTap = false;
+        if (!manual && _tapMove.active) {
+            var tdx = _tapMove.tx - _tx;
+            var tdy = _tapMove.ty - _ty;
+            var td = Math.hypot(tdx, tdy);
+            if (td <= TAP_ARRIVE) {
+                _tapMove.active = false;
+                dx = 0;
+                dy = 0;
+            } else {
+                dx = tdx / td;
+                dy = -tdy / td;
+                fromTap = true;
+                manual = true; // 玩家點螢幕也算手動，暫停自動追
+            }
         }
         if (dx && dy) {
             var len = Math.hypot(dx, dy) || 1;
             if (len > 1) { dx /= len; dy /= len; }
         }
-        return { dx: dx, dy: dy, left: l || (_vStick.active && _vStick.dx < -0.2), right: r || (_vStick.active && _vStick.dx > 0.2) };
+        return {
+            dx: dx,
+            dy: dy,
+            manual: manual,
+            fromTap: fromTap,
+            left: l || (_vStick.active && _vStick.dx < -0.2) || (dx < -0.2),
+            right: r || (_vStick.active && _vStick.dx > 0.2) || (dx > 0.2)
+        };
+    }
+
+    function explorePlayerActionLocked() {
+        return false;
     }
 
     function exploreTick() {
         if (!exploreAllowed()) {
             if (_moving || document.getElementById('battle-view') && document.getElementById('battle-view').classList.contains('is-world-scroll')) {
                 _moving = false;
+                _vx = 0;
+                _vy = 0;
+                _tapMove.active = false;
                 exploreApplyWorld();
                 exploreRenderHint();
                 exploreRenderEdges();
             }
             return;
         }
+        _tickN = (_tickN + 1) | 0;
         var mapId = mapState.current;
         if (mapId !== _lastMap) {
             _lastMap = mapId;
-            _cx = 0;
-            _cy = 0;
+            exploreConsumePendingSpawn();
+            _vx = 0;
+            _vy = 0;
             _walkPhase = 0;
+            _tapMove.active = false;
         }
         // 💀 死亡不可移動（清鍵＋停步）
         if (explorePlayerDead()) {
@@ -1251,6 +2785,9 @@
             _vStick.active = false;
             _vStick.dx = 0;
             _vStick.dy = 0;
+            _tapMove.active = false;
+            _vx = 0;
+            _vy = 0;
             _moving = false;
             _camMoved = false;
             exploreMobChaseTick();
@@ -1263,54 +2800,139 @@
         }
         _camMoved = false;
         var inp = exploreReadInput();
-        var keyMoving = !!(inp.dx || inp.dy);
-        if (keyMoving) {
-            _cx += inp.dx * CAM_STEP;
-            _cy += (-inp.dy) * CAM_STEP;
+        var wantMove = !!(inp.dx || inp.dy);
+        var autoDrive = false;
+        var movedDist = 0;
+        // 🩹 v3.8.419：攻擊不鎖步（變身攻擊動畫長會感覺變慢）
+        _vx = 0;
+        _vy = 0;
+        _moving = false;
+        if (wantMove && inp.manual) {
+            var wdx = inp.dx;
+            var wdy = -inp.dy;
+            if (Math.abs(wdx) > 0.001 || Math.abs(wdy) > 0.001) {
+                exploreSetFaceFromVec(inp.dx, inp.dy);
+                movedDist = explorePlayerWalkStep(wdx, wdy);
+                _moving = movedDist > 0.08;
+            }
+        } else {
+            autoDrive = exploreCombatCamChaseTick(false);
+            _moving = !!autoDrive || !!_moving;
+        }
+        if (_tx < -CAM_MAX_X) _tx = -CAM_MAX_X;
+        if (_tx > CAM_MAX_X) _tx = CAM_MAX_X;
+        if (_ty < -CAM_MAX_Y) _ty = -CAM_MAX_Y;
+        if (_ty > CAM_MAX_Y) _ty = CAM_MAX_Y;
+        {
+            var realMap = exploreIsRealMap();
+            var viewBiasX = exploreViewCenterBiasX();
+            var wantCx = _tx - viewBiasX;
+            if (realMap) {
+                if (_cx !== wantCx || _cy !== _ty) {
+                    _cx = wantCx;
+                    _cy = _ty;
+                    _camMoved = true;
+                }
+            } else {
+                var _lerp = (wantMove || autoDrive || _moving) ? 1.0 : 0.85;
+                var _lx = (wantCx - _cx) * _lerp;
+                var _ly = (_ty - _cy) * _lerp;
+                if (Math.abs(_lx) > 0.03 || Math.abs(_ly) > 0.03 || wantMove || autoDrive) {
+                    _cx += _lx;
+                    _cy += _ly;
+                    movedDist = Math.max(movedDist, Math.hypot(_lx, _ly));
+                    _camMoved = true;
+                } else {
+                    _cx = wantCx;
+                    _cy = _ty;
+                }
+            }
             if (_cx < -CAM_MAX_X) _cx = -CAM_MAX_X;
             if (_cx > CAM_MAX_X) _cx = CAM_MAX_X;
             if (_cy < -CAM_MAX_Y) _cy = -CAM_MAX_Y;
             if (_cy > CAM_MAX_Y) _cy = CAM_MAX_Y;
-            _walkPhase += WALK_PHASE_KEY;
-            exploreSetFaceFromVec(inp.dx, inp.dy);
         }
 
         exploreMobChaseTick();
-        exploreCombatCamChaseTick(keyMoving);
-        // 手動走 或 相機自動拉近：都算走動（播 walk 幀／腳步感）
-        if (keyMoving) {
-            _moving = true;
-        } else if (_camMoved) {
-            _moving = true;
-            _walkPhase += WALK_PHASE_CAM;
-        } else {
-            _moving = false;
-        }
 
         exploreTryPickupLoot();
-        exploreApplyWorld();
-        exploreRenderHint();
-        exploreRenderEdges();
+        // 🩹 v3.8.481：靜止時降頻世界層／提示（移動或相機動才每 tick）
+        var _vizHeavy = !!(wantMove || autoDrive || _camMoved || _moving);
+        if (_vizHeavy || (_tickN & 1) === 0) {
+            exploreApplyWorld();
+            exploreRenderHint();
+            exploreRenderEdges();
+        }
         exploreEngageRetarget();
         exploreApplyFieldDomPos();
+        // 🌐 MMORPG：移動時推送座標給同圖玩家
+        try {
+            if ((wantMove || autoDrive || _camMoved || _moving) && typeof rtWorldPushMove === 'function') rtWorldPushMove(false);
+        } catch (eWsMove) {}
+        try { exploreTryPortal(); } catch (ePortal) {}
+        // 🩹 v3.8.481：動畫改由 js/09 interval＋RAF 專責（此處再呼叫＝每幀×3 重繪＝延遲主因）
     }
 
-    /** 把場座標寫進既有怪卡 DOM（追逐微移不必整列 rebuild） */
+    /** 把場座標寫進既有怪卡 DOM（相機相對＝畫面偏移） */
+    var _fieldCardCache = Object.create(null);
+    var _fieldCardCacheMl = null;
     function exploreApplyFieldDomPos() {
         if (!exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return;
         var ml = document.getElementById('mob-list');
         if (!ml || !ml.classList.contains('is-field-combat')) return;
+        if (_fieldCardCacheMl !== ml) {
+            _fieldCardCache = Object.create(null);
+            _fieldCardCacheMl = ml;
+        }
+        var cull = RENDER_HIDE_PX;
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._fx == null) continue;
-            var card = ml.querySelector('.mob-target[data-uid="' + m.uid + '"]');
+            var dxCam = (m._fx - _tx);
+            var dyCam = ((m._fy || 0) - _ty);
+            var far = (dxCam * dxCam + dyCam * dyCam) > (cull * cull);
+            var uid = String(m.uid || '');
+            var card = _fieldCardCache[uid];
+            if (!card || !card.isConnected) {
+                card = ml.querySelector('.mob-target[data-uid="' + uid + '"]');
+                if (card) _fieldCardCache[uid] = card;
+            }
             if (!card) continue;
+            if (far) {
+                if (card.style.visibility !== 'hidden') {
+                    card.style.visibility = 'hidden';
+                    card.style.pointerEvents = 'none';
+                }
+                continue;
+            }
+            if (card.style.visibility === 'hidden') {
+                card.style.visibility = '';
+                card.style.pointerEvents = '';
+            }
             var depth = exploreFieldDepthStyle(m._fy);
-            card.style.left = 'calc(50% + ' + Math.round(m._fx) + 'px)';
-            card.style.bottom = Math.round(depth.bottom) + 'px';
-            card.style.transform = depth.transform;
-            card.style.zIndex = depth.zIndex;
-            card.classList.toggle('is-engage', exploreMobInEngageRange(m));
+            var sx = exploreFieldScreenX(m._fx);
+            var leftStr = 'calc(50% + ' + sx.toFixed(1) + 'px)';
+            var botStr = (Number(depth.bottom) || 0).toFixed(1) + 'px';
+            if (card.style.left !== leftStr) card.style.left = leftStr;
+            if (card.style.bottom !== botStr) card.style.bottom = botStr;
+            if (card.style.transform !== depth.transform) card.style.transform = depth.transform;
+            var zStr = String(depth.zIndex);
+            if (card.style.zIndex !== zStr) card.style.zIndex = zStr;
+            var eng = exploreMobInEngageRange(m);
+            if (!!card.classList.contains('is-engage') !== eng) card.classList.toggle('is-engage', eng);
+            var walking = !!m._animMoving;
+            if (!!card.classList.contains('is-mob-walking') !== walking) card.classList.toggle('is-mob-walking', walking);
+            var plant = Number(m._mobPlant) || 0;
+            var plantOn = !!(walking && plant > 0.35);
+            if (!!card.classList.contains('is-mob-plant') !== plantOn) card.classList.toggle('is-mob-plant', plantOn);
+            if (walking) {
+                var bobY = Number(m._mobBob) || 0;
+                var swayX = Math.sin((Number(m._walkPhase) || 0) * Math.PI) * 2.4;
+                card.style.setProperty('--mob-walk-bob', bobY.toFixed(2) + 'px');
+                card.style.setProperty('--mob-walk-sway', swayX.toFixed(2) + 'px');
+                card.style.setProperty('--mob-shadow-scale', (Number(m._mobShadow) || 0.94).toFixed(3));
+                card.style.setProperty('--mob-foot-plant', plant.toFixed(3));
+            }
         }
     }
 
@@ -1370,48 +2992,123 @@
         // 隱藏舊出口 UI（若殘留）
         var layer = document.getElementById('explore-exit-layer');
         if (layer) layer.classList.add('hidden');
-        var leftEl = document.getElementById('explore-portal-left');
-        var rightEl = document.getElementById('explore-portal-right');
-        if (leftEl) leftEl.classList.add('hidden');
-        if (rightEl) rightEl.classList.add('hidden');
+        if (!document.getElementById('explore-portal-left')) {
+            var pl = document.createElement('button');
+            pl.type = 'button';
+            pl.id = 'explore-portal-left';
+            pl.className = 'explore-portal explore-portal-left hidden';
+            pl.textContent = '← 村莊';
+            bv.appendChild(pl);
+            pl.addEventListener('click', function () {
+                try {
+                    var p = (typeof mapdefPortalAt === 'function') ? mapdefPortalAt(mapState.current, _tx, _ty) : null;
+                    if (p && p.side === 'west') exploreDoPortal(p.dest, p);
+                } catch (eC) {}
+            });
+        }
+        if (!document.getElementById('explore-portal-right')) {
+            var pr = document.createElement('button');
+            pr.type = 'button';
+            pr.id = 'explore-portal-right';
+            pr.className = 'explore-portal explore-portal-right hidden';
+            pr.textContent = '港口 →';
+            bv.appendChild(pr);
+            pr.addEventListener('click', function () {
+                try {
+                    var p2 = (typeof mapdefPortalAt === 'function') ? mapdefPortalAt(mapState.current, _tx, _ty) : null;
+                    if (p2 && p2.side && p2.side !== 'west') exploreDoPortal(p2.dest, p2);
+                } catch (eC2) {}
+            });
+        }
+        if (!document.getElementById('explore-portal-markers')) {
+            var marks = document.createElement('div');
+            marks.id = 'explore-portal-markers';
+            marks.className = 'explore-portal-markers hidden';
+            marks.setAttribute('aria-hidden', 'true');
+            bv.appendChild(marks);
+        }
         if (!document.getElementById('explore-hint')) {
             var hint = document.createElement('div');
             hint.id = 'explore-hint';
             hint.className = 'explore-hint hidden';
             bv.appendChild(hint);
         }
+        if (!document.getElementById('explore-sea-mask')) {
+            var sea = document.createElement('div');
+            sea.id = 'explore-sea-mask';
+            sea.className = 'explore-sea-mask hidden';
+            sea.setAttribute('aria-hidden', 'true');
+            var propLayer = document.getElementById('explore-prop-layer');
+            if (propLayer && propLayer.parentNode === bv) bv.insertBefore(sea, propLayer);
+            else bv.appendChild(sea);
+        }
+        if (!document.getElementById('explore-foot-patch')) {
+            var patch = document.createElement('div');
+            patch.id = 'explore-foot-patch';
+            patch.className = 'hidden';
+            patch.setAttribute('aria-hidden', 'true');
+            bv.appendChild(patch);
+        }
     }
 
     function exploreOnMapChange() {
+        _propCacheKey = '';
+        _solidList = [];
+        _solidKey = '';
         exploreEnsureUi();
         exploreReset('map');
         exploreRenderHint();
     }
 
-    // 探索模式：主角鎖畫面正中央，傭兵簇擁四周
+    // 🩹 v3.8.389：真地圖＝人物螢幕偏移（世界−相機）；其餘鎖中央
     function explorePartySpritePos() {
-        var gy = exploreGroundYLive();
+        var real = exploreIsRealMap();
+        var ox = real ? explorePlayerScreenX() : 0;
+        var gy = real ? explorePlayerScreenBottom() : (exploreGroundYLive() - FOOT_CONTACT_SINK);
+        var pz = explorePlayerDepthZ();
+        if (!real) {
+            return {
+                P: { x: '50%', b: gy, z: pz },
+                A: [
+                    { x: '43%', b: gy - 6, z: pz - 1 },
+                    { x: '57%', b: gy - 6, z: pz - 1 },
+                    { x: '38%', b: gy + 8, z: pz + 1 },
+                    { x: '62%', b: gy + 8, z: pz + 1 },
+                    { x: '46%', b: gy + 14, z: pz + 2 },
+                    { x: '54%', b: gy + 14, z: pz + 2 },
+                    { x: '50%', b: gy + 20, z: pz + 3 }
+                ]
+            };
+        }
         return {
-            P: { x: '50%', b: gy },
+            P: { dx: ox, x: '50%', b: gy, z: pz },
             A: [
-                { x: '43%', b: gy - 6 },
-                { x: '57%', b: gy - 6 },
-                { x: '38%', b: gy + 8 },
-                { x: '62%', b: gy + 8 },
-                { x: '46%', b: gy + 14 },
-                { x: '54%', b: gy + 14 },
-                { x: '50%', b: gy + 20 }
+                { dx: ox - 52, x: '50%', b: gy - 6, z: pz - 1 },
+                { dx: ox + 52, x: '50%', b: gy - 6, z: pz - 1 },
+                { dx: ox - 78, x: '50%', b: gy + 8, z: pz + 1 },
+                { dx: ox + 78, x: '50%', b: gy + 8, z: pz + 1 },
+                { dx: ox - 28, x: '50%', b: gy + 14, z: pz + 2 },
+                { dx: ox + 28, x: '50%', b: gy + 14, z: pz + 2 },
+                { dx: ox, x: '50%', b: gy + 20, z: pz + 3 }
             ]
         };
     }
 
     window.exploreSetVirtualStick = exploreSetVirtualStick;
+    window.exploreSetTapMoveFromScreen = exploreSetTapMoveFromScreen;
+    window.exploreClearTapMove = exploreClearTapMove;
     window.exploreWorldActive = exploreWorldActive;
     window.exploreIsMoving = exploreIsMoving;
     window.exploreFaceDir = exploreFaceDir;
     window.exploreWalkPhase = exploreWalkPhase;
     window.exploreCamX = exploreCamX;
     window.exploreCamY = exploreCamY;
+    window.explorePlayerX = explorePlayerX;
+    window.explorePlayerY = explorePlayerY;
+    window.explorePlayerScreenX = explorePlayerScreenX;
+    window.explorePlayerScreenBottom = explorePlayerScreenBottom;
+    window.exploreIsRealMap = exploreIsRealMap;
+    window.exploreActiveMapDef = exploreActiveMapDef;
     window.exploreFieldCombatActive = exploreFieldCombatActive;
     window.exploreAssignFieldPos = exploreAssignFieldPos;
     window.exploreEnsureAllFieldPos = exploreEnsureAllFieldPos;
@@ -1421,18 +3118,25 @@
     window.exploreEngageRetarget = exploreEngageRetarget;
     window.exploreMobShouldSim = exploreMobShouldSim;
     window.exploreMobShouldRender = exploreMobShouldRender;
-    window.exploreEngagePx = function () { return ENGAGE_PX; };
+    window.exploreMobWorldDist = exploreMobWorldDist;
+    window.exploreEngagePx = function () { return exploreEngageLimit(); };
+    window.exploreEngageLimit = exploreEngageLimit;
     window.exploreTryPortal = exploreTryPortal;
     window.exploreOnMapChange = exploreOnMapChange;
     window.exploreReset = exploreReset;
+    window.exploreRandomTeleportOnMap = exploreRandomTeleportOnMap;
     window.exploreVacuumLoot = exploreVacuumLoot;
     window.claimExploreLootEl = claimExploreLootEl;
     window.exploreEnsureUi = exploreEnsureUi;
     window.explorePartySpritePos = explorePartySpritePos;
     window.exploreGroundY = exploreGroundYLive;
     window.exploreFieldFootBottom = exploreFieldFootBottom;
+    window.exploreMobScreenBottom = exploreMobScreenBottom;
+    window.exploreFieldScreenX = exploreFieldScreenX;
+    window.explorePlayerDepthZ = explorePlayerDepthZ;
+    window.exploreApplyFieldDomPos = exploreApplyFieldDomPos;
     window.exploreFieldDepthStyle = exploreFieldDepthStyle;
-    window.exploreGrindSpots = function () { return GRIND_SPOTS.slice(); };
+    window.exploreGrindSpots = function () { return exploreActiveGrindSpots().slice(); };
     window.exploreFieldSlotCount = exploreFieldSlotCount;
     window.exploreInitFieldSpawns = exploreInitFieldSpawns;
     window.exploreRespawnDelayJitter = exploreRespawnDelayJitter;
@@ -1441,6 +3145,7 @@
     window.exploreBiomeOf = exploreBiomeOf;
     window.exploreTopdownStyle = exploreTopdownStyle;
     window.exploreMapSceneBgUrl = exploreMapSceneBgUrl;
+    window.exploreMapFloorOverride = exploreMapFloorOverride;
     window.MAP_PORTAL_LINKS = MAP_PORTAL_LINKS;
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -1474,6 +3179,9 @@
     window.addEventListener('blur', function () {
         _keys = Object.create(null);
         _moving = false;
+        _vx = 0;
+        _vy = 0;
+        _tapMove.active = false;
     });
 
     var _hooked = false;
@@ -1484,6 +3192,12 @@
         window.changeMap = function () {
             var r = orig.apply(this, arguments);
             try { exploreOnMapChange(); } catch (e) {}
+            // 🌐 P4：切圖後向伺服器申請頻道／進出圖
+            try {
+                if (typeof rtWorldEnter === 'function' && typeof mapState !== 'undefined' && mapState && mapState.current) {
+                    rtWorldEnter(mapState.current);
+                }
+            } catch (eEnt) {}
             return r;
         };
     }

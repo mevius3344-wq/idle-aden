@@ -1515,10 +1515,10 @@
                 '<div style="color:#cbd5e1;line-height:1.7;margin-bottom:12px;">' +
                     '<div>狩獵區：<span style="color:#93c5fd;">' + _offlineEsc(result.mapName) + '</span></div>' +
                     '<div>離線時間：' + _offlineFormatDuration(result.requestedElapsedMs || result.elapsedMs) + (result.capped ? '（已達 12 小時上限）' : '') + '</div>' +
-                    (result.died ? '<div style="color:#fca5a5;font-weight:700;">戰鬥 ' + _offlineFormatDuration(result.elapsedMs) + ' 後死亡，後續收益停止。</div>' : '') +
+                    (result.died ? '<div style="color:#fca5a5;font-weight:700;">戰鬥 ' + _offlineFormatDuration(result.elapsedMs) + ' 後死亡，後續收益停止；已自動回村甦醒（傷勢未癒，請在村中休息恢復）。</div>' : '') +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:1fr auto;gap:8px 14px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;">' +
-                    (result.died ? '<span>離線結果</span><b style="color:#f87171;">戰鬥中死亡</b>' : '') +
+                    (result.died ? '<span>離線結果</span><b style="color:#f87171;">戰鬥中死亡（已回村甦醒）</b>' : '') +
                     '<span>獲得經驗</span><b style="color:#86efac;">' + result.exp.toLocaleString() + '</b>' +
                     '<span>獲得金幣</span><b style="color:#fde047;">' + result.gold.toLocaleString() + '</b>' +
                     '<span>擊殺怪物</span><b style="color:#c4b5fd;">' + result.kills.toLocaleString() + '</b>' +
@@ -1607,29 +1607,45 @@
 
     function _offlineApplySettledDeath() {
         if (!player) return;
-        // 已死亡則只確保 UI，不重複清召喚／覆寫狀態
-        if (player.dead && !(Number(player.hp) > 0)) {
-            try {
-                let revive = document.getElementById('btn-revive');
-                if (revive) revive.classList.remove('hidden');
-                if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
-                if (typeof updateUI === 'function') updateUI();
-            } catch (e0) {}
-            return;
-        }
-        player.hp = 0;
+        // 🩹 v3.8.353：離線死亡＝回村甦醒，低血起步（與線上 revive 相同，靠村莊自然恢復）
+        try {
+            let b1 = document.getElementById('btn-revive'); if (b1) b1.classList.add('hidden');
+            let b2 = document.getElementById('btn-revive-inplace'); if (b2) b2.classList.add('hidden');
+            if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
+        } catch (eBtn) {}
+        // 已存活且有血→略過（避免重複回村）
+        if (!player.dead && Number(player.hp) > 0) return;
         player.dead = true;
+        player.hp = 0;
         player.summon = null;
         player.charmed = null;
         if (Array.isArray(player.summonsV2)) player.summonsV2 = [];
         if (player.buffs) player.buffs.sk_charm = 0;
+        try { if (typeof renderSummonPanel === 'function') renderSummonPanel(true); } catch (eSum) {}
         try {
-            let revive = document.getElementById('btn-revive');
-            if (revive) revive.classList.remove('hidden');
-            if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
-            if (typeof renderSummonPanel === 'function') renderSummonPanel(true);
+            if (typeof revive === 'function') {
+                revive();
+                return;
+            }
+        } catch (eRev) {}
+        // revive 不可用時的後備：清死亡、低血、確保在村莊
+        try {
+            player.dead = false;
+            if (typeof calcStats === 'function') calcStats();
+            player.hp = 1;
+            player.mp = Math.max(0, Math.min(Number(player.mmp) || 0, 1));
+            player.statuses = { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0, armorBreak: 0, slowAtk: 0, cleave: 0, evilAura: 0 };
+            let home = (typeof getHomeTown === 'function') ? getHomeTown() : 'town_giran';
+            if (typeof setMapSelectors === 'function') setMapSelectors(home);
+            if (typeof changeMap === 'function') changeMap(true);
             if (typeof updateUI === 'function') updateUI();
-        } catch (e) {}
+            if (typeof logSys === 'function') {
+                logSys('<span class="text-green-300">你在村莊甦醒了……傷勢未癒，請在村中休息恢復。（離線戰鬥死亡）</span>');
+            }
+            _offlineInternalSave = true;
+            try { if (typeof _offlineOriginalSaveGame === 'function') _offlineOriginalSaveGame(); } catch (eSv) {}
+            finally { _offlineInternalSave = false; }
+        } catch (eFb) {}
     }
 
     function _offlineGrantBatch(source, profile, elapsed, rawElapsed, efficiency, options) {
@@ -1746,7 +1762,7 @@
         if (typeof logSys === 'function' && options.catchupFormat) {
             logSys('<span class="' + (survivalPlan.died ? 'text-red-400' : 'text-cyan-300') + ' font-bold">⏩ 掛機補跑完成：</span>已補上 ' +
                 _offlineFormatCatchupDuration(elapsed) + ' 的進度' + (gold > 0 ? ('，金幣 +' + gold.toLocaleString()) : '') +
-                (survivalPlan.died ? '，角色在戰鬥中死亡，後續時間不再計算收益。' : '。'));
+                (survivalPlan.died ? '，角色在戰鬥中死亡（已自動回村甦醒），後續時間不再計算收益。' : '。'));
             let gains = _offlineCatchupGainRows(loot);
             if (gains.length) logSys('<span class="sys-item-gain">掛機期間獲得：' + gains.join('、') + '</span>');
         } else if (typeof logSys === 'function') {
@@ -1756,7 +1772,7 @@
                 '、掉落物 ' + loot.itemCount.toLocaleString() + '、卡片 ' + loot.cardCount.toLocaleString() + '。');
             if (survivalPlan.died) {
                 logSys('<span class="text-red-400 font-bold">角色在離線戰鬥 ' + _offlineFormatDuration(elapsed) +
-                    ' 後死亡，後續收益已停止；離線頭目戰需再次擊敗頭目才能解鎖，普通狩獵復活後仍可掛機。</span>');
+                    ' 後死亡，後續收益已停止；已自動回村甦醒。離線頭目戰需再次擊敗頭目才能解鎖，普通狩獵出發後仍可掛機。</span>');
             }
         }
         if (survivalPlan.died) _offlineApplySettledDeath();

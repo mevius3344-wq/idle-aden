@@ -1079,16 +1079,39 @@ function hasTeleportRing() {
     return [player.eq.ring1, player.eq.ring2, player.eq.ring3, player.eq.ring4].some(e => e && e.id === 'acc_116')
         || (player.inv && player.inv.some(i => i && i.id === 'acc_116' && (i.cnt || 0) > 0));
 }
-// 傳送：清空當前怪物並重置生怪排程；forceBoss=true 時讓下一次生怪必定為 BOSS
-function doTeleport(forceBoss) {
+// 傳送：同圖移動＋清空當前怪物並重置生怪；forceBoss=true 時讓下一次生怪必定為 BOSS
+// opts.escape=true：自動逃 BOSS（短距退避）；否則手動遠距隨機
+function doTeleport(forceBoss, opts) {
+    opts = opts || {};
     if (typeof npcClanOnLeaveBattleArea === 'function') npcClanOnLeaveBattleArea();
     if (typeof giltasKeepOnLeave === 'function') giltasKeepOnLeave();   // 🌑 v3.4.16 受詛咒聖地內瞬移＝清空重生怪物（吉爾塔斯消失重生）→ 視同離開戰鬥·先做 HP 保留判定（消耗完整的召喚球＋提示·helper 自帶地圖 gate）
     if (typeof playTeleportFx === 'function') { try { playTeleportFx(); } catch (e) {} }   // 🌀 v3.0.102 傳送術特效＋玩家 sprite 暫隱（傳送術技能/手動+自動瞬移卷軸皆經此）
     saveSiegeBossHp();   // 傳送前保存攻城塔/門血量
+    // 🌀 v3.8.499／500：手動＝遠距隨機；自動逃 BOSS＝短距退避（仍清怪）
+    try {
+        if (typeof exploreRandomTeleportOnMap === 'function') {
+            exploreRandomTeleportOnMap({ mode: opts.escape ? 'near' : 'far', escape: !!opts.escape });
+        }
+    } catch (eTp) {}
     mapState.mobs = [null, null, null, null, null];
     mapState.spawnAt = [null, null, null, null, null];
+    mapState.targetIdx = -1;   // 🌀 清鎖定／仇恨
     if(forceBoss) mapState.forceBoss = true;
     mapState.suppressSiegeBoss = !forceBoss;   // 無戒指傳送：必不出現城門/守護塔；持戒指：forceBoss 必定出現
+    // 🌀 v3.8.500：落地短暫無敵（約 2 秒），避免剛落地被殘留／重生怪秒接
+    try { if (typeof grantTpSafe === 'function') grantTpSafe(20); } catch (eSafe) {}
+    // 場戰槽數可能 >5：清完後依練功點重鋪
+    try {
+        if (typeof exploreInitFieldSpawns === 'function' && typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) {
+            let _t0 = (typeof state !== 'undefined' && state && state.ticks) ? state.ticks : 0;
+            exploreInitFieldSpawns(_t0);
+        }
+    } catch (eFs) {}
+    if (opts.escape) {
+        try {
+            if (typeof logSys === 'function') logSys('<span class="text-sky-300">瞬間移動：短暫退避，甩開頭目氣息。</span>');
+        } catch (eLog) {}
+    }
     renderMobs();
 }
 

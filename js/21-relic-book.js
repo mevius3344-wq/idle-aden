@@ -50,15 +50,27 @@ function openRelicBook() {
     if (!player.relicDex) player.relicDex = {};
     if (typeof mergeSharedIntoPlayer === 'function') mergeSharedIntoPlayer('relic');   // 🔄 多開兜底：開書前先併入其他分頁的遺物進度
     if (typeof closeModal === 'function') closeModal();
+    try { if (typeof closeCollectionPanel === 'function') closeCollectionPanel(); } catch (e) {}
     _relicBookOpen = true;
     // 首個「有遺物」的分頁為預設，避免開在空分頁
     let firstCat = EQUIP_CATEGORIES.find(c => (RELIC_CAT_ITEMS[c.key] || []).length > 0);
     if (firstCat && !((RELIC_CAT_ITEMS[_relicBookCat] || []).length > 0)) _relicBookCat = firstCat.key;
     let el = document.getElementById('relic-book'); if (!el) return;
     el.classList.remove('hidden');
+    el.style.display = '';
+    el.style.pointerEvents = '';
+    el.style.visibility = '';
     renderRelicBook();
 }
-function closeRelicBook() { _relicBookOpen = false; let el = document.getElementById('relic-book'); if (el) el.classList.add('hidden'); }
+function closeRelicBook() {
+    _relicBookOpen = false;
+    let el = document.getElementById('relic-book');
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+    }
+}
 function relicBookTab(key) { _relicBookCat = key; renderRelicBook(); }
 function relicBookBackdrop(ev) { if (ev && ev.target && ev.target.id === 'relic-book') closeRelicBook(); }
 

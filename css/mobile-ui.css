@@ -906,10 +906,14 @@
   height: min(62dvh, 480px) !important;
   max-height: min(70dvh, 520px) !important;
 }
-#warehouse-window-frame,
-#item-modal:not(.hidden) {
+#warehouse-window-frame {
   height: min(70dvh, 540px) !important;
   max-height: min(78dvh, 580px) !important;
+}
+/* 🩹 v3.8.445：物品視窗高度改由 style.css 依比對區動態控管，勿鎖死 70dvh 以免比對／販售擠壓 */
+#item-modal:not(.hidden) {
+  height: auto !important;
+  max-height: min(92dvh, 760px) !important;
 }
 :is(#pvp-arena-modal, #pvp-result-modal, #poly-modal, #osiris-box-modal,
     #summon-select-overlay, #pet-evo-overlay, #pet-gear-overlay,

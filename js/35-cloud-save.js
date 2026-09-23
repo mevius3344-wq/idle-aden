@@ -450,7 +450,9 @@
     }
     if (localObj != null) {
       if (name.indexOf('warehouse') === 0) {
-        if (_sharedWealth(localObj) > _sharedWealth(cloudObj)) {
+        // 🌐 P5c：權威開啟時以雲端倉為準，禁止本機較富就反推
+        var _econWh = (typeof econAuthActive === 'function' && econAuthActive());
+        if (!_econWh && _sharedWealth(localObj) > _sharedWealth(cloudObj)) {
           cloudPushShared(name, localObj);
           return false;
         }
@@ -540,7 +542,10 @@
         var wr = _lzGet(wKey);
         if (wr != null && wr !== '') {
           try {
-            cloudPushShared(_sharedName('warehouse', classic), JSON.parse(wr));
+            // 🌐 P5c：經濟權威開啟時不自由覆寫倉庫
+            if (!(typeof econAuthActive === 'function' && econAuthActive())) {
+              cloudPushShared(_sharedName('warehouse', classic), JSON.parse(wr));
+            }
           } catch (e3) {}
         }
       }

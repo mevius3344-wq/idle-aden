@@ -725,14 +725,23 @@ function openCardBook() {
     if (!player.cardDex) player.cardDex = {};
     if (typeof mergeSharedIntoPlayer === 'function' && mergeSharedIntoPlayer('card') && typeof calcStats === 'function') calcStats();   // 🔄 多開兜底：開書前先併入其他分頁的卡片進度（file:// storage 事件不保證觸發）
     if (typeof closeModal === 'function') closeModal();   // 先關掉物品操作彈窗（z-50），避免書頁(z-45)開在其後方
+    try { if (typeof closeCollectionPanel === 'function') closeCollectionPanel(); } catch (e) {}
     _cardBookOpen = true;
     let el = document.getElementById('card-book'); if (!el) return;
     el.classList.remove('hidden');
+    el.style.display = '';
+    el.style.pointerEvents = '';
+    el.style.visibility = '';
     renderCardBook();
 }
 function closeCardBook() {
     _cardBookOpen = false;
-    let el = document.getElementById('card-book'); if (el) el.classList.add('hidden');
+    let el = document.getElementById('card-book');
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+    }
 }
 function cardBookTab(key) { _cardBookRegion = key; renderCardBook(); }
 function cardBookBackdrop(ev) { if (ev && ev.target && ev.target.id === 'card-book') closeCardBook(); }

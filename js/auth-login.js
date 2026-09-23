@@ -103,14 +103,18 @@
   }
 
   function startServerStatsPolling() {
-    refreshServerStats();
+    // 🩹 v3.8.330：延後首包，避免與登入動畫／腳本下載搶連線
     if (_serverStatsTimer) clearInterval(_serverStatsTimer);
-    _serverStatsTimer = setInterval(refreshServerStats, 30000);
+    _serverStatsTimer = setTimeout(function () {
+      refreshServerStats();
+      _serverStatsTimer = setInterval(refreshServerStats, 30000);
+    }, 1800);
   }
 
   function stopServerStatsPolling() {
     if (_serverStatsTimer) {
       clearInterval(_serverStatsTimer);
+      clearTimeout(_serverStatsTimer);
       _serverStatsTimer = null;
     }
   }
@@ -273,6 +277,7 @@
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}
+    // 🩹 v3.8.333：不在選單自動載入（避免卡在「載入 77%」）；按開始遊戲再載
   }
 
   function showLoggedOut() {
@@ -595,6 +600,7 @@
       return;
     }
     setStatus("註冊中……", "ok");
+    wakeServerBeforeAuth().then(function () {
     accountsApiReady().then(function (online) {
       if (!online) {
         if (!saveAccount(account, password, { keepLocalPassword: true })) {
@@ -622,6 +628,7 @@
           setStatus("無法連線伺服器註冊，請稍後再試。", "err");
         });
     });
+    });
   }
 
   function wakeServerBeforeAuth() {
@@ -634,8 +641,18 @@
         return Promise.resolve({ ok: true, local: true });
       }
     } catch (e0) {}
+    // 🩹 v3.8.330：剛 ping 成功過就免再等；否則最多 25s（舊 90s 體感像當掉）
+    try {
+      if (window.GameServerWake && typeof window.GameServerWake.lastOkMs === "function") {
+        var last = Number(window.GameServerWake.lastOkMs()) || 0;
+        if (last && Date.now() - last < 90000) {
+          return Promise.resolve({ ok: true, warm: true });
+        }
+      }
+    } catch (e1) {}
     if (window.GameServerWake && typeof window.GameServerWake.ensureAwake === "function") {
-      return window.GameServerWake.ensureAwake(90000);
+      setStatus("伺服器喚醒中……", "ok");
+      return window.GameServerWake.ensureAwake(25000);
     }
     return Promise.resolve({ ok: true });
   }
@@ -907,7 +924,10 @@
     }
   }
 
-  if (document.readyState === "loading") {
+  // 🩹 v3.8.330：登入 DOM 已在腳本之前，立即 boot，勿等 DOMContentLoaded（會被 5MB+ defer 腳本擋住）
+  if ($("btn-auth-login") || $("account-auth-panel")) {
+    boot();
+  } else if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {
     boot();

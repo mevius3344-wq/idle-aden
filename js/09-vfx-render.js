@@ -7,11 +7,37 @@ const _VFX_ELE_COLOR = { fire:'#ff7a45', water:'#4fc3f7', wind:'#9ccc65', earth:
 const _VFX_PROJECTILE_SKILLS = { sk_illu_mindbreak:'magic' };   // 戰斧投擲是「下一擊」增益→改在攻擊觸發處射斧，不走 cast 樞紐；🏹 v3.2.14 三重矢移除：改在 js/07 命中迴圈射 3 支箭矢序列幀投射物(playArrowFx·快速連發)·不再播 CSS 風彈；✨ v3.2.15 究極光裂移除（用戶明令無 CSS）：本就被下方 SPELL_FX 閘擋住(有三層動態特效)＝死碼·顯式移除防日後 key 改名時 CSS 光彈偷跑回來；✨ v3.5.87 光箭移除：同究極光裂被 SPELL_FX 閘無條件擋住＝死碼
 function _vfxLayer() {
     // 🎚️ v3.0.73 vfx 圖層改掛進 #app-stage（與 item-modal/收集冊/浮動裝備視窗/浮動倉庫 同一 stacking context）→ 其 z-index(35) 才排得進這些 UI(z45~72)之下；先前掛 document.body(root context)時 z-index:45 正值恆蓋在 #app-stage(position:fixed→自成 context·z-auto)之上，使死亡殘影蓋掉所有 UID。#app-stage 為 position:fixed 且無 transform/filter→其 position:fixed 子層仍以「視窗」為容器塊(getBoundingClientRect 螢幕座標定位不變)。
-    let host = document.getElementById('app-stage') || document.body;
+    // 🩹 v3.8.321：combat-hud 的 #game-screen 自身 z:40，VFX 若掛在 app-stage(z35) 會整層被戰場蓋住→傷害數字消失。改掛進 game-screen（內部 z:38＝高於戰場、低於收藏/控制）。
+    let gs = document.getElementById('game-screen');
+    let host = (gs && !gs.classList.contains('hidden') && gs.classList.contains('combat-hud'))
+        ? gs
+        : (document.getElementById('app-stage') || document.body);
     let l = document.getElementById('vfx-layer');
     if (!l) { l = document.createElement('div'); l.id = 'vfx-layer'; host.appendChild(l); }
-    else if (l.parentElement !== host) host.appendChild(l);   // 舊狀態若曾掛 body→搬進 app-stage
+    else if (l.parentElement !== host) host.appendChild(l);
+    // 🩹 v3.9.1：重掛後強制清掉可能殘留的 inline 尺寸，避免 getBoundingClientRect 原點偏掉→技能特效飛出欄外
+    try {
+        l.style.left = '';
+        l.style.top = '';
+        l.style.width = '';
+        l.style.height = '';
+        l.style.transform = '';
+    } catch (eClr) {}
     return l;
+}
+// 🩹 v3.8.496：combat-hud 下 #vfx-layer＝absolute（相對置中的 #game-screen 欄），getBoundingClientRect 仍是螢幕座標。
+//    若直接當 style.left/top → 特效偏到欄外（人物在螢幕正中時最明顯＝「跑到視窗外」）。
+//    一律減 layer 原點轉成 layer 內座標；fixed 全螢幕時原點≈(0,0)行為不變。
+function _vfxLayerOrigin() {
+    try {
+        let l = document.getElementById('vfx-layer') || _vfxLayer();
+        let r = l.getBoundingClientRect();
+        return { x: r.left || 0, y: r.top || 0 };
+    } catch (e) { return { x: 0, y: 0 }; }
+}
+function _vfxToLocal(sx, sy) {
+    let o = _vfxLayerOrigin();
+    return { x: sx - o.x, y: sy - o.y };
 }
 function _vfxClearAll() {   // 🎚️ v3.0.73 換地圖/回城即清空狩獵區殘留特效（死亡殘影 vfx-ghost／法術 vfx-spell／冰凍／怪技能特效）→上一張地圖尚在播放的死亡動畫不會殘留、蓋到村莊或新地圖介面。冰凍/怪技能追蹤 dict 一併清鍵避免孤兒元素。
     try { let l = document.getElementById('vfx-layer'); if (l) while (l.firstChild) l.removeChild(l.firstChild); } catch (e) {}
@@ -31,11 +57,36 @@ function _vfxClearAll() {   // 🎚️ v3.0.73 換地圖/回城即清空狩獵�
 //   基準值@妖魔鬥士（帶高112）：proj 顯示縮放 mScale=1.095；w驅動 內框寬=105。h驅動本就用帶高＝早已固定不變。
 const SPELL_FX_REF_MSCALE_K = 1.095 / 112;   // proj: mScale = refH × 此（帶高112→1.095·與妖魔鬥士當前一致）
 const SPELL_FX_REF_W_K = 105 / 112;          // w驅動: 基準寬 = refH × 此（帶高112→105）
+// 🩹 v3.9.4：技能特效整體縮尺（場戰／手機欄視覺過大）；尺寸公式仍吃帶高基準
+const SPELL_FX_SCALE = 0.72;
 // 📏 v3.3.13 帶高基準正規化：v3.2.80 站立帶鎖 242 時「舊 242＝battle-view 含 p-4→內容 210」→新純帶 242 使 .mob-img-inner 由調校基準 112 默默長到 144(@舞台1:1)
 //    → 凡以「內框高 r.height」推導尺寸的特效(SPELL_FX 三模式/FREEZE_FX/怪技能非錨定)全被放大 1.286×。
 //    正規化＝由 #mob-list 帶高(area-fit 恆 242 css×舞台縮放)推回 112 基準＝真正「與怪無關、只隨舞台等比」(v3.0.21 拍板)·順帶消除靜態 boss-zoom rect(×1.78) 對特效的誤放大；帶不可量→退傳入 rect 高(非 area-fit 舊版面維持原行為)。
 function _fxBandRefH(fallbackH) {
-    try { let ml = document.getElementById('mob-list'); let h = ml ? ml.getBoundingClientRect().height : 0; if (h > 0) return h * (112 / 242); } catch (e) {}
+    try {
+        let ml = document.getElementById('mob-list');
+        let h = ml ? ml.getBoundingClientRect().height : 0;
+        if (h > 0) {
+            let band = h;
+            // 🩹 v3.9.4：場戰／combat-hud 的 #mob-list＝整塊戰場（常 400~900px），不是經典 242 站立帶
+            //    若直接 *112/242 → 特效暴衝。改以戰鬥框寬等比回推「經典帶高」，並硬帽 260。
+            try {
+                let isField = ml.classList.contains('is-field-combat');
+                let gs = document.getElementById('game-screen');
+                let isHud = !!(gs && gs.classList.contains('combat-hud'));
+                if (isField || isHud) {
+                    let bv = document.getElementById('battle-view');
+                    let bw = bv ? bv.getBoundingClientRect().width : 0;
+                    // 經典設計：框寬 800 → 帶高 242
+                    let fromW = (bw > 0) ? (bw * (242 / 800)) : 242;
+                    band = Math.min(h, fromW, 260);
+                } else {
+                    band = Math.min(h, 280);
+                }
+            } catch (eCap) {}
+            return band * (112 / 242);
+        }
+    } catch (e) {}
     return fallbackH;
 }
 const SPELL_FX = {
@@ -71,16 +122,16 @@ const SPELL_FX = {
     '弱化術': { dir:'弱化術', prefix:'2228-0', n:9, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '會心一擊': { dir:'會心一擊', prefix:'2952-0', n:16, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '木乃伊的詛咒': { dir:'木乃伊的詛咒', prefix:'746-0', n:8, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
-    '極光雷電': { dir:'極光雷電', dirPrefix:'170-', dirs:8, n:6, fps:12, blend:'screen', proj:true, nw:122, nh:255, projScale:0.5, ax:0.50, ay:0.50 },
-    '極道落雷': { dir:'極道落雷', prefix:'10-0', n:6, fps:14, blend:'screen', h:2, ax:0.50, ay:0.98 },
+    '極光雷電': { dir:'極光雷電', dirPrefix:'170-', dirs:8, n:6, fps:12, blend:'screen', proj:true, nw:122, nh:255, projScale:0.38, ax:0.50, ay:0.50 },
+    '極道落雷': { dir:'極道落雷', prefix:'10-0', n:6, fps:14, blend:'screen', h:1.55, ax:0.50, ay:0.98 },
     // ⚡ v3.7.52 審判落雷（遺物 克特之盾＋克特之劍·極道落雷升級版）：gfx7004 12幀單向·雷擊發光型→screen；錨點=spr 世界原點(135,198)=落雷著地點
-    '審判落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:2, ax:0.413, ay:0.762 },
+    '審判落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:1.55, ax:0.413, ay:0.762 },
     // ⚡ v3.7.92 致命落雷（sk_holy_lightning·聖晶魔杖 procSkill）：沿用審判落雷的同一組幀，dir 指同資料夾不另存圖檔。
     //   走 procFreeMagicSkill → playSpellFx(sk.n, t)，查表鍵＝技能顯示名，故此處鍵名必須與 DB.skills.sk_holy_lightning.n 完全一致。
-    '致命落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:2, ax:0.413, ay:0.762 },
+    '致命落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:1.55, ax:0.413, ay:0.762 },
     '毒咒': { dir:'毒咒', prefix:'745-0', n:8, fps:14, blend:'screen', h:0.8, ax:0.50, ay:0.55 },
     '沉睡之霧': { dir:'沉睡之霧', prefix:'760-0', n:21, fps:16, blend:'screen', h:0.9, ax:0.50, ay:0.55 },
-    '流星雨': { dir:'流星雨', prefix:'762-0', n:20, fps:16, blend:'screen', h:1.9, ax:0.50, ay:0.88 },
+    '流星雨': { dir:'流星雨', prefix:'762-0', n:20, fps:16, blend:'screen', h:1.45, ax:0.50, ay:0.88 },
     '火箭': { dir:'火箭', dirPrefix:'1583-', dirs:4, n:4, fps:12, blend:'screen', proj:true, nw:31, nh:40, ax:0.50, ay:0.50 },
     '火風暴': { dir:'火風暴', prefix:'1819-0', n:14, fps:14, blend:'screen', h:1.3, ax:0.50, ay:0.55 },
     '烈炎術': { dir:'烈炎術', prefix:'1811-0', n:19, fps:16, blend:'screen', h:1.2, ax:0.50, ay:0.55 },
@@ -92,7 +143,7 @@ const SPELL_FX = {
     '燃燒的火球': { dir:'燃燒的火球', dirPrefix:'171-', dirs:8, n:5, fps:12, blend:'screen', proj:true, nw:43, nh:49, ax:0.50, ay:0.50 },
     '爆裂的火球': { dir:'燃燒的火球', dirPrefix:'171-', dirs:8, n:5, fps:12, blend:'screen', proj:true, nw:43, nh:49, ax:0.50, ay:0.50 },   // 🏺 遺物 爆裂的火球：沿用燃燒的火球 VFX（同 sprite 目錄）
     '疾病術': { dir:'疾病術', prefix:'2230-0', n:11, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
-    '究極光裂術': { dir:'究極光裂術', prefix:'1815-0', layers:['1816-0', '1817-0'], n:21, fps:16, blend:'screen', h:1.9, ax:0.50, ay:0.85 },
+    '究極光裂術': { dir:'究極光裂術', prefix:'1815-0', layers:['1816-0', '1817-0'], n:21, fps:16, blend:'screen', h:1.45, ax:0.50, ay:0.85 },
     '緩速術': { dir:'緩速術', prefix:'752-0', n:8, fps:14, blend:'screen', h:0.85, ax:0.50, ay:0.55 },
     '衝擊之暈': { dir:'衝擊之暈', prefix:'4434-0', n:6, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '起死回生術': { dir:'起死回生術', prefix:'754-0', n:21, fps:16, blend:'screen', h:1.3, ax:0.50, ay:0.55 },
@@ -104,7 +155,7 @@ const SPELL_FX = {
     '魔法封印': { dir:'魔法封印', prefix:'2177-0', n:17, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '魔法消除': { dir:'魔法消除', prefix:'2181-0', n:19, fps:16, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '黑闇之影': { dir:'黑闇之影', prefix:'2175-0', n:8, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
-    '龍捲風': { dir:'龍捲風', prefix:'758-0', n:20, fps:16, h:1.5, ax:0.50, ay:0.82, targetVc:0.9 },   // 🌪️ v3.4.1 補回註冊（v2.7.39 曾註冊·v3.0.101 全量重生時漏列＝施放無動畫）·幾何沿 v2.7.39 拍板「自腳底」·幀重轉原色 20 幀（原部署 luma 淡化版已替換）·塵土實體不加 screen（比照地裂術）
+    '龍捲風': { dir:'龍捲風', prefix:'758-0', n:20, fps:16, h:1.2, ax:0.50, ay:0.82, targetVc:0.9 },   // 🌪️ v3.4.1 補回註冊（v2.7.39 曾註冊·v3.0.101 全量重生時漏列＝施放無動畫）·幾何沿 v2.7.39 拍板「自腳底」·幀重轉原色 20 幀（原部署 luma 淡化版已替換）·塵土實體不加 screen（比照地裂術）
     // 🔮 保留：能量感測(byEle 屬性變體·手動 sense 掛點)
     '能量感測':   { dir: '能量感測',   n: 8, fps: 12, blend: 'screen', h: 0.85, ax: 0.50, ay: 0.55,
                     byEle: { fire: { prefix: '火' }, water: { prefix: '水' }, earth: { prefix: '地' }, wind: { prefix: '風' } } },
@@ -139,7 +190,7 @@ let _deathGhostCount = 0;
 function _preloadDeathFx(name, n) {
     if (_deathFxCache[name]) return _deathFxCache[name];
     let arr = [];
-    for (let i = 0; i < n; i++) { let im = new Image(); im.src = 'assets/anim/' + encodeURIComponent(name) + '/death_effect_' + i + '.png'; arr.push(im); }
+    for (let i = 0; i < n; i++) { let im = new Image(); im.src = ((typeof _mobAnimBase === 'function') ? _mobAnimBase(name) : ('assets/anim/' + encodeURIComponent(name) + '/')) + 'death_effect_' + i + '.png'; arr.push(im); }
     _deathFxCache[name] = arr;
     return arr;
 }
@@ -194,6 +245,7 @@ function playSpellFx(skn, mob, caster) {
         let fxW, fxH, left, top;
         let _computeGeom = () => {
             let _refH = _fxBandRefH(r.height);   // 📏 v3.3.13 尺寸一律用「112 調校基準」帶高(由 #mob-list 正規化·消 v3.2.80 帶長高 112→144 的 1.286× 誤放大)；位置錨定仍用 r(追蹤目標框)
+            let _sc = (typeof SPELL_FX_SCALE === 'number' && SPELL_FX_SCALE > 0) ? SPELL_FX_SCALE : 1;
             if (cfg.proj) {                                                     // 🎯 v3.0.21 投射物型固定尺寸：原生像素 × 帶高基準縮放(不再讀目標怪 body·對所有怪同大小·相當於妖魔鬥士)
                 let mScale = _refH * SPELL_FX_REF_MSCALE_K;                      // 基準帶高(112 等值)×係數＝1.095·隨舞台等比·與怪身高無關
                 let baseW = first.naturalWidth || cfg.nw || 40, baseH = first.naturalHeight || cfg.nh || 40;
@@ -202,8 +254,11 @@ function playSpellFx(skn, mob, caster) {
             }
             else if (cfg.w != null) { fxW = (_refH * SPELL_FX_REF_W_K) * cfg.w; fxH = fxW / ar; }  // 🌋 寬度驅動(地面型)v3.0.21 改帶高基準寬(固定·不隨怪寬)
             else { fxH = _refH * (cfg.h || 1.8); fxW = fxH * ar; }               // ⚡ 高度驅動(範圍型·如落雷)：基準帶高＝固定不隨怪
-            left = (ax - fxW * (cfg.ax != null ? cfg.ax : 0.5)) + 'px';
-            top = (ay - fxH * (cfg.ay != null ? cfg.ay : 0.9)) + 'px';
+            fxW *= _sc; fxH *= _sc;
+            // 🩹 v3.8.496：螢幕點→layer 內座標（combat-hud 欄偏移）
+            let _loc = _vfxToLocal(ax - fxW * (cfg.ax != null ? cfg.ax : 0.5), ay - fxH * (cfg.ay != null ? cfg.ay : 0.9));
+            left = _loc.x + 'px';
+            top = _loc.y + 'px';
         };
         _computeGeom();
         let mkImg = (src, extraCls, blend) => {
@@ -228,7 +283,10 @@ function playSpellFx(skn, mob, caster) {
             let axf = (cfg.ax != null ? cfg.ax : 0.5), ayf = (cfg.ay != null ? cfg.ay : 0.5);   // 投射物錨點(哪一點沿路徑走)
             let el = mkImg(first.src, null, cfg.blend);
             if (_flipX) el.style.transform = 'scaleX(-1)';   // 🎯 4向左側：水平鏡射（NW←NE鏡射·W←E鏡射）
-            el.style.left = (ox - fxW * axf) + 'px'; el.style.top = (oy - fxH * ayf) + 'px';   // 立即置於起點(避免首幀閃在終點)
+            {
+                let _p0 = _vfxToLocal(ox - fxW * axf, oy - fxH * ayf);
+                el.style.left = _p0.x + 'px'; el.style.top = _p0.y + 'px';   // 立即置於起點(避免首幀閃在終點)
+            }
             _spellFxActive[fxKey] = true;
             let dist = Math.hypot(ax - ox, ay - oy);
             let dur = Math.max(140, Math.min(380, dist / 1600 * 1000));         // 飛行時間依距離(近140ms~遠380ms)
@@ -241,7 +299,8 @@ function playSpellFx(skn, mob, caster) {
                     if (_arFallback && first.naturalWidth && first.naturalHeight) { _arFallback = false; _computeGeom(); }   // 🩹 解碼後校正尺寸(採真原生像素)
                     let px = ox + (ax - ox) * t, py = oy + (ay - oy) * t;
                     el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
-                    el.style.left = (px - fxW * axf) + 'px'; el.style.top = (py - fxH * ayf) + 'px';
+                    let _pt = _vfxToLocal(px - fxW * axf, py - fxH * ayf);
+                    el.style.left = _pt.x + 'px'; el.style.top = _pt.y + 'px';
                     let fi = Math.floor(elapsed / frameDur) % cfg.n; if (frames[fi]) el.src = frames[fi].src;   // 途中循環幀
                     if (t < 1) requestAnimationFrame(raf);
                     else { el.remove(); delete _spellFxActive[fxKey]; }
@@ -260,7 +319,39 @@ function playSpellFx(skn, mob, caster) {
         let i = 0, iv = setInterval(() => {
             i++;
             if (i >= cfg.n) { clearInterval(iv); el.remove(); if (sEl) sEl.remove(); extraLayers.forEach(L => L.el.remove()); delete _spellFxActive[fxKey]; return; }
-            if (_arFallback && first.naturalWidth && first.naturalHeight) { _arFallback = false; ar = first.naturalWidth / first.naturalHeight; _computeGeom(); _applyGeom(el); if (sEl) _applyGeom(sEl); extraLayers.forEach(L => _applyGeom(L.el)); }   // 🩹 解碼後重算幾何一次(僅首播命中)
+            // 🩹 v3.8.494：場戰相機／怪位移時每幀重錨目標框，避免特效「跑掉」留在舊螢幕座標
+            try {
+                let slot2 = ml && ml.querySelector('.mob-target[data-uid="' + mob.uid + '"]');
+                let box2 = slot2 && (slot2.querySelector('.mob-img-inner') || slot2.querySelector('.mob-img-wrap') || slot2);
+                if (box2) {
+                    let r2 = box2.getBoundingClientRect();
+                    if (r2.width > 0 && r2.height > 0) {
+                        r = r2;
+                        let _mobImg2 = box2.querySelector('img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
+                        let _anc2 = _mobImgAnchor(_mobImg2);
+                        let _vc2 = (cfg.targetVc != null) ? cfg.targetVc : _anc2.vc;
+                        ax = r.left + r.width * _anc2.hc;
+                        ay = r.top + r.height * _vc2;
+                    }
+                }
+                if (_arFallback && first.naturalWidth && first.naturalHeight) {
+                    _arFallback = false;
+                    ar = first.naturalWidth / first.naturalHeight;
+                }
+                _computeGeom();
+                _applyGeom(el);
+                if (sEl) _applyGeom(sEl);
+                extraLayers.forEach(L => _applyGeom(L.el));
+            } catch (eRe2) {
+                if (_arFallback && first.naturalWidth && first.naturalHeight) {
+                    _arFallback = false;
+                    ar = first.naturalWidth / first.naturalHeight;
+                    _computeGeom();
+                    _applyGeom(el);
+                    if (sEl) _applyGeom(sEl);
+                    extraLayers.forEach(L => _applyGeom(L.el));
+                }
+            }
             el.src = frames[i].src;
             if (sEl && shadowFrames[i]) sEl.src = shadowFrames[i].src;
             extraLayers.forEach(L => { if (L.frames[i]) L.el.src = L.frames[i].src; });
@@ -346,39 +437,66 @@ const SELF_FX = {
     '傳送術':       { dir: '傳送術',     prefix: '169-0', n: 7,  fps: 14, blend: 'screen', h: 0.85, cy: 0.55 },
 };
 let _selfFxActive = {};   // 「技能名|錨點識別」 → true：同技能同錨點同時只保留一個
-function playSelfFx(skn, anchorRect) {   // 🩹 v3.0.95 第2參 anchorRect（選用）：顯式錨點 rect（傭兵治癒疊在被治癒者 sprite 身上）·未傳→原邏輯（玩家 sprite→戰鬥區中央）
+function playSelfFx(skn, anchorRect, opts) {   // 🩹 v3.0.95 第2參 anchorRect；opts.pin＝釘死施放當下座標（傳送術必用·避免瞬移後重錨跑位）
     try {
         if (_vfxMute()) return;
         let cfg = SELF_FX[skn]; if (!cfg) return;
+        opts = opts || {};
+        let pin = !!(opts.pin) || skn === '傳送術';
         // ✨ v3.5.87 去重鍵含錨點：同名技能對不同目標可同時播（修：玩家治癒 vs 傭兵治癒、多傭兵各自治癒在動畫視窗內互吞·只播第一個呼叫者）
-        let _fxKey = skn + '|' + (anchorRect ? (Math.round(anchorRect.left) + ',' + Math.round(anchorRect.top)) : 'self');
+        let _fxKey = skn + '|' + (pin ? 'pin' : (anchorRect ? (Math.round(anchorRect.left) + ',' + Math.round(anchorRect.top)) : 'self'));
         if (_selfFxActive[_fxKey]) return;
         let bv = document.getElementById('battle-view');
         if (!bv) return;
         let r = bv.getBoundingClientRect(); if (r.width === 0 || r.height === 0) return;
-        // 📐 v3.3.12 尺寸基準改「怪物站立帶」#mob-list（area-fit 恆鎖 242px×舞台縮放＝舊條狀框高＝cfg.h 當初調校基準）：
-        //    v3.2.80 戰鬥框改 16:9(450) 後原以 battle-view 高算尺寸→自身 buff/治癒/傳送特效被放大 ~1.86×；帶高恆定不受框形影響。r 仍供無 sprite 錨點時的「定位」fallback（置中要相對整個框）。
-        let _ml0 = document.getElementById('mob-list');
-        let _mr0 = _ml0 && _ml0.getBoundingClientRect();
-        let refH = (_mr0 && _mr0.height > 0) ? _mr0.height : r.height;
+        // 📐 v3.3.12／v3.9.4：尺寸走 _fxBandRefH（場戰勿吃整屏高）再還原成「242 帶」座標（SELF_FX 的 cfg.h 以此調校）＋整體縮尺
+        let refH = _fxBandRefH(r.height) * (242 / 112);
         let layer = _vfxLayer();
         if (layer.childElementCount > 220) return;
         let frames = _preloadFxFrames(cfg.dir, cfg.prefix, cfg.n);
         let first = frames[0];
         let _arFallback = !(first.naturalWidth && first.naturalHeight);   // 🩹 首播未解碼→退 1·解碼後重算一次
         let ar = _arFallback ? 1 : (first.naturalWidth / first.naturalHeight);
+        // 🌀 釘錨（傳送術）：施放瞬間快照螢幕座標；後續幀／解碼重算尺寸只改寬高，不跟瞬移後新位置跑
+        // pinMode: 'foot'＝自腳底往上｜'head'＝頭頂｜'center'＝戰鬥區比例中心
+        let pinCx = null, pinAy = null, pinMode = null;
+        if (pin) {
+            let _pr0 = anchorRect || ((typeof _pmCasterRect === 'function') ? _pmCasterRect() : null);
+            if (_pr0 && _pr0.width > 0) {
+                pinCx = _pr0.left + _pr0.width / 2;
+                pinAy = cfg.overHead ? _pr0.top : _pr0.bottom;
+                pinMode = cfg.overHead ? 'head' : 'foot';
+            } else {
+                let _br0 = bv.getBoundingClientRect();
+                pinCx = _br0.left + _br0.width * (cfg.cx != null ? cfg.cx : 0.5);
+                pinAy = _br0.top + _br0.height * (cfg.cy != null ? cfg.cy : (cfg.overHead ? 0.42 : 0.62));
+                pinMode = 'center';
+            }
+        }
         let fxH, fxW, left, top;
         let _geom = () => {
-            fxH = refH * (cfg.h || 0.5); fxW = fxH * ar;
-            let pr = anchorRect || ((typeof _pmCasterRect === 'function') ? _pmCasterRect() : null);   // 🧝 v3.0.49 玩家變身 sprite 顯示中→特效錨定 sprite 身上（水平置中）；v3.0.95 顯式錨點優先
-            if (pr) {
-                left = (pr.left + pr.width / 2 - fxW / 2) + 'px';
-                top = (cfg.overHead ? (pr.top - fxH * 0.55) : (pr.bottom - fxH)) + 'px';   // 🙏 輔助 buff→疊在 sprite 頭頂上方；治癒→疊在身體(自腳底往上)
+            let _sc = (typeof SPELL_FX_SCALE === 'number' && SPELL_FX_SCALE > 0) ? SPELL_FX_SCALE : 1;
+            fxH = refH * (cfg.h || 0.5) * _sc; fxW = fxH * ar;
+            let sx, sy;
+            if (pin && pinCx != null) {
+                sx = pinCx - fxW / 2;
+                if (pinMode === 'foot') sy = pinAy - fxH;
+                else if (pinMode === 'head') sy = pinAy - fxH * 0.55;
+                else sy = pinAy - fxH / 2;
+            } else {
+                let pr = anchorRect || ((typeof _pmCasterRect === 'function') ? _pmCasterRect() : null);
+                if (pr) {
+                    sx = pr.left + pr.width / 2 - fxW / 2;
+                    sy = cfg.overHead ? (pr.top - fxH * 0.55) : (pr.bottom - fxH);
+                } else {
+                    let br = bv.getBoundingClientRect();
+                    sx = br.left + br.width * (cfg.cx != null ? cfg.cx : 0.5) - fxW / 2;
+                    sy = br.top + br.height * (cfg.cy != null ? cfg.cy : (cfg.overHead ? 0.42 : 0.62)) - fxH / 2;
+                }
             }
-            else {
-                left = (r.left + r.width * (cfg.cx != null ? cfg.cx : 0.5) - fxW / 2) + 'px';
-                top = (r.top + r.height * (cfg.cy != null ? cfg.cy : (cfg.overHead ? 0.42 : 0.62)) - fxH / 2) + 'px';   // 無 sprite→輔助偏上、治癒略偏下
-            }
+            let _loc = _vfxToLocal(sx, sy);
+            left = _loc.x + 'px';
+            top = _loc.y + 'px';
         };
         _geom();
         let el = document.createElement('img');
@@ -391,7 +509,26 @@ function playSelfFx(skn, anchorRect) {   // 🩹 v3.0.95 第2參 anchorRect（�
         let i = 0, iv = setInterval(() => {
             i++;
             if (i >= cfg.n) { clearInterval(iv); el.remove(); delete _selfFxActive[_fxKey]; return; }
-            if (_arFallback && first.naturalWidth && first.naturalHeight) { _arFallback = false; ar = first.naturalWidth / first.naturalHeight; _geom(); el.style.width = fxW + 'px'; el.style.height = fxH + 'px'; el.style.left = left; el.style.top = top; }
+            try {
+                if (!pin) {
+                    // 場戰移動中每幀重錨（治癒／buff）
+                    if (anchorRect && anchorRect._liveWho) {
+                        let lr = (typeof _partyMemberRect === 'function') ? _partyMemberRect(anchorRect._liveWho) : null;
+                        if (lr) anchorRect = lr;
+                    }
+                }
+                if (_arFallback && first.naturalWidth && first.naturalHeight) {
+                    _arFallback = false;
+                    ar = first.naturalWidth / first.naturalHeight;
+                    _geom();
+                    el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
+                    el.style.left = left; el.style.top = top;
+                } else if (!pin) {
+                    _geom();
+                    el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
+                    el.style.left = left; el.style.top = top;
+                }
+            } catch (eRe) {}
             el.src = frames[i].src;
         }, Math.round(1000 / (cfg.fps || 14)));
     } catch (e) {}
@@ -402,8 +539,10 @@ function playTeleportFx() {
     try {
         let cfg = SELF_FX['傳送術'];
         let durMs = cfg ? (cfg.n / (cfg.fps || 14) * 1000) : 500;
+        // 🩹 v3.8.495：先抓腳錨再隱身／清怪——釘死施放當下位置，避免瞬移後特效跟著新座標跑位
+        let pr = (typeof _pmCasterRect === 'function') ? _pmCasterRect() : null;
         _teleportFxUntil = Date.now() + durMs + 80;   // +80ms 緩衝：特效播畢後 sprite 才復現
-        if (typeof playSelfFx === 'function') playSelfFx('傳送術');   // 無 anchorRect→錨定玩家 sprite（_pmCasterRect）·此刻 sprite 尚未隱藏→rect 有效
+        if (typeof playSelfFx === 'function') playSelfFx('傳送術', pr, { pin: true });
     } catch (e) {}
 }
 // 🩹 v3.0.95 隊伍成員「戰場 sprite」錨點：回傳該成員(玩家/傭兵) sprite 的 rect，供 playSelfFx 把治癒特效疊在被治癒者身上；無 sprite/不可見→null（playSelfFx 落回預設錨點）
@@ -425,10 +564,12 @@ function _freezePosition(el, r) {
     let f0 = _preloadFxFrames(FREEZE_FX.dir, 'state', FREEZE_FX.stateN)[0];
     let ar = (f0.naturalWidth && f0.naturalHeight) ? (f0.naturalWidth / f0.naturalHeight) : 1.1;
     let fxH = _fxBandRefH(r.height) * FREEZE_FX.h, fxW = fxH * ar;   // 📏 v3.3.13 尺寸用 112 調校基準(消帶長高誤放大)·位置仍蓋目標框中心
+    if (typeof SPELL_FX_SCALE === 'number' && SPELL_FX_SCALE > 0) { fxH *= SPELL_FX_SCALE; fxW *= SPELL_FX_SCALE; }
     let cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.5;   // 幾何中心蓋住身體
     el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
-    el.style.left = (cx - fxW * FREEZE_FX.ax) + 'px';
-    el.style.top = (cy - fxH * FREEZE_FX.ay) + 'px';
+    let _loc = _vfxToLocal(cx - fxW * FREEZE_FX.ax, cy - fxH * FREEZE_FX.ay);
+    el.style.left = _loc.x + 'px';
+    el.style.top = _loc.y + 'px';
 }
 function _updateFreezeFx() {
     try {
@@ -507,7 +648,8 @@ function _updateMobSkillFx() {
                     if (_br.width > 0) {
                         let _sx = _br.width / cfg.anchored.bw, _sy = _br.height / cfg.anchored.bh;
                         s.el.style.width = ((f0.naturalWidth || 1) * _sx) + 'px'; s.el.style.height = ((f0.naturalHeight || 1) * _sy) + 'px';
-                        s.el.style.left = (_br.left + cfg.anchored.ox * _sx) + 'px'; s.el.style.top = (_br.top + cfg.anchored.oy * _sy) + 'px';
+                        let _aloc = _vfxToLocal(_br.left + cfg.anchored.ox * _sx, _br.top + cfg.anchored.oy * _sy);
+                        s.el.style.left = _aloc.x + 'px'; s.el.style.top = _aloc.y + 'px';
                         if (seq[fi]) s.el.src = seq[fi].src;
                         if (s.el2 && a.skillFx.start2) {   // 🔥 v2.7.41 第二特效層(不死鳥 skill_effect2)：與 start 同畫布(--multi)→同幾何同錨定·同步幀
                             s.el2.style.width = s.el.style.width; s.el2.style.height = s.el.style.height;
@@ -527,6 +669,7 @@ function _updateMobSkillFx() {
             }
             let ar = (f0.naturalWidth && f0.naturalHeight) ? (f0.naturalWidth / f0.naturalHeight) : 1.5;
             let fxH = _fxBandRefH(r.height) * (cfg.h || 1.6), fxW = fxH * ar;   // 📏 v3.3.13 尺寸用 112 調校基準(消帶長高誤放大)·cfg.h 全在 112 基準下逐怪調校
+            if (typeof SPELL_FX_SCALE === 'number' && SPELL_FX_SCALE > 0) { fxH *= SPELL_FX_SCALE; fxW *= SPELL_FX_SCALE; }
             let cx = r.left + r.width * 0.5, cy;
             if (cfg.feet) {   // 🔥 地面型(敵人施法火環)：錨在本體圖「不透明區底部」＝真實腳底(bc 逐怪逐幀動態偵測·統一畫布 idle 腳底非畫布底也精準)·v2.7.26
                 let _bimg = box.querySelector('img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
@@ -535,7 +678,8 @@ function _updateMobSkillFx() {
             } else cy = r.top + r.height * 0.5;   // 身體中心(DK/卡瑞 火焰爆發)
             let ay = (cfg.ay != null) ? cfg.ay : 0.55;
             s.el.style.width = fxW + 'px'; s.el.style.height = fxH + 'px';
-            s.el.style.left = (cx - fxW * 0.5) + 'px'; s.el.style.top = (cy - fxH * ay) + 'px';
+            let _mloc = _vfxToLocal(cx - fxW * 0.5, cy - fxH * ay);
+            s.el.style.left = _mloc.x + 'px'; s.el.style.top = _mloc.y + 'px';
             if (seq[fi]) s.el.src = seq[fi].src;
         }
     } catch (e) {}
@@ -567,7 +711,14 @@ function _vfxFlush() {
             if (!slot) continue;
             let box = slot.querySelector('.mob-img-inner') || slot.querySelector('.mob-img-wrap') || slot;   // 🎯 v2.6.41 VFX 錨定「圖層 .mob-img-inner」(帶 translateY/scale·getBoundingClientRect 反映實際位置) 而非「容器 .mob-img-wrap」→修 v2.6.39 單排景深(後排上移30px/前排放大1.55)後 死亡殘影/擊殺特效/傷害數字 錯位
             let r = box.getBoundingClientRect();
-            if (r.width === 0) continue;
+            // 🩹 v3.8.317：場戰卡量測偶發 0×0→退回整卡／畫面中央，勿直接丟棄（_vfxHp 已推進＝永遠補不回）
+            if (!(r.width > 0 && r.height > 0)) r = slot.getBoundingClientRect();
+            if (!(r.width > 0 && r.height > 0)) {
+                let bv = document.getElementById('battle-view');
+                let br = bv ? bv.getBoundingClientRect() : null;
+                if (br && br.width > 0) r = { left: br.left + br.width * 0.5 - 24, top: br.top + br.height * 0.42, width: 48, height: 64 };
+                else continue;
+            }
             reads.push({ p: p, cx: r.left + r.width / 2, top: r.top, h: r.height });
         }
         for (const it of reads) {
@@ -598,7 +749,10 @@ function _vfxNumber(x, y, dmg, ele, big) {
     let el = document.createElement('div');
     let isMiss = ele === 'miss';
     el.className = 'vfx-dmg' + (big ? ' vfx-crit' : '') + (big === 'crit' ? ' vfx-critical' : (big === 'heavy' ? ' vfx-heavy' : '')) + (isMiss ? ' vfx-miss' : '');
-    el.style.left = x + 'px'; el.style.top = y + 'px';
+    // 🩹 v3.8.321／496：螢幕座標→layer 內座標（combat-hud 欄偏移）
+    let layer = _vfxLayer();
+    let _loc = _vfxToLocal(x, y);
+    el.style.left = _loc.x + 'px'; el.style.top = _loc.y + 'px';
     el.style.color = isMiss ? 'rgba(203,213,225,.78)' : (big === 'crit' ? '#ff3b30' : (big === 'heavy' ? '#ffd54f' : (_VFX_ELE_COLOR[ele] || '#f1f5f9')));   // 未命中淡灰／爆擊大紅／重擊大金／其餘依屬性
     el.style.fontSize = (isMiss ? 14 : (big ? 32 : 20)) + 'px';   // 未命中刻意較小；傷害飄字保留強弱差異
     const dmgText = dmg >= 10000 ? (dmg / 1000).toFixed(1) + 'k' : ('' + dmg);
@@ -613,7 +767,7 @@ function _vfxNumber(x, y, dmg, ele, big) {
     } else {
         el.textContent = dmgText;
     }
-    _vfxLayer().appendChild(el);
+    layer.appendChild(el);
     el.addEventListener('animationend', () => el.remove(), { once: true });
     setTimeout(() => { if (el.parentNode) el.remove(); }, 1400);
 }
@@ -621,12 +775,13 @@ function _vfxNumber(x, y, dmg, ele, big) {
 const _VFX_BLOOD_COLORS = ['#7f1d1d', '#991b1b', '#b91c1c', '#dc2626', '#ef4444'];
 function _vfxBlood(cx, cy, big) {
     let layer = _vfxLayer();
+    let _loc = _vfxToLocal(cx, cy);
     let n = big ? (8 + (Math.random() * 5 | 0)) : (4 + (Math.random() * 3 | 0));   // 爆擊/重擊 8~12·一般 4~6（不用太多）
     for (let i = 0; i < n; i++) {
         let sp = document.createElement('div'); sp.className = 'vfx-blood';
         let sz = 1.3 + Math.random() * (big ? 2.1 : 1.4);   // 小顆粒：一般 1.3~2.7·爆擊 1.3~3.4
         sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-        sp.style.left = cx + 'px'; sp.style.top = cy + 'px';
+        sp.style.left = _loc.x + 'px'; sp.style.top = _loc.y + 'px';
         sp.style.background = _VFX_BLOOD_COLORS[(Math.random() * _VFX_BLOOD_COLORS.length) | 0];
         layer.appendChild(sp);
         let ang = Math.PI * 2 * Math.random();
@@ -718,7 +873,8 @@ function vfxKill(mob) {
                     let _ir = _img.getBoundingClientRect();
                     let _grx = _ir.width > 0 ? (_ir.left + _ir.width / 2) : bcx, _gry = _ir.width > 0 ? (_ir.top + _ir.height / 2) : bcy;
                     let _grw = _ir.width > 0 ? _ir.width : r.width, _grh = _ir.width > 0 ? _ir.height : r.height;
-                    gh.style.left = _grx + 'px'; gh.style.top = _gry + 'px';   // 殘影＝整張圖複製→定位本體 img 中心以完整覆蓋原圖(對齊)
+                    let _gloc = _vfxToLocal(_grx, _gry);
+                    gh.style.left = _gloc.x + 'px'; gh.style.top = _gloc.y + 'px';   // 殘影＝整張圖複製→定位本體 img 中心以完整覆蓋原圖(對齊)
                     gh.style.width = _grw + 'px'; gh.style.height = _grh + 'px';
                     gh.style.transformOrigin = (_anc.hc * 100).toFixed(1) + '% ' + (_anc.vc * 100).toFixed(1) + '%';   // 🎯 v2.6.45 放大自「怪物身體中心」擴散(非方框中心)→白閃由怪身發散
                     layer.appendChild(gh);
@@ -756,8 +912,9 @@ function vfxKill(mob) {
                     let _fgDone = false; let _fgRelease = () => { if (_fgDone) return; _fgDone = true; _deathGhostCount = Math.max(0, _deathGhostCount - 1); };
                     let gh2 = document.createElement('img'); gh2.className = 'vfx-ghost'; gh2.src = _img.src;
                     let _ir2 = _img.getBoundingClientRect();
-                    gh2.style.left = (_ir2.width > 0 ? (_ir2.left + _ir2.width / 2) : bcx) + 'px'; gh2.style.top = (_ir2.width > 0 ? (_ir2.top + _ir2.height / 2) : bcy) + 'px';
-                    gh2.style.width = (_ir2.width > 0 ? _ir2.width : r.width) + 'px'; gh2.style.height = (_ir2.width > 0 ? _ir2.height : r.height) + 'px';
+                    let _g2loc = _vfxToLocal(_ir2.width > 0 ? (_ir2.left + _ir2.width / 2) : bcx, _ir2.width > 0 ? (_ir2.top + _ir2.height / 2) : bcy);
+                    gh2.style.left = _g2loc.x + 'px'; gh2.style.top = _g2loc.y + 'px';
+                    gh2.style.width = (_ir2.width > 0 ? _ir2.width : r.width) + 'px'; gh2.style.height = (_ir2.height > 0 ? _ir2.height : r.height) + 'px';
                     layer.appendChild(gh2);
                     try { gh2.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, easing: 'ease-out' }).onfinish = () => { gh2.remove(); _fgRelease(); }; } catch (e) { gh2.remove(); _fgRelease(); }
                     setTimeout(() => { try { if (gh2.isConnected) gh2.remove(); } catch (e) {} _fgRelease(); }, 900);   // 保險回收
@@ -772,7 +929,8 @@ function vfxKill(mob) {
                     let de = document.createElement('img'); de.className = 'vfx-spell'; de.style.mixBlendMode = 'screen';
                     de.src = _dfF[0].src;
                     de.style.width = (_dfCfg.ew * _dsx) + 'px'; de.style.height = (_dfCfg.eh * _dsy) + 'px';
-                    de.style.left = (r.left + _dfCfg.anchored.ox * _dsx) + 'px'; de.style.top = (r.top + _dfCfg.anchored.oy * _dsy) + 'px';
+                    let _dloc = _vfxToLocal(r.left + _dfCfg.anchored.ox * _dsx, r.top + _dfCfg.anchored.oy * _dsy);
+                    de.style.left = _dloc.x + 'px'; de.style.top = _dloc.y + 'px';
                     layer.appendChild(de);
                     let _dfi = 0, _dfint = setInterval(() => {
                         _dfi++;
@@ -790,7 +948,8 @@ function vfxKill(mob) {
             let bv = document.getElementById('battle-view'); let br = bv && bv.getBoundingClientRect();
             if (br && br.width > 0) {
                 let fl = document.createElement('div'); fl.className = 'vfx-areaflash';
-                fl.style.left = br.left + 'px'; fl.style.top = br.top + 'px'; fl.style.width = br.width + 'px'; fl.style.height = br.height + 'px';
+                let _floc = _vfxToLocal(br.left, br.top);
+                fl.style.left = _floc.x + 'px'; fl.style.top = _floc.y + 'px'; fl.style.width = br.width + 'px'; fl.style.height = br.height + 'px';
                 fl.style.background = 'radial-gradient(circle, rgba(255,255,255,.6), rgba(255,213,79,.25) 45%, rgba(255,213,79,0) 75%)';
                 fl.style.animation = 'vfxBossFlash .7s ease-out forwards';
                 layer.appendChild(fl); fl.addEventListener('animationend', () => fl.remove(), { once: true }); setTimeout(() => { if (fl.parentNode) fl.remove(); }, 1200);
@@ -808,10 +967,12 @@ function vfxLevelUp() {
         if (!r || r.width === 0) return;
         let cx = r.left + r.width / 2, cy = r.top + r.height * 0.5;
         let layer = _vfxLayer();
+        let _cxy = _vfxToLocal(cx, cy);
         if (bv && bv.getBoundingClientRect().width > 0) {
             let br = bv.getBoundingClientRect();
             let fl = document.createElement('div'); fl.className = 'vfx-areaflash';
-            fl.style.left = br.left + 'px'; fl.style.top = br.top + 'px'; fl.style.width = br.width + 'px'; fl.style.height = br.height + 'px';
+            let _floc = _vfxToLocal(br.left, br.top);
+            fl.style.left = _floc.x + 'px'; fl.style.top = _floc.y + 'px'; fl.style.width = br.width + 'px'; fl.style.height = br.height + 'px';
             fl.style.background = 'radial-gradient(circle, rgba(255,213,79,.42), rgba(255,213,79,0) 70%)';
             fl.style.animation = 'vfxLvFlash .9s ease-out forwards';
             layer.appendChild(fl); fl.addEventListener('animationend', () => fl.remove(), { once: true }); setTimeout(() => { if (fl.parentNode) fl.remove(); }, 1500);
@@ -819,12 +980,12 @@ function vfxLevelUp() {
         for (let i = 0; i < 2; i++) {
             let ring = document.createElement('div'); ring.className = 'vfx-lvring';
             let sz = 90 + i * 44;
-            ring.style.left = cx + 'px'; ring.style.top = cy + 'px'; ring.style.width = sz + 'px'; ring.style.height = sz + 'px';
+            ring.style.left = _cxy.x + 'px'; ring.style.top = _cxy.y + 'px'; ring.style.width = sz + 'px'; ring.style.height = sz + 'px';
             ring.style.animation = 'vfxLvRing ' + (0.7 + i * 0.15) + 's ease-out forwards';
             layer.appendChild(ring); ring.addEventListener('animationend', () => ring.remove(), { once: true }); setTimeout(() => { if (ring.parentNode) ring.remove(); }, 1500);
         }
         let t = document.createElement('div'); t.className = 'vfx-lvtext';
-        t.style.left = cx + 'px'; t.style.top = cy + 'px'; t.style.fontSize = '26px';
+        t.style.left = _cxy.x + 'px'; t.style.top = _cxy.y + 'px'; t.style.fontSize = '26px';
         t.textContent = 'LEVEL UP!  Lv.' + player.lv;
         t.style.animation = 'vfxLvText 1.5s ease-out forwards';
         layer.appendChild(t); t.addEventListener('animationend', () => t.remove(), { once: true }); setTimeout(() => { if (t.parentNode) t.remove(); }, 2200);
@@ -832,7 +993,7 @@ function vfxLevelUp() {
         for (let i = 0; i < n; i++) {
             let sp = document.createElement('div'); sp.className = 'vfx-particle';
             let sz = 4 + Math.random() * 4; sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-            sp.style.left = cx + 'px'; sp.style.top = cy + 'px'; sp.style.background = '#ffd54f'; sp.style.boxShadow = '0 0 7px #ffca28';
+            sp.style.left = _cxy.x + 'px'; sp.style.top = _cxy.y + 'px'; sp.style.background = '#ffd54f'; sp.style.boxShadow = '0 0 7px #ffca28';
             layer.appendChild(sp);
             let ang = Math.PI * 2 * (i / n) + Math.random() * 0.4; let dist = 60 + Math.random() * 70;
             let dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist;
@@ -872,7 +1033,8 @@ function _vfxProjectile(rect, ele) {
         let col = isAxe ? '#cbd5e1' : (_VFX_ELE_COLOR[ele] || '#ce93d8');
         let orb = document.createElement('div'); orb.className = 'vfx-particle';
         let osz = isAxe ? 18 : 15; orb.style.width = osz + 'px'; orb.style.height = osz + 'px';
-        orb.style.left = sx + 'px'; orb.style.top = sy + 'px';
+        let _oloc = _vfxToLocal(sx, sy);
+        orb.style.left = _oloc.x + 'px'; orb.style.top = _oloc.y + 'px';
         orb.style.background = isAxe ? 'radial-gradient(circle, #f8fafc 25%, #94a3b8 78%, rgba(0,0,0,0) 100%)' : 'radial-gradient(circle, #fff 10%, ' + col + ' 55%, rgba(0,0,0,0) 100%)';
         orb.style.boxShadow = isAxe ? '0 0 8px #cbd5e1' : ('0 0 14px ' + col + ', 0 0 26px ' + col);
         layer.appendChild(orb);
@@ -885,10 +1047,11 @@ function _vfxProjectile(rect, ele) {
         );
         anim.onfinish = () => {
             orb.remove();
+            let _tloc = _vfxToLocal(tx, ty);
             for (let i = 0; i < 4; i++) {
                 let sp = document.createElement('div'); sp.className = 'vfx-particle';
                 let sz = 3 + Math.random() * 3; sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-                sp.style.left = tx + 'px'; sp.style.top = ty + 'px'; sp.style.background = col; sp.style.boxShadow = '0 0 5px ' + col;
+                sp.style.left = _tloc.x + 'px'; sp.style.top = _tloc.y + 'px'; sp.style.background = col; sp.style.boxShadow = '0 0 5px ' + col;
                 layer.appendChild(sp);
                 let ang = Math.PI * 2 * Math.random(), dist = 16 + Math.random() * 20;
                 let ex = Math.cos(ang) * dist, ey = Math.sin(ang) * dist;
@@ -945,7 +1108,8 @@ function playArrowFx(who, target, delayMs) {
             let img = _arrowFxCache[_dir]; if (!img) return;
             let el = document.createElement('img');
             el.className = 'vfx-arrow'; el.src = img.src; el.alt = ''; el.draggable = false;
-            el.style.left = sx + 'px'; el.style.top = sy + 'px';
+            let _sloc = _vfxToLocal(sx, sy);
+            el.style.left = _sloc.x + 'px'; el.style.top = _sloc.y + 'px';
             layer.appendChild(el);
             let dx = tx - sx, dy = ty - sy;
             el.animate(
@@ -966,8 +1130,9 @@ function vfxRareDrop(name) {
         if (!rect) return;
         let cx = rect.left + rect.width / 2, cy = rect.top + rect.height * 0.4;
         let layer = _vfxLayer();
+        let _rloc = _vfxToLocal(cx, cy);
         let t = document.createElement('div'); t.className = 'vfx-lvtext';
-        t.style.left = cx + 'px'; t.style.top = cy + 'px'; t.style.fontSize = '20px'; t.style.color = '#ffe08a';
+        t.style.left = _rloc.x + 'px'; t.style.top = _rloc.y + 'px'; t.style.fontSize = '20px'; t.style.color = '#ffe08a';
         t.textContent = '✦ ' + (name || '稀有掉落') + ' ✦';
         t.style.animation = 'vfxLvText 1.6s ease-out forwards';
         layer.appendChild(t); t.addEventListener('animationend', () => t.remove(), { once: true }); setTimeout(() => { if (t.parentNode) t.remove(); }, 2300);
@@ -975,7 +1140,7 @@ function vfxRareDrop(name) {
         for (let i = 0; i < n; i++) {
             let sp = document.createElement('div'); sp.className = 'vfx-particle';
             let sz = 4 + Math.random() * 4; sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-            sp.style.left = cx + 'px'; sp.style.top = cy + 'px'; sp.style.background = '#ffe082'; sp.style.boxShadow = '0 0 8px #ffca28, 0 0 14px #ffb300';
+            sp.style.left = _rloc.x + 'px'; sp.style.top = _rloc.y + 'px'; sp.style.background = '#ffe082'; sp.style.boxShadow = '0 0 8px #ffca28, 0 0 14px #ffb300';
             layer.appendChild(sp);
             let ang = Math.PI * 2 * (i / n) + Math.random() * 0.4, dist = 40 + Math.random() * 55;
             let dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 8;
@@ -1282,8 +1447,10 @@ function vfxBossEntrance(mob, opts) {
         let r = bv.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return;   // 戰鬥區不可見（村莊）→不播
         let layer = _vfxLayer();
-        let cx = r.left + r.width / 2, cy = r.top + r.height * 0.55;
-        let boxCss = 'position:absolute;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;pointer-events:none;border-radius:6px;';
+        let _bloc = _vfxToLocal(r.left, r.top);
+        let _cloc = _vfxToLocal(r.left + r.width / 2, r.top + r.height * 0.55);
+        let cx = _cloc.x, cy = _cloc.y;
+        let boxCss = 'position:absolute;left:' + _bloc.x + 'px;top:' + _bloc.y + 'px;width:' + r.width + 'px;height:' + r.height + 'px;pointer-events:none;border-radius:6px;';
 
         // 1) 強力螢幕震動（#battle-view·rect 已於震動前讀取→overlay 停靜止位）
         bv.classList.remove('vfx-bossshake'); void bv.offsetWidth; bv.classList.add('vfx-bossshake');
@@ -1317,7 +1484,7 @@ function vfxBossEntrance(mob, opts) {
         let banner = document.createElement('div');
         banner.className = 'vfx-boss-banner';
         banner.style.left = cx + 'px';
-        banner.style.top = (r.top + r.height * 0.30) + 'px';
+        banner.style.top = _vfxToLocal(0, r.top + r.height * 0.30).y + 'px';
         banner.style.color = cfg.a;
         banner.style.textShadow = '0 0 10px ' + cfg.a + ', 0 0 24px ' + cfg.b + ', 0 2px 5px #000';
         banner.innerHTML = '<div class="vfx-boss-sub">' + ((opts && opts.sub) || '◈　頭 目 降 臨　◈') + '</div><div class="vfx-boss-name">' + ((opts && opts.name) || ((cfg.label || mob.n) + '　現身！')) + '</div>';   // 🌅 v3.4.95 opts 覆寫名條（變身自訂文字用）
@@ -1348,8 +1515,10 @@ function vfxBossRage(mob) {
         let r = bv.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return;
         let layer = _vfxLayer();
-        let cx = r.left + r.width / 2, cy = r.top + r.height * 0.55;
-        let boxCss = 'position:absolute;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;pointer-events:none;border-radius:6px;';
+        let _bloc = _vfxToLocal(r.left, r.top);
+        let _cloc = _vfxToLocal(r.left + r.width / 2, r.top + r.height * 0.55);
+        let cx = _cloc.x, cy = _cloc.y;
+        let boxCss = 'position:absolute;left:' + _bloc.x + 'px;top:' + _bloc.y + 'px;width:' + r.width + 'px;height:' + r.height + 'px;pointer-events:none;border-radius:6px;';
         let a = '#fb3b45', b = '#7f1018';
 
         bv.classList.remove('vfx-bossshake'); void bv.offsetWidth; bv.classList.add('vfx-bossshake');
@@ -1391,7 +1560,7 @@ function vfxBossRage(mob) {
         let banner = document.createElement('div');
         banner.className = 'vfx-boss-banner vfx-rage-banner';
         banner.style.left = cx + 'px';
-        banner.style.top = (r.top + r.height * .30) + 'px';
+        banner.style.top = _vfxToLocal(0, r.top + r.height * .30).y + 'px';
         banner.style.color = '#ffb4b9';
         banner.style.textShadow = '0 0 8px #fff1a8, 0 0 18px ' + a + ', 0 0 34px ' + b + ', 0 2px 5px #000';
         banner.innerHTML = '<div class="vfx-boss-sub">◆　頭 目 狂 暴　◆</div><div class="vfx-boss-name">' + (cfg.label || mob.n) + '　陷入狂暴！</div>';
@@ -1450,6 +1619,60 @@ function toggleVfxNumPref() {
     setVfxNumOn(!!window.__vfxNumOff);
 }
 
+// 🪪 顯示玩家 ID（人物頭上 .pm-name）：設定分頁開關，本機共用
+const _PLAYER_ID_PREF_KEY = 'lineage_show_player_id';
+function _applyPlayerIdPref() {
+    let show = true;
+    try {
+        let s = localStorage.getItem(_PLAYER_ID_PREF_KEY);
+        if (s !== null) show = (s === '1');
+    } catch (e) {}
+    window.__showPlayerId = show;
+    let cb = document.getElementById('set-player-id-on');
+    if (cb) cb.checked = show;
+    try { document.body.classList.toggle('hide-player-id', !show); } catch (e2) {}
+    try { if (typeof _playerNameplateApply === 'function') _playerNameplateApply(); } catch (e3) {}
+}
+function setShowPlayerId(on) {
+    try { localStorage.setItem(_PLAYER_ID_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+    _applyPlayerIdPref();
+}
+function _playerNameplateApply() {
+    let el = (typeof _pmState !== 'undefined' && _pmState) ? _pmState.el : null;
+    if (!el) return;
+    let nm = el.querySelector('.pm-name');
+    if (!nm) {
+        nm = document.createElement('div');
+        nm.className = 'pm-name';
+        el.appendChild(nm);
+    }
+    let show = (typeof window.__showPlayerId === 'undefined') ? true : !!window.__showPlayerId;
+    nm.style.display = show ? '' : 'none';
+    if (!show) return;
+    let text = (typeof player !== 'undefined' && player && player.name) ? String(player.name) : '未命名';
+    if (nm.textContent !== text) nm.textContent = text;
+    try {
+        if (typeof pvpAlignmentColor === 'function' && player && player.name)
+            nm.style.color = pvpAlignmentColor(player.alignmentValue);
+        else nm.style.color = '';
+    } catch (eC) {}
+    let bd = (_pmState.imgs && _pmState.imgs.bd) ? _pmState.imgs.bd : null;
+    let h = 0;
+    try { h = (bd && (bd.offsetHeight || bd.clientHeight || 0)) || 0; } catch (eH) {}
+    if (!(h > 0)) {
+        try { h = (bd && bd.naturalHeight) ? Math.min(336, bd.naturalHeight) : 96; } catch (eH2) { h = 96; }
+    }
+    // 🩹 v3.8.474：貼近頭頂（畫布上方多透明空白，勿用整段高度）
+    nm.style.bottom = Math.round(Math.max(36, h * 0.62)) + 'px';
+    nm.style.left = '50%';
+    let flip = false;
+    try {
+        if (el.classList.contains('q-face-d0') || el.classList.contains('q-face-d6') || el.classList.contains('q-face-d7')) flip = true;
+        else if (/scaleX\s*\(\s*-1\s*\)/.test(String(el.style.transform || ''))) flip = true;
+    } catch (eF) {}
+    nm.style.transform = flip ? 'translateX(-50%) scaleX(-1)' : 'translateX(-50%)';
+}
+
 // ✨ VFX：包裝 castSkill → 對本次「攻擊魔法」施法中掉血的目標各射一發拋射物（用 HP 差比對，與內部實作無關；僅有屬性、非武器/投擲類技能觸發）
 if (typeof castSkill === 'function' && !castSkill._vfxWrapped) {
     let _vfxOrigCastSkill = castSkill;
@@ -1480,6 +1703,7 @@ function _renderMobsImpl() {
     let _back = backSlotsActive();                                   // 🆕 五格模式：原三格(前排)＋後排兩格
     let _fieldSlots = 0;
     try { if (typeof exploreFieldSlotCount === 'function') _fieldSlots = exploreFieldSlotCount() || 0; } catch (eFs2) {}
+    // 🩹 v3.8.361：場戰關閉時維持舊版 3／5 格，勿用 world-scroll 硬灌場戰槽數
     let _order;
     if (_fieldSlots > 0) {
         // 🚀 場戰只繪製鏡頭附近＋目前目標（避免 80 格整列 DOM／動畫拖死主執行緒）
@@ -1494,6 +1718,12 @@ function _renderMobsImpl() {
             } catch (eNear) {}
             if (_near || _i === _tgt) _order.push(_i);
         }
+        // 🩹 同組 uid 固定排序→index 不因「誰先進畫面」跳動→減少整列重建砍動畫
+        _order.sort(function (a, b) {
+            let ua = (mapState.mobs[a] && mapState.mobs[a].uid) || a;
+            let ub = (mapState.mobs[b] && mapState.mobs[b].uid) || b;
+            return String(ua).localeCompare(String(ub));
+        });
     } else {
         _order = (_back ? [0, 1, 2, 3, 4] : [0, 1, 2]);
     }
@@ -1502,8 +1732,15 @@ function _renderMobsImpl() {
         let m = mapState.mobs[i];
         let _rowCls = (_fieldSlots > 0) ? '' : ((i >= 3) ? ' mob-back' : (_back ? ' mob-front' : ''));   // 場戰不走前後排 flex
         if (m) {
-            let act = (i === mapState.targetIdx) ? 'active' : '';
-            let _mi = mobStillImg(m.n, m.img, true);   // 🎬 戰鬥初始幀：有動畫→優先 spawn_0（無 spawn 退 idle_0·再退舊靜態）；無動畫→舊靜態
+            let act = (_fieldSlots > 0) ? '' : ((i === mapState.targetIdx) ? 'active' : '');
+            // 🩹 v3.8.317 場戰：靜態幀鎖 idle_0（勿 preferSpawn——探測完成會改字串→outerHTML 砍動畫）
+            let _mi = (_fieldSlots > 0) ? mobStillImg(m.n, m.img, false) : mobStillImg(m.n, m.img, true);   // 🎬 戰鬥初始幀：有動畫→優先 spawn_0（無 spawn 退 idle_0·再退舊靜態）；無動畫→舊靜態
+            // 🩹 v3.8.359：場戰有經典 anim 的怪勿把 icons 塞進 data-fb（onerror 一退就整場靜態）
+            if (_fieldSlots > 0 && typeof MOB_ANIM_NAMES !== 'undefined' && MOB_ANIM_NAMES.has(m.n)) {
+                try {
+                    _mi.fb = (_mi.fb || []).filter(function (u) { return u && String(u).indexOf('/icons/') < 0; });
+                } catch (eFb0) { _mi.fb = []; }
+            }
             let _qSrc = null;
             try {
                 if (typeof qBattleSkinOn === 'function' && qBattleSkinOn() && typeof qMobSpriteFor === 'function') {
@@ -1516,7 +1753,11 @@ function _renderMobsImpl() {
             // 🎯 v2.7.30 頭目受擊門檻（用戶要求）：頭目「只有被 重擊(_vfxBig='heavy') 或 爆擊(_vfxBig='crit')」才播 hurt——一般命中不打斷頭目的待機/攻擊/技能動作，維持頭目氣勢；非頭目維持「任何命中都播」。⚠️ _vfxBig 由本幀攻擊設(js/03:818 getPhysicalDmg 樞紐)·須在下一行 _vfxQueueDmg 重設它「之前」判斷。
             if (m.justHit && MOB_ANIM_NAMES.has(m.n) && (!m.boss || m._vfxBig === 'crit' || m._vfxBig === 'heavy' || m._spellHurt)) {
                 if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(m.n)) { if (typeof _mobAnimTrigger === 'function') _mobAnimTrigger(m, 'hurt'); }   // 🧭 v3.2.11 八方向怪：cache 分方向存(通用 cache 為空)→逕觸發受擊(該怪必有 hurt·_mob8Apply 從方向 cache 取幀)
-                else { let _ha = _mobAnimCache[m.n]; if (_ha && _ha !== 'probing' && _ha.hurt && typeof _mobAnimTrigger === 'function') _mobAnimTrigger(m, 'hurt'); }
+                // 🩹 v3.8.343：探測中／失敗也觸發 hurt（直連 hurt_N 換幀；舊制等 cache.hurt 永遠不播）
+                else if (typeof _mobAnimTrigger === 'function') {
+                    let _ha = _mobAnimCache[m.n];
+                    if (!_ha || _ha === 'probing' || _ha.hurt) _mobAnimTrigger(m, 'hurt');
+                }
             }   // 🎬 v3.0.14 _spellHurt：法術傷害也讓「頭目」播 hurt（一般怪本就任何命中都播·物理維持 v2.7.30 爆擊/重擊門檻·DoT/反射不標記→頭目不因持續傷害狂顫）
             try { _vfxQueueDmg(m); } catch(e){}   // ✨ VFX：用 HP 差捕捉本幀傷害（須在重設 justHit 前）
             m.justHit = false;
@@ -1546,11 +1787,18 @@ function _renderMobsImpl() {
             if(_showMobStatus && _rageNow) _badgeTags = `<span class="px-1 rounded text-[10px] font-bold border" style="color:#fecdd3;background:rgba(127,29,29,.88);border-color:#fb7185;text-shadow:0 0 5px #ef4444;">狂暴</span>` + (_badgeTags ? ' ' + _badgeTags : '');
             if(_eleBadge) _badgeTags = _badgeTags ? (_badgeTags + ' ' + _eleBadge) : _eleBadge;
             // 徽章列固定常駐，狀態多時以完整徽章換行，避免「頭目」被壓成「頭」。
-            let badges = `<div class="mob-badge-row">${_badgeTags}</div>`;
+            let badges = `<div class="mob-badge-row">${(_fieldSlots > 0) ? '' : _badgeTags}</div>`;
             // 🩹 狀態列（出血/猛爆毒/鈍擊/硬皮）：狀態開關關閉時清空內容（保留固定高度列避免版面跳動）
-            let _statRow = !_showMobStatus ? '' : `${(m.bleeds && m.bleeds.length) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;" title="出血層數">🩸×${m.bleeds.length}</span>` : ''}${(m._burstPoison && m._burstPoison.left > 0) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;color:#a3e635;" title="猛爆劇毒：每秒100固定傷害（5秒）">💥毒</span>` : ''}${(m._bluntShow && state.ticks < m._bluntShow) ? `<span class="text-[11px] font-bold text-amber-300" style="display:inline-flex;align-items:center;line-height:1;" title="鈍擊：攻擊延遲中">🔨鈍</span>` : ''}${(m.hardSkin > 0) ? `<span class="text-[11px] font-bold text-stone-300" style="display:inline-flex;align-items:center;line-height:1;" title="硬皮值：額外物理減傷（魔法不減），可用鈍器/重擊消磨">🛡${m.hardSkin}</span>` : ''}`;
-
-            let _hpBar = !_showMobHp ? '' : `<div class="mob-hp-bar flex justify-center mb-1" style="height:6px;"><div style="width:50px;height:5px;background:#475569;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#ef4444;width:${Math.max(0, Math.min(100, Math.round((m.curHp / (m.hp || 1)) * 100)))}%;"></div></div></div>`;
+            let _statRow = (!_showMobStatus || _fieldSlots > 0) ? '' : `${(m.bleeds && m.bleeds.length) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;" title="出血層數">🩸×${m.bleeds.length}</span>` : ''}${(m._burstPoison && m._burstPoison.left > 0) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;color:#a3e635;" title="猛爆劇毒：每秒100固定傷害（5秒）">💥毒</span>` : ''}${(m._bluntShow && state.ticks < m._bluntShow) ? `<span class="text-[11px] font-bold text-amber-300" style="display:inline-flex;align-items:center;line-height:1;" title="鈍擊：攻擊延遲中">🔨鈍</span>` : ''}${(m.hardSkin > 0) ? `<span class="text-[11px] font-bold text-stone-300" style="display:inline-flex;align-items:center;line-height:1;" title="硬皮值：額外物理減傷（魔法不減），可用鈍器/重擊消磨">🛡${m.hardSkin}</span>` : ''}`;
+            // 🩹 v3.8.321：場戰血條永遠建 DOM，僅 .active（攻擊目標）顯示；經典列仍尊重 _showMobHp
+            let _hpBar;
+            if (_fieldSlots > 0) {
+                _hpBar = `<div class="mob-hp-bar flex justify-center mb-1" style="height:6px;"><div style="width:50px;height:5px;background:transparent;border-radius:3px;overflow:hidden;"><div class="mob-hp-fill" style="height:100%;background:#ef4444;width:100%;"></div></div></div>`;
+            } else if (!_showMobHp) {
+                _hpBar = '';
+            } else {
+                _hpBar = `<div class="mob-hp-bar flex justify-center mb-1" style="height:6px;"><div style="width:50px;height:5px;background:transparent;border-radius:3px;overflow:hidden;"><div style="height:100%;background:#ef4444;width:${Math.max(0, Math.min(100, Math.round((m.curHp / (m.hp || 1)) * 100)))}%;"></div></div></div>`;
+            }
             let _isBossUnit = BOSS_BIG_MAPS.includes(mapState.current) || m.boss;   // 🎲 頭目不散佈(維持置中大圖)
             let _scat = '';   // ⚠️v2.6.39 取消「水平隨機位移＋隨機大小」(_mobScatter 死碼已於 v3.5.48 清除)。v3.3.2：16:9 高框上半留白→改為僅「垂直往上」隨機分佈
             let _yLift = (typeof MOB_YLIFT !== 'undefined' && MOB_YLIFT[m.n]) || 0;
@@ -1559,22 +1807,13 @@ function _renderMobsImpl() {
             try { _fieldCombat = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFc) {}
             if (_fieldCombat && !(m.siegeEnemy && m.race === '建築') && !m._pvpDuelFoe) {
                 try { if (typeof exploreAssignFieldPos === 'function') exploreAssignFieldPos(m, i); } catch (eAp) {}
-                let _fx = Math.round(Number(m._fx) || 0);
-                let _fy = Math.round(Number(m._fy) || 0);
-                let _eng = false;
-                try { _eng = (typeof exploreMobInEngageRange === 'function' && exploreMobInEngageRange(m)); } catch (eEn) {}
-                // 🗺️ v3.8.189 遠近：_fy＝淺景深；腳底對齊地面帶
-                let _t = Math.max(0, Math.min(1, Math.abs(_fy) / 220));
-                let _sc = (1.05 - _t * 0.08).toFixed(3);
-                let _z = Math.round(28 - _fy * 0.04);
-                let _foot = (typeof exploreFieldFootBottom === 'function')
-                    ? exploreFieldFootBottom(_fy)
-                    : (16 + _fy);
-                _scat = ` style="left:calc(50% + ${_fx}px);bottom:${Math.round(_foot)}px;transform:translateX(-50%) scale(${_sc});z-index:${_z};"`;
+                // 🗺️ v3.8.317：left/bottom/is-engage 不進 HTML diff——相機一動字串全變→每幀 innerHTML
+                //    整列重建＝所有 sprite <img> 被砍回靜態幀（看起來永遠不動）。座標只由 exploreApplyFieldDomPos 寫。
+                _scat = '';
                 _sfCls = ' field-mob';
-                if (_eng) act = (act ? act + ' ' : '') + 'is-engage';
             } else {
-                if (!_isBossUnit && m._yScat == null) m._yScat = Math.floor(Math.random() * 40);
+                // 🦶 v3.8.275：亂飄高度從 0–40 壓到 0–10，避免腳離地面像浮空貼紙
+                if (!_isBossUnit && (m._yScat == null || m._yScat > 10)) m._yScat = Math.floor(Math.random() * 10);
                 let _yTot = (_isBossUnit ? 0 : (m._yScat || 0)) + _yLift;
                 if (_yTot) _scat = ` style="transform:translateY(-${_yTot}px);"`;
                 if (m.siegeEnemy && m.race === '建築' && typeof SIEGE_BUILD_POS !== 'undefined' && SIEGE_BUILD_POS[m.n]) {
@@ -1584,6 +1823,11 @@ function _renderMobsImpl() {
                 } else if (m._pvpDuelFoe && typeof PVP_DUEL_FOE_POS !== 'undefined') {
                     _scat = ` style="left:${PVP_DUEL_FOE_POS.left}%;top:${PVP_DUEL_FOE_POS.top}%;"`;
                     _sfCls = ' duel-fixed';
+                } else if ((m.trainingDummy || m.n === '木頭人') && typeof TRAINING_DUMMY_POS !== 'undefined') {
+                    // 與玩家同一座標系（#battle-view bottom），木頭人跟人物一起往上
+                    let _tb = (TRAINING_DUMMY_POS.bottom != null) ? TRAINING_DUMMY_POS.bottom : 190;
+                    _scat = ` style="left:${TRAINING_DUMMY_POS.left}%;bottom:${_tb}px;"`;
+                    _sfCls = ' training-fixed';
                 }
             }
             // 🎨 僅「真有 Q 包」的怪才套粉彩名牌；經典 anim／變身不受影響
@@ -1596,7 +1840,11 @@ function _renderMobsImpl() {
             }
             // 🏰 v3.7.82 用戶指定復原：攻城敵人原生尺寸。🗺️ v3.8.185 場戰用 .field-mob
             // 🌑 v2.7.17 真實影子 sprite 圖層：本體圖層下疊一層同步影子 img（idle_s_0 為初始貼圖·_mobAnimApply 逐幀同步）；同時隱藏 CSS 橢圓（比照烙印影子）
-            let _spriteShadow = !_qSrc && MOB_ANIM_NAMES.has(m.n) && (typeof MOB_ANIM_SPRITE_SHADOW !== 'undefined') && MOB_ANIM_SPRITE_SHADOW.has(m.n);
+            // 🦶 v3.8.275：暗黑重製必開腳底 _s 層（腳本有寫影子幀）；其餘仍依 MOB_ANIM_SPRITE_SHADOW
+            let _spriteShadow = !_qSrc && MOB_ANIM_NAMES.has(m.n) && (
+                ((typeof MOB_ANIM_SPRITE_SHADOW !== 'undefined') && MOB_ANIM_SPRITE_SHADOW.has(m.n))
+                || ((typeof MOB_DARK_REMAKE !== 'undefined') && MOB_DARK_REMAKE.has(m.n))
+            );
             let _innerAnimCls = _qSrc
                 ? ' q-mob-art'
                 : (MOB_ANIM_NAMES.has(m.n) ? (' mob-anim' + ((MOB_ANIM_BAKED_SHADOW.has(m.n) || _spriteShadow) ? ' mob-anim-shadowed' : '')) : '');
@@ -1604,13 +1852,22 @@ function _renderMobsImpl() {
             if (!_qSrc && typeof MOB_SHADOW_TINT !== 'undefined' && MOB_SHADOW_TINT.has(m.n)) _innerAnimCls += ' mob-shadow-tint';   // 🌑 灰白剪影怪→半透明黑影
             if (!_qSrc && typeof MOB_ANIM_BIG !== 'undefined' && MOB_ANIM_BIG.has(m.n)) _innerAnimCls += ' mob-anim-big';   // 🐉 大畫布非頭目怪→頭目級 185px 高度上限（v3.0.37）
             if (!_qSrc && typeof MOB_ANIM_SMALL !== 'undefined' && MOB_ANIM_SMALL.has(m.n)) _innerAnimCls += ' mob-anim-small';   // 🔻 v3.1.65 過大/攻擊死亡溢框怪→整體等比縮小（max-height 降至 85%·本體+_s+_w+技能特效同縮同步）
-            let _shadowLayer = _spriteShadow ? `<img class="mob-anim-shadow w-24 h-24 p-1 object-contain pointer-events-none" src="assets/anim/${_animDir(m.n)}/idle_s_0.png" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">` : '';
+            // 舊版造型時勿套 dark-remake CSS（那是重製圖抗抖用）
+            if (!_qSrc && !(typeof MOB_USE_LEGACY_LINEAGE !== 'undefined' && MOB_USE_LEGACY_LINEAGE) && typeof MOB_DARK_REMAKE !== 'undefined' && MOB_DARK_REMAKE.has(m.n)) _innerAnimCls += ' mob-dark-remake';
+            let _shadowLayer = '';
+            if (_spriteShadow) {
+                // 🩹 v3.8.355／365：八方向影子在 dN/；路徑走舊版 root
+                let _shP = (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(m.n))
+                    ? (_mobAnimBase(m.n, 6) + 'idle_s_0.png')
+                    : (_mobAnimBase(m.n) + 'idle_s_0.png');
+                _shadowLayer = `<img class="mob-anim-shadow w-24 h-24 p-1 object-contain pointer-events-none" src="${_shP}" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">`;
+            }
             // ⚔️ v2.7.22 武器揮動特效層(疊本體「前」·screen)：同影子機制·排在本體 img 之後
             let _weaponFx = !_qSrc && MOB_ANIM_NAMES.has(m.n) && (typeof MOB_ANIM_WEAPON_FX !== 'undefined') && MOB_ANIM_WEAPON_FX.has(m.n);
-            let _weaponLayer = _weaponFx ? `<img class="mob-anim-weapon w-24 h-24 p-1 object-contain pointer-events-none" src="assets/anim/${_animDir(m.n)}/idle_w_0.png" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">` : '';
+            let _weaponLayer = _weaponFx ? `<img class="mob-anim-weapon w-24 h-24 p-1 object-contain pointer-events-none" src="${_mobAnimBase(m.n)}idle_w_0.png" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">` : '';
             // ⚔️ v2.7.40 第二武器層(_w2·如伊弗利特雙武器/雙火焰)：與 _w 同機制·再疊一層 .mob-anim-weapon2
             let _weaponFx2 = !_qSrc && MOB_ANIM_NAMES.has(m.n) && (typeof MOB_ANIM_WEAPON_FX2 !== 'undefined') && MOB_ANIM_WEAPON_FX2.has(m.n);
-            let _weaponLayer2 = _weaponFx2 ? `<img class="mob-anim-weapon2 w-24 h-24 p-1 object-contain pointer-events-none" src="assets/anim/${_animDir(m.n)}/idle_w2_0.png" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">` : '';
+            let _weaponLayer2 = _weaponFx2 ? `<img class="mob-anim-weapon2 w-24 h-24 p-1 object-contain pointer-events-none" src="${_mobAnimBase(m.n)}idle_w2_0.png" alt="" aria-hidden="true" onload="this.style.display='';this.style.visibility=''" onerror="this.style.visibility='hidden'">` : '';
             let _npcClanCrown = '';
             if (m._npcClanLeader && m._npcClanConflict && m._npcClanHasCastle && !m._dead && m.curHp > 0) {
                 let _crownAvatar = m._pvpAvatar === '公主' ? '公主' : '王子';
@@ -1620,13 +1877,13 @@ function _renderMobsImpl() {
             let _npcClanNameTag = m._npcClanName
                 ? `<span class="text-[10px] font-bold text-cyan-200 whitespace-nowrap">［${m._npcClanLeader ? '盟主・' : ''}${m._npcClanName}］</span>`
                 : '';
-            _slotHtmls[_k] = `<div class="mob-target ${act}${_rageNow ? ' mob-raging' : ''}${_rowCls}${BOSS_BIG_MAPS.includes(mapState.current) ? ' boss-slot' : (m.boss ? ' boss-zoom' : '')}${_sfCls}" data-uid="${m.uid}"${_scat}>
+            _slotHtmls[_k] = `<div class="mob-target ${act}${(_fieldSlots > 0) ? '' : (_rageNow ? ' mob-raging' : '')}${_rowCls}${BOSS_BIG_MAPS.includes(mapState.current) ? ' boss-slot' : (m.boss ? ' boss-zoom' : '')}${_sfCls}" data-uid="${m.uid}"${_scat}>
                         <div class="flex flex-wrap justify-center items-center gap-1 text-sm mb-1 mob-name">
                             <span class="${getMobNameClass(m)}" title="${m.n}${m._npcClanName ? '・' + m._npcClanName : ''}"${(typeof pvpNameStyle === 'function') ? pvpNameStyle(m) : ''}>${m.n}</span>${_npcClanNameTag}
                         </div>
                         ${badges}
                         <div class="flex justify-center mb-1 mob-img-wrap">
-                            <span class="mob-img-inner${_innerAnimCls}">${_shadowLayer}<img src="${_mi.src}" data-fb="${_mi.fb.concat(['https://placehold.co/100x100/1e293b/ffffff?text=?']).join('|')}" alt="${m.n}" onerror="_mobImgErr(this)" class="w-24 h-24 p-1 object-contain pointer-events-none${m._grace ? ' grace-glow' : ''}">${_weaponLayer}${_weaponLayer2}${_npcClanCrown}</span>
+                            <span class="mob-img-inner${_innerAnimCls}">${_shadowLayer}<img src="${_mi.src}" data-fb="${(_mi.fb || []).join('|')}" alt="${m.n}" onerror="_mobImgErr(this)" class="w-24 h-24 p-1 object-contain pointer-events-none${(_fieldSlots > 0) ? '' : (m._grace ? ' grace-glow' : '')}">${_weaponLayer}${_weaponLayer2}${_npcClanCrown}</span>
                         </div>
                         <div class="flex justify-center items-center gap-2 mb-1" style="height:16px;display:flex;align-items:center;justify-content:center;gap:8px;">${_statRow}</div>
                         ${_hpBar}
@@ -1643,11 +1900,79 @@ function _renderMobsImpl() {
     if (_ml) {
         let _fcOn = false;
         try { _fcOn = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFc2) {}
+        // 🩹 v3.8.328：修練場絕不用場戰 DOM 模式
+        try { if (mapState.current === 'training') _fcOn = false; } catch (eTrFc) {}
+        // 🩹 v3.8.361：場戰關閉時勿因 is-world-scroll 硬改場戰 DOM（要測舊版列排動畫）
         _ml.classList.toggle('is-field-combat', !!_fcOn);
-        let _structKey = _order.join(',') + '|' + mapState.current + '|' + (BOSS_BIG_MAPS.includes(mapState.current) ? 'B' : '') + (_fcOn ? '|F' + _order.length : '') + ((typeof qBattleSkinOn === 'function' && qBattleSkinOn()) ? '|Q' : '');
+        let _skinTag = ((typeof qBattleSkinOn === 'function' && qBattleSkinOn()) ? 'Q' : 'C') + ':' + ((typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'x');
+        let _structKey;
+        if (_fcOn) {
+            // 場戰：結構鍵＝地圖＋uid 集合（排序後）；HP/鎖定/座標不進此鍵
+            let _uids = [];
+            for (let _si = 0; _si < _order.length; _si++) {
+                let _sm = mapState.mobs[_order[_si]];
+                if (_sm) _uids.push(String(_sm.uid));
+            }
+            // 🩹 v3.8.350：skinTag 進鍵——Q→經典／版本升級時整批重建卡（舊制只增刪 uid＝殘留靜態／q-mob-art＝無動態）
+            _structKey = 'F|' + mapState.current + '|' + _uids.join(',') + '|' + _skinTag;
+        } else {
+            _structKey = _order.join(',') + '|' + mapState.current + '|' + (BOSS_BIG_MAPS.includes(mapState.current) ? 'B' : '') + '|' + _skinTag;
+        }
         let _c = _mobRenderCache;
         let _wrote = false;
-        if (!_c || _c.ml !== _ml || _c.structKey !== _structKey || _c.slots.length !== _slotHtmls.length || _ml.children.length !== _slotHtmls.length) {
+        if (_fcOn) {
+            // 🩹 v3.8.317 場戰：依 uid 增刪卡，既有卡永不 outerHTML（否則每 tick 砍回靜態幀＝無動畫）
+            // 🩹 v3.8.350：僅造型／地圖模式變才整批重建（勿因附近 uid 進出就清空＝永遠卡 idle_0）
+            let _modeBreak = !!(!_c || _c.ml !== _ml || !_c.fieldUid || _c.skinTag !== _skinTag || _c.mapId !== mapState.current);
+            if (_modeBreak) {
+                while (_ml.firstChild) { try { _ml.removeChild(_ml.firstChild); } catch (eClr) { break; } }
+                _wrote = true;
+            }
+            let _have = {};
+            let _kids = Array.prototype.slice.call(_ml.children);
+            for (let _ci = 0; _ci < _kids.length; _ci++) {
+                let _cu = _kids[_ci].getAttribute('data-uid');
+                if (_cu) _have[String(_cu)] = _kids[_ci];
+            }
+            let _want = {};
+            for (let _k = 0; _k < _order.length; _k++) {
+                let _om = mapState.mobs[_order[_k]];
+                if (!_om || !_slotHtmls[_k]) continue;
+                let _ou = String(_om.uid);
+                _want[_ou] = true;
+                let _needNew = !_have[_ou];
+                // 殘留 Q 卡才換掉；經典 anim 偶發退到 icons 時勿每 tick 重建（會砍回 idle_0＝無動態）
+                if (!_needNew && _have[_ou]) {
+                    try {
+                        let _inner0 = _have[_ou].querySelector('.mob-img-inner');
+                        let _img0 = _have[_ou].querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
+                        let _src0 = (_img0 && (_img0.getAttribute('src') || _img0.src)) || '';
+                        let _isQ = !!(_inner0 && _inner0.classList.contains('q-mob-art')) || /\/qskin\//.test(_src0);
+                        // 🩹 v3.8.355：有經典 anim 的怪即使暫顯 icons 也不拆卡——交给 _mobAnimApply 直連換幀
+                        let _keepAnim = _om && typeof MOB_ANIM_NAMES !== 'undefined' && MOB_ANIM_NAMES.has(_om.n);
+                        if (_isQ || (/\/icons\/monsters\//.test(_src0) && !_keepAnim)) {
+                            try { _have[_ou].remove(); } catch (eStale) {}
+                            delete _have[_ou];
+                            _needNew = true;
+                        }
+                    } catch (eChk) {}
+                }
+                if (_needNew) {
+                    let _tmp = document.createElement('div');
+                    _tmp.innerHTML = _slotHtmls[_k];
+                    let _node = _tmp.firstElementChild;
+                    if (_node) { _ml.appendChild(_node); _have[_ou] = _node; _wrote = true; }
+                }
+            }
+            for (let _eu in _have) {
+                if (!_want[_eu]) { try { _have[_eu].remove(); } catch (eRm) {} _wrote = true; }
+            }
+            // 清掉無 uid 的殘留空卡
+            Array.prototype.slice.call(_ml.children).forEach(function (ch) {
+                if (!ch.getAttribute('data-uid')) { try { ch.remove(); } catch (e0) {} _wrote = true; }
+            });
+            _mobRenderCache = { ml: _ml, structKey: _structKey, slots: _slotHtmls, fieldUid: true, skinTag: _skinTag, mapId: mapState.current };
+        } else if (!_c || _c.ml !== _ml || _c.structKey !== _structKey || _c.slots.length !== _slotHtmls.length || _ml.children.length !== _slotHtmls.length || _c.fieldUid) {
             _ml.innerHTML = _slotHtmls.join('');   // 首次/結構改變/節點被換→整列重建
             _mobRenderCache = { ml: _ml, structKey: _structKey, slots: _slotHtmls };   // _slotHtmls 是每幀新建的暫存陣列→直接存、免 slice 複製
             _wrote = true;
@@ -1668,7 +1993,10 @@ function _renderMobsImpl() {
         //    但被重建過的格會丟失 hover class，故只在「有寫入 DOM」時重新套用一次（無重建的幀維持原樣、零成本）。
         if (_wrote) _applyHoverName();
         // 🎞️ 無專用 Q 包的怪：照常播唯一 anim；有 Q 包則由 45-q-anim 輪播
-        if (_wrote) { try { _mobAnimApply(); } catch(e){} }
+        // 🩹 v3.8.317 場戰即使沒增刪卡也要推一幀（避免只靠 interval 與 tick 錯開看起來像靜止）
+        if (_wrote || _fcOn) { try { _mobAnimApply(); } catch(e){} }
+        // 🗺️ 場戰座標：重建後立刻寫入（之後每 tick 由 exploreTick 更新，不再靠 HTML 字串）
+        try { if (typeof exploreApplyFieldDomPos === 'function') exploreApplyFieldDomPos(); } catch (ePos) {}
     }
     try {
         let _bvQ = document.getElementById('battle-view');
@@ -1712,16 +2040,37 @@ const MOB_YLIFT = { '法利昂': 30 };   // 法利昂（水龍·本體在 375×2
 //   ⚠️ 面對面是「位置決定」的：對手 sprite 走 assets/anim/玩家* 恆左向，玩家 sprite 由 _classFacing8
 //      依目標卡片 rect 判左右——只要對手釘在玩家右邊，玩家就會自動轉成 R，兩邊自然對看。
 const PVP_DUEL_FOE_POS = { left: 58, top: 70 };
+// 🪵 v3.8.266 新兵修練場：木頭人置中偏右；玩家固定站其左側敲打
+const TRAINING_DUMMY_POS = { left: 56, bottom: 48 };
+const TRAINING_PLAYER_POS = { x: '34%', b: 48 };
 const SIEGE_BUILD_POS = {
     '肯特城門': { left: 40, top: 33 }, '風木城門': { left: 41, top: 23 }, '海音城門': { left: 39, top: 23 },
     '肯特守護塔': { left: 50, top: 48 }, '風木守護塔': { left: 50, top: 48 }, '海音守護塔': { left: 50, top: 48 }
 };
 let _mobAnimCache = {};            // 怪名 → {idle,spawn,attack,skill,death:各[Image]|null} ｜ 'probing' ｜ null（全無）
 let _mobAnimTrimAt = 0;
+let _mobAnimProbeAt = {};          // name → Date.now() 開始探測時間（卡住 probing 可清）
 function _trimMobAnimCaches(now) {
     if (now < _mobAnimTrimAt) return;
-    _mobAnimTrimAt = now + 10000;
+    _mobAnimTrimAt = now + 8000;
     let keep = new Set(((typeof mapState !== 'undefined' && mapState.mobs) || []).filter(Boolean).map(m => m.n));
+    // 卡住 >12s 的 probing → 標 null（失敗）勿 delete，否則每輪重探＝404 海＋CPU
+    try {
+        for (let pk in _mobAnimCache) {
+            if (_mobAnimCache[pk] === 'probing' && _mobAnimProbeAt[pk] && (now - _mobAnimProbeAt[pk]) > 12000) {
+                _mobAnimCache[pk] = null;
+                delete _mobAnimProbeAt[pk];
+            }
+        }
+        if (typeof _mob8Cache !== 'undefined') {
+            for (let pk8 in _mob8Cache) {
+                if (_mob8Cache[pk8] === 'probing' && _mobAnimProbeAt[pk8] && (now - _mobAnimProbeAt[pk8]) > 12000) {
+                    _mob8Cache[pk8] = null;
+                    delete _mobAnimProbeAt[pk8];
+                }
+            }
+        }
+    } catch (ePr) {}
     let trim = (cache, limit, nameOf) => {
         let keys = Object.keys(cache); if (keys.length <= limit) return;
         let remaining = keys.length;
@@ -1731,8 +2080,70 @@ function _trimMobAnimCaches(now) {
             delete cache[key]; remaining--;
         }
     };
-    trim(_mobAnimCache, 48, k => k);
+    trim(_mobAnimCache, 80, k => k);
     if (typeof _mob8Cache !== 'undefined') trim(_mob8Cache, 96, k => k.slice(0, k.lastIndexOf('#')));
+    // 🩹 v3.8.329：人物形態快取也修剪（Q 八向×武器變體會長跑膨脹）
+    try { _trimMorphBattleCache(now, 48); } catch (eMc) {}
+}
+function _trimMorphBattleCache(now, limit) {
+    if (typeof _morphBattleCache === 'undefined' || !_morphBattleCache) return;
+    // 卡住 probing 的形態（換裝／換地圖後 orphan）>12s → 標空物件，勿 delete 重探
+    try {
+        for (let pk in _morphBattleCache) {
+            if (_morphBattleCache[pk] === 'probing' && _mobAnimProbeAt[pk] && (now - _mobAnimProbeAt[pk]) > 12000) {
+                // 🩹 v3.8.344：失敗標 null（勿空物件）——空 {} 會被當成就緒並清掉 attack
+                _morphBattleCache[pk] = null;
+                delete _mobAnimProbeAt[pk];
+            }
+        }
+    } catch (eStuck) {}
+    let keys = Object.keys(_morphBattleCache);
+    if (keys.length <= limit) return;
+    let keepKey = null;
+    try {
+        let form = (typeof _playerBattleForm === 'function') ? _playerBattleForm() : null;
+        if (form) keepKey = form.key;
+    } catch (e0) {}
+    let last = (typeof _pmState !== 'undefined' && _pmState) ? _pmState.lastAnim : null;
+    let remaining = keys.length;
+    for (let i = 0; i < keys.length && remaining > limit; i++) {
+        let k = keys[i];
+        if (k === keepKey) continue;
+        if (_morphBattleCache[k] === 'probing') continue;
+        if (last && _morphBattleCache[k] === last) continue;
+        delete _morphBattleCache[k];
+        try { delete _mobAnimProbeAt[k]; } catch (eDel) {}
+        remaining--;
+    }
+}
+/** 🩹 v3.8.329：長掛機保養——砍 VFX 殘留 DOM、修剪快取、限佇列 */
+function _perfHousekeeping() {
+    try {
+        let l = document.getElementById('vfx-layer');
+        if (l && l.childNodes.length > 48) {
+            while (l.childNodes.length > 24 && l.firstChild) l.removeChild(l.firstChild);
+        }
+    } catch (e0) {}
+    try {
+        if (typeof _vfxPending !== 'undefined' && _vfxPending && _vfxPending.length > 80) _vfxPending.length = 0;
+    } catch (eP) {}
+    try { _trimMobAnimCaches(Date.now()); } catch (e1) {}
+    try {
+        if (typeof _freezeFx !== 'undefined' && _freezeFx) {
+            for (let k in _freezeFx) {
+                let fx = _freezeFx[k];
+                if (fx && fx.el && !fx.el.isConnected) delete _freezeFx[k];
+            }
+        }
+    } catch (e2) {}
+    try {
+        if (typeof _mobSkillFx !== 'undefined' && _mobSkillFx) {
+            for (let k in _mobSkillFx) {
+                let s = _mobSkillFx[k];
+                if (s && s.el && !s.el.isConnected) delete _mobSkillFx[k];
+            }
+        }
+    } catch (e3) {}
 }
 // 🎬 有序列幀動畫的怪物名單（單一真相·同步判斷用）：戰鬥/圖鑑靜態顯示點與探測皆據此，避免對 1000+ 無動畫怪發 404。
 //    ⚠️ 新增動畫怪：把幀丟進 assets/anim/<怪名>/（跑 spr2png.js）後，把 <怪名> 加進此 Set（一行）。播放幀數由 _mobAnimProbe 自動偵測。
@@ -1749,6 +2160,478 @@ const MOB_ANIM_BIG = new Set(['遺忘之島飛龍', '哈維', '遺忘之島哈�
 // 🔻 額外縮小名單：希爾黛斯已於 v3.2.x 重作為原生全畫布 399×300(不再裁切)，本體放大改走 MOB_ANIM_BIG(185px 上限)，不在此 Set。
 //    後續若有無法重匯、只能暫時縮小避開戰鬥框的怪物，可加入此 Set。
 const MOB_ANIM_SMALL = new Set([]);
+// v3.8.270 dark remake Path B: fixed canvas + opaque concepts -> auto rendering anti-jitter
+const MOB_DARK_REMAKE = new Set([
+  '哥布林',
+  '蘑菇',
+  '象牙塔果凍怪',
+  '骷髏',
+  '妖魔',
+  '漂浮之眼',
+  '妖魔弓箭手',
+  '地靈',
+  '狼人',
+  '哈柏哥布林',
+  '人形殭屍',
+  '石頭高崙',
+  '骷髏弓箭手',
+  '夏洛伯',
+  '歐熊',
+  '妖魔鬥士',
+  '骷髏斧手',
+  '食屍鬼',
+  '史巴托',
+  '萊肯',
+  '歐吉',
+  '蜥蜴人',
+  '黑騎士',
+  '冰原狼人',
+  '狼',
+  '熊',
+  '妖魔殭屍',
+  '妖魔法師',
+  '妖魔巡守',
+  '食人妖精',
+  '食人妖精王',
+  '骷髏槍兵',
+  '骷髏鬥士',
+  '骷髏神射手',
+  '骷髏警衛',
+  '鬼魂',
+  '紅鬼魂',
+  '密密',
+  '紙人',
+  '死亡之劍',
+  '小惡魔',
+  '多眼怪',
+  '怪手',
+  '毒蠍',
+  '穴居人',
+  '鼠人',
+  '巨蟻',
+  '巨大兵蟻',
+  '地獄犬',
+  '魔狼',
+  '蟹人',
+  '蟑螂人',
+  '思克巴',
+  '思克巴女皇',
+  '甘地妖魔',
+  '羅孚妖魔',
+  '阿吐巴妖魔',
+  '那魯加妖魔',
+  '都達瑪拉妖魔',
+  '受詛咒的妖魔殭屍',
+  '象牙塔密密',
+  '象牙塔紙人',
+  '象牙塔死亡之劍',
+  '象牙塔小惡魔',
+  '炎魔的小惡魔',
+  '巴風特',
+  '死亡騎士',
+  '惡魔',
+  '巴列斯',
+  '克特',
+  '冰之女王',
+  '黑長者',
+  '巨蟻女皇',
+  '不死鳥',
+  '安塔瑞斯',
+  '法利昂',
+  '巴拉卡斯',
+  '林德拜爾',
+  '卡瑞',
+  '伊弗利特',
+  '飛龍',
+  '卡士柏',
+  '巴土瑟',
+  '馬庫爾',
+  '變形怪首領',
+  '古代巨人',
+  '獨角獸',
+  '夢魘',
+  '冰魔',
+  '梅杜莎',
+  '活鎧甲',
+  '象牙塔活鎧甲',
+  '獨眼巨人',
+  '格利芬',
+  '哈維',
+  '侏儒戰士',
+  '蛇女',
+  '象牙塔蛇女',
+  '變種蛇女',
+  '死神',
+  '象牙塔死神',
+  '雪怪',
+  '冰人',
+  '鋼鐵高崙',
+  '象牙塔鋼鐵高崙',
+  '恐怖的鋼鐵高崙',
+  '熔岩高崙',
+  '火蜥蜴',
+  '夢幻之島火蜥蜴',
+  '恐怖的吸血鬼',
+  '馬昆斯吸血鬼',
+  '木乃伊王',
+  '不死的木乃伊王',
+  '卡司特',
+  '卡司特王',
+  '侏儒',
+  '人魚',
+  '鱷魚',
+  '遺忘之島鱷魚',
+  '海星',
+  '魔熊',
+  '雪人',
+  '犰狳',
+  '歐姆民兵',
+  '歐姆裝甲兵',
+  '狂暴的歐姆裝甲兵',
+  '狂暴的歐姆',
+  '海賊骷髏',
+  '海賊骷髏士兵',
+  '奇異鸚鵡',
+  '楊果里恩',
+  '安普長老',
+  '污染的潘',
+  '爆彈花',
+  '闇之精靈',
+  '黑暗精靈',
+  '亞力安',
+  '遺忘之島亞力安',
+  '伊萊克頓',
+  '不滅的巫妖',
+  '不幸的幻象眼魔',
+  '小幻象眼魔',
+  '冰石高崙',
+  '夢幻之島冰石高崙',
+  '冰原老虎',
+  '冷酷冰原老虎',
+  '冰之女王侍女',
+  '巨人',
+  '巨人戰士',
+  '巨人長老',
+  '奇美拉',
+  '象牙塔奇美拉',
+  '幼龍',
+  '艾莉絲',
+  '冷酷的艾莉絲',
+  '奎斯坦修',
+  '希爾黛斯',
+  '依詩蒂',
+  '依詩蒂公主',
+  '傲慢的潔尼斯女王',
+  '冥法軍王海露拜',
+  '卡魯塔',
+  '受詛咒的艾爾摩士兵',
+  '受詛咒的艾爾摩將軍',
+  '受詛咒的艾爾摩法師',
+  '受詛咒的馴獸師',
+  '受詛咒的黑暗妖精鬥士',
+  '受詛咒的黑暗妖精騎士',
+  '受詛咒的黑暗妖精法師',
+  '吉爾塔斯',
+  '哈汀之影',
+  '地獄奴隸',
+  '地獄束縛犬',
+  '地獄的黑豹',
+  '多羅',
+  '遺忘之島多羅',
+  '艾爾摩士兵',
+  '艾爾摩將軍',
+  '艾爾摩法師',
+  '唐傘小僧',
+  '喀瑪南',
+  '喀瑪南王',
+  '喀瑪焰',
+  '喀瑪焰王',
+  '喀瑪王',
+  '喚獸師',
+  '喬',
+  '嗚釜',
+  '土精靈王',
+  '地之牙',
+  '地元素守護者',
+  '地靈之主',
+  '墮落',
+  '墮落的司祭(一階)',
+  '墮落的司祭(二階)',
+  '墮落的司祭(三階)',
+  '墮落的司祭(四階)',
+  '墮落的司祭(五階)',
+  '墳墓守護者',
+  '墳墓守護者法師',
+  '墳墓守護者騎士',
+  '巨大墳墓守護者',
+  '天狗',
+  '巨大白螞蟻',
+  '巨大突擊螞蟻',
+  '大地荒龍',
+  '夢幻之島冰人',
+  '夢幻之島地精靈王',
+  '夢幻之島大鬼火',
+  '夢幻之島暴走兔',
+  '夢幻之島殺人蜂',
+  '夢幻之島水精靈王',
+  '夢幻之島火炎蛋',
+  '夢幻之島火精靈王',
+  '夢幻之島蘑菇',
+  '夢幻之島鎧甲守衛',
+  '夢幻之島閃電球',
+  '夢幻之島風精靈王',
+  '夢幻之島鬼火',
+  '巨大骷髏',
+  '巨大鱷魚',
+  '巫師',
+  '底比斯 凱比斯(紅)',
+  '底比斯 凱比斯(黑)',
+  '底比斯 尖碑石奴',
+  '底比斯 尖碑石奴(黑)',
+  '底比斯 尼荷斯',
+  '底比斯 尼荷斯(藍)',
+  '底比斯 巴斯',
+  '底比斯 巴斯(紅)',
+  '底比斯 斯芬克斯',
+  '底比斯 斯芬克斯(黑)',
+  '底比斯 曼陀羅草',
+  '底比斯 曼陀羅草(白)',
+  '底比斯 聖甲蟲',
+  '底比斯 聖甲蟲(藍)',
+  '底比斯 賀洛斯',
+  '底比斯 阿努斯',
+  '底比斯 阿努斯(黑)',
+  '底比斯 阿努比斯',
+  '強化巨蟻',
+  '強盜',
+  '強盜頭目',
+  '影魔',
+  '德雷克',
+  '恐怖夢魘',
+  '恐怖的伊弗利特',
+  '恐怖的地獄犬',
+  '恐怖的殭屍王',
+  '恐怖的火炎蛋',
+  '憤怒的嗚釜',
+  '扭曲的潔尼斯女王',
+  '拉斯塔巴德守門人',
+  '拉斯塔巴德近衛隊',
+  '拉斯塔巴德近衛隊隊長',
+  '拉斯塔巴德馴獸師',
+  '提卡爾杰弗雷庫(雄)',
+  '提卡爾杰弗雷庫(雌)',
+  '提卡爾艾庫卡伊拉(藍)',
+  '提卡爾艾庫卡伊拉(黃)',
+  '提卡爾艾庫尤卡(白)',
+  '提卡爾艾庫尤卡(藍)',
+  '提卡爾艾庫巴拉',
+  '提卡爾艾庫巴拉(紅)',
+  '提卡爾艾庫艾托',
+  '提卡爾艾庫艾托(枯竭)',
+  '提卡爾艾庫阿茲特',
+  '提卡爾艾庫阿茲特(黃)',
+  '提卡爾薩德司卡(紅)',
+  '提卡爾薩德司卡(紫)',
+  '提卡爾薩德提歐(藍)',
+  '提卡爾薩德提歐(黃)',
+  '提卡爾薩德泥偶',
+  '提卡爾薩德泥偶(黑)',
+  '暗殺軍王史雷佛',
+  '暗黑思克巴女皇',
+  '暗黑火焰弓箭手',
+  '暗黑火焰戰士',
+  '暗黑萊肯',
+  '暗黑黑騎士',
+  '曼波兔',
+  '月之精靈歐薇',
+  '月光朱利安',
+  '木頭人',
+  '朱利安',
+  '歐姆',
+  '歐姆戰士',
+  '歐薇',
+  '死亡',
+  '死亡的司祭(巴風特)',
+  '死亡的司祭(思克巴)',
+  '死亡的殭屍王',
+  '殘暴的史巴托',
+  '殘暴的食屍鬼',
+  '殘暴的骷髏斧兵',
+  '殘暴的骷髏槍兵',
+  '殘暴的骷髏神射手',
+  '殘暴的骷髏鬥士',
+  '水之牙',
+  '水元素守護者',
+  '水精靈王',
+  '水靈之主',
+  '污染的地精靈',
+  '污染的安特',
+  '河童',
+  '法令軍王蕾雅',
+  '海賊骷髏刀手',
+  '海賊骷髏首領',
+  '海音城門',
+  '海音守護塔',
+  '深淵之主',
+  '深淵地靈',
+  '深淵弓箭手',
+  '深淵水靈',
+  '深淵火靈',
+  '深淵風靈',
+  '深淵食屍鬼',
+  '混沌',
+  '混沌的司祭(野獸)',
+  '混沌的司祭(飛翼)',
+  '火之牙',
+  '火元素守護者',
+  '火炎蛋',
+  '火焰之影親衛隊(巴風特)',
+  '火焰之靈魂(紅)',
+  '火焰之靈魂(藍)',
+  '火焰之魔法師',
+  '火焰弓箭手',
+  '火焰戰士',
+  '火焰烈炎獸',
+  '火焰阿西塔基奧',
+  '火精靈王',
+  '火靈之主',
+  '炎魔的分身',
+  '炎魔的巴列斯',
+  '炎魔的巴風特',
+  '炎魔的思克巴',
+  '炎魔的思克巴女皇',
+  '炎魔的惡魔',
+  '烈炎獸',
+  '牛鬼',
+  '牛鬼之子',
+  '特提斯',
+  '特羅斯王子',
+  '白螞蟻群',
+  '白面金毛九尾狐・九尾',
+  '白面金毛九尾狐・殺生石',
+  '白面金毛九尾狐・玉藻',
+  '真‧死亡騎士 冥皇丹特斯',
+  '翼龍',
+  '肯特城門',
+  '變種楊果里恩',
+  '象牙塔影魔',
+  '象牙塔石頭高崙',
+  '象牙塔黑長者',
+  '遺忘之島卡司特',
+  '遺忘之島卡司特王',
+  '遺忘之島哈維',
+  '遺忘之島夏洛伯',
+  '遺忘之島巨大鱷魚',
+  '遺忘之島格利芬',
+  '遺忘之島楊果里恩',
+  '遺忘之島歐熊',
+  '遺忘之島狼人',
+  '遺忘之島獨眼巨人',
+  '遺忘之島萊肯',
+  '遺忘之島蛇女',
+  '遺忘之島蜥蜴人',
+  '遺忘之島飛龍',
+  '遺忘之島食人妖精',
+  '遺忘之島食人妖精王',
+  '遺忘之島黑暗精靈',
+  '肯特守護塔',
+  '莫妮亞',
+  '藍尾蜥蜴',
+  '藏寶箱',
+  '血色術士',
+  '血騎士',
+  '被侵蝕的安塔瑞斯',
+  '西斯',
+  '西瑪',
+  '變形怪',
+  '遺忘之島變形怪',
+  '赤鬼',
+  '轆轤首',
+  '象牙塔巴列斯之影',
+  '象牙塔巴風特之影',
+  '象牙塔惡魔之影',
+  '象牙塔炎魔之影',
+  '風元素守護者',
+  '風木城門',
+  '風木守護塔',
+  '風精靈王',
+  '風靈之主',
+  '食腐獸',
+  '馴獸師',
+  '骨龍',
+  '高等蜥蜴人',
+  '魂騎士',
+  '魔族暗殺團',
+  '魔法師喬',
+  '魔獸軍王巴蘭卡',
+  '鯊魚',
+  '鵺',
+  '黑暗妖精士兵',
+  '黑暗妖精將軍',
+  '黑暗妖精巡守',
+  '黑暗妖精殘兵(劍)',
+  '黑暗妖精殘兵(十字弓)',
+  '黑暗妖精殘兵(弓)',
+  '黑暗妖精殘兵(法師)',
+  '黑暗妖精殘兵(雙手劍)',
+  '黑暗妖精法師',
+  '黑暗妖精盜賊',
+  '黑暗妖精警衛(十字弓)',
+  '黑暗妖精警衛(矛)',
+  '黑暗妖精魔法學徒',
+  '黑暗復仇者',
+  '黑暗棲林者',
+  '黑暗精靈使',
+  '黑法師',
+  '黑虎',
+  '黑騎士搜索隊',
+  '龍蠅',
+  '龍龜',
+  '遺忘之島巨大牛人',
+  '象牙塔惡靈',
+  '象牙塔炎魔的奴隸',
+  '象牙塔翼魔',
+  '象牙塔長者',
+  '象牙塔閃電球',
+  '象牙塔黑魔法師',
+  '賽尼斯',
+  '魔女賽尼斯',
+  '遺忘之島巨斧牛人',
+  '邪惡蜥蜴',
+  '遺忘之島邪惡蜥蜴',
+  '遺忘之島鏈鎚牛人',
+  '阿魯巴',
+  '遺忘之島阿魯巴',
+  '邪惡多眼怪',
+  '邪惡密密',
+  '邪惡的鐮刀死神',
+  '重裝歐姆戰士',
+  '金屬蜈蚣',
+  '鋼鐵阿頓',
+  '鎌鼬',
+  '鎌鼬長兄',
+  '長老',
+  '長老隨從',
+  '長老．安迪斯',
+  '長老．巴塔斯',
+  '長老．巴洛斯',
+  '長老．巴陸德',
+  '長老．拉曼斯',
+  '長老．泰瑪斯',
+  '長老．琪娜',
+  '長老．艾迪爾',
+  '闇影格立特',
+  '闇黑君王',
+  '闇黑的騎士范德',
+  '騎士范德',
+  '阿修羅像',
+  '阿西塔基奧',
+  '阿頓',
+  '青鬼',
+  '風之牙'
+]);
+
+try { if (typeof MOB_ANIM_NAMES !== 'undefined') MOB_ANIM_NAMES.add('木頭人'); } catch (eWd) {}   // 🪵 新兵修練場木頭人動畫
 // 🌑 v2.7.17 真實影子 sprite（天堂「獨立影子 spr」·用戶另外抽出 <動作>_s.spr）：本 Set 的動畫怪在本體圖層下再疊一層「同步影子 img」(assets/anim/<怪名>/<動作>_s_N.png)。
 //    ⚠️ 影子 spr 必須與本體 spr「一起 spr2png --multi 轉」共用世界錨定畫布→影子 PNG 與本體 PNG 同尺寸、疊放即像素級對齊(連跳躍幀影子留地面都正確)。單獨轉影子會錯位。
 //    這些怪同時隱藏遊戲 CSS 橢圓影子(比照 MOB_ANIM_BAKED_SHADOW→加 .mob-anim-shadowed)免雙重。⚠️新增：本體+影子一起重轉部署+加此 Set+(若新怪)加 MOB_ANIM_NAMES。
@@ -1867,22 +2750,38 @@ function mobStillImg(name, staticUrl, preferSpawn) {
     let base = staticUrl || `assets/icons/monsters/${name}.png`;
     if (!MOB_ANIM_NAMES.has(name)) return { src: base, fb: [] };
     let dir = _animDir(name);   // 🔗 v3.0.7 共用怪→幀 URL 走目標資料夾
-    // 🧭 v3.2.64 八方向怪：idle 幀在 d<N> 子資料夾（根目錄無 idle_0）→圖鑑/靜態縮圖取「面對玩家」的方向（d6=SW·同戰場預設向/寵物縮圖）；退 d5(S 正面)→base
+    let enc = encodeURIComponent(dir);
+    let bust = (typeof GAME_VERSION !== 'undefined') ? ('?v=' + GAME_VERSION) : '';
+    let root = (typeof _mobAnimRootFor === 'function') ? _mobAnimRootFor(name) : 'assets/anim';
+    // 🧭 v3.2.64／352 八方向怪：idle 在 dN；路徑一律 encode
     if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)) {
-        return { src: `assets/anim/${dir}/d6/idle_0.png`, fb: [`assets/anim/${dir}/d5/idle_0.png`, base] };
+        return { src: `${root}/${enc}/d6/idle_0.png` + bust, fb: [`${root}/${enc}/d5/idle_0.png` + bust, `assets/anim/${enc}/d6/idle_0.png` + bust, base] };
     }
     let list = [];
     if (preferSpawn) {
         let _c = (typeof _mobAnimCache !== 'undefined') ? _mobAnimCache[name] : undefined;
         // 🎬 v2.6.93 已探測且確定「無登場動畫」(如哥布林只有 idle/attack/death)→不放 spawn_0，免每次渲染固定 404；未探測/探測中仍嘗試(首見一次無害)。
-        if (!(_c && _c !== 'probing' && (!_c.spawn || !_c.spawn.length))) list.push(`assets/anim/${dir}/spawn_0.png`);
+        if (!(_c && _c !== 'probing' && (!_c.spawn || !_c.spawn.length))) list.push(`${root}/${enc}/spawn_0.png` + bust);
     }
-    list.push(`assets/anim/${dir}/idle_0.png`, base);
+    list.push(`${root}/${enc}/idle_0.png` + bust);
+    if (root.indexOf('_legacy_lineage') >= 0) list.push(`assets/anim/${enc}/idle_0.png` + bust);
+    list.push(base);
     return { src: list[0], fb: list.slice(1) };
 }
 // 通用 img onerror：依 data-fb（|分隔清單）逐張退回，用盡則停。
+// 🩹 v3.8.326／359：動畫引擎換幀中（dataset.animF）勿吃 data-fb；有經典 anim 的怪勿退到 icons（會整場變靜態圖）
 function _mobImgErr(img) {
     try {
+        if (img && img.dataset && img.dataset.animF) return;
+        let alt = (img.getAttribute('alt') || '').trim();
+        if (alt && typeof MOB_ANIM_NAMES !== 'undefined' && MOB_ANIM_NAMES.has(alt)) {
+            // 釘回 idle_0，留給 _mobAnimApply 繼續換幀（勿掉進 icons）
+            try {
+                let u0 = _mobDirectFrameUrl(alt, 'idle', 0);
+                if (u0) { img.src = u0; return; }
+            } catch (e0) {}
+            return;
+        }
         let fb = (img.getAttribute('data-fb') || '').split('|').filter(Boolean);
         if (fb.length) { img.setAttribute('data-fb', fb.slice(1).join('|')); img.src = fb[0]; }
         else { img.onerror = null; }
@@ -1890,7 +2789,7 @@ function _mobImgErr(img) {
 }
 // 🔗 v3.0.7 動畫資料夾共用(alias)：自身無可用 spr 的怪→借用另一隻已部署怪的 assets/anim/<目標>/ 幀(URL 層 redirect·_mobAnimCache 仍以自身名為 key)。
 //   ⚠️ 目標怪須已部署且在 MOB_ANIM_NAMES；共用怪自身也要加進 MOB_ANIM_NAMES(+SPRITE_SHADOW 若目標有 _s)。目標更新→共用怪自動跟著(真共用非複製)。
-const MOB_ANIM_ALIAS = { '老虎': '虎男',   // 🔗 動畫資料夾共用 alias(名→目標名)·🐾 v3.2.17 老虎共用虎男素材（真共用非複製）
+const MOB_ANIM_ALIAS = { '遺忘之島狼人': '狼人', '老虎': '虎男',   // 🔗 動畫資料夾共用 alias(名→目標名)·🐾 v3.2.17 老虎共用虎男素材（真共用非複製）
     '被侵蝕的狂怒安塔瑞斯': '被侵蝕的安塔瑞斯', '被侵蝕的瘋狂安塔瑞斯': '被侵蝕的安塔瑞斯',   // 🐉 v3.7.57 三段變身共用本體（elite antharas one·變身時新物件重播 spawn=entry 破土登場·擊敗瘋狂形態播 death=escape 鑽地遁走）
     // 👥 v3.5.64 血盟敵人戰鬥動態改「玩家職業動畫」：assets/anim/玩家<avatar>（由 assets/classanim/<avatar>2 左前向依各職業代表武器產出·部署器 scratchpad/deploy_player_anim.js）。
     //   14 名皆原本就在 MOB_ANIM_NAMES＋SPRITE_SHADOW（新資料夾含 _s 影子）·不在 WEAPON_FX/8DIR→只需 alias；白目玩家（js/03）動態註冊共用同一批資料夾。
@@ -1900,6 +2799,67 @@ const MOB_ANIM_ALIAS = { '老虎': '虎男',   // 🔗 動畫資料夾共用 ali
     '喬': '玩家男法師', '魔法師喬': '玩家男法師', '賽尼斯': '玩家女法師', '魔女賽尼斯': '玩家女法師',
     '闇影格立特': '玩家男黑暗妖精' };
 function _animDir(name) { return (typeof MOB_ANIM_ALIAS !== 'undefined' && MOB_ANIM_ALIAS[name]) ? MOB_ANIM_ALIAS[name] : name; }
+// 🩹 v3.8.425：永遠優先舊版造型（不再為 walk 切主樹＝暗黑重製）
+var MOB_USE_LEGACY_LINEAGE = true;
+var MOB_PREF_MAIN_WALK = new Set(); // 空：不強制主樹
+function _mobLegacyEnt() {
+    try {
+        return (typeof ANIM_MANIFEST !== 'undefined' && ANIM_MANIFEST) ? ANIM_MANIFEST['assets/anim/_legacy_lineage'] : null;
+    } catch (e) { return null; }
+}
+function _mobLegacyHasWalk(dir) {
+    var ent = _mobLegacyEnt();
+    if (!ent) return false;
+    if ((ent[dir + '/walk_'] | 0) > 1) return true;
+    for (var d = 0; d < 8; d++) {
+        if ((ent[dir + '/d' + d + '/walk_'] | 0) > 1) return true;
+    }
+    return false;
+}
+function _mobAnimRootFor(name) {
+    if (!MOB_USE_LEGACY_LINEAGE) return 'assets/anim';
+    var dir = _animDir(name);
+    if (/^玩家/.test(String(dir || ''))) return 'assets/anim';
+    // 🩹 v3.9.2：八向＋行走以主樹為準——legacy 若只有單向／無 walk，勿劫持（否則有八向資產也不播）
+    try {
+        if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)
+            && typeof ANIM_MANIFEST !== 'undefined' && ANIM_MANIFEST) {
+            var mainEnt = ANIM_MANIFEST['assets/anim/' + dir];
+            var legEnt = _mobLegacyEnt();
+            var main8w = !!(mainEnt && (mainEnt['d0/walk_'] | 0) > 1 && (mainEnt['d6/walk_'] | 0) > 1);
+            var leg8w = !!(legEnt && (legEnt[dir + '/d0/walk_'] | 0) > 1 && (legEnt[dir + '/d6/walk_'] | 0) > 1);
+            if (main8w && !leg8w) return 'assets/anim';
+            if (leg8w) return 'assets/anim/_legacy_lineage';
+            if (main8w) return 'assets/anim';
+        }
+    } catch (e8root) {}
+    try {
+        var ent = _mobLegacyEnt();
+        if (ent && (ent[dir + '/idle_'] > 0 || ent[dir + '/attack_'] > 0 || ent[dir + '/d6/idle_'] > 0 || ent[dir + '/d5/idle_'] > 0)) {
+            return 'assets/anim/_legacy_lineage';
+        }
+    } catch (eM) {}
+    try {
+        if (typeof MOB_DARK_REMAKE !== 'undefined' && (MOB_DARK_REMAKE.has(name) || MOB_DARK_REMAKE.has(dir))) {
+            return 'assets/anim/_legacy_lineage';
+        }
+    } catch (eD) {}
+    return 'assets/anim';
+}
+function _mobAnimBase(name, faceDir) {
+    var dir = encodeURIComponent(_animDir(name));
+    var base = _mobAnimRootFor(name) + '/' + dir + '/';
+    if (faceDir != null && faceDir !== '') base += 'd' + faceDir + '/';
+    else if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)) base += 'd6/';
+    return base;
+}
+function _mobAnimBaseRaw(name, faceDir) {
+    var dir = _animDir(name);
+    var base = _mobAnimRootFor(name) + '/' + dir + '/';
+    if (faceDir != null && faceDir !== '') base += 'd' + faceDir + '/';
+    else if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)) base += 'd6/';
+    return base;
+}
 // 🚀 v3.4.37 幀探測平行化（滑動窗口）：取代「載完第 N 張才載第 N+1 張」的串行鏈——一次最多 6 張在途，
 //   高延遲環境（GitHub Pages RTT ~100ms）首次動畫就緒時間 ≈ 原本 1/6（法利昂 death 27 幀：27 次往返→5 次）。
 //   語意不變：幀必須從 0 連續、遇缺號即止；缺號當下已在途的最多多載 5 個 404（無害·不進結果）。
@@ -1910,13 +2870,128 @@ function _animDir(name) { return (typeof MOB_ANIM_ALIAS !== 'undefined' && MOB_A
 function _manifestCount(url0) {
     if (typeof ANIM_MANIFEST === 'undefined' || !ANIM_MANIFEST) return null;
     let p; try { p = decodeURIComponent(url0); } catch (e) { return null; }   // 壞的 % 序列→退探測
+    // 🩹 v3.8.326：去掉 ?v= cache bust，否則 Q 包 manifest 永遠 miss→全走 404 探測塞爆連線
+    let q = p.indexOf('?'); if (q >= 0) p = p.slice(0, q);
     if (p.slice(-5) !== '0.png') return null;
     let parts = p.slice(0, -5).split('/');                                    // 去掉結尾的 "0.png"（urlFor(0) 的索引恆為單字元 0）
     if (parts.length < 4) return null;
     let ent = ANIM_MANIFEST[parts.slice(0, 3).join('/')];                     // assets/<tree>/<資料夾>
     if (!ent) return null;                                                    // 整個資料夾不在表內→退探測（不敢斷言 0）
     let n = ent[parts.slice(3).join('/')];                                    // 前綴（八方向含 "d6/" 前置）
-    return (typeof n === 'number') ? n : 0;                                   // 資料夾在表內但無此前綴＝確定 0 幀
+    // ⚠️ v3.8.288：缺前綴→null（退 404 探測），勿回 0。
+    //   舊行為「資料夾在表內但無此前綴＝0」會讓後來補上的 walk_ 永遠不載入（暗黑重製滑冰／無走路／只剩 idle 晃）。
+    return (typeof n === 'number') ? n : null;
+}
+
+/** 🩹 v3.8.355／359／371：換幀要穩——新幀載好才換 src（避免移動中空白閃爍） */
+function _animSetImgFrame(img, fkey, url) {
+    if (!img || !url) return;
+    try {
+        let bare = String(url).split('?')[0];
+        let file = bare.split('/').pop() || bare;
+        try { file = decodeURIComponent(file); } catch (eDec) {}
+        let prevF = '';
+        try { prevF = img.dataset.animF || ''; } catch (ePf) {}
+        if (prevF === fkey) {
+            let cur = '';
+            try { cur = img.getAttribute('src') || ''; } catch (eC) {}
+            if (!cur) { try { cur = String(img.src || ''); } catch (eS) {} }
+            let curFile = '';
+            try {
+                curFile = (String(cur).split('?')[0].split('/').pop()) || '';
+                curFile = decodeURIComponent(curFile);
+            } catch (eCf) {}
+            if (curFile === file && img.complete && img.naturalWidth > 0) return;
+        }
+        let wantUrl = String(url);
+        img.dataset.animPending = fkey;
+        try { delete img.dataset.animRawTried; } catch (eR) {}
+        try { img.removeAttribute('onerror'); } catch (eOe) {}
+        try { img.removeAttribute('data-fb'); } catch (eFb) {}
+
+        let applySrc = function (src) {
+            if (img.dataset.animPending !== fkey) return;   // 已被更新的意圖蓋過
+            img.dataset.animF = fkey;
+            try { img.setAttribute('src', src); } catch (eA) {}
+            img.src = src;
+        };
+
+        let pre = new Image();
+        pre.onload = function () {
+            applySrc(wantUrl);
+        };
+        pre.onerror = function () {
+            try {
+                if (!img.dataset.animRawTried && /assets\/anim\//.test(wantUrl)) {
+                    img.dataset.animRawTried = '1';
+                    try {
+                        let raw = wantUrl.replace(/(assets\/anim(?:\/_legacy_lineage)?)\/([^/?#]+)/, function (_m, root, enc) {
+                            try {
+                                let dec = decodeURIComponent(enc);
+                                if (dec && dec !== enc) return root + '/' + dec;
+                            } catch (eD) {}
+                            return root + '/' + enc;
+                        });
+                        if (raw !== wantUrl) {
+                            let pre2 = new Image();
+                            pre2.onload = function () { applySrc(raw); };
+                            pre2.onerror = function () {
+                                if (img.dataset.animPending === fkey) {
+                                    try { delete img.dataset.animPending; } catch (eP) {}
+                                }
+                            };
+                            pre2.src = raw;
+                            return;
+                        }
+                    } catch (eRaw) {}
+                }
+                if (img.dataset.animPending === fkey) {
+                    try { delete img.dataset.animPending; } catch (eP2) {}
+                }
+            } catch (e0) {}
+        };
+        pre.src = wantUrl;
+        // 快取命中：同步套用（無閃）
+        if (pre.complete && pre.naturalWidth > 0) applySrc(wantUrl);
+    } catch (e) {}
+}
+function _mobDirectFrameUrl(name, act, f, faceDir) {
+    let bust = (typeof GAME_VERSION !== 'undefined') ? ('?v=' + GAME_VERSION) : '';
+    // 🩹 v3.8.365：舊版造型走 _legacy_lineage；中文資料夾一律 encode
+    return _mobAnimBase(name, faceDir) + act + '_' + f + '.png' + bust;
+}
+function _mobDirectFrameCount(name, act, faceDir) {
+    let fd = faceDir;
+    // 🩹 v3.8.355：八方向怪未帶 faceDir 時預設 d6（勿查根目錄 attack_＝manifest miss→假 4 幀／錯路徑）
+    if ((fd == null || fd === '') && typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)) fd = 6;
+    let n = _manifestCount(_mobAnimBaseRaw(name, fd) + act + '_0.png');
+    if (typeof n === 'number' && n > 0) return n;
+    if (n === 0) return 0;
+    // 🩹 v3.8.369／422：舊造型無 walk→0；主樹未知資料夾（狼人）允許直連 6 幀
+    if (act === 'walk') {
+        let idleN = _manifestCount(_mobAnimBaseRaw(name, fd) + 'idle_0.png');
+        if (typeof idleN === 'number') return 0;
+        if (typeof MOB_PREF_MAIN_WALK !== 'undefined' && MOB_PREF_MAIN_WALK.has(_animDir(name))) return 6;
+        return 6;
+    }
+    return 4;
+}
+/** 🩹 v3.8.344：Q 人物包標準幀數（免等 probe／manifest） */
+function _qPlayerFrameCount(act) {
+    let m = { idle: 4, walk: 8, attack: 6, skill: 6, hurt: 3, death: 5 };
+    return m[act] || 4;
+}
+/** 🩹 v3.8.347：經典 classanim 幀數（manifest 優先；未知給合理預設） */
+function _classAnimFrameCount(form, act) {
+    try {
+        if (form && form.base) {
+            let pfx = (form.wpn && act !== 'skill' && act !== 'death') ? (form.wpn + '_' + act + '_') : (act + '_');
+            let mc = _manifestCount(form.base + pfx + '0.png');
+            if (typeof mc === 'number' && mc > 0) return mc;
+        }
+    } catch (e) {}
+    let fb = { idle: 12, walk: 4, attack: 7, skill: 8, hurt: 2, death: 10 };
+    return fb[act] || 4;
 }
 function _probeFramesWin(urlFor, maxF, minF, done) {
     // 🚀 v3.4.40 快路徑：幀數已知→直接平行載精確張數（零 404·零探測往返·離線同樣受益）。
@@ -1966,23 +3041,34 @@ function _probeFramesWin(urlFor, maxF, minF, done) {
 function _mobAnimProbe(name) {
     if (_mobAnimCache[name] !== undefined) return;
     _mobAnimCache[name] = 'probing';
+    _mobAnimProbeAt[name] = Date.now();
     let animName = _animDir(name);   // 🔗 共用怪：本體/影子/武器幀 URL 走目標資料夾(cache 仍 keyed by name)
-    let hasShadow = (typeof MOB_ANIM_SPRITE_SHADOW !== 'undefined') && MOB_ANIM_SPRITE_SHADOW.has(name);   // 🌑 真實影子 sprite→額外探測 <動作>_s_N.png
+    // 🩹 v3.8.323：暗黑重製也有 _s 層（HTML 會掛 shadow img）→必須探進 cache，否則本體換幀、影子釘死 idle_s_0 像「不會動只會晃」
+    let hasShadow = ((typeof MOB_ANIM_SPRITE_SHADOW !== 'undefined') && MOB_ANIM_SPRITE_SHADOW.has(name))
+        || ((typeof MOB_DARK_REMAKE !== 'undefined') && MOB_DARK_REMAKE.has(name));
     let hasWeapon = (typeof MOB_ANIM_WEAPON_FX !== 'undefined') && MOB_ANIM_WEAPON_FX.has(name);           // ⚔️ 武器揮動特效→額外探測 <動作>_w_N.png
     let hasWeapon2 = (typeof MOB_ANIM_WEAPON_FX2 !== 'undefined') && MOB_ANIM_WEAPON_FX2.has(name);        // ⚔️ v2.7.40 第二武器層→額外探測 <動作>_w2_N.png
     let skfCfg = (typeof MOB_ANIM_SKILL_FX !== 'undefined') ? MOB_ANIM_SKILL_FX[name] : null;               // 🔥 技能特效 cfg(怪名→{startPfx,endPfx?,h,ay,feet?})
     let hasSkillFx = !!skfCfg;
-    let out = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null };
-    if (hasShadow) out.shadow = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null };
-    if (hasWeapon) out.weapon = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null };
+    let out = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null, walk: null };
+    if (hasShadow) out.shadow = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null, walk: null };
+    if (hasWeapon) out.weapon = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null, walk: null };
     if (hasWeapon2) out.weapon2 = { idle: null, spawn: null, attack: null, skill: null, hurt: null, death: null };
     if (hasSkillFx) out.skillFx = { start: null, end: null };
-    let pending = 6 + (hasShadow ? 6 : 0) + (hasWeapon ? 6 : 0) + (hasWeapon2 ? 6 : 0) + (hasSkillFx ? (1 + (skfCfg.endPfx ? 1 : 0) + (skfCfg.startPfx2 ? 1 : 0) + (skfCfg.startPfx3 ? 1 : 0)) : 0);
-    let finish = () => { if (--pending > 0) return; _mobAnimCache[name] = (out.idle || out.spawn || out.attack || out.skill || out.hurt || out.death) ? out : null; };
+    let pending = 7 + (hasShadow ? 7 : 0) + (hasWeapon ? 7 : 0) + (hasWeapon2 ? 6 : 0) + (hasSkillFx ? (1 + (skfCfg.endPfx ? 1 : 0) + (skfCfg.startPfx2 ? 1 : 0) + (skfCfg.startPfx3 ? 1 : 0)) : 0);
+    let finish = () => { if (--pending > 0) return; _mobAnimCache[name] = (out.idle || out.spawn || out.attack || out.skill || out.hurt || out.death || out.walk) ? out : null; };
     let probeSeq = (target, key, prefixes, minF) => {   // 依前綴平行探測(滑動窗口)到缺號為止；idle 先試 idle_ 再退裸編號。minF=最少幀數(受擊 hurt 允許 1 幀)
         let pi = 0;
-        let attempt = () => _probeFramesWin(i => `assets/anim/${animName}/${prefixes[pi]}${i}.png`, MOB_ANIM_MAX_FRAMES, minF || 2, (frames, n) => {
+        // 🩹 v3.8.350：探測 URL 與直連一律 encode（免部分環境裸中文 404→cache null→只剩翻面晃）
+        let _animBase = _mobAnimBase(name);
+        let attempt = () => _probeFramesWin(i => _animBase + prefixes[pi] + i + '.png', MOB_ANIM_MAX_FRAMES, minF || 2, (frames, n) => {
             if (!frames && n === 0 && pi + 1 < prefixes.length) { pi++; attempt(); return; }   // 第 0 幀即缺→換下一個前綴重試（同舊制：僅首幀缺才換前綴）
+            if (frames && frames.length) {
+                let pfx = prefixes[pi];
+                for (let fi = 0; fi < frames.length; fi++) {
+                    try { frames[fi]._animPath = _animBase + pfx + fi + '.png'; } catch (eP) {}
+                }
+            }
             target[key] = frames; finish();
         });
         attempt();
@@ -1993,6 +3079,7 @@ function _mobAnimProbe(name) {
     probeSeq(out, 'skill', ['skill_']);
     probeSeq(out, 'hurt', ['hurt_'], 1);   // 🎬 v2.6.94 受擊動畫（通常 1~2 幀→允許單幀；被擊中優先播放一輪回待機）
     probeSeq(out, 'death', ['death_']);
+    probeSeq(out, 'walk', ['walk_']);   // v3.8.280 lively walk
     if (hasShadow) {   // 🌑 影子層各動作序列（幀數與本體對應動作相同→_mobAnimApply 用同一幀索引同步）
         probeSeq(out.shadow, 'idle', ['idle_s_']);
         probeSeq(out.shadow, 'spawn', ['spawn_s_']);
@@ -2000,6 +3087,7 @@ function _mobAnimProbe(name) {
         probeSeq(out.shadow, 'skill', ['skill_s_']);
         probeSeq(out.shadow, 'hurt', ['hurt_s_'], 1);
         probeSeq(out.shadow, 'death', ['death_s_']);
+        probeSeq(out.shadow, 'walk', ['walk_s_']);
     }
     if (hasWeapon) {   // ⚔️ 武器揮動特效層各動作序列（同幀索引·允許單幀·揮動空幀本就透明）
         probeSeq(out.weapon, 'idle', ['idle_w_'], 1);
@@ -2008,6 +3096,7 @@ function _mobAnimProbe(name) {
         probeSeq(out.weapon, 'skill', ['skill_w_'], 1);
         probeSeq(out.weapon, 'hurt', ['hurt_w_'], 1);
         probeSeq(out.weapon, 'death', ['death_w_'], 1);
+        probeSeq(out.weapon, 'walk', ['walk_w_'], 1);
     }
     if (hasWeapon2) {   // ⚔️ v2.7.40 第二武器層各動作序列(同 _w 機制·前綴 _w2_)
         probeSeq(out.weapon2, 'idle', ['idle_w2_'], 1);
@@ -2027,12 +3116,17 @@ function _mobAnimProbe(name) {
 // 🎬 觸發單次動作（js/04 攻擊/技能掛點呼叫）：鎖定動作（登場/技能）播放中→忽略新觸發（強制放完）
 function _mobAnimTrigger(m, k) {
     if (!m) return;
-    if (typeof state !== 'undefined' && state.ff) return;   // 🎬 v3.2.72 背景補跑期間不觸發怪物動作動畫/技能特效登記→切分頁回來不會全場怪物同步爆播攻擊/技能（比照 v3.2.65 _vfxMute 對特效的處理·此為 sprite 幀動畫路徑）
+    // 🎬 v3.8.317：只在長段補跑靜音；前景 tick 追趕不可吃掉攻擊動作
+    if (typeof _ffCatchupLong === 'function' && _ffCatchupLong()) return;
     let cur = m._animAct;
     if (cur && cur.lock) {   // 鎖定動作播放中？（以快取序列長度判斷是否還沒播完）
         let a = _mobAnimCache[m.n];
         let seq = (a && a !== 'probing') ? a[cur.k] : null;
-        if (seq && (Date.now() - cur.t) < seq.length * (1000 / MOB_ANIM_FPS)) return;   // 還在播→不打斷、不排隊
+        // 🩹 v3.8.355：八方向估時長也要帶 dN，否則根目錄 miss→錯估
+        let _fdEst = (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(m.n))
+            ? ((m._face8 != null) ? m._face8 : 6) : null;
+        let nEst = (seq && seq.length) ? seq.length : _mobDirectFrameCount(m.n, cur.k, _fdEst);
+        if ((Date.now() - cur.t) < Math.max(1, nEst) * (1000 / MOB_ANIM_FPS)) return;   // 還在播→不打斷、不排隊
     }
     m._animAct = { k: k, t: Date.now(), lock: (k === 'spawn' || k === 'skill') };
     if (k === 'skill' && (typeof MOB_ANIM_SKILL_FX !== 'undefined') && MOB_ANIM_SKILL_FX[m.n]) {   // 🔥 技能觸發同時登記技能特效(start→end·_updateMobSkillFx 推進)
@@ -2040,13 +3134,72 @@ function _mobAnimTrigger(m, k) {
         if (_mobSkillFx[m.uid] && _mobSkillFx[m.uid].el2) _mobSkillFx[m.uid].el2.remove();   // 🔥 v2.7.41 重觸發也移除第二特效層(不死鳥)·防 DOM 洩漏(審查發現的第4個 cleanup 點)
         _mobSkillFx[m.uid] = { t0: Date.now(), el: null };
     }
+    // 🩹 v3.8.343：觸發後立刻換幀（勿等下一輪 8fps ticker＝看起來沒攻擊動作）
+    try { _mobAnimApply(); } catch (eNow) {}
 }
 // ===== 🧭 v3.2.11 八方向怪物：依攻擊目標選面向 =====
 //   名單內的怪：assets/anim/<名>/d0..d7/ 各一組動作(idle/attack/hurt/death)+影子(_s)；d0..d7 全部共畫布(--multi)→換方向不跳大小/位置。
 //   方向羅盤：dir 從左上 NW 順時針每 45°（0=NW 1=N 2=NE 3=E 4=SE 5=S 6=SW 7=W）·對應 spr 檔號 動作×8+方向。
 //   面向＝怪 sprite 中心 → 目標 sprite 中心 的螢幕向量選最近方向；目標由 js/04 寫 m._facePartyKey(P/A:slot)，未定→退玩家 sprite→退預設 dir6。
 //   惰性載入：只載實際用到的方向(固定側視戰場僅下半球數個方向會被選到)；未載好先退上次成功方向/預設 d6。
-const MOB_ANIM_8DIR = new Set(['杜賓狗', /* 🐾 v3.2.17 夥伴更新12怪（素材＝寵物八方向共用） */ /* 🔁 v3.2.20 同名怪去重：改讀八方向共用圖·舊根圖已刪（冰人保留spawn·火系等7隻保留特效層不切） */ '哈柏哥布林', '甘地妖魔', '都達瑪拉妖魔', '妖魔巡守', '狂野毒牙', '狂野之毒', '狂野之魔', '食人妖精', '食人妖精王', '狂暴蜥蜴人', '重裝蜥蜴人', '魔狼', '魔蝙蝠', '巨大守護螞蟻', '強化白螞蟻群', '巨大強化白螞蟻', '地獄奴隸', '闇精靈王', '狼', '熊', '哈士奇', '牧羊犬',  '老虎', '貓', '熊貓', '高麗幼犬', '浣熊', '聖伯納犬', '狐狸', '暴走兔', '小獵犬', '柯利', '袋鼠', '猴子']);   // 🐕 v3.2.11 杜賓狗試點 → v3.2.17 擴 12 捕捉動物
+const MOB_ANIM_8DIR = new Set(['杜賓狗', /* 🐾 v3.2.17 夥伴更新12怪（素材＝寵物八方向共用） */ /* 🔁 v3.2.20 同名怪去重：改讀八方向共用圖·舊根圖已刪（冰人／火系等保留根目錄 spawn／skill_effect→見 DENY） */ '哈柏哥布林', '甘地妖魔', '都達瑪拉妖魔', '妖魔巡守', '狂野毒牙', '狂野之毒', '狂野之魔', '食人妖精', '食人妖精王', '狂暴蜥蜴人', '重裝蜥蜴人', '魔狼', '魔蝙蝠', '巨大守護螞蟻', '強化白螞蟻群', '巨大強化白螞蟻', '地獄奴隸', '闇精靈王', '狼', '熊', '哈士奇', '牧羊犬',  '老虎', '貓', '熊貓', '高麗幼犬', '浣熊', '聖伯納犬', '狐狸', '暴走兔', '小獵犬', '柯利', '袋鼠', '猴子']);   // 🐕 v3.2.11 杜賓狗試點 → v3.2.17 擴 12 捕捉動物
+/** 🩹 保留根目錄 spawn／skill_effect 管線，不切八向（即使 assets 有 d0..d7） */
+const MOB_ANIM_8DIR_DENY = new Set([
+    '冰人', '夢幻之島冰人',
+    '火焰弓箭手', '火焰戰士', '火蜥蜴', '夢幻之島火蜥蜴',
+    '暗黑火焰弓箭手', '暗黑火焰戰士'
+]);
+// 🩹 v3.8.367／503／v3.9.2：manifest 有 d0+d6 idle 的怪自動進八向（含頂層 assets/anim/<名>＋_legacy_lineage）
+//    並同步掛進 MOB_ANIM_NAMES（否則 _mobAnimApply 當靜態怪略過→無行走／無八向轉向）
+var _mob8DirLegacyExpanded = false;
+function _expandMob8DirFromLegacyManifest() {
+    if (_mob8DirLegacyExpanded) return;
+    try {
+        if (typeof ANIM_MANIFEST === 'undefined' || !ANIM_MANIFEST) return;
+        function _tryAdd8(ent, name) {
+            if (!name || !ent) return;
+            if (typeof MOB_ANIM_8DIR_DENY !== 'undefined' && MOB_ANIM_8DIR_DENY.has(name)) return;
+            if (!((ent['d0/idle_'] || 0) > 0 && (ent['d6/idle_'] || 0) > 0)) return;
+            MOB_ANIM_8DIR.add(name);
+            // 🩹 v3.9.2：八向資產存在＝必須進動畫管線，否則有圖也不播 walk／轉向
+            try { if (typeof MOB_ANIM_NAMES !== 'undefined') MOB_ANIM_NAMES.add(name); } catch (eN) {}
+            // 有影子幀就掛 SPRITE_SHADOW（腳底 _s；無則維持 CSS 橢圓）
+            try {
+                if (typeof MOB_ANIM_SPRITE_SHADOW !== 'undefined') {
+                    var hasS = false;
+                    for (var d = 0; d < 8 && !hasS; d++) {
+                        if ((ent['d' + d + '/idle_s_'] || 0) > 0 || (ent['d' + d + '/walk_s_'] || 0) > 0) hasS = true;
+                    }
+                    if (hasS) MOB_ANIM_SPRITE_SHADOW.add(name);
+                }
+            } catch (eS) {}
+        }
+        // (1) 舊版巢狀 _legacy_lineage
+        var leg = ANIM_MANIFEST['assets/anim/_legacy_lineage'];
+        if (leg) {
+            Object.keys(leg).forEach(function (k) {
+                var mm = /^(.+)\/d6\/idle_$/.exec(k);
+                if (mm && mm[1]) _tryAdd8(leg, mm[1]);
+            });
+        }
+        // (2) 頂層 assets/anim/<怪名>（v3.8.503：補齊磁碟已有完整八向但未硬編的怪）
+        Object.keys(ANIM_MANIFEST).forEach(function (bucket) {
+            if (bucket.indexOf('assets/anim/') !== 0) return;
+            if (bucket === 'assets/anim/_legacy_lineage') return;
+            var name = bucket.slice('assets/anim/'.length);
+            if (!name || name.charAt(0) === '_') return;
+            _tryAdd8(ANIM_MANIFEST[bucket], name);
+        });
+        // 硬編／舊 expand 誤加的 DENY 名一律踢出
+        if (typeof MOB_ANIM_8DIR_DENY !== 'undefined') {
+            MOB_ANIM_8DIR_DENY.forEach(function (n) { MOB_ANIM_8DIR.delete(n); });
+        }
+        _mob8DirLegacyExpanded = true;
+    } catch (e8) {}
+}
+try { _expandMob8DirFromLegacyManifest(); } catch (eBoot8) {}
+try { window._expandMob8DirFromLegacyManifest = _expandMob8DirFromLegacyManifest; } catch (eW8) {}
+try { window.MOB_ANIM_8DIR_DENY = MOB_ANIM_8DIR_DENY; } catch (eWd) {}
 let _mob8Cache = {};   // '<名>#<dir>' → {idle,attack,hurt,death, shadow:{...}} | 'probing' | null
 function _vec2dir(dx, dy) {   // 螢幕向量(x右·y下)→ dir 0-7（NW 順時針）
     let oct = Math.round(Math.atan2(dy, dx) * 4 / Math.PI);   // -4..4：0=E 1=SE 2=S 3=SW ±4=W -3=NW -2=N -1=NE
@@ -2054,15 +3207,91 @@ function _vec2dir(dx, dy) {   // 螢幕向量(x右·y下)→ dir 0-7（NW 順時
     let r = map[String(oct)];
     return (r == null) ? 6 : r;
 }
+/** 🩹 v3.8.408：場戰單向／靜態怪左右翻（西半球＝flip） */
+function _mobFieldWantFlip(m) {
+    try {
+        // 西半球＝翻面；純南北沿用上次左右（_faceFlipLatched）
+        if (m && m._moveFace8 != null) {
+            let d = m._moveFace8 | 0;
+            if (d === 0 || d === 6 || d === 7) { m._faceFlipLatched = true; return true; }
+            if (d === 2 || d === 3 || d === 4) { m._faceFlipLatched = false; return false; }
+            if (d === 1 || d === 5) {
+                if (m._faceFlipLatched != null) return !!m._faceFlipLatched;
+            }
+        }
+        if (m && m._fvx != null && Math.abs(m._fvx) > 0.2) {
+            let fl = m._fvx < 0;
+            m._faceFlipLatched = fl;
+            return fl;
+        }
+        if (m && m._face8 != null) {
+            let d2 = m._face8 | 0;
+            if (d2 === 0 || d2 === 6 || d2 === 7) { m._faceFlipLatched = true; return true; }
+            if (d2 === 2 || d2 === 3 || d2 === 4) { m._faceFlipLatched = false; return false; }
+            if ((d2 === 1 || d2 === 5) && m._faceFlipLatched != null) return !!m._faceFlipLatched;
+        }
+        if (m && m._faceFlipLatched != null) return !!m._faceFlipLatched;
+    } catch (e) {}
+    return null;
+}
+function _mobApplyFieldFaceFlip(c, m, now) {
+    try {
+        let inner = c.querySelector('.mob-img-inner') || c.querySelector('.mob-img-wrap');
+        if (!inner) return;
+        if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(m.n)) {
+            inner.classList.remove('mob-face-flip');
+            return;
+        }
+        let want = _mobFieldWantFlip(m);
+        if (want == null) return;
+        let cur = inner.classList.contains('mob-face-flip');
+        if (want === cur) return;
+        // 🩹 v3.8.424：移動中立刻轉向（勿黏 40ms＝看起來正面滑）
+        let need = (m._animMoving || m._aggro) ? 0 : 100;
+        let last = m._faceFlipAt || 0;
+        if ((now - last) < need) return;
+        inner.classList.toggle('mob-face-flip', !!want);
+        m._faceFlipAt = now;
+    } catch (eF) {}
+}
+function _mobResolveMoveAct(name, moving, faceDir) {
+    let act = moving ? 'walk' : 'idle';
+    let n = _mobDirectFrameCount(name, act, faceDir);
+    let synth = false;
+    // 🩹 v3.8.418／424：探測 cache／八向 cache 已有 walk → 真左右腳
+    try {
+        let c = _mobAnimCache[name];
+        if (moving && c && c !== 'probing' && c.walk && c.walk.length > 1) {
+            return { act: 'walk', n: c.walk.length, synth: false };
+        }
+    } catch (eC) {}
+    try {
+        if (moving && faceDir != null && typeof _mob8Cache !== 'undefined') {
+            let c8 = _mob8Cache[name + '#' + faceDir];
+            if (c8 && c8 !== 'probing' && c8.walk && c8.walk.length > 1) {
+                return { act: 'walk', n: c8.walk.length, synth: false };
+            }
+        }
+    } catch (e8) {}
+    if (act === 'walk' && !(n > 1)) {
+        act = 'idle';
+        n = _mobDirectFrameCount(name, 'idle', faceDir);
+        synth = !!moving;
+        if (!(n > 0)) n = 4;
+    }
+    if (!(n > 0)) n = moving ? 4 : 1;
+    return { act: act, n: n, synth: synth };
+}
 function _mob8Probe(name, dir) {
     let key = name + '#' + dir;
     if (_mob8Cache[key] !== undefined) return;
     _mob8Cache[key] = 'probing';
-    let folder = 'assets/anim/' + encodeURIComponent(_animDir(name)) + '/d' + dir + '/';   // 🔗 v3.2.17 八方向亦吃共用 alias（老虎→虎男）
+    _mobAnimProbeAt[key] = Date.now();
+    let folder = _mobAnimBase(name, dir);   // 🔗 v3.2.17 八方向亦吃共用 alias（老虎→虎男）＋舊版造型 root
     let out = { shadow: {} };
-    let acts = ['idle', 'attack', 'hurt', 'death'];
+    let acts = ['idle', 'walk', 'attack', 'hurt', 'death'];
     let pending = acts.length * 2;
-    let finish = () => { if (--pending > 0) return; _mob8Cache[key] = out.idle ? out : null; };
+    let finish = () => { if (--pending > 0) return; _mob8Cache[key] = (out.idle || out.walk || out.attack) ? out : null; };
     let probeSeq = (target, k, pfx, minF) => {   // 🚀 平行探測（滑動窗口·見 _probeFramesWin）
         _probeFramesWin(i => folder + pfx + i + '.png', MOB_ANIM_MAX_FRAMES, minF || 2, frames => { target[k] = frames; finish(); });
     };
@@ -2081,106 +3310,365 @@ function _mob8TargetRect(m) {
 }
 function _mob8FaceDir(m, box) {
     try {
+        // 🩹 v3.8.401：追擊移動中＝邏輯面向立刻套用（勿再黏滯）
+        if (m && m._animMoving && m._moveFace8 != null) {
+            m._face8 = m._moveFace8;
+            return m._face8;
+        }
+        let stickAdj = 180, stickTurn = 70;
         let tr = _mob8TargetRect(m); if (!tr) return (m._face8 != null) ? m._face8 : 6;
         let mr = box.getBoundingClientRect(); if (!mr.width) return (m._face8 != null) ? m._face8 : 6;
         let dx = (tr.left + tr.width / 2) - (mr.left + mr.width / 2);
         let dy = (tr.top + tr.height * 0.5) - (mr.top + mr.height * 0.5);
         if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return (m._face8 != null) ? m._face8 : 6;
-        let d = _vec2dir(dx, dy); m._face8 = d; return d;
+        let d = _vec2dir(dx, dy);
+        let now2 = Date.now();
+        let cur2 = (m._face8 != null) ? m._face8 : d;
+        if (cur2 === d) {
+            m._face8 = d;
+            return m._face8;
+        }
+        let dlt2 = Math.min((d - cur2 + 8) % 8, (cur2 - d + 8) % 8);
+        let age2 = m._faceStickAt ? (now2 - m._faceStickAt) : 9999;
+        let need2 = (dlt2 >= 2) ? stickTurn : stickAdj;
+        if (m._face8 == null || age2 >= need2) {
+            m._face8 = d;
+            m._faceStickAt = now2;
+        }
+        return m._face8;
     } catch (e) { return (m._face8 != null) ? m._face8 : 6; }
+}
+function _mob8DirReady(a) {
+    return !!(a && a !== 'probing' && ((a.walk && a.walk.length) || (a.idle && a.idle.length)));
 }
 function _mob8Apply(c, m, uid, now) {
     now = now || Date.now();
     let box = c.querySelector('.mob-img-inner') || c.querySelector('.mob-img-wrap') || c;
-    let dir = _mob8FaceDir(m, box);
+    // 🩹 v3.8.403：遠處凍結 idle＋鎖已載向（禁探鄰向／狂換幀＝閃圖）
+    let _farFreeze8 = false;
+    try {
+        if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m)) _farFreeze8 = true;
+    } catch (eFf8) {}
+    if (_farFreeze8) {
+        m._animMoving = false;
+        let lockDir = (m._face8Loaded != null) ? m._face8Loaded : ((m._face8 != null) ? m._face8 : 6);
+        let imgF = c.querySelector('.mob-img-wrap .mob-img-inner img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)') || c.querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
+        if (!imgF) return;
+        let freezeKey = '8:' + lockDir + ':idle:0';
+        try {
+            if (imgF.dataset && imgF.dataset.animF === freezeKey) return;
+        } catch (eFk) {}
+        _animSetImgFrame(imgF, freezeKey, _mobDirectFrameUrl(m.n, 'idle', 0, lockDir));
+        return;
+    }
+    let wantDir = _mob8FaceDir(m, box);
+    // 🩹 v3.8.388：視覺方向與邏輯面向分離——新向未就緒或剛換向時先播舊向
+    let showDir = (m._face8Loaded != null) ? m._face8Loaded : wantDir;
+    let aWant = _mob8Cache[m.n + '#' + wantDir];
+    if (aWant === undefined) { _mob8Probe(m.n, wantDir); aWant = _mob8Cache[m.n + '#' + wantDir]; }
+    // 僅近距走路才預探鄰向（遠距探幀＝閃／爆請求）
+    if (m._animMoving) {
+        try {
+            let _nearProbe = true;
+            if (typeof exploreMobWorldDist === 'function') {
+                _nearProbe = exploreMobWorldDist(m) <= 420;
+            }
+            if (_nearProbe) {
+                _mob8Probe(m.n, (wantDir + 1) % 8);
+                _mob8Probe(m.n, (wantDir + 7) % 8);
+            }
+        } catch (ePf) {}
+    }
+    if (_mob8DirReady(aWant)) {
+        // 🩹 v3.8.405：走路／追擊＝就緒即換向；靜止才滯後防閃
+        let visAge = (m._faceVisAt != null) ? (now - m._faceVisAt) : 9999;
+        if (wantDir === showDir) {
+            m._face8Loaded = wantDir;
+            if (m._faceVisAt == null) m._faceVisAt = now;
+        } else if (m._animMoving || m._faceVisAt === 0 || visAge >= 50) {
+            showDir = wantDir;
+            m._face8Loaded = wantDir;
+            m._faceVisAt = now;
+        }
+    } else {
+        // 新向還在 probing：硬鎖已載方向，勿直連缺幀
+        if (m._face8Loaded != null) showDir = m._face8Loaded;
+    }
+    let dir = showDir;
     let a = _mob8Cache[m.n + '#' + dir];
-    if (a === undefined) { _mob8Probe(m.n, dir); }
+    if (a === undefined) { _mob8Probe(m.n, dir); a = _mob8Cache[m.n + '#' + dir]; }
+    let img = c.querySelector('.mob-img-wrap .mob-img-inner img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)') || c.querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
+    if (!img) return;
+    try {
+        let _inner8 = img.closest('.mob-img-inner');
+        if (_inner8) {
+            _inner8.classList.remove('q-mob-art', 'q-classic-chibi', 'mob-face-flip');
+            if (!_inner8.classList.contains('mob-anim')) _inner8.classList.add('mob-anim');
+        }
+    } catch (e8) {}
     if (!a || a === 'probing') {   // 該方向未載好→退上次成功方向／預設 d6
         let fb = (m._face8Loaded != null) ? m._face8Loaded : 6;
         a = _mob8Cache[m.n + '#' + fb];
-        if (a === undefined) { _mob8Probe(m.n, fb); }
-        if (!a || a === 'probing') return;   // 連退路都還沒好→本幀維持靜態圖
-    } else { m._face8Loaded = dir; }
+        if (a === undefined) { _mob8Probe(m.n, fb); a = _mob8Cache[m.n + '#' + fb]; }
+        // 🩹 v3.8.326：連退路都還 probing → 直連 dN 換幀（不再整段靜態）
+        // 🩹 v3.8.343：探測中也要播 attack／hurt（舊制只播 idle／walk＝左右晃無攻擊）
+        if (!a || a === 'probing') {
+            let _act8 = 'idle';
+            let _f8 = 0;
+            // 🩹 v3.8.371：新方向未就緒時用已載方向換幀，避免空白閃爍
+            let _useDir = (m._face8Loaded != null) ? m._face8Loaded : ((fb != null) ? fb : dir);
+            let _ofs8 = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs8 += s.charCodeAt(j); }
+            if (m._animAct) {
+                let _ak = m._animAct.k;
+                if (_ak === 'skill' || _ak === 'spawn') _ak = 'attack';
+                let _nA = _mobDirectFrameCount(m.n, _ak, _useDir);
+                let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
+                if (ff < Math.max(1, _nA)) { _act8 = _ak; _f8 = ff; }
+                else m._animAct = null;
+            }
+            if (!m._animAct) {
+                let _mv8 = !!(m._animMoving);
+                let _ra8 = _mobResolveMoveAct(m.n, _mv8, _useDir);
+                _act8 = _ra8.act;
+                let _n8 = _ra8.n;
+                try { c.classList.toggle('is-mob-walk-synth', !!_ra8.synth); } catch (eSy8) {}
+                if (_mv8 && m._walkPhase > 0) {
+                    _f8 = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, _n8 || 4);
+                } else {
+                    _f8 = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs8) % Math.max(1, _n8 || 4);
+                }
+            }
+            _animSetImgFrame(img, '8:' + _useDir + ':' + _act8 + ':' + _f8, _mobDirectFrameUrl(m.n, _act8, _f8, _useDir));
+            return;
+        }
+        dir = fb;
+    }
     m._animSpawned = true;   // 8 方向怪無 spawn 動作·標記免走 spawn 觸發
-    let img = c.querySelector('.mob-img-wrap .mob-img-inner img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)') || c.querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
-    if (!img) return;
     let _act = null, _f = 0;
     if (m._animAct) {   // 單次動作（攻擊/受擊/死亡）：自觸發時刻逐幀播一輪
         let _ak = m._animAct.k, seq = a[_ak];
         if (!seq && (_ak === 'skill' || _ak === 'spawn') && a.attack) { _ak = 'attack'; seq = a.attack; }
-        if (seq) { let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS)); if (ff < seq.length) { _act = _ak; _f = ff; } else m._animAct = null; }
-        else m._animAct = null;
+        // 🩹 v3.8.346：cache 缺序列仍直連播完，勿清掉 _animAct
+        let nA = (seq && seq.length) ? seq.length : _mobDirectFrameCount(m.n, (_ak === 'skill' || _ak === 'spawn') ? 'attack' : _ak, dir);
+        let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
+        if (ff < Math.max(1, nA)) {
+            _act = (_ak === 'skill' || _ak === 'spawn') ? 'attack' : _ak;
+            _f = ff;
+        } else m._animAct = null;
     }
-    if (_act === null && a.idle) { let _ofs = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs += s.charCodeAt(j); } _act = 'idle'; _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % a.idle.length; }
-    if (_act === null) return;
-    let _bseq = a[_act];
-    if (_bseq && _bseq[_f] && img.src !== _bseq[_f].src) img.src = _bseq[_f].src;
+    if (_act === null) {
+        let _ofs = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs += s.charCodeAt(j); }
+        let _mv = !!(m._animMoving);
+        let _ra = _mobResolveMoveAct(m.n, _mv, dir);
+        _act = _ra.act;
+        try { c.classList.toggle('is-mob-walk-synth', !!_ra.synth); } catch (eSy) {}
+        let seqL = a[_act];
+        let nL = (seqL && seqL.length) ? seqL.length : _ra.n;
+        if (!(nL > 0)) nL = _ra.n || 4;
+        if (_mv && m._walkPhase > 0) {
+            _f = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, nL || 4);
+        } else {
+            _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % Math.max(1, nL || 4);
+        }
+    } else {
+        try { c.classList.remove('is-mob-walk-synth'); } catch (eSy2) {}
+    }
+    // 🩹 v3.8.355：快取已有 Image 優先用其 src（免重複編解碼路徑＝行動裝置換幀失敗）
+    let _url8 = _mobDirectFrameUrl(m.n, _act, _f, dir);
+    try {
+        let _seq8 = a && a[_act];
+        if (_seq8 && _seq8[_f] && _seq8[_f].src) _url8 = _seq8[_f].src;
+    } catch (eU8) {}
+    _animSetImgFrame(img, m.n + '#8:' + dir + ':' + _act + ':' + _f, _url8);
     let _simg = c.querySelector('.mob-anim-shadow');
     if (_simg && a.shadow) {
-        let _sseq = a.shadow[_act];
-        if (_sseq && _sseq.length) { if (_simg.style.visibility === 'hidden') _simg.style.visibility = ''; let _sf = _f < _sseq.length ? _f : (_f % _sseq.length); if (_simg.src !== _sseq[_sf].src) _simg.src = _sseq[_sf].src; }
+        // 🩹 v3.8.418：有 walk 影跟著本體幀；無則鎖 idle（避免缺影閃黑）
+        let _sAct = _act;
+        let _sseq = a.shadow[_sAct];
+        if (!(_sseq && _sseq.length) && _act === 'walk') {
+            _sAct = 'idle';
+            _sseq = a.shadow.idle;
+        }
+        if (_sseq && _sseq.length) {
+            if (_simg.style.visibility === 'hidden') _simg.style.visibility = '';
+            let _sf = (_sAct === 'idle' && _act === 'walk') ? 0 : (_f < _sseq.length ? _f : (_f % _sseq.length));
+            let _sp = _sseq[_sf].src || _sseq[_sf]._animPath;
+            if (_sp) _animSetImgFrame(_simg, m.n + '#8s:' + dir + ':' + _sAct + ':' + _sf, _sp);
+        }
         else if (_simg.style.visibility !== 'hidden') _simg.style.visibility = 'hidden';
     }
 }
 function _mobAnimApply() {
+    try { _expandMob8DirFromLegacyManifest(); } catch (eEx8) {}
     let ml = document.getElementById('mob-list'); if (!ml) return;
     if (typeof mapState === 'undefined' || !mapState.mobs) return;
     let now = Date.now();
     _trimMobAnimCaches(now);
     let mobByUid = new Map();
     for (let mob of mapState.mobs) if (mob) mobByUid.set(String(mob.uid), mob);
-    let cards = ml.querySelectorAll('.mob-target[data-uid]');
+        let cards = ml.querySelectorAll('.mob-target[data-uid]');
     for (let c of cards) {
+        try {
         let uid = c.getAttribute('data-uid');
         let m = mobByUid.get(String(uid));
         if (!m) continue;
-        if (!MOB_ANIM_NAMES.has(m.n)) continue;   // 🎬 非動畫名單→維持靜態圖·不探測（免對 1000+ 無動畫怪發 404）
+        // 🩹 v3.8.408：場戰一律套面向翻轉（含靜態圖怪）
+        let _fieldCard = false;
+        try {
+            _fieldCard = !!(ml && ml.classList.contains('is-field-combat'));
+        } catch (eFc0) {}
+        if (_fieldCard) _mobApplyFieldFaceFlip(c, m, now);
+        if (!MOB_ANIM_NAMES.has(m.n) && !(typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(m.n))) {
+            // 靜態怪：無序列幀仍靠翻面＋is-mob-walking bob（explore 層已寫）
+            try { c.classList.toggle('is-mob-walk-synth', !!m._animMoving); } catch (eSt) {}
+            continue;
+        }
+        // 🩹 v3.8.403：遠處怪凍結為 idle（禁 walk／狂換向＝閃圖）
+        let _farFreeze = false;
+        try {
+            if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m)) _farFreeze = true;
+        } catch (eFar) {}
+        if (_farFreeze) {
+            m._animMoving = false;
+            if (m._animAct && (m._animAct.k === 'attack' || m._animAct.k === 'skill' || m._animAct.k === 'walk')) {
+                m._animAct = null;
+            }
+            try { c.classList.remove('is-mob-walk-synth'); } catch (eFf) {}
+        }
+        // 🩹 v3.8.369：追擊中且尚未交戰→清掉遠距 attack，優先 walk／位移
+        if (! _farFreeze && m._animMoving && m._animAct && (m._animAct.k === 'attack' || m._animAct.k === 'skill')) {
+            try {
+                if (typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(m)) m._animAct = null;
+            } catch (eClrAtk) {}
+        }
         if (MOB_ANIM_8DIR.has(m.n)) { _mob8Apply(c, m, uid, now); continue; }   // 🧭 v3.2.11 八方向怪：依攻擊目標選向（不走通用單方向路徑）
         let a = _mobAnimCache[m.n];
-        if (a === undefined) { _mobAnimProbe(m.n); continue; }   // 首次遇到→背景探測幀檔（探測完成前維持靜態圖）
-        if (!a || a === 'probing') continue;
-        if (!m._animSpawned) { m._animSpawned = true; if (a.spawn) _mobAnimTrigger(m, 'spawn'); }   // 🎬 登場：該怪物物件首次被動畫系統看到→播登場一輪（每隻一次）
+        if (a === undefined) { _mobAnimProbe(m.n); a = 'probing'; }
         let img = c.querySelector('.mob-img-wrap .mob-img-inner img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)') || c.querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)'); if (!img) continue;
-        let _act = null, _f = 0;   // 🌑 先決定「動作＋幀索引」，本體與影子共用→逐幀同步
-        if (m._animAct) {   // 🎬 單次動作（登場/攻擊/技能/受擊）：自觸發時刻起逐幀播一輪，播畢清除回待機
-            let _ak = m._animAct.k;
-            let seq = a[_ak];
-            if (!seq && _ak === 'skill' && a.attack) { _ak = 'attack'; seq = a.attack; }   // 🎞️ v2.7.50 怪施放技能但無 skill_*.png 幀→改播 attack_*.png（_act 一併改 attack→影子/武器層同步；skill_effect 疊層仍由 _mobAnimTrigger 以原技能意圖登記，不受影響）
-            if (seq) {
+        // 🩹 v3.8.350／359：清掉殘留 Q／翻面；若已掉進 icons 強制拉回 anim
+        try {
+            let _innerFix = img.closest('.mob-img-inner');
+            if (_innerFix) {
+                _innerFix.classList.remove('q-mob-art', 'q-classic-chibi'); // v3.8.422 勿清 mob-face-flip
+                if (!_innerFix.classList.contains('mob-anim')) _innerFix.classList.add('mob-anim');
+            }
+            let _srcFix = '';
+            try { _srcFix = img.getAttribute('src') || img.src || ''; } catch (eSf) {}
+            if (/\/icons\//.test(_srcFix) || /\/qskin\//.test(_srcFix)) {
+                try { delete img.dataset.animF; } catch (eDf) {}
+            }
+        } catch (eCls) {}
+        // 🩹 v3.8.343：探測中／失敗 → 直連仍要播 attack／walk（舊制只播 idle＝左右晃、攻擊無動態）
+        if (!a || a === 'probing') {
+            let _act0 = 'idle';
+            let _f0 = 0;
+            let _ofs0 = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs0 += s.charCodeAt(j); }
+            if (m._animAct) {
+                let _ak = m._animAct.k;
+                if (_ak === 'skill') _ak = 'attack';
+                let _nA = _mobDirectFrameCount(m.n, _ak);
                 let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
-                if (ff < seq.length) { _act = _ak; _f = ff; } else m._animAct = null;
-            } else m._animAct = null;   // 該動作無序列（且無 attack 後備）→直接清（維持待機）
-        }
-        if (_act === null && a.idle) {
-            let _ofs = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs += s.charCodeAt(j); }   // 同名多隻→依 uid 錯開相位
-            _act = 'idle'; _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % a.idle.length;
-        }
-        if (_act !== null) {
-            let _bseq = a[_act];
-            if (_bseq && _bseq[_f] && img.src !== _bseq[_f].src) img.src = _bseq[_f].src;
-            if (a.shadow) {   // 🌑 真實影子層：同動作同幀（缺該動作退 idle·幀數不足取模）→與本體像素級同步
-                let _simg = c.querySelector('.mob-anim-shadow');
-                if (_simg) { let _sseq = a.shadow[_act];   // 🌑 v2.7.41 該動作無影子→隱藏(不再退 idle)：不死鳥 death 無 death_s→死亡無影子(用戶要求·全 164 影子怪僅此一例不對稱)
-                    if (_sseq && _sseq.length) { if (_simg.style.display === 'none') _simg.style.display = ''; if (_simg.style.visibility === 'hidden') _simg.style.visibility = ''; let _sf = _f < _sseq.length ? _f : (_f % _sseq.length); if (_simg.src !== _sseq[_sf].src) _simg.src = _sseq[_sf].src; }
-                    else if (_simg.style.visibility !== 'hidden') _simg.style.visibility = 'hidden'; }
+                if (ff < Math.max(1, _nA)) { _act0 = _ak; _f0 = ff; }
+                else m._animAct = null;
             }
-            if (a.weapon) {   // ⚔️ 武器揮動特效層：v2.7.36 嚴格「直接對照本動作本幀」(_w 與本體動作 1:1 逐幀對照·不退 idle·不取模)；本動作或本幀無 _w→隱藏(不殘留上一動作的舊武器幀)
-                let _wimg = c.querySelector('.mob-anim-weapon');
-                if (_wimg) {
-                    let _wseq = a.weapon[_act];
-                    if (_wseq && _wseq[_f]) { if (_wimg.style.display === 'none') _wimg.style.display = ''; if (_wimg.style.visibility === 'hidden') _wimg.style.visibility = ''; if (_wimg.src !== _wseq[_f].src) _wimg.src = _wseq[_f].src; }
-                    else if (_wimg.style.visibility !== 'hidden') _wimg.style.visibility = 'hidden';
+            if (!m._animAct) {
+                let _mv0 = !!(m._animMoving);
+                let _ra0 = _mobResolveMoveAct(m.n, _mv0);
+                _act0 = _ra0.act;
+                let _n0 = _ra0.n;
+                try { c.classList.toggle('is-mob-walk-synth', !!_ra0.synth); } catch (eSy0) {}
+                if (_mv0 && m._walkPhase > 0) {
+                    _f0 = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, _n0);
+                } else {
+                    _f0 = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs0) % Math.max(1, _n0);
                 }
             }
-            if (a.weapon2) {   // ⚔️ v2.7.40 第二武器層：同 _w 嚴格 1:1 逐幀對照
-                let _w2img = c.querySelector('.mob-anim-weapon2');
-                if (_w2img) {
-                    let _w2seq = a.weapon2[_act];
-                    if (_w2seq && _w2seq[_f]) { if (_w2img.style.display === 'none') _w2img.style.display = ''; if (_w2img.style.visibility === 'hidden') _w2img.style.visibility = ''; if (_w2img.src !== _w2seq[_f].src) _w2img.src = _w2seq[_f].src; }
-                    else if (_w2img.style.visibility !== 'hidden') _w2img.style.visibility = 'hidden';
+            _animSetImgFrame(img, 'dir:' + _act0 + ':' + _f0, _mobDirectFrameUrl(m.n, _act0, _f0));
+            if (_fieldCard) _mobApplyFieldFaceFlip(c, m, now);
+            continue;
+        }
+        if (!m._animSpawned) { m._animSpawned = true; if (a.spawn) _mobAnimTrigger(m, 'spawn'); }
+        // 🩹 v3.8.422：翻面改於換幀後套用
+        // 🩹 v3.8.346：本體一律直連換幀（cache 缺 attack/walk 時舊制會清掉 _animAct＝永遠 idle）
+        let _act = null, _f = 0;
+        let _ofs = 0; { let s = String(uid); for (let j = 0; j < s.length; j++) _ofs += s.charCodeAt(j); }
+        if (m._animAct) {
+            let _ak = m._animAct.k;
+            if (_ak === 'skill' || _ak === 'spawn') _ak = (a.attack && a.attack.length) ? 'attack' : _ak;
+            if (_ak === 'skill') _ak = 'attack';
+            let seq = a[_ak];
+            let nA = (seq && seq.length) ? seq.length : _mobDirectFrameCount(m.n, _ak);
+            let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
+            if (ff < Math.max(1, nA)) { _act = _ak; _f = ff; }
+            else m._animAct = null;
+        }
+        if (_act === null) {
+            let _mv = !!(m._animMoving);
+            let _ra = _mobResolveMoveAct(m.n, _mv);
+            _act = _ra.act;
+            try { c.classList.toggle('is-mob-walk-synth', !!_ra.synth); } catch (eSy1) {}
+            let seqW = a[_act];
+            let nW = (seqW && seqW.length) ? seqW.length : _ra.n;
+            if (!(nW > 0)) nW = _ra.n || 4;
+            if (_mv && m._walkPhase > 0) {
+                _f = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, nW || 4);
+            } else {
+                _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % Math.max(1, nW || 4);
+            }
+        } else {
+            try { c.classList.remove('is-mob-walk-synth'); } catch (eSy3) {}
+        }
+        // 🩹 v3.8.355：快取 Image.src 優先
+        let _url1 = _mobDirectFrameUrl(m.n, _act, _f);
+        try {
+            let _seq1 = a && a[_act];
+            if (_seq1 && _seq1[_f] && _seq1[_f].src) _url1 = _seq1[_f].src;
+            else if (_seq1 && _seq1[_f] && _seq1[_f]._animPath) _url1 = _seq1[_f]._animPath;
+        } catch (eU1) {}
+        _animSetImgFrame(img, m.n + ':' + _act + ':' + _f, _url1);
+        _mobApplyFieldFaceFlip(c, m, now);
+        if (a.shadow) {
+            let _simg = c.querySelector('.mob-anim-shadow');
+            if (_simg) {
+                // 🩹 v3.8.418：有 walk 影跟本體；否則退 idle
+                let _sAct1 = _act;
+                let _sseq = a.shadow[_sAct1];
+                if (!(_sseq && _sseq.length) && _act === 'walk') {
+                    _sAct1 = 'idle';
+                    _sseq = a.shadow.idle;
                 }
+                if (_sseq && _sseq.length) {
+                    if (_simg.style.display === 'none') _simg.style.display = '';
+                    if (_simg.style.visibility === 'hidden') _simg.style.visibility = '';
+                    let _sf = (_sAct1 === 'idle' && _act === 'walk') ? 0 : (_f < _sseq.length ? _f : (_f % _sseq.length));
+                    let _sp = _sseq[_sf].src || _sseq[_sf]._animPath;
+                    if (_sp) _animSetImgFrame(_simg, m.n + ':s:' + _sAct1 + ':' + _sf, _sp);
+                } else if (_simg.style.visibility !== 'hidden') _simg.style.visibility = 'hidden';
             }
         }
+        if (a.weapon) {
+            let _wimg = c.querySelector('.mob-anim-weapon');
+            if (_wimg) {
+                let _wseq = a.weapon[_act];
+                if (_wseq && _wseq[_f]) {
+                    if (_wimg.style.display === 'none') _wimg.style.display = '';
+                    if (_wimg.style.visibility === 'hidden') _wimg.style.visibility = '';
+                    _animSetImgFrame(_wimg, m.n + ':w:' + _act + ':' + _f, _wseq[_f].src || _wseq[_f]._animPath);
+                } else if (_wimg.style.visibility !== 'hidden') _wimg.style.visibility = 'hidden';
+            }
+        }
+        if (a.weapon2) {
+            let _w2img = c.querySelector('.mob-anim-weapon2');
+            if (_w2img) {
+                let _w2seq = a.weapon2[_act];
+                if (_w2seq && _w2seq[_f]) {
+                    if (_w2img.style.display === 'none') _w2img.style.display = '';
+                    if (_w2img.style.visibility === 'hidden') _w2img.style.visibility = '';
+                    _animSetImgFrame(_w2img, m.n + ':w2:' + _act + ':' + _f, _w2seq[_f].src || _w2seq[_f]._animPath);
+                } else if (_w2img.style.visibility !== 'hidden') _w2img.style.visibility = 'hidden';
+            }
+        }
+        } catch (eCard) {}
     }
 }
 // ===== 🧝 v3.0.46 玩家戰鬥 sprite（變身 Phase 2＋🗡️ v3.0.67 職業動態 ARPG Tier1）=====
@@ -2299,25 +3787,41 @@ function _classForm(p, allyGrp, morphPfx) {   // 職業形態解析：p=玩家�
     // 🧭 v3.7.65 八方向 avatar：資料夾依 p._faceD（0..7·ANIM_DIR_SFX8）·domKey 不含朝向→換向不重建 DOM（八方向共畫布·只換幀）
     //    職業動畫與真夏納（morphPfx）皆已八方向部署（含 <武器>_walk 行走幀）。
     if (morphPfx || CLASS_ANIM_8DIR.has(av)) {
-        let folder = fname + _animDirSfx((p && p._faceD != null) ? p._faceD : 2, true);
-        return { key: 'class:' + folder + ':' + wk, domKey: 'class:' + fname + ':' + wk, base: 'assets/classanim/' + encodeURIComponent(folder) + '/', wpn: wk };
+        let faceD = (p && p._faceD != null) ? (p._faceD | 0) : 2;
+        faceD = ((faceD % 8) + 8) % 8;
+        let folder = fname + _animDirSfx(faceD, true);
+        let ver = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'c';
+        // 🩹 v3.8.347：cache key 不含朝向（同 Q）——換 dN 只改 base，勿重探＝永遠 probing／只晃
+        return {
+            key: 'class:' + fname + ':' + wk + ':' + ver,
+            domKey: 'class:' + fname + ':' + wk,
+            base: 'assets/classanim/' + encodeURIComponent(folder) + '/',
+            wpn: wk,
+            classAnim: true,
+            faceD: faceD
+        };
     }
     let folder = allyGrp ? fname + '2' : fname;
-    return { key: 'class:' + folder + ':' + wk, domKey: 'class:' + folder + ':' + wk, base: 'assets/classanim/' + encodeURIComponent(folder) + '/', wpn: wk };
+    return {
+        key: 'class:' + folder + ':' + wk,
+        domKey: 'class:' + folder + ':' + wk,
+        base: 'assets/classanim/' + encodeURIComponent(folder) + '/',
+        wpn: wk,
+        classAnim: true
+    };
 }
 
 /** 角色頭像是否女性（公主／女○） */
 function _avatarIsFemale(avatar) {
     return /女|公主/.test(String(avatar || ''));
 }
-/** Q 多幀人物包資料夾：男＝knight/elf/mage/royal；女＝*_f（王子／公主、男／女騎士、法師、妖精分開造型） */
+/** Q 多幀人物包資料夾：男＝knight/elf/mage/royal/dark；女＝*_f（含黑暗妖精專用包） */
 function _qPlayerPackFolder(cls, avatar) {
     let c = String(cls || 'knight');
-    if (c === 'dark') c = 'elf';
     if (c === 'illusion') c = 'mage';
-    // 👑 王族獨立包；戰士／龍騎暫共用騎士
+    // 👑 王族獨立包；戰士／龍騎暫共用騎士；黑暗妖精用 dark／dark_f（不再借妖精綠裝）
     if (c === 'warrior' || c === 'dragon') c = 'knight';
-    if (c !== 'elf' && c !== 'mage' && c !== 'knight' && c !== 'royal') c = 'knight';
+    if (c !== 'elf' && c !== 'mage' && c !== 'knight' && c !== 'royal' && c !== 'dark') c = 'knight';
     if (_avatarIsFemale(avatar)) c = c + '_f';
     return c;
 }
@@ -2355,10 +3859,12 @@ function _qPlayerForm(actor) {
     let faceD = (actor && actor._faceD != null) ? (actor._faceD | 0) : 3;
     faceD = ((faceD % 8) + 8) % 8;
     // 🧭 v3.8.213 真・八方向：assets/qskin/player/<cls|cls_f>/d0..d7/
+    // 🩹 v3.8.344：cache key 不含朝向——換 dN 只改 base 換圖，勿重探／清幀（舊制每向一 key＝永遠 probing＝只晃）
     return {
-        key: 'q8:' + folder + ':d' + faceD + ':' + ver,
+        key: 'q8:' + folder + ':' + ver,
         domKey: 'q8:' + folder,
         base: 'assets/qskin/player/' + folder + '/d' + faceD + '/',
+        faceD: faceD,
         wpn: null,
         qSkin: true,
         q8: true
@@ -2386,13 +3892,7 @@ function _actorBattleForm(actor, allyGrp) {   // 玩家／傭兵戰場形態：�
         }
         return { key: 'morph:' + m, domKey: 'morph:' + m, base: 'assets/morphanim/' + encodeURIComponent(m) + '/', wpn: null };
     }
-    // 🎨 v3.8.207：僅玩家用 Q 多幀包（idle 輪播）；傭兵仍職業動態
-    try {
-        if (typeof player !== 'undefined' && actor === player) {
-            let qf = _qPlayerForm(actor);
-            if (qf) return qf;
-        }
-    } catch (eQ) {}
+    // 🩹 v3.8.348：Q 造型永久停用→一律職業 classanim（舊版有動態）
     return _classForm(actor, !!allyGrp);
 }
 function _playerBattleForm() {
@@ -2401,8 +3901,10 @@ function _playerBattleForm() {
 let _morphBattleCache = {};   // 形態 key（morph:<名>｜class:<avatar>:<武器key>）→ { idle/attack/skill/hurt/death:[Image]|null, shadow:{...}, weapon:{...} } | 'probing'
 function _battleSpriteProbe(form) {
     _morphBattleCache[form.key] = 'probing';
+    _mobAnimProbeAt[form.key] = Date.now();
     let out = { shadow: {}, weapon: {} };
-    let pending = form.wpn ? 20 : 18;   // 🗡️ v3.0.70 職業形態多探 2 項：武器專屬 skill（<wpn>_skill_·黑暗妖精雙刀/鋼爪·龍騎士雙手劍/鎖鏈劍·戰士各武器）；🚶 v3.7.65 動作多一組 walk（body/shadow/weapon 共 3）
+    // 🩹 v3.8.323：Q 八向只探本體 6 動作（無 _s/_w）——舊制每向 18 請求×8 向＝塞爆連線→換向永遠 probing＝只剩晃動無換幀
+    let pending = form.qSkin ? 6 : (form.wpn ? 20 : 18);
     let finish = () => { if (--pending <= 0) {
         // 🏹 弓/十字弓無專屬技能動畫(bow_skill_)：施放技能(如妖精三重矢)時原退回「通用 skill_」空手施法姿勢→改借用弓攻擊(bow_attack)姿勢，持弓者施放技能不再變空手（玩家＋傭兵共用此快取·同套用影子層）
         if (form.wpn === 'bow' && !out.wskill && out.attack) { out.wskill = out.attack; if (out.shadow && !out.shadow.wskill && out.shadow.attack) out.shadow.wskill = out.shadow.attack; }
@@ -2415,17 +3917,31 @@ function _battleSpriteProbe(form) {
             if (!out.death && out.hurt) out.death = out.hurt;
             if (!out.death && out.idle) out.death = out.idle;
         }
-        _morphBattleCache[form.key] = out;
+        // 🩹 v3.8.344：全空→null（勿存空物件，否則 apply 清掉 attack＝只剩晃）
+        let _hasAny = !!(out.idle || out.walk || out.attack || out.skill || out.hurt || out.death || out.wskill);
+        _morphBattleCache[form.key] = _hasAny ? out : null;
     } };
     let probeSeq = (target, key, pfx, minF) => {   // 🚀 平行探測（滑動窗口·見 _probeFramesWin）
         let bust = form.qSkin ? ('?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'q')) : '';
-        _probeFramesWin(i => form.base + pfx + i + '.png' + bust, MOB_ANIM_MAX_FRAMES, minF || 2, frames => { target[key] = frames; finish(); });
+        _probeFramesWin(i => form.base + pfx + i + '.png' + bust, MOB_ANIM_MAX_FRAMES, minF || 2, frames => {
+            if (frames && frames.length) {
+                for (let fi = 0; fi < frames.length; fi++) {
+                    try { frames[fi]._animPath = form.base + pfx + fi + '.png' + bust; } catch (eP) {}
+                }
+            }
+            target[key] = frames; finish();
+        });
     };
     let pfxOf = (a) => (form.wpn && a !== 'skill' && a !== 'death') ? form.wpn + '_' + a + '_' : a + '_';   // 職業形態：idle/attack/hurt 帶武器前綴·skill/death 共用
     ['idle', 'walk', 'attack', 'skill', 'hurt', 'death'].forEach(a => {   // 🚶 v3.7.65 walk＝行走幀（移動中播放·無此檔→退 idle）
         let p = pfxOf(a);
         let minN = (form.qSkin || a === 'hurt') ? 1 : 2;   // Q 包動作常只有 1～2 幀
         probeSeq(out, a, p, minN);
+        if (form.qSkin) {
+            out.shadow[a] = null;
+            out.weapon[a] = null;
+            return;
+        }
         probeSeq(out.shadow, a, p.slice(0, -1) + '_s_', 1);
         if (form.wpn) { out.weapon[a] = null; finish(); }   // 職業動態無 _w 層→免探測（省 404）
         else probeSeq(out.weapon, a, p.slice(0, -1) + '_w_', 1);
@@ -2463,21 +3979,27 @@ function _pmCurActivePrio() {   // 目前「仍在播放中」動作的權重（
     if (!st.act || st.act === 'idle') return 0;
     if (st.act === 'death') return _PM_PRIO.death;   // 死亡鎖定
     let form = _playerBattleForm(); let a = form && _morphBattleCache[form.key];
-    if (!a || a === 'probing') return 0;
-    let seq = (st.act === 'skill' && !st.skGen && a.wskill) ? a.wskill : a[st.act];
-    if (!seq || !seq.length) return 0;
-    let fms = (st.act === 'attack') ? _atkFrameMs((player.d && player.d.aspd) || 0, seq.length)
-        : (st.act === 'skill') ? _skillFrameMs(seq.length) : (1000 / MOB_ANIM_FPS);
-    return ((Date.now() - st.t) < seq.length * fms) ? (_PM_PRIO[st.act] || 0) : 0;   // 仍在播→其權重·已播完→0(idle)
+    let seq = null;
+    if (a && a !== 'probing') {
+        seq = (st.act === 'skill' && !st.skGen && a.wskill) ? a.wskill : a[st.act];
+    }
+    // 🩹 v3.8.343：探測中用估幀數，勿回 0（否則 hurt/skill 權重失效、attack 被當可打斷）
+    let n = (seq && seq.length) ? seq.length : 4;
+    let fms = (st.act === 'attack') ? _atkFrameMs((player.d && player.d.aspd) || 0, n)
+        : (st.act === 'skill') ? _skillFrameMs(n) : (1000 / MOB_ANIM_FPS);
+    return ((Date.now() - st.t) < n * fms) ? (_PM_PRIO[st.act] || 0) : 0;   // 仍在播→其權重·已播完→0(idle)
 }
 function _playerMorphTrigger(k, skId) {   // js/04 attack／castSkill·manualCast 包裝 skill／HP-delta hurt 呼叫（🗡️ v3.0.67 職業形態亦適用·呼叫端零改動）
     let form = _playerBattleForm(); if (!form) return;
     let st = _pmState;
     if (st.act === 'death') return;   // 死亡鎖定：復活前不接受任何動作（最高權重）
+    // 🩹 v3.8.390：恢復攻擊／變身施法動畫（舊制移動中直接 return＝畫面永遠只走路）
     let newP = _PM_PRIO[k] || 0, curP = _pmCurActivePrio();   // 🎬 v3.0.106 依權重決定是否打斷（hurt>skill>attack）
     if (newP < curP) { if (k === 'attack') st.pendAtk = true; return; }   // 權重較低→不打斷（attack 排隊·hurt/skill 直接略過）
     if (k === 'skill') st.skGen = (skId === 'sk_warrior_roar');   // 🗡️ v3.0.70 戰士咆哮用「通用」skill 動作（CSV 規則）·其餘技能優先武器專屬 wskill
     st.act = k; st.t = Date.now(); st.pendAtk = false;   // 🔮 新動作生效→清掉排隊中的攻擊（已被取代）
+    // 🩹 v3.8.343：觸發後立刻換幀（勿等 ticker＝攻擊無動態）；_inApply 時略過以免重入
+    if (!_pmState._inApply) { try { _playerMorphApply(); } catch (eNow) {} }
 }
 function _playerMorphRemove() {
     if (_pmState.el) { try { _pmState.el.remove(); } catch (e) {} }
@@ -2496,12 +4018,13 @@ function _prefetchPlayerFaceDirs(actor) {
         _pmState.facePrefetched = tag;
         let saved = actor._faceD != null ? actor._faceD : 5;
         let queue = [];
-        for (let d = 0; d < 8; d++) {
-            if (d === ((saved | 0) % 8)) continue; // 當前朝向已由主路徑探測
+        // 🩹 v3.8.323：只預載相鄰 2 向（非全 8）——Q 精簡後仍避免移動瞬間連線塞滿
+        let cur = ((saved | 0) % 8 + 8) % 8;
+        [ (cur + 1) % 8, (cur + 7) % 8, (cur + 2) % 8, (cur + 6) % 8 ].forEach(function (d) {
             actor._faceD = d;
             let f = _actorBattleForm(actor, false);
             if (f && _morphBattleCache[f.key] === undefined) queue.push(d);
-        }
+        });
         actor._faceD = saved;
         let i = 0;
         function pump() {
@@ -2514,9 +4037,9 @@ function _prefetchPlayerFaceDirs(actor) {
                 actor._faceD = keep;
                 if (f && _morphBattleCache[f.key] === undefined) _battleSpriteProbe(f);
             } catch (e1) {}
-            setTimeout(pump, 45);
+            setTimeout(pump, 80);
         }
-        setTimeout(pump, 120);
+        setTimeout(pump, 160);
     } catch (e) {}
 }
 function _playerCastleCrownOn() {
@@ -2613,14 +4136,19 @@ function _playerMorphYOffset(form) {
 function _atkFrameMs(intervalSec, seqLen) {
     let base = 1000 / MOB_ANIM_FPS;   // 預設 125ms/幀（8fps）
     if (!(intervalSec > 0) || !(seqLen > 0)) return base;
-    return Math.max(45, Math.min(base, intervalSec * 1000 / seqLen));
+    // v3.8.298：整段攻擊至少約 380ms，避免高速攻速把揮刀閃成「沒動作」
+    let fromAspd = intervalSec * 1000 / seqLen;
+    let minReadable = 380 / seqLen;
+    return Math.max(55, minReadable, Math.min(base, fromAspd));
 }
 // 🔮 v3.0.94 技能動畫播放速度隨施法速度：比照 _atkFrameMs·間隔＝castLock(tick·職業施法冷卻下限·js/07 施法鎖同源)÷10 秒·只加速不放慢（慢施法維持 8fps 早播完待機）
 //    v3.0.96 第2參 lockTicks（選用）：傭兵傳自身 ally.d.castLock；未傳＝主玩家 player.d.castLock（fallback 12）
 function _skillFrameMs(seqLen, lockTicks) { return _atkFrameMs((lockTicks != null ? lockTicks : ((player && player.d && player.d.castLock) || 12)) / 10, seqLen); }
 // 🧍 v3.7.81 用戶指定改回原本的固定站位（不移動）＝回到 v3.6.89 行為：玩家恆站前排中央、朝向永遠對攻擊目標、待機幀不播行走。
 //   走位實作（_playerMoveStep）原樣保留，只由此開關關閉；要改回走位把此值改 true 即可（行走幀仍照常預載）。
-const PLAYER_BATTLE_WALK = false;
+const PLAYER_BATTLE_WALK = false;  // v3.8.285：經典格位不亂走（探索模式仍由 explore 播 walk）
+const Q_PLAYER_DISP_W = 78;        // v3.8.284：人物顯示寬（原 39×2）
+const Q_PLAYER_DISP_H = 96;        // v3.8.284：人物顯示高上限
 // 🚶 v3.7.64 主角戰鬥走位（用戶：仿寵物/召喚行動概念——有怪走向目標、保持距離攻擊，無怪隨機閒晃；純視覺，攻擊/命中排程完全不變）
 //   步進比照 js/22 _petWanderStep（8fps）：x=正規化 0..1（battle-view 寬）·bottom=2~28px（隊伍層 zIndex=30-bottom 必須為正·後排帶≈26）。
 //   目標＝player._faceTgtUid（js/04 攻擊時寫入）·無則取最早槽位存活者；停在目標約一格寬外（「不用真的碰到」）。
@@ -2672,28 +4200,65 @@ function _playerMoveStep(bv) {
     st.mb = Math.max(2, Math.min(28, st.mb));
 }
 function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態＝變身優先→職業動態·key 含武器變體→換武器自動重建）
+    if (_pmState._inApply) return;
+    _pmState._inApply = true;
+    try { _playerMorphApplyBody(); } finally { _pmState._inApply = false; }
+}
+function _playerMorphApplyBody() {
     let form = _playerBattleForm();
     let bv = document.getElementById('battle-view');
-    let inBattle = bv && !bv.classList.contains('hidden') && bv.classList.contains('area-fit');
-    if (!form || !inBattle) { if (_pmState.el) _playerMorphRemove(); return; }
+    // 🩹 v3.8.317：有戰鬥框即可；area-fit 閃爍不再整隻拔掉 sprite（否則移動瞬間半身／消失）
+    let inBattle = bv && !bv.classList.contains('hidden');
+    if (!inBattle) { if (_pmState.el) _playerMorphRemove(); return; }
+    // 🩹 v3.8.338：game-screen 已顯示時，即使探索 class 尚未套上也不拔掉人物（否則進場靜態無動作）
+    if (!bv.classList.contains('area-fit') && !bv.classList.contains('is-world-scroll')) {
+        let _keepExplore = false;
+        try { if (typeof exploreWorldActive === 'function') _keepExplore = !!exploreWorldActive(); } catch (eKe) {}
+        let _inGame = false;
+        try {
+            let _gs = document.getElementById('game-screen');
+            _inGame = !!(!_gs || !_gs.classList.contains('hidden'));
+        } catch (eIg) {}
+        if (!_keepExplore && !_inGame) { if (_pmState.el) _playerMorphRemove(); return; }
+    }
+    if (!form) { if (_pmState.el) _playerMorphRemove(); return; }
     // 🌀 v3.0.102 傳送術特效期間：暫時隱藏玩家 sprite（特效結束自動恢復·期間跳過渲染）
     if (_teleportFxUntil > Date.now()) { if (_pmState.el) _pmState.el.style.visibility = 'hidden'; return; }
     if (_pmState.el && _pmState.el.style.visibility === 'hidden') _pmState.el.style.visibility = '';
     let a = _morphBattleCache[form.key];
-    if (a === undefined) { _battleSpriteProbe(form); }
+    if (a === undefined) { _battleSpriteProbe(form); a = _morphBattleCache[form.key]; }
     // 轉向換 key 時若新方向還在載：沿用上一方向動畫，避免人物瞬空白
+    let _directOnly = false;
+    // 🩹 v3.8.344：空物件／無序列＝直連；Q 一律直連（base 隨朝向變，不吃舊 dN 的 _animPath）
+    // 🩹 v3.8.347：經典 classanim 亦一律直連（換向不重探＝可播 walk/attack）
+    if (form.qSkin || form.classAnim) _directOnly = true;
     if (!a || a === 'probing') {
-        if (_pmState.lastAnim && _pmState.lastAnim !== 'probing') a = _pmState.lastAnim;
-        else return;
-    } else {
+        if (!form.qSkin && !form.classAnim && _pmState.lastAnim && _pmState.lastAnim !== 'probing') a = _pmState.lastAnim;
+        else { a = { idle: null, walk: null, attack: null, skill: null, hurt: null, death: null, shadow: {}, weapon: {} }; _directOnly = true; }
+    } else if (!(a.idle || a.walk || a.attack || a.skill || a.hurt || a.death)) {
+        a = { idle: null, walk: null, attack: null, skill: null, hurt: null, death: null, shadow: a.shadow || {}, weapon: a.weapon || {} };
+        _directOnly = true;
+    } else if (!form.qSkin && !form.classAnim) {
         _pmState.lastAnim = a;
+    }
+    // 換形態(domKey)才清幀鍵；同形態換朝向保留節奏（動作中更不可清）
+    if (_pmState._animDomKey !== form.domKey) {
+        _pmState._animDomKey = form.domKey;
+        _pmState._animFormKey = form.key;
+        try { if (_pmState.imgs && _pmState.imgs.bd) delete _pmState.imgs.bd.dataset.animF; } catch (eCk) {}
+    } else if (_pmState._animFormKey !== form.key) {
+        _pmState._animFormKey = form.key;
+        if (!_pmState.act) {
+            try { if (_pmState.imgs && _pmState.imgs.bd) delete _pmState.imgs.bd.dataset.animF; } catch (eCk2) {}
+        }
     }
     try { _prefetchPlayerFaceDirs(player); } catch (ePf) {}
     if (_pmState.name !== form.domKey) { _playerMorphRemove(); _pmState.name = form.domKey; }   // 🧭 v3.2.12 只在武器/變身(domKey)變時重建·換朝向(form.key 變·domKey 不變)只換幀
     // 受擊：HP-delta 偵測（涵蓋物理/魔法/DoT 所有傷害落點）
     let hp = player.hp;
-    if (_pmState.prevHp != null && hp < _pmState.prevHp && hp > 0) _playerMorphTrigger('hurt');
-    _pmState.prevHp = hp;
+    let _hpDrop = (_pmState.prevHp != null && hp < _pmState.prevHp && hp > 0);
+    _pmState.prevHp = hp;   // 先寫回，避免 trigger→apply 重入再觸發 hurt
+    if (_hpDrop) _playerMorphTrigger('hurt');
     // 死亡/復活：以遊戲的 player.dead 旗標為準（手動改 hp 不觸發·regen 亦不誤判）；復活(revive 清旗標)→解除凍結回待機
     let _dead = !!player.dead || hp <= 0;
     if (_dead) { if (_pmState.act !== 'death') { _pmState.act = 'death'; _pmState.t = Date.now(); _pmState.pendAtk = false; try { if (typeof playMorphDeathSfx === 'function') playMorphDeathSfx(); } catch (e) {} } }   // 🧝 v3.0.47 變身死亡音（該怪物死亡音·一次）
@@ -2706,12 +4271,13 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         let bd = document.createElement('img'); bd.className = 'pm-body';
         let wp = document.createElement('img'); wp.className = 'pm-weapon';
         let cr = document.createElement('img'); cr.className = 'pm-castle-crown'; cr.src = 'assets/ui/castle-crown.gif?v=v3.6.22'; cr.style.visibility = 'hidden';
+        let nmEl = document.createElement('div'); nmEl.className = 'pm-name'; nmEl.textContent = '';
         [sh, bd, wp, cr].forEach(i => { i.alt = ''; i.draggable = false; });
-        el.append(sh, bd, wp, cr);
+        el.append(sh, bd, wp, cr, nmEl);
         bv.appendChild(el);
         _pmState.el = el; _pmState.imgs = { sh: sh, bd: bd, wp: wp, cr: cr };
         try { if (typeof qApplyActor === 'function') qApplyActor(el, !!(form && form.qSkin)); } catch (eSkin0) {}
-        let w = form.qSkin ? 68 : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
+        let w = form.qSkin ? Q_PLAYER_DISP_W : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
         el.style.width = w + 'px';
     } else if (_pmState.el.parentElement !== bv) bv.appendChild(_pmState.el);
     // 🎨 v3.8.208：人物 Q 只靠 .q-chibi-actor；整場不套 q-chibi，避免動到怪物／變身
@@ -2731,34 +4297,120 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
     // 🚶 v3.7.64 主角走位（取代 v3.6.89 玩家固定站位·僅主玩家；傭兵仍固定站位）：_playerMoveStep 每輪步進·CSS 補間平滑（同寵物 .pet）
     // 🗺️ v3.8.182 探索模式：角色鎖中央，關閉走格子；朝向／步行動畫由 explore 驅動
     {
-        let _pw = form.qSkin ? 68 : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
-        let _worldScroll = (typeof exploreWorldActive === 'function' && exploreWorldActive());
+        let _pw = form.qSkin ? Q_PLAYER_DISP_W : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
+        // 🗺️ 以 CSS／探索圖為準鎖中央腳錨（避免 exploreAllowed／area-fit 瞬間 false 掉回 bottom:2~4px＝半身）
+        let _worldScroll = !!(bv && bv.classList.contains('is-world-scroll'));
+        try { if (!_worldScroll && typeof exploreWorldActive === 'function') _worldScroll = !!exploreWorldActive(); } catch (eWs) {}
+        // 狩獵場戰圖：即使 class 尚未補上 is-world-scroll，也絕對不要掉回經典格位 bottom:2
+        if (!_worldScroll) {
+            try {
+                if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) _worldScroll = true;
+            } catch (eFcL) {}
+        }
+        // 🩹 v3.8.339：不在村莊＝一律場戰腳錨（修「突然半身」：探索模組晚一秒→bottom 掉回 4px）
+        if (!_worldScroll) {
+            try {
+                let _tv = document.getElementById('town-view');
+                let _inTown = !!(!_tv ? false : !_tv.classList.contains('hidden'));
+                if (!_inTown) _worldScroll = true;
+            } catch (eNt) {}
+        }
+        // 🩹 v3.8.328：新兵修練場永不走場戰捲動置中（固定站木頭人左側）
+        let _isTrainingYard = false;
+        try { _isTrainingYard = !!(typeof mapState !== 'undefined' && mapState && mapState.current === 'training'); } catch (eTr0) {}
+        if (_isTrainingYard) {
+            _worldScroll = false;
+            try {
+                if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
+                else {
+                    bv.classList.remove('is-world-scroll', 'is-exploring', 'is-real-map', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll', 'is-scenic-3d');
+                    bv.classList.add('training-yard', 'area-fit', 'has-bg');
+                    let _mlTr = document.getElementById('mob-list');
+                    if (_mlTr) _mlTr.classList.remove('is-field-combat');
+                }
+            } catch (eTr1) {}
+        }
+        // 🩹 v3.8.323：探索允許時硬鎖 class＋腳錨（移動瞬間 class 閃掉＝人物掉到控鍵區被裁成半身）
+        if (_worldScroll && bv) {
+            try { bv.classList.add('is-world-scroll', 'area-fit'); } catch (eLock) {}
+        }
         if (_worldScroll) {
             if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }
-            _pmState.moving = !!(typeof exploreIsMoving === 'function' && exploreIsMoving());
-            if (_pmState.moving && typeof exploreFaceDir === 'function') {
+            // 🩹 v3.8.389：真地圖＝世界−相機腳錨（人在圖上走）；其餘鎖畫面中央
+            let _realMap = false;
+            try { _realMap = !!(typeof exploreIsRealMap === 'function' && exploreIsRealMap()); } catch (eRm) {}
+            let _gy = 186;
+            let _sx = 0;
+            if (_realMap) {
+                try {
+                    if (typeof explorePlayerScreenX === 'function') _sx = Number(explorePlayerScreenX()) || 0;
+                    if (typeof explorePlayerScreenBottom === 'function') _gy = Number(explorePlayerScreenBottom()) || 186;
+                    else if (typeof exploreMobScreenBottom === 'function' && typeof explorePlayerY === 'function') {
+                        _gy = Number(exploreMobScreenBottom(explorePlayerY())) || 186;
+                    }
+                } catch (eGyR) {}
+            } else {
+                try {
+                    if (typeof exploreFieldFootBottom === 'function') _gy = Number(exploreFieldFootBottom(0)) || 186;
+                    else if (typeof exploreGroundY === 'function') _gy = Number(exploreGroundY()) || 186;
+                } catch (eGy) {}
+            }
+            if (!(_gy > 40)) _gy = 186;
+            let _foot = ((_gy - _playerMorphYOffset(form)).toFixed(1)) + 'px';
+            // 🩹 v3.8.451：腳錨＝50%+sx，容器寬＝實際顯示寬（勿 width:auto 塌陷＋圖右溢＝看起來偏右）
+            if (form.qSkin) _pw = 272;
+            else _pw = Math.max(96, Math.min(Math.max(_pw || 100, 100), 272));
+            _pmState.el.style.setProperty('width', _pw + 'px', 'important');
+            _pmState.el.style.setProperty('min-width', '0', 'important');
+            _pmState.el.style.left = 'calc(50% + ' + _sx.toFixed(1) + 'px)';
+            _pmState.el.style.setProperty('bottom', _foot, 'important');
+            _pmState.el.style.setProperty('top', 'auto', 'important');
+            _pmState.el.style.setProperty('height', 'auto', 'important');
+            _pmState.el.style.setProperty('overflow', 'visible', 'important');
+            // 🩹 v3.8.325：人物 z 跟人／怪同一腳底公式（勿寫死 50，否則無法與前排怪交錯）
+            let _pz = 40;
+            try {
+                if (typeof explorePlayerDepthZ === 'function') _pz = Number(explorePlayerDepthZ()) || 40;
+            } catch (ePz) {}
+            _pmState.el.style.zIndex = String(_pz);
+            _pmState.mx = 0.5; _pmState.mb = _gy;
+            // 🩹 v3.8.390／419：探索在走→取消攻擊／施法播 walk（變身後勿因攻擊鎖步變慢）
+            let _exMoving = !!(typeof exploreIsMoving === 'function' && exploreIsMoving());
+            let _lockFace = !!(_pmState.act === 'attack' || _pmState.act === 'skill' || _pmState.act === 'hurt');
+            if (_exMoving && (_pmState.act === 'attack' || _pmState.act === 'skill')) {
+                _pmState.act = null;
+                _pmState.pendAtk = false;
+                _lockFace = false;
+            }
+            _pmState.moving = _exMoving;
+            if (!_lockFace && _pmState.moving && typeof exploreFaceDir === 'function') {
                 try { player._faceD = exploreFaceDir(); } catch (e) {}
             }
-            // 正中央鎖死（水平＋垂直）
-            let _gy = 186;
-            try { if (typeof exploreGroundY === 'function') _gy = exploreGroundY(); } catch (eGy) {}
-            _pmState.el.style.left = 'calc(50% - ' + Math.round(_pw / 2) + 'px)';
-            _pmState.el.style.bottom = (_gy - _playerMorphYOffset(form)) + 'px';
-            _pmState.el.style.zIndex = '36';
-            _pmState.mx = 0.5; _pmState.mb = _gy;
         } else if (PLAYER_BATTLE_WALK) {
             _playerMoveStep(bv);
             if (!_pmState.el._moveTrans) { _pmState.el.style.transition = 'left .14s linear, bottom .14s linear'; _pmState.el._moveTrans = true; }
             _pmState.el.style.left = 'calc(' + (_pmState.mx * 100).toFixed(2) + '% - ' + Math.round(_pw / 2) + 'px)';
             _pmState.el.style.bottom = (Math.round(_pmState.mb) - _playerMorphYOffset(form)) + 'px';
             _pmState.el.style.zIndex = String(Math.max(1, 30 - Math.round(_pmState.mb)));
-        } else {   // 🧍 v3.7.81 固定站位（v3.6.89 原制·同傭兵那行）：不步進、不補間、moving 恆 false→朝向恆對目標且待機播 idle
+        } else {   // 🧍 v3.7.81 固定站位（含新兵修練場）：清掉場戰留下的 !important 定位，否則人物被甩出畫面
             let _pp = _partySpritePos().P;
             if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }
-            _pmState.moving = false; _pmState.mx = null;   // mx 清空＝開關切回 true 時重新以固定站位起步
+            _pmState.moving = false; _pmState.mx = null;
+            try {
+                _pmState.el.style.removeProperty('bottom');
+                _pmState.el.style.removeProperty('top');
+                _pmState.el.style.removeProperty('left');
+                _pmState.el.style.removeProperty('width');
+                _pmState.el.style.removeProperty('min-width');
+                _pmState.el.style.removeProperty('height');
+                _pmState.el.style.removeProperty('overflow');
+                _pmState.el.style.removeProperty('transform');
+            } catch (eClrImp) {}
             _pmState.el.style.left = 'calc(' + _pp.x + ' - ' + Math.round(_pw / 2) + 'px)';
             _pmState.el.style.bottom = (_pp.b - _playerMorphYOffset(form)) + 'px';
             _pmState.el.style.zIndex = String(30 - _pp.b);
+            _pmState.el.style.visibility = '';
+            _pmState.el.style.opacity = '';
         }
     }
     // 🎨 v3.8.212：Q 多幀包保留 q-chibi；非 Q 才清掉
@@ -2770,10 +4422,12 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         }
     } catch (eRm) {}
     // 🧭 朝向：職業／變身八方向；Q 真八向靠 d0..d7 資料夾換圖（不透視扭轉）
-    if (!form.qSkin && !_pmState.moving && (CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
+    // 🩹 v3.8.343：攻擊／施法／受傷期間勿改朝向（換 dN＝換 form.key＝清空幀＝只剩左右晃）
+    let _faceLocked = !!(_pmState.act === 'attack' || _pmState.act === 'skill' || _pmState.act === 'hurt' || _pmState.act === 'death');
+    if (!_faceLocked && !form.qSkin && !_pmState.moving && (CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
     if (form.qSkin) {
         try {
-            if (!_pmState.moving) _classFacing8(player, _pmState.el);
+            if (!_faceLocked && !_pmState.moving) _classFacing8(player, _pmState.el);
             if (_pmState.el) {
                 _pmState.el.style.transform = '';
                 for (let _qi = 0; _qi < 8; _qi++) _pmState.el.classList.remove('q-face-d' + _qi);
@@ -2787,17 +4441,35 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         let seq = a[_pmState.act];
         if (_pmState.act === 'skill' && !_pmState.skGen && a.wskill) { seq = a.wskill; _useW = true; }   // 🗡️ v3.0.70 武器專屬 skill 優先（戰士咆哮 skGen→通用）
         if (seq) {
+            // 🎨 v3.8.274：Q 不再額外 ×0.65/0.7 加速（與幀＋CSS 疊加會像「抖／加速」）；死亡略慢可讀
             let _fms = (_pmState.act === 'attack')
-                ? (form.qSkin ? Math.max(36, _atkFrameMs((player.d && player.d.aspd) || 0, seq.length) * 0.65) : _atkFrameMs((player.d && player.d.aspd) || 0, seq.length))
-                : (_pmState.act === 'skill') ? (form.qSkin ? Math.max(40, _skillFrameMs(seq.length) * 0.7) : _skillFrameMs(seq.length))
-                : (_pmState.act === 'death' && form.qSkin) ? 90
-                : (form.qSkin ? (1000 / 12) : (1000 / MOB_ANIM_FPS));
+                ? _atkFrameMs((player.d && player.d.aspd) || 0, seq.length)
+                : (_pmState.act === 'skill') ? _skillFrameMs(seq.length)
+                : (_pmState.act === 'death' && form.qSkin) ? 100
+                : (form.qSkin ? (1000 / MOB_ANIM_FPS) : (1000 / MOB_ANIM_FPS));
             let ff = Math.floor((Date.now() - _pmState.t) / _fms);
             if (_pmState.act === 'death') { act = 'death'; f = Math.min(ff, seq.length - 1); }
             else if (ff < seq.length) { act = _pmState.act; f = ff; }
             else {
                 _pmState.act = null;
-                if (_pmState.pendAtk && a.attack) { _pmState.pendAtk = false; _pmState.act = 'attack'; _pmState.t = Date.now(); act = 'attack'; f = 0; _useW = false; }   // 🎬 v3.0.106 skill／hurt 播完→接播排隊中的攻擊動畫
+                if (_pmState.pendAtk && (a.attack || _directOnly || form.qSkin || form.classAnim)) { _pmState.pendAtk = false; _pmState.act = 'attack'; _pmState.t = Date.now(); act = 'attack'; f = 0; _useW = false; }   // 🎬 v3.0.106 skill／hurt 播完→接播排隊中的攻擊動畫
+                else _pmState.pendAtk = false;
+            }
+        } else if (_directOnly || form.qSkin || form.classAnim) {
+            // 🩹 v3.8.343／344／347：探測中空 cache 勿清 attack——直連播幀
+            let _ak = _pmState.act;
+            let _nA = form.qSkin ? _qPlayerFrameCount(_ak) : _classAnimFrameCount(form, _ak);
+            let _fmsD = (_ak === 'attack')
+                ? _atkFrameMs((player.d && player.d.aspd) || 0, _nA)
+                : (_ak === 'skill') ? _skillFrameMs(_nA)
+                : (_ak === 'death' && form.qSkin) ? 100
+                : (1000 / MOB_ANIM_FPS);
+            let ff = Math.floor((Date.now() - _pmState.t) / _fmsD);
+            if (_ak === 'death') { act = 'death'; f = Math.min(ff, Math.max(0, _nA - 1)); }
+            else if (ff < _nA) { act = _ak; f = ff; }
+            else {
+                _pmState.act = null;
+                if (_pmState.pendAtk) { _pmState.pendAtk = false; _pmState.act = 'attack'; _pmState.t = Date.now(); act = 'attack'; f = 0; _useW = false; }
                 else _pmState.pendAtk = false;
             }
         } else if (_pmState.act !== 'death') _pmState.act = null;   // 該動作無序列→回待機（death 無序列則維持 idle）
@@ -2805,31 +4477,85 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
     }
     // 🚶 待機層：移動中且有行走幀→播 walk·否則 idle；探索模式步伐與相機位移同步
     if (act === null) {
-        let mv = _pmState.moving && a.walk && a.walk.length;
-        let base = mv ? a.walk : a.idle;
-        let _qFps = form.qSkin ? (mv ? 11 : 8) : MOB_ANIM_FPS;
-        if (base) {
+        let mv = _pmState.moving && ((a.walk && a.walk.length) || _directOnly || form.qSkin || form.classAnim);
+        let base = (!form.qSkin && !form.classAnim && !_directOnly) ? (mv ? (a.walk || a.idle) : a.idle) : null;
+        let _qFps = MOB_ANIM_FPS;
+        if (base && base.length) {
             act = mv ? 'walk' : 'idle';
             _useW = false;
-            if (mv && typeof exploreWorldActive === 'function' && exploreWorldActive() && typeof exploreWalkPhase === 'function') {
-                let ph = Number(exploreWalkPhase()) || 0;
-                f = ((Math.floor(ph) % base.length) + base.length) % base.length;
+            // 🩹 v3.8.356：探索行走用 walkPhase 對齊步伐（勿純時鐘＝與位移脫節像滑冰）
+            let _wp = 0;
+            try {
+                if (mv && typeof exploreWalkPhase === 'function') _wp = Number(exploreWalkPhase()) || 0;
+            } catch (eWp) {}
+            if (mv && _wp > 0) {
+                let wantF = Math.floor(_wp) % base.length;
+                // 🩹 v3.8.447：走路幀至少停留 95ms，避免換幀快過解碼＝閃圖
+                if (!_pmState._walkHold || _pmState._walkHold.n !== base.length) {
+                    _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
+                } else if (wantF !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= 95) {
+                    _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
+                }
+                f = _pmState._walkHold.f;
             } else {
+                _pmState._walkHold = null;
                 f = Math.floor(Date.now() / (1000 / _qFps)) % base.length;
             }
+        } else if (form.qSkin || form.classAnim || _directOnly) {
+            // 直連：尚未探完也播（Q／經典 classanim）
+            act = mv ? 'walk' : 'idle';
+            let _dn = form.qSkin ? _qPlayerFrameCount(act) : _classAnimFrameCount(form, act);
+            let _wp2 = 0;
+            try {
+                if (mv && typeof exploreWalkPhase === 'function') _wp2 = Number(exploreWalkPhase()) || 0;
+            } catch (eWp2) {}
+            if (mv && _wp2 > 0) {
+                let _dnSafe = Math.max(1, _dn);
+                let wantF2 = Math.floor(_wp2) % _dnSafe;
+                if (!_pmState._walkHold || _pmState._walkHold.n !== _dnSafe) {
+                    _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
+                } else if (wantF2 !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= 95) {
+                    _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
+                }
+                f = _pmState._walkHold.f;
+            } else {
+                _pmState._walkHold = null;
+                f = Math.floor(Date.now() / (1000 / MOB_ANIM_FPS)) % Math.max(1, _dn);
+            }
+            _useW = false;
         }
     }
     if (act === null) return;
-    let seq = (act === 'skill' && _useW) ? a.wskill : a[act]; if (!seq || !seq[f]) return;
     let I = _pmState.imgs;
     if (!I.cr && _pmState.el) {
         let cr = document.createElement('img'); cr.className = 'pm-castle-crown'; cr.src = 'assets/ui/castle-crown.gif?v=v3.6.22'; cr.alt = ''; cr.draggable = false; cr.style.visibility = 'hidden';
         _pmState.el.appendChild(cr); I.cr = cr;
     }
-    if (I.bd.src !== seq[f].src) I.bd.src = seq[f].src;
-    // 🎨 Q：動作 class（攻擊／施法每次重觸發；死亡持續）
+    // 🩹 v3.8.326／344／347：Q／經典 classanim 一律用當前 form.base 直連（勿吃舊朝向 _animPath）
+    {
+        let seq = (act === 'skill' && _useW) ? a.wskill : a[act];
+        let _faceTag = (form.faceD != null) ? form.faceD : ((form.key || '').indexOf('d') >= 0 ? form.key : '');
+        let _pfk = form.domKey + ':' + _faceTag + ':' + act + ':' + f;
+        let _pp = null;
+        let bust = '?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'c');
+        if (form.qSkin && form.base) {
+            _pp = form.base + act + '_' + f + '.png' + bust;
+        } else if (form.classAnim && form.base) {
+            let pfx = (form.wpn && act !== 'skill' && act !== 'death') ? (form.wpn + '_' + act + '_') : (act + '_');
+            _pp = form.base + pfx + f + '.png' + bust;
+        } else {
+            if (seq && seq[f]) _pp = seq[f]._animPath || seq[f].src;
+            if (!_pp && form.base) {
+                let pfx = (form.wpn && act !== 'skill' && act !== 'death') ? (form.wpn + '_' + act + '_') : (act + '_');
+                _pp = form.base + pfx + f + '.png' + bust;
+            }
+        }
+        if (_pp) _animSetImgFrame(I.bd, _pfk, _pp);
+        else return;
+    }
+    // 🎨 動作 class（Q＋變身／職業皆掛，供探索攻擊 lunge）
     try {
-        if (_pmState.el && form.qSkin) {
+        if (_pmState.el) {
             _pmState.el.classList.toggle('q-act-walk', act === 'walk');
             _pmState.el.classList.toggle('q-act-hurt', act === 'hurt');
             _pmState.el.classList.toggle('q-act-death', act === 'death');
@@ -2852,10 +4578,11 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         }
     } catch (eAct) {}
     _playerBattleCrownApply(I.cr, form, act);
-    let ss = (act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act];   // 影子：寬容（幀數不足取模·缺動作隱藏）
+    try { _playerNameplateApply(); } catch (eNm) {}
+    let ss = (a.shadow && ((act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act]));
     if (ss && ss.length) { let sf = f < ss.length ? f : (f % ss.length); if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = ''; if (I.sh.src !== ss[sf].src) I.sh.src = ss[sf].src; }
     else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';
-    let ws = a.weapon[act];   // 武器：嚴格 1:1（本動作本幀無 _w→隱藏·v2.7.36 規則）
+    let ws = a.weapon && a.weapon[act];
     if (ws && ws[f]) { if (I.wp.style.visibility === 'hidden') I.wp.style.visibility = ''; if (I.wp.src !== ws[f].src) I.wp.src = ws[f].src; }
     else if (I.wp.style.visibility !== 'hidden') I.wp.style.visibility = 'hidden';
 }
@@ -2878,9 +4605,16 @@ function _partySpritePos() {
             return explorePartySpritePos();
         }
     } catch (e0) {}
+    // 🪵 新兵修練場：玩家站木頭人左側（僅此圖）
+    try {
+        if (typeof mapState !== 'undefined' && mapState && mapState.current === 'training'
+            && typeof TRAINING_PLAYER_POS !== 'undefined') {
+            return { P: TRAINING_PLAYER_POS, A: [] };
+        }
+    } catch (eTr) {}
     let five = true; try { five = (typeof backSlotsActive !== 'function') || backSlotsActive(); } catch (e) {}
-    return five ? { P: { x: '45.5%', b: 2 }, A: [{ x: '23%', b: 2 }, { x: '66%', b: 2 }, { x: '83.5%', b: 2 }, { x: '28%', b: 26 }, { x: '51%', b: 26 }, { x: '70.5%', b: 26 }, { x: '7%', b: 26 }] }
-                : { P: { x: '39%', b: 2 },   A: [{ x: '28%', b: 2 }, { x: '62%', b: 2 }, { x: '72%', b: 2 }, { x: '33.5%', b: 26 }, { x: '57%', b: 26 }, { x: '77.5%', b: 26 }, { x: '23%', b: 26 }] };
+    return five ? { P: { x: '50%', b: 2 }, A: [{ x: '23%', b: 2 }, { x: '66%', b: 2 }, { x: '83.5%', b: 2 }, { x: '28%', b: 26 }, { x: '51%', b: 26 }, { x: '70.5%', b: 26 }, { x: '7%', b: 26 }] }
+                : { P: { x: '50%', b: 2 },   A: [{ x: '28%', b: 2 }, { x: '62%', b: 2 }, { x: '72%', b: 2 }, { x: '33.5%', b: 26 }, { x: '57%', b: 26 }, { x: '77.5%', b: 26 }, { x: '23%', b: 26 }] };
 }
 let _allySpriteStates = {};   // slot → { act, t, prevHp, el, imgs, key, skGen }
 function _allySpriteTrigger(ally, k, skId) {   // js/06 掛點：allyAttackOnce→'attack'·三施法函式→'skill'
@@ -2947,7 +4681,15 @@ function _allySpritesApply() { return;   // 離線存檔位協力 sprite 已移�
         } catch (eAllyGen) {}
         let w = ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
         st.el.style.width = w + 'px';
-        { let _ps = _partySpritePos().A, _pp = _ps[Math.min(i, _ps.length - 1)]; st.el.style.left = 'calc(' + _pp.x + ' - ' + Math.round(w / 2) + 'px)'; st.el.style.bottom = _pp.b + 'px'; st.el.style.zIndex = String(30 - _pp.b); }   // 每輪更新（隊員順位/地圖版面 5格↔3格 可能變）；🤝 v3.6.89 固定站位＝依招募順序（前排 0~2·後排 3~6）
+        { let _ps = _partySpritePos().A, _pp = _ps[Math.min(i, _ps.length - 1)];
+            if (_pp && _pp.dx != null) {
+                st.el.style.left = 'calc(50% + ' + Math.round(_pp.dx - w / 2) + 'px)';
+            } else {
+                st.el.style.left = 'calc(' + _pp.x + ' - ' + Math.round(w / 2) + 'px)';
+            }
+            st.el.style.bottom = _pp.b + 'px';
+            st.el.style.zIndex = String((_pp.z != null) ? _pp.z : (30 - _pp.b));
+        }   // 每輪更新；🩹 v3.8.383／389 真地圖用螢幕偏移＋景深 z
         try {
             st.el.classList.remove('q-chibi-actor', 'q-style-actor');
             st.el.style.transform = '';
@@ -3007,9 +4749,15 @@ function _remotePartySpritePos(i, key, mem) {
                 var cy = (typeof exploreCamY === 'function') ? Number(exploreCamY()) || 0 : 0;
                 var dx = wx - cx;
                 var dy = wy - cy;
-                var gy = (typeof exploreGroundY === 'function') ? Number(exploreGroundY()) || 186 : 186;
+                var gy = (typeof exploreFieldFootBottom === 'function')
+                    ? Number(exploreFieldFootBottom(0)) || 180
+                    : ((typeof exploreGroundY === 'function') ? Number(exploreGroundY()) || 186 : 186);
                 if (Math.hypot(dx, dy) < 1400) {
-                    return { mode: 'field', dx: dx, bottom: gy - dy };
+                    // 與場怪同：left／bottom 用世界座標，再吃 --wx/--wy 相機平移
+                    var foot = (typeof exploreFieldFootBottom === 'function')
+                        ? Number(exploreFieldFootBottom(wy)) || (gy + wy)
+                        : (gy + wy);
+                    return { mode: 'field', dx: wx, bottom: foot };
                 }
             }
         }
@@ -3171,7 +4919,60 @@ function _remotePartySpritesApply() {
         } else if (st.imgs.sh.style.visibility !== 'hidden') st.imgs.sh.style.visibility = 'hidden';
     });
 }
-setInterval(() => { if (!document.hidden && !(typeof catchupActive === 'function' && catchupActive())) { try { _mobAnimApply(); } catch (e) {} try { _updateFreezeFx(); } catch (e) {} try { _updateMobSkillFx(); } catch (e) {} try { _allySpritesApply(); } catch (e) {} try { _remotePartySpritesApply(); } catch (e) {} try { _playerMorphApply(); } catch (e) {} } }, Math.floor(1000 / MOB_ANIM_FPS));
+// 🩹 v3.8.346：顯式掛 window（boot mustReady／場戰 tick 依賴；勿只靠腳本頂層洩漏）
+try {
+    window._playerMorphApply = _playerMorphApply;
+    window._playerMorphTrigger = _playerMorphTrigger;
+    window._mobAnimApply = _mobAnimApply;
+    window._mobAnimTrigger = _mobAnimTrigger;
+    window._animSetImgFrame = _animSetImgFrame;
+} catch (eExpAnim) {}
+
+// 🩹 v3.8.334／352／355：戰鬥視窗可見就換幀（勿只靠 game-screen；行動 HUD 偶發 class 不同步）
+let _perfHousekeepAt = 0;
+setInterval(() => {
+    if (document.hidden) return;
+    try {
+        let bv = document.getElementById('battle-view');
+        let gs = document.getElementById('game-screen');
+        let bvOk = !!(bv && !bv.classList.contains('hidden'));
+        let gsOk = !!(gs && !gs.classList.contains('hidden'));
+        if (!bvOk && !gsOk) return;
+    } catch (eGate) { return; }
+    try { _mobAnimApply(); } catch (e) {}
+    if (!(typeof _ffCatchupLong === 'function' && _ffCatchupLong())) {
+        try { _updateFreezeFx(); } catch (e) {}
+        try { _updateMobSkillFx(); } catch (e) {}
+        try { _allySpritesApply(); } catch (e) {}
+        try { _remotePartySpritesApply(); } catch (e) {}
+    }
+    try { _playerMorphApply(); } catch (e) {}
+    let _nowHk = Date.now();
+    if (_nowHk - _perfHousekeepAt > 20000) {
+        _perfHousekeepAt = _nowHk;
+        try { _perfHousekeeping(); } catch (eHk) {}
+    }
+}, Math.floor(1000 / MOB_ANIM_FPS));
+// 🩹 v3.8.352：RAF 輔助換幀（interval 被背景節流時場戰仍要動）
+(function _mobAnimRafLoop() {
+    let last = 0;
+    function tick(ts) {
+        try {
+            if (!document.hidden && ts - last >= (1000 / MOB_ANIM_FPS) - 2) {
+                let gs = document.getElementById('game-screen');
+                let bv = document.getElementById('battle-view');
+                let gsOk = !!(gs && !gs.classList.contains('hidden'));
+                let bvOk = !!(bv && !bv.classList.contains('hidden'));
+                if (gsOk || bvOk) {
+                    last = ts;
+                    try { _mobAnimApply(); } catch (e0) {}
+                }
+            }
+        } catch (e1) {}
+        try { requestAnimationFrame(tick); } catch (e2) {}
+    }
+    try { requestAnimationFrame(tick); } catch (e3) {}
+})();
 
 // 🌙 v3.6.03 掛網記憶體釋放：切到背景的瞬間清空 #vfx-layer 全部特效元素＋冰凍/怪技能追蹤 dict。
 //    背景分頁的移除管線全數停擺（animationend 不觸發·WAAPI onfinish 暫停·setTimeout 節流至 1/分鐘），
