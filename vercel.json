@@ -9,8 +9,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/:path+",
-      "destination": "/api?__p=:path"
+      "source": "/api/:path*",
+      "destination": "/api?__p=:path*"
     }
   ],
   "headers": [
