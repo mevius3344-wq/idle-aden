@@ -9,20 +9,32 @@
   },
   "headers": [
     {
-      "source": "/(.*\\.(html|js|css))",
+      "source": "/:path*.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
         { "key": "Pragma", "value": "no-cache" }
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/:path*.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        { "key": "Cache-Control", "value": "public, max-age=86400, immutable" }
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/:path*.css",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, immutable" }
+      ]
+    },
+    {
+      "source": "/assets/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, immutable" }
+      ]
+    },
+    {
+      "source": "/public/:path*",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400, immutable" }
       ]
