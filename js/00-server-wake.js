@@ -103,7 +103,7 @@
   }
 
   /**
-   * 登入／連線前確保 Render 已喚醒。冷啟動最多等 maxWaitMs（預設 90 秒）。
+   * 登入／連線前確保 Render 已喚醒。冷啟動最多等 maxWaitMs（預設 25 秒）。
    * 本機／無喚醒網址：直接放行，避免卡在「伺服器喚醒中」。
    */
   function ensureAwake(maxWaitMs) {
@@ -111,19 +111,19 @@
       _lastOkMs = Date.now();
       return Promise.resolve({ ok: true, warm: true, local: true });
     }
-    var limit = Math.max(15000, Number(maxWaitMs) || 90000);
+    var limit = Math.max(8000, Number(maxWaitMs) || 25000);
     var started = Date.now();
-    var delay = 1200;
+    var delay = 800;
 
     function attempt() {
       if (_lastOkMs > started - 60000) return Promise.resolve({ ok: true, warm: true });
-      return pingOnce(Math.min(45000, limit)).then(function (ok) {
+      return pingOnce(Math.min(20000, limit)).then(function (ok) {
         if (ok) return { ok: true, warm: false };
         if (Date.now() - started >= limit) return { ok: false, error: "timeout" };
         return new Promise(function (resolve) {
           setTimeout(resolve, delay);
         }).then(function () {
-          delay = Math.min(8000, Math.floor(delay * 1.4));
+          delay = Math.min(5000, Math.floor(delay * 1.35));
           return attempt();
         });
       });

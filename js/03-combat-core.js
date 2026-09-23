@@ -225,10 +225,16 @@ function gameLoop() {
     }
 
     let owed = Math.floor(_tickDebt / TICK_MS);
-    if (owed <= 1 && !_hidden && !_ffAcc) {   // 即時路徑：背景／既有補跑摘要一律走下方靜音路徑
-        _tickDebt -= TICK_MS;
-        state.inTick = true;
-        try { tick(); } finally { state.inTick = false; settleDeadMobs(); }
+    // 🩹 v3.8.318：前景允許一次消化最多 4 個 tick（約 400ms 卡頓）仍走「有畫面」路徑。
+    //    場戰＋探索很容易讓 elapsed≈200～300ms；舊條件 owed<=1 會誤進靜音補跑→清 VFX、擋動畫。
+    let _liveBurst = (!_hidden && !_ffAcc) ? 4 : 1;
+    if (owed <= _liveBurst && !_hidden && !_ffAcc) {
+        let n = Math.min(owed, _liveBurst);
+        for (let _li = 0; _li < n; _li++) {
+            _tickDebt -= TICK_MS;
+            state.inTick = true;
+            try { tick(); } finally { state.inTick = false; settleDeadMobs(); }
+        }
         flushTickRender();
         return;
     }
@@ -239,11 +245,12 @@ function gameLoop() {
     if (!_ffAcc) {
         if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
         _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), invStart: _ffInventoryCounts() };   // ⏩ 整段補跑只在起點與終點各掃一次背包
-        try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (e) {}   // 補跑只保留最終收益，立即釋放尚未播完的戰鬥特效
+        // 🩹 v3.8.318：短卡頓進補跑時勿立刻清 VFX（否則傷害數字／濺血一冒出就被砍）
     }
     // 長補跑先讓瀏覽器畫出進度提示再開始重運算；只做一次，不增加每批額外等待。
     if (!_hidden && !_ffAcc.progressPrimed && (_ffAcc.ticks * TICK_MS + _tickDebt) >= FF_PROGRESS_MIN_MS) {
         _ffAcc.progressPrimed = true;
+        try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (eClr) {}
         _ffProgressUpdate(_ffAcc, _tickDebt);
         _ffScheduleNext();
         return;
@@ -423,6 +430,10 @@ function _ffScheduleNext() {
         if (_tickDebt >= TICK_MS && state && state.running && player && !player.dead) gameLoop();
     }, FF_YIELD_MS);
 }
+/** 真正長段補跑（≥3 秒）：只有這種才靜音攻擊／走路動畫；前景 1～2 tick 追趕不可吃掉揮砍 */
+function _ffCatchupLong() {
+    return !!(_ffAcc && (((_ffAcc.ticks || 0) + Math.floor((_tickDebt || 0) / TICK_MS)) >= 30));
+}
 function _ffCancelScheduledLoop() {
     if (_ffResumeTimer !== null) clearTimeout(_ffResumeTimer);
     _ffResumeTimer = null;
@@ -476,6 +487,19 @@ function _ffPetProgressSum() {
 }
 // 🛡️ 絕對屏障：與世界隔絕——無法攻擊/施法/用道具、不自然恢復、不受任何傷害（持續期間 player.buffs.sk_abs_barrier>0）
 function inAbsBarrier() { return !!(player.buffs && player.buffs.sk_abs_barrier > 0); }
+// 🌀 v3.8.500：傳送落地短暫無敵（可行動；僅擋敵方傷害／異常·約 2 秒＝20 tick）
+function inTpSafe() {
+    try {
+        return !!(typeof state !== 'undefined' && state && state._tpSafeUntil != null && (state.ticks || 0) < state._tpSafeUntil);
+    } catch (e) { return false; }
+}
+function grantTpSafe(ticks) {
+    try {
+        if (typeof state === 'undefined' || !state) return;
+        let n = Math.max(1, Math.floor(Number(ticks) || 20));
+        state._tpSafeUntil = (state.ticks || 0) + n;
+    } catch (e) {}
+}
 // 🚀 重繪合併：tick 進行中(state.inTick)時 updateUI/renderMobs 只標記 dirty，於 tick 結尾 flushTickRender() 統一重繪一次，
 //   避免單一 tick 內(玩家＋多傭兵＋持續傷害＋特效＋擊殺)重複重繪十數次；tick 外(點擊/裝備/用道具/開面板)維持立即重繪、體感不變。
 let _uiDirty = false, _mobsDirty = false;
@@ -484,9 +508,12 @@ function renderMobs() { if (state.inTick || (typeof catchupActive === 'function'
 function flushTickRender() { if (typeof catchupActive === 'function' && catchupActive()) return; if (_uiDirty) { _uiDirty = false; _updateUIImpl(); } if (_mobsDirty) { _mobsDirty = false; _renderMobsImpl(); } }
 // 🚀 怪物卡互動穩定：① 滑鼠所在怪的 uid 以 JS 追蹤(_hoverMobUid)、每次重繪都重新套用「顯示名字」class→避免重繪(每 tick 換掉 #mob-list 內容)使 :hover 瞬間失效造成名字一直閃；② 按住怪物卡期間(_mobPointerDown)延後重繪→避免 mousedown↔mouseup 之間整列被換掉使點擊切換目標失效。
 let _hoverMobUid = null, _mobPointerDown = false, _mobRebuildPending = false;
-function _applyHoverName() {   // 依 _hoverMobUid 即時切換各卡名字顯示(不整列重繪)
+function _applyHoverName() {   // 🩹 v3.9.3：只在 hover 顯示怪名；鎖定目標已有血條（＋combat-hud 頂部目標列），勿再常駐怪名＝上下重複
     let ml = document.getElementById('mob-list'); if (!ml) return;
-    ml.querySelectorAll('.mob-target').forEach(c => c.classList.toggle('name-show', !!_hoverMobUid && c.getAttribute('data-uid') === _hoverMobUid));
+    ml.querySelectorAll('.mob-target').forEach(c => {
+        let uid = c.getAttribute('data-uid');
+        c.classList.toggle('name-show', !!_hoverMobUid && uid === _hoverMobUid);
+    });
 }
 function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 innerHTML)上掛委派事件，跨重繪存活
     let ml = document.getElementById('mob-list'); if (!ml || ml._guardInit) return;
@@ -572,6 +599,11 @@ function tick() {
         let _hpIv = Math.max(30, 160 - 10 * ((player.d && player.d.hpRegenFaster) || 0));   // 🏺 巨魔的再生戒指：HP 自然恢復間隔縮短（每 1 秒=10 tick·下限 3 秒）
         if (player.buffs && (player.buffs.sk_heal_energy_storm || 0) > 0) _hpIv = Math.min(_hpIv, (DB.skills.sk_heal_energy_storm && DB.skills.sk_heal_energy_storm.hpRegenIv) || 30);   // 🌀 治癒能量風暴：維持中 HP 自然恢復間隔固定 3 秒（取更快者·MP 不受影響）
         let _mpIv = wisMpRegenIntervalTicks((player.d && player.d.wis) || 0);
+        // 🏘️ v3.8.302：村莊恢復節奏加快（間隔約一半，下限 2 秒）
+        if (_inTownSafe()) {
+            _hpIv = Math.max(20, Math.floor(_hpIv / 2));
+            _mpIv = Math.max(20, Math.floor(_mpIv / 2));
+        }
         let _hpDue = (state.ticks % _hpIv === 0), _mpDue = (state.ticks % _mpIv === 0);
         if (_hpDue) _regenHP();
         if (_mpDue) _regenMP();
@@ -599,7 +631,7 @@ function tick() {
     if (state._junkSellAt == null) state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS;   // 🗑️ 自動賣廢品倒數：預設 10 秒（JUNK_AUTOSELL_TICKS）
     if (state.ticks >= state._junkSellAt) { try { if (typeof autoSellJunk === 'function' && (!player || player.autoSellOn !== false)) autoSellJunk(); } catch (e) {} state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS; }   // 🗑️ 倒數到→若「自動賣出」開啟(player.autoSellOn!==false·預設開)則賣出標示為廢品的物品並重新排程 10 秒；停止賣出時只重排程不賣。玩家手動標示廢品會把此時間往後推 10 秒（_bumpJunkSellTimer）。⚠️自動路徑 autoSellJunk() 不 saveGame（效能·靠其他存檔點落地）
     
-    if(player.statuses.poison > 0 && state.ticks % player.statuses.poisonTick === 0 && !inAbsBarrier()) {
+    if(player.statuses.poison > 0 && state.ticks % player.statuses.poisonTick === 0 && !inAbsBarrier() && !(typeof inTpSafe === 'function' && inTpSafe())) {
         let _pdmg = player.statuses.poisonDmg;
         if (player.buffs && player.buffs.sk_dark_poisonres > 0) _pdmg = Math.max(1, Math.floor(_pdmg / 2));   // 🔧 毒性抵抗：中毒傷害減半
         if (player.d && player.d.poisonHealMult > 0) {
@@ -616,21 +648,21 @@ function tick() {
             updateUI();
         }
     }
-    if(player.statuses.burn > 0 && state.ticks % player.statuses.burnTick === 0 && !inAbsBarrier()) {
+    if(player.statuses.burn > 0 && state.ticks % player.statuses.burnTick === 0 && !inAbsBarrier() && !(typeof inTpSafe === 'function' && inTpSafe())) {
         player.hp -= player.statuses.burnDmg;
         if (typeof dotMpRefundTo === 'function') dotMpRefundTo(player, player.statuses.burnDmg);   // 🏺 v3.7.52 淚滴
         logCombat(`你受到灼燒傷害 ${player.statuses.burnDmg} 點。`, 'enemy');
         if(player.hp <= 0) { killPlayer(); return; }
         updateUI();
     }
-    if(player.statuses.scald > 0 && state.ticks % player.statuses.scaldTick === 0 && !inAbsBarrier()) {
+    if(player.statuses.scald > 0 && state.ticks % player.statuses.scaldTick === 0 && !inAbsBarrier() && !(typeof inTpSafe === 'function' && inTpSafe())) {
         player.hp -= player.statuses.scaldDmg;
         if (typeof dotMpRefundTo === 'function') dotMpRefundTo(player, player.statuses.scaldDmg);   // 🏺 v3.7.52 淚滴
         logCombat(`你受到燙傷傷害 ${player.statuses.scaldDmg} 點。`, 'enemy');
         if(player.hp <= 0) { killPlayer(); return; }
         updateUI();
     }
-    if(player.statuses.bleed > 0 && state.ticks % player.statuses.bleedTick === 0 && !inAbsBarrier()) {
+    if(player.statuses.bleed > 0 && state.ticks % player.statuses.bleedTick === 0 && !inAbsBarrier() && !(typeof inTpSafe === 'function' && inTpSafe())) {
         player.hp -= player.statuses.bleedDmg;
         if (typeof dotMpRefundTo === 'function') dotMpRefundTo(player, player.statuses.bleedDmg);   // 🏺 v3.7.52 淚滴
         logCombat(`你受到出血傷害 ${player.statuses.bleedDmg} 點。`, 'enemy');
@@ -755,6 +787,8 @@ function tick() {
                     delay = 50;                                                 // 🔧 軍王之室：固定 5 秒復活，不受日光術/席琳的世界加速影響
                 } else if(mapState.current === 'antharas_lair') {
                     delay = 50;                                                 // 🐉 v3.7.57 侵蝕的安塔瑞斯棲息地（BOSS房）：固定 5 秒重生
+                } else if(mapState.current === 'training') {
+                    delay = 15;                                                 // 🪵 v3.8.449 新兵修練場：木頭人約 1.5 秒重生
                 } else {
                     // 🐾 重生延遲＝基準 50 tick(5秒) × 玩家有效移動延遲倍率。
                     let _mv = playerMoveDelayMultiplier();
@@ -1002,11 +1036,20 @@ function hasLoadFreeRegen() {
     return false;
 }
 
+// 🏘️ 是否在安全區（村莊／城堡等 town_*）
+function _inTownSafe() {
+    return !!(mapState && mapState.current && String(mapState.current).indexOf('town_') === 0);
+}
+// 🏘️ v3.8.302 村莊自然恢復倍率（回血／回魔量）；野外維持原值
+const TOWN_REGEN_MULT = 5;
+
 // 🏺 v3.4.x 拆分為 HP／MP 兩段，供 gameLoop 排程用不同節奏（巨魔的再生戒指只加速 HP·MP 維持 16 秒）。合併版 regenTick 已於 v3.5.83 移除（零呼叫點）。
 function _regenHP() {
     if(!state.running || player.dead) return;
     let _loadFreeRegen = hasLoadFreeRegen();
-    if(player.hp < player.mhp && !(player.buffs.sk_berserk > 0) && (_loadFreeRegen || (player.d.loadTier||0) < 1)) {
+    let _inTown = _inTownSafe();
+    // 🏘️ 村莊不受負重擋恢復（休息調息）
+    if(player.hp < player.mhp && !(player.buffs.sk_berserk > 0) && (_loadFreeRegen || _inTown || (player.d.loadTier||0) < 1)) {
         let baseHpRegen = player.d.hpRegenMax > 0 ? roll(1, player.d.hpRegenMax) : 0;
         // 使用 Number() 強制轉換為數字，避免 10 + '1' = 101 的字串相加 Bug
         let totalHpRegen = Number(baseHpRegen) + Number(player.d.hpR || 0);
@@ -1016,6 +1059,12 @@ function _regenHP() {
                 totalHpRegen = Math.floor(totalHpRegen * (1 + _ce.regen)) + Math.max(1, Math.round(_ce.regen * 50));
             }
         } catch (eClanHp) {}
+        if (_inTown) {
+            totalHpRegen = Math.max(
+                Math.floor(totalHpRegen * TOWN_REGEN_MULT),
+                Math.max(15, Math.floor((player.mhp || 1) * 0.04))
+            );
+        }
         if (totalHpRegen > 0) {
             player.hp = Math.min(player.mhp, player.hp + totalHpRegen);
         }
@@ -1024,7 +1073,8 @@ function _regenHP() {
 function _regenMP() {
     if(!state.running || player.dead) return;
     let _loadFreeRegen = hasLoadFreeRegen();
-    if(player.mp < player.mmp && (_loadFreeRegen || (player.d.loadTier||0) < 1)) {
+    let _inTown = _inTownSafe();
+    if(player.mp < player.mmp && (_loadFreeRegen || _inTown || (player.d.loadTier||0) < 1)) {
         // 同樣加上 Number() 保護
         let totalMpRegen = Number(player.d.mpR || 0);
         if (player.d.lowMpRegenBonus && player.mp < player.mmp * 0.15) totalMpRegen += player.d.lowMpRegenBonus;   // 🐍 蛇神的凝視：MP<15% 時 MP自然恢復量額外 +N
@@ -1034,6 +1084,12 @@ function _regenMP() {
                 totalMpRegen = Math.floor(totalMpRegen * (1 + _ce.regen)) + Math.max(1, Math.round(_ce.regen * 25));
             }
         } catch (eClanMp) {}
+        if (_inTown) {
+            totalMpRegen = Math.max(
+                Math.floor(totalMpRegen * TOWN_REGEN_MULT),
+                Math.max(8, Math.floor((player.mmp || 1) * 0.03))
+            );
+        }
         if (totalMpRegen > 0) {
             player.mp = Math.min(player.mmp, player.mp + totalMpRegen);
         }
@@ -2035,6 +2091,14 @@ function pledgeBlessTick() {
 
 function spawnMob(idx) {
     if (mapState.current === 'rift_battle') { spawnRiftMob(idx); return; }   // 🌀 時空裂痕：自訂動態出怪（不靠 DB.maps）
+    // 🪵 v3.8.266 新兵修練場：只生中央木頭人（其餘格清空）→ 新手敲打木人畫面
+    if (mapState.current === 'training') {
+        if (idx !== 1) { mapState.mobs[idx] = null; return; }
+        let _wd = DB.mobs.wood_dummy; if (!_wd) return;
+        mapState.mobs[idx] = { ..._wd, curHp: _wd.hp, uid: uid(), _born: ++_mobBornSeq, _bornMs: Date.now(), _magCd: {}, justHit: false, st: newMobStatus(), trainingDummy: true, noAttack: true };
+        try { mapState.targetIdx = 1; } catch (eT) {}
+        return;
+    }
     // 👑 世界王欄位：中央固定頭目（全服即時同步）
     if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
         if (idx !== 1) { mapState.mobs[idx] = null; return; }

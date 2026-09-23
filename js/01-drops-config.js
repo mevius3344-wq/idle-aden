@@ -1633,7 +1633,10 @@ let _saveLoopId = null;             // 自動存檔 setInterval id
 let currentSlot = 1;                // 目前所在的存檔位（1~4）
 
 function catchupActive() {
-    return !!(state && (state.ff || _tickDebt >= TICK_MS));
+    // 🩹 v3.8.318：只在真正靜音補跑(state.ff)時擋重繪。
+    //    舊條件含 `_tickDebt >= TICK_MS` → 場戰卡頓欠 1～2 tick 時 flushTickRender／renderMobs 全被擋
+    //    → HP 條靠 explore DOM 更新看得到，但 _vfxQueueDmg 從不跑＝無傷害數字；長補跑更靜音動畫。
+    return !!(state && state.ff);
 }
 
 function deferCatchupSave() {
@@ -1685,6 +1688,13 @@ function startGameTimers() {
     if (typeof initUnifiedLogTab === 'function') initUnifiedLogTab();   // 🗂️ 統一日誌分頁版面（避免多 pane 擠壓）
     if (typeof applyCombatFilter === 'function') applyCombatFilter();   // ⚔️ 套用已儲存的戰鬥日誌來源過濾（按鈕點亮/點暗 + 隱藏對應訊息）
     if (typeof _initTabGuard === 'function') _initTabGuard();           // 🚀 綁定分頁面板點擊保護＋重繪節流（避免狩獵時 賣出/強化 按鈕卡頓、點擊失效）
+}
+
+/** 僅在主迴圈未掛上時啟動（場戰 AUTO 自癒用；勿每 tick 重掛以免清掉攻速進度） */
+function ensureGameTimers() {
+    if (_gameLoopId !== null) return false;
+    startGameTimers();
+    return true;
 }
 
 function stopGameTimers() {
@@ -2127,7 +2137,7 @@ function initCombatLogLock() {
 
 // ⚡ 快速強化（批次強化）狀態：wpn=武器分頁、arm=防具分頁（含飾品）。sel 為 uid→true 的勾選集合。
 let quickEnh = { wpn: { active: false, target: 6, sel: {}, useBless: false }, arm: { active: false, target: 6, sel: {}, useBless: false } };   // 🌟 useBless：快速強化是否使用祝福卷（成功時 +1~+3）
-// 🗑️ 快速廢品（批次標記廢品）狀態：wpn/arm/item 三分頁；啟用時預先勾選「已是廢品」者。sel 為 uid→true。（與快速強化同分頁互斥）
+// 🗑️ 及時賣出（原快速廢品）狀態：wpn/arm/item 三分頁；啟用時預先勾選「已是廢品」者，確認後立即賣出。sel 為 uid→true。（與快速強化同分頁互斥）
 let quickJunk = { wpn: { active: false, sel: {}, known: {} }, arm: { active: false, sel: {}, known: {} }, item: { active: false, sel: {}, known: {} } };   // known＝面板開啟時(及之後同步)已納入的物品 uid，避免「面板開啟後才掉落的廢品」於確認時被誤取消標記
 
 // ===== ⚔️ 戰鬥日誌來源過濾（敵人/玩家/傭兵/召喚/夥伴）=====
@@ -2252,6 +2262,14 @@ function switchUnifiedLogTab(tab) {
     if (tab === 'world' || tab === 'clan' || tab === 'party') {
         if (typeof _chatActiveChannel !== 'undefined') _chatActiveChannel = tab;
     }
+    // 🩹 v3.8.455：點頻道分頁時自動展開日誌（村莊無 FAB 時也能開）
+    try {
+        var _gs = document.getElementById('game-screen');
+        if (_gs && _gs.classList.contains('combat-hud')) {
+            _gs.classList.add('log-open');
+            if (typeof window.syncCombatHudLogFab === 'function') window.syncCombatHudLogFab();
+        }
+    } catch (eOpen) {}
 
     let isCombat = tab === 'combat';
     let isSys = tab === 'sys';
@@ -2323,10 +2341,12 @@ function switchUnifiedLogTab(tab) {
 function switchLogTab(tab) {
     switchUnifiedLogTab(tab === 'sys' ? 'sys' : 'combat');
 }
-if (typeof window !== 'undefined' && window.addEventListener) {
-    window.addEventListener('DOMContentLoaded', function () {
+if (typeof window !== 'undefined') {
+    function _bootUnifiedLogTab() {
         try { if (typeof initUnifiedLogTab === 'function') initUnifiedLogTab(); } catch (e) {}
-    });
+    }
+    if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', _bootUnifiedLogTab);
+    else _bootUnifiedLogTab();
 }
 
 // 🌐 聊天日誌：世界頻道（含叫賣系統訊息）／血盟／隊伍；玩家發言僅真實角色。

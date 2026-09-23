@@ -405,31 +405,42 @@
         let rule = eligibility('kent');
         if (!rule.ok) { alert(rule.reason); return; }
         if (!confirm('確定提交 1,000,000 金幣並開始肯特城戰嗎？')) return;
+        function startAfterPay() {
+            let old = player.siege || {};
+            let defender = typeof npcClanCastleDefender === 'function' ? npcClanCastleDefender('kent', player) : null;
+            player.siege = {
+                version:VERSION,
+                active:true,
+                city:'kent',
+                stageId:STAGES[0].id,
+                stageIndex:0,
+                stageProgress:0,
+                stageSpawned:0,
+                stageQueue:[],
+                stageMobHp:null,
+                startedAt:Date.now(),
+                endTime:Date.now() + DURATION_MS,
+                kills:0,
+                deaths:0,
+                result:null,
+                cooldownUntil:0,
+                accCdUntil:num(old.accCdUntil, 0),
+                npcDefenderClanId:defender ? defender.id : null,
+                entryGold:ENTRY_GOLD
+            };
+            log('<span class="text-red-300 font-bold">肯特城戰開始。</span>五道防線已展開，於 30 分鐘內擊敗肯特城主即可佔領城池。');
+            enterStage(STAGES[0].id, true);
+        }
+        if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            rtEconSinkSecure('siege_entry').then(function (r) {
+                if (r === null) { player.gold -= ENTRY_GOLD; startAfterPay(); return; }
+                if (r === false) return;
+                startAfterPay();
+            });
+            return;
+        }
         player.gold -= ENTRY_GOLD;
-        let old = player.siege || {};
-        let defender = typeof npcClanCastleDefender === 'function' ? npcClanCastleDefender('kent', player) : null;
-        player.siege = {
-            version:VERSION,
-            active:true,
-            city:'kent',
-            stageId:STAGES[0].id,
-            stageIndex:0,
-            stageProgress:0,
-            stageSpawned:0,
-            stageQueue:[],
-            stageMobHp:null,
-            startedAt:Date.now(),
-            endTime:Date.now() + DURATION_MS,
-            kills:0,
-            deaths:0,
-            result:null,
-            cooldownUntil:0,
-            accCdUntil:num(old.accCdUntil, 0),
-            npcDefenderClanId:defender ? defender.id : null,
-            entryGold:ENTRY_GOLD
-        };
-        log('<span class="text-red-300 font-bold">肯特城戰開始。</span>五道防線已展開，於 30 分鐘內擊敗肯特城主即可佔領城池。');
-        enterStage(STAGES[0].id, true);
+        startAfterPay();
     }
 
     function finish(result, reason) {
@@ -658,7 +669,13 @@
         let body = card && card.querySelector('.mob-img-inner img:not(.siege-v2-shadow):not(.siege-v2-right)');
         let layer = typeof _vfxLayer === 'function' ? _vfxLayer() : null; if (!body || !layer) return;
         let r = body.getBoundingClientRect(), ghost = document.createElement('img');
-        ghost.className = 'vfx-ghost siege-v2-death'; ghost.style.left = (r.left + r.width / 2) + 'px'; ghost.style.top = (r.top + r.height / 2) + 'px'; ghost.style.width = r.width + 'px'; ghost.style.height = r.height + 'px';
+        // 🩹 v3.8.503：#vfx-layer 在 combat-hud 下為 absolute，螢幕座標須轉本地
+        let _gx = r.left + r.width / 2, _gy = r.top + r.height / 2;
+        if (typeof _vfxToLocal === 'function') {
+            let _loc = _vfxToLocal(_gx, _gy);
+            _gx = _loc.x; _gy = _loc.y;
+        }
+        ghost.className = 'vfx-ghost siege-v2-death'; ghost.style.left = _gx + 'px'; ghost.style.top = _gy + 'px'; ghost.style.width = r.width + 'px'; ghost.style.height = r.height + 'px';
         layer.appendChild(ghost);
         let i = 0, draw = () => { ghost.src = `${p.base}/${frameName(cfg, 'body', cfg.start + i)}`; };
         draw();

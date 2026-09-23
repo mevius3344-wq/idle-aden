@@ -614,7 +614,7 @@ function useItem(u, silent = false) {
     if (!item) return;
     if (player.dead) { if (!silent) logSys(`死亡狀態無法使用道具，請先復活。`); return; }   // 死亡(未復活前)鎖住手動使用
     if (inAbsBarrier()) { if(!silent) logSys('絕對屏障期間與世界隔絕，無法使用藥水與道具。'); return; }   // 🛡️ 絕對屏障：禁止使用任何道具（自動使用 silent 亦略過）
-    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後請點「祈求復活」回村；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
+    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後會自動回村甦醒；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
     let d = DB.items[item.id];
     if (d.noUse) { if(!silent) logSys(`此物品無法直接使用。`); return; }
 
@@ -713,7 +713,7 @@ function useItem(u, silent = false) {
         return;
     }
 
-    if (d.type === 'pot' || d.eff === 'poly' || d.eff === 'reset' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll' || d.eff === 'panacea') {   // 變形卷軸(eff:poly)、回憶蠟燭(eff:reset)、魔法卷軸(eff:magicbarrier)、瞬間移動卷軸(eff:teleport_scroll)亦走此消耗品分支
+    if (d.type === 'pot' || d.eff === 'poly' || d.eff === 'reset' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll' || d.eff === 'town_recall' || d.eff === 'panacea') {   // 變形卷軸／回憶蠟燭／魔法屏障／瞬間移動／傳送回家／萬能藥
         // 職業限定檢查（如慎重藥水=法師、勇敢藥水=騎士、精靈餅乾=妖精）
         if (!reqAllowsClass(d, player.cls)) {
             if (!silent) logSys(`無法使用 ${d.n}，職業不符。`);
@@ -806,10 +806,29 @@ function useItem(u, silent = false) {
                 enterHiddenArea(HIDDEN_AREA_PARENT[mapState.current]);
             } else {
                 let forceBoss = !silent && hasTeleportRing();
-                doTeleport(forceBoss);
-                if(!silent) logSys(`使用瞬間移動卷軸，當前的怪物消失了${forceBoss ? '；傳送控制戒指引動了強敵的氣息……' : ''}。`);
+                // 🌀 v3.8.499：自動逃 BOSS（silent）＝短距退避；手動＝遠距隨機
+                doTeleport(forceBoss, { escape: !!silent });
+                if(!silent) logSys(`使用瞬間移動卷軸，空間一瞬扭曲，你出現在地圖的另一處${forceBoss ? '；傳送控制戒指引動了強敵的氣息……' : ''}。`);
             }
             // 落到下方 consume(item)，消耗一張卷軸
+        } else if (d.eff === 'town_recall') {
+            // 🏘️ 傳送回家卷軸：回最近村莊／家鄉（與回村按鈕同路徑）
+            if (silent) return;   // 僅手動使用，不進自動消耗
+            if (player.statuses && (player.statuses.stone > 0 || player.statuses.paralyze > 0 || player.statuses.freeze > 0 || player.statuses.stun > 0 || player.statuses.sleep > 0)) {
+                logSys('你目前無法行動（石化／麻痺／冰凍／暈眩），無法使用傳送回家卷軸。');
+                return;
+            }
+            if (typeof pvpArenaTravelLocked === 'function' && pvpArenaTravelLocked()) {
+                logSys('<span class="text-red-400">決鬥進行中無法使用傳送回家卷軸；可按「投降」結束本場。</span>');
+                return;
+            }
+            if (mapState.current && String(mapState.current).indexOf('town_') === 0) {
+                logSys('你已經在村莊裡了，無需使用傳送回家卷軸。');
+                return;
+            }
+            if (typeof returnToTown !== 'function' || !returnToTown()) return;
+            logSys('使用傳送回家卷軸，空間裂縫將你送回村莊。');
+            // 落到下方 consume(item)
         } else if (d.eff === 'panacea') {
             const STAT_CN = { str:'力量', dex:'敏捷', con:'體質', int:'智力', wis:'精神', cha:'魅力' };
             let st = d.pstat;
@@ -859,7 +878,7 @@ function useItem(u, silent = false) {
         } else logSys(`你已經學過這個技能了。`);
     }
     updateUI();
-    if(!silent && document.getElementById('item-modal').classList.contains('hidden') === false && (d.type !== 'scroll' || d.eff === 'poly' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll')) {
+    if(!silent && document.getElementById('item-modal').classList.contains('hidden') === false && (d.type !== 'scroll' || d.eff === 'poly' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll' || d.eff === 'town_recall')) {
         closeModal();
     }
 }
@@ -1212,6 +1231,22 @@ function consume(item) {
 function buyItem(id, qty) {
     qty = Math.max(1, Math.floor(Number(qty) || 1));   // 數量正規化，至少 1
 
+    // 🌐 P5a：線上經濟權威購買
+    try {
+        if (typeof rtShopBuySecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            rtShopBuySecure(id, qty).then(function (r) {
+                if (r === null) buyItemLocal(id, qty);
+                // true/false 已處理
+            });
+            return;
+        }
+    } catch (eEcon) {}
+    buyItemLocal(id, qty);
+}
+
+function buyItemLocal(id, qty) {
+    qty = Math.max(1, Math.floor(Number(qty) || 1));
+
     // 箭 / 銀箭：一「份」= 1000，單價固定，qty 代表份數（🚫 v3.2.17 肉已隨舊項圈系統移除）
     let bundle = (id === 'wpn_5')        ? { unit: 100, amount: 1000, n: '箭',   suffix: '根' }
                : (id === 'wpn_22')       ? { unit: 200, amount: 1000, n: '銀箭', suffix: '根' }
@@ -1428,11 +1463,11 @@ function renderStatusEffects() {
     renderStatusIconBar();
 
     // ===== 增益 BUFF =====
-    // 🔧 v2.7.2 用戶要求「有圖示的狀態不用再於此文字欄重複」：戰鬥右上狀態圖示列(renderStatusIconBar)已顯示的增益，這裡略過文字。
-    //   但圖示列在 #battle-view 內→安全區(村莊)戰鬥區帶 .hidden 時圖示不可見，此時仍以文字顯示，避免完全看不到增益。
-    //   _skipIconized=true(戰鬥中·圖示可見)：藥水(加速/勇/藍/慎/精靈餅乾)、變身、及 STATUS_ICON_SKILLS 內的技能 皆略過文字（改看圖示）。
+    // 🔧 v2.7.2：有圖示的狀態不在文字欄重複。🩹 v3.8.457：combat-hud 圖示掛 #game-screen 右上（村莊也可見）→同樣略過文字。
     let _bv = document.getElementById('battle-view');
-    let _skipIconized = !!(_bv && !_bv.classList.contains('hidden'));
+    let _gsHud = document.getElementById('game-screen');
+    let _hudIconsOn = !!(_gsHud && _gsHud.classList.contains('combat-hud') && !_gsHud.classList.contains('hidden'));
+    let _skipIconized = !!(_bv && !_bv.classList.contains('hidden')) || _hudIconsOn;
     let buffs = [];
     if((player.buffs.haste>0 || player._equipHaste) && !_skipIconized) buffs.push(`<span class="text-emerald-400 font-bold">加速</span>`);
     if(player.buffs.brave>0 && !_skipIconized) buffs.push(`<span class="text-fuchsia-400 font-bold">勇水</span>`);
@@ -1546,7 +1581,20 @@ function _updateUIImpl() {
             let _vc = document.getElementById('victory-badge-crown'), _vd = (player.cls === 'royal') ? '' : 'none';
             if (_vc && _vc.style.display !== _vd) _vc.style.display = _vd;
             vb.title = `${_lordTitle}：血盟持有${victoryCityCfg().castleName}，全商店 8 折、開放城堡`; } } }   // 血盟城堡淡金黃標記（同模式永久共用，換城時同步更新）
-    { let cb = document.getElementById('classic-badge'); if (cb) cb.style.display = player.classicMode ? 'inline' : 'none'; }   // 🎮 經典模式標記（🏛️v3.0.83 傳統徽章已移除）
+    // ⚖️ v3.8.282：左上狀態改顯示正義值陣營（邪惡／中立／正義），套用天堂性向門檻 ±1000
+    { let ab = document.getElementById('align-badge');
+        if (ab) {
+            let av = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player.alignmentValue) : (Number(player.alignmentValue) || 0);
+            let lab = (typeof pvpAlignmentLabel === 'function') ? pvpAlignmentLabel(av) : '中立';
+            let col = (typeof pvpAlignmentColor === 'function') ? pvpAlignmentColor(av) : '#e2e8f0';
+            let shown = lab + ' ' + av;
+            if (ab.textContent !== shown) ab.textContent = shown;
+            ab.style.display = 'inline';
+            ab.style.color = col;
+            ab.style.textShadow = '0 0 6px rgba(0,0,0,.75), 0 0 4px ' + col;
+            ab.title = '正義值 ' + av + '（' + lab + '）\n邪惡 ≤ -1000　中立　正義 ≥ 1000';
+        }
+    }
     applyAreaBackground();   // 區域背景：地監/攻城→戰鬥區、城堡→村莊畫面
     
     // 處理顯示文字：只顯示 騎士、法師、妖精、黑暗妖精
@@ -1576,18 +1624,68 @@ function _updateUIImpl() {
         }
     }
 
-    // 處理背景圖片：一律用職業頭像（assets/character），不用 Q 靜態圖
+    // 處理頭像：經典欄用底圖；combat-hud 大頭照＝創角舊肖像 assets/start（勿用暗黑 character／classanim）
     let bgImageName = player.avatar || clsDisplayName;
     let _sp = document.getElementById('status-panel');
+    let _avVer = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'v3.8.252';
+    let _startKey = (typeof LOAD_AVATAR_TO_START_KEY !== 'undefined' && LOAD_AVATAR_TO_START_KEY[bgImageName])
+        ? LOAD_AVATAR_TO_START_KEY[bgImageName]
+        : ((typeof LOAD_CLASS_TO_START_KEY !== 'undefined' && player.cls && LOAD_CLASS_TO_START_KEY[player.cls]) || null);
+    let _avUrl = _startKey
+        ? ('assets/start/' + _startKey + '.png?v=' + _avVer)
+        : ('assets/character/' + encodeURIComponent(bgImageName) + '.png?v=' + _avVer);
+    let _charUrl = 'assets/character/' + encodeURIComponent(bgImageName) + '.png?v=' + _avVer;
+    let _gsHud = document.getElementById('game-screen');
+    let _isCombatHud = !!(_gsHud && _gsHud.classList.contains('combat-hud'));
     if (_sp) {
-        let _avVer = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'v3.8.252';
-        _sp.style.backgroundImage = `url('assets/character/${bgImageName}.png?v=${_avVer}')`;
-        _sp.classList.add('bg-top');
+        if (_isCombatHud) {
+            _sp.style.backgroundImage = 'none';
+            _sp.style.backgroundColor = 'transparent';
+            _sp.style.backgroundBlendMode = 'normal';
+        } else {
+            _sp.style.backgroundImage = "url('" + _charUrl + "')";
+            _sp.classList.add('bg-top');
+        }
         _sp.classList.remove('q-skin-portrait', 'aden-skin-portrait');
-        // 性別可辨：狀態欄加上 gender class（樣式微調／標記）
         let _isF = /女|公主/.test(String(player.avatar || ''));
         _sp.classList.toggle('avatar-gender-f', _isF);
         _sp.classList.toggle('avatar-gender-m', !_isF);
+    }
+    let _avImg = document.getElementById('status-avatar');
+    if (_avImg) {
+        // 🩹 v3.8.479：大頭照優先 assets/start；combat-hud 每次強制套圖＋可見
+        let _wantKind = _startKey ? ('start:' + _startKey) : ('char:' + bgImageName);
+        let _curSrc = String(_avImg.getAttribute('src') || '');
+        let _need = (_avImg.dataset.avKind !== _wantKind)
+            || !_curSrc
+            || !(_startKey ? _curSrc.includes('assets/start/') : _curSrc.includes('assets/character/'));
+        _avImg.style.display = '';
+        _avImg.style.visibility = 'visible';
+        _avImg.style.opacity = '1';
+        _avImg.style.filter = 'none';
+        _avImg.removeAttribute('hidden');
+        if (_need) {
+            _avImg.dataset.avKind = _wantKind;
+            _avImg.dataset.avKey = bgImageName;
+            _avImg.onerror = function () {
+                if (this.dataset.avFb === '1') {
+                    this.onerror = null;
+                    try {
+                        this.src = 'assets/start/0.png?v=' + _avVer;
+                    } catch (e0) {}
+                    return;
+                }
+                this.dataset.avFb = '1';
+                this.src = _charUrl;
+            };
+            _avImg.dataset.avFb = '0';
+            _avImg.src = _avUrl;
+        }
+    }
+    // 🩹 v3.8.472：角色 ID 改人物頭上（.pm-name）；左上狀態欄永久不顯示
+    { let _hn = document.getElementById('st-hud-name');
+      if (_hn) { _hn.style.display = 'none'; let _nr = _hn.parentElement; if (_nr && _nr.classList && _nr.classList.contains('status-name-row')) _nr.style.display = 'none'; }
+      try { if (typeof _playerNameplateApply === 'function') _playerNameplateApply(); } catch (ePid) {}
     }
 
     document.getElementById('st-ac').innerText = player.d.ac;

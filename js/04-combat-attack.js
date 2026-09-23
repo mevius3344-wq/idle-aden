@@ -2,9 +2,19 @@ function playerAttack() {
     if (typeof fieldPvpTryAttack === 'function' && fieldPvpTryAttack()) return;
     let target = getTarget();
     if(!target) return;
-    // 🗺️ 場戰：畫面距離未進交戰圈則本拍不攻擊（攻速 tick 照跑）
-    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
-        && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(target)) return;
+    // 🗺️ 場戰：鄰格才近戰（格子距離）
+    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) {
+        if (typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(target)) return;
+        // 🩹 v3.8.404：世界腳距須 ≤ 交戰格；踏格途中不揮
+        try {
+            if (target._fx != null && typeof explorePlayerX === 'function') {
+                let _pd = Math.hypot(target._fx - explorePlayerX(), (target._fy || 0) - (typeof explorePlayerY === 'function' ? explorePlayerY() : 0));
+                let _stop = (typeof exploreEngageLimit === 'function') ? exploreEngageLimit() : 24;
+                if (_pd > _stop + 0.5) return;
+                if (typeof exploreIsMoving === 'function' && exploreIsMoving() && _pd > _stop * 0.55) return;
+            }
+        } catch (eEng) {}
+    }
     player._faceTgtUid = target.uid;   // 🧭 只記錄可序列化 UID；不可保存怪物物件，否則與 mob→player 面向參照形成循環而使存檔失敗
     delete player._faceTgt;
     if (typeof _playerMorphTrigger === 'function') { try { _playerMorphTrigger('attack'); } catch (e) {} }   // 🧝 v3.0.46 玩家變身 sprite：攻擊動作（含被迴避＝有揮擊）
@@ -149,7 +159,9 @@ function playerAttack() {
         if (_allowWpnProc && wpn && wpn.slowScaleDmg) result.dmg += Math.max(0, Math.floor((((player.d && player.d.aspd) || 0) - 0.10) / 0.05));   // 🏺 v3.6.44 大地碎裂劍：攻速極限 0.10 秒為基準·攻擊間隔每慢 0.05 秒近傷 +1
         var _dmgBeforeMainMult = result.dmg;   // 🏺 v3.6.44 艾爾摩尖頭槍：穿透波及傷害以「主目標加成前」為基準
         if (_allowWpnProc && wpn && wpn.pierceMainMult) result.dmg = Math.max(1, Math.floor(result.dmg * wpn.pierceMainMult));   // 🏺 v3.6.44 艾爾摩尖頭槍：一般攻擊主目標傷害 ×1.3
+        var _authHpBefore = target.curHp;
         target.curHp -= result.dmg;
+        try { if (typeof rtWorldHit === 'function') rtWorldHit(target, result.dmg, _authHpBefore); } catch (eAuthHit) {}
         if (_allowWpnProc && wpn && wpn.bonespike && (target._bonespike || 0) > 0 && target.curHp > 0) { let _bs = target._bonespike * 20; target._bonespike = 0; target.curHp -= _bs; target._spellHurt = true; mobWake(target); logCombat(`<span class="font-bold" style="color:#e5e7eb;text-shadow:0 0 6px #6b7280;">【骨刺爆裂】</span>引爆目標身上的骨刺，額外造成 ${_bs} 點固定傷害。`, 'player-special'); }   // 🏺 骸骨意志之弓：一般攻擊引爆所有骨刺（每層 20 固定傷害）
         reflectWallOnDamage(target, result.dmg, result.ranged ? 'ranged' : 'melee', null);   // 🌑 血壁空間（吉爾塔斯）：反彈同等傷害給攻擊方
         if (player.dead) { player._flameSlashFire = false; return; }   // ⚡ v3.5.89 早退前先消耗一次性旗標：燃燒擊砍在扣血前就設起，若直接 return 會殘留到復活後的下一擊（憑空再噴一次火屬性）
@@ -216,6 +228,7 @@ function playerAttack() {
                         return;
                     }
                     exT.curHp -= _pierceDmg;
+                    try { if (typeof rtWorldHit === 'function') rtWorldHit(exT, _pierceDmg, exT.curHp + _pierceDmg); } catch (eAuthP) {}
                     if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, exT, _pierceDmg);
                     exT.justHit = getWpnEle(player.eq.wpn, wpn);
                     mobWake(exT);
@@ -1127,6 +1140,7 @@ function corrosiveJellySkinOnBasicHit(mob, defender) {
 function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkDb = null, isBasicAttack = false) {   // atkDmg/atkDb：連擊技覆寫骰子/加值（如鐮刀劍氣斬 9×3D70+99，與一般攻擊不同）
     if(player.dead) return;
     if(inAbsBarrier()) return;   // 🛡️ 絕對屏障：不受任何傷害（敵方一般/連擊攻擊完全無效，亦不觸發反擊）
+    if(typeof inTpSafe === 'function' && inTpSafe()) return;   // 🌀 傳送落地短無敵
     if(!mob || mob.curHp <= 0) return;   // 🔧 攻擊者已死亡（如連擊中被反擊/居合反殺）：死怪不得繼續攻擊
     if (typeof _mobAnimTrigger === 'function') _mobAnimTrigger(mob, 'attack');   // 🎞️ 序列幀：攻擊動作（有 attack_*.png 幀才會播·登場/技能鎖定播放中會被忽略·見 js/09）
     mob._facePartyKey = 'P';   // 🧭 只記錄隊伍位置鍵；避免 mob→player 與 player→mob 形成循環參照
@@ -1701,6 +1715,8 @@ function pvpChaoticDeathItemLoss() {
 }
 
 function killPlayer() {
+    // v3.8.281：已死亡則不重入（DoT／反射連擊會連打 killPlayer→日誌狂刷、復活鈕閃爍＝死亡異常）
+    if (player && player.dead) return;
     player.hp = 0;
     player.dead = true; // 保持死亡狀態，停止遊戲計時
     // ⚔️ v3.7.9 決鬥落敗＝完全無損失（用戶拍板）：決鬥贏沒有獎勵，輸也不該有真實損失。
@@ -1773,13 +1789,32 @@ function killPlayer() {
     logSys(`<span class="text-red-500 font-bold text-lg">${msg}</span>`);
     logCombat(`你的角色已經死亡。`, 'enemy');
     
-    // 重新顯示「祈求復活」按鈕（⚔️ 決鬥落敗除外：改由 js/28 的決鬥結果視窗處理——選「繼續」就地整備、選「回村莊」送回古魯丁，兩條路都會解除死亡，不必也不該手動復活）
-    // 🪦 已移除「原地復活」：死亡後僅能祈求復活回村
-    if (!_duelDeath) {
-        document.getElementById('btn-revive').classList.remove('hidden');
-        if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
-    }
+    // v3.8.281：死亡後自動回村甦醒（不再按「祈求復活」）。決鬥落敗仍交 js/28 結果視窗。
+    try {
+        let b1 = document.getElementById('btn-revive'); if (b1) b1.classList.add('hidden');
+        let b2 = document.getElementById('btn-revive-inplace'); if (b2) b2.classList.add('hidden');
+    } catch (eBtn) {}
+    if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
     updateUI();
+    if (!_duelDeath) {
+        // 短暫讓死亡幀／音效露臉，再自動走 revive() 回村（與時空裂痕自動結算同精神）
+        setTimeout(function () {
+            try {
+                if (!player || !player.dead) return;
+                if ((typeof pvpArenaDeathExempt === 'function') && pvpArenaDeathExempt()) return;
+                if (typeof revive === 'function') revive();
+            } catch (eAuto) {
+                // 🩹 v3.8.439：revive 拋錯時仍強制回家鄉，避免卡死在戰場
+                try {
+                    player.dead = false;
+                    player.hp = 1;
+                    let home = (typeof getHomeTown === 'function') ? getHomeTown() : 'town_silver_knight';
+                    if (typeof setMapSelectors === 'function') setMapSelectors(home);
+                    if (typeof changeMap === 'function') changeMap(true);
+                } catch (eFb) {}
+            }
+        }, 650);
+    }
 }
 
 // 🤝 Phase4：怪物魔法施放分派。攻擊型(傷害 sk.dmg／CC・DoT 異常狀態)→「全體名單」打玩家+全部傭兵·否則依仇恨權重抽單一受害者(玩家或某傭兵)。其餘(自我增益/治癒/驅散/破甲/邪氣/物理追擊)照原樣交給 applyMobMagic(對玩家或自身)。
@@ -2090,6 +2125,7 @@ function _applyMobMagicInner(mob, sk) {
         return;
     }
     if(inAbsBarrier()) return;   // 🛡️ 絕對屏障：與世界隔絕，敵方魔法（傷害與異常狀態）一律無效
+    if(typeof inTpSafe === 'function' && inTpSafe()) return;   // 🌀 傳送落地短無敵
     if(!mob || mob.curHp <= 0) return;   // 🔧 施法者已死亡（如 mag1 追加攻擊期間被反殺）：mag2/mag3 不得以死怪身分施放
     if(mob.st && mob.st.confuse > 0 && !mob.boss) { logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 思緒混亂，無法施放技能。`, 'magic'); return; }   // 🔮 混亂：非BOSS敵人無法施放技能
     

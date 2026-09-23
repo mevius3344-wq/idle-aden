@@ -14,6 +14,14 @@
         if (!win || !content) return;
         win.classList.remove('hidden');
         win.setAttribute('aria-hidden', 'false');
+        // 🌐 P5c：開啟時拉一次雲端倉（非阻塞）
+        try {
+            if (typeof econAuthActive === 'function' && econAuthActive() && typeof rtWarehousePull === 'function') {
+                rtWarehousePull().then(function () {
+                    if (typeof renderWarehouseNPC === 'function') renderWarehouseNPC(content);
+                }).catch(function () {});
+            }
+        } catch (ePull) {}
         if (typeof renderWarehouseNPC === 'function') renderWarehouseNPC(content);
     };
 

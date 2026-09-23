@@ -1,4 +1,4 @@
-// 潘朵拉黑市：全服單件競標（競標 20 分鐘 · 間歇 60 分鐘）·需連線 API
+// 潘朵拉抽抽樂：付費權重抽獎（連線 API）·舊全服競標已停用
 (function () {
   "use strict";
 
@@ -6,8 +6,9 @@
   var _readyAt = 0;
   var _readyPromise = null;
   var _pollBusy = false;
-  var _pandoraLastLotSeq = 0;
+  var _drawBusy = false;
   var _appliedClaimIds = Object.create(null);
+  var _gachaMeta = null;
 
   function _httpOk() {
     try {
@@ -27,6 +28,13 @@
     return "";
   }
 
+  function _slot() {
+    try {
+      if (typeof currentSlot !== "undefined" && currentSlot) return currentSlot;
+    } catch (e) {}
+    return 1;
+  }
+
   function pandoraProbeServer() {
     if (_readyPromise) return _readyPromise;
     _readyAt = Date.now();
@@ -36,10 +44,26 @@
       })
       .then(function (data) {
         _ready = !!(data && data.ok && data.enabled);
+        try {
+          window._pandoraServerReady = _ready;
+        } catch (eR) {}
+        if (data && data.ok) {
+          _gachaMeta = {
+            mode: data.mode || "gacha",
+            drawCost: Math.max(1, Math.floor(Number(data.drawCost) || 100000)),
+            drawMax: Math.max(1, Math.floor(Number(data.drawMax) || 10)),
+            dailyCap: Math.max(0, Math.floor(Number(data.dailyCap) || 0)),
+            blessRate: Number(data.blessRate) || 0.01,
+          };
+          window._pandoraGachaMeta = _gachaMeta;
+        }
         return _ready;
       })
       .catch(function () {
         _ready = false;
+        try {
+          window._pandoraServerReady = false;
+        } catch (eF) {}
         return false;
       })
       .finally(function () {
@@ -56,96 +80,29 @@
     return true;
   }
 
-  function _charName() {
-    try {
-      if (typeof player !== "undefined" && player && player.name) return String(player.name).trim();
-    } catch (e) {}
-    return "未命名";
-  }
-
-  function _slot() {
-    try {
-      if (typeof currentSlot !== "undefined" && currentSlot) return currentSlot;
-    } catch (e) {}
-    return 1;
-  }
-
-  function pandoraAnnounceServerLot(lot) {
-    if (!lot || lot.phase !== "active" || !lot.itemId) return;
-    var d;
-    try {
-      d = DB.items[lot.itemId];
-    } catch (e) {
-      d = null;
-    }
-    if (!d) return;
-    var inst = { id: lot.itemId, bless: !!lot.bless };
-    var rare = lot.weight === 1;
-    try {
-      if (typeof player !== "undefined" && player) {
-        player.pandoraAnnounce = lot.itemId;
-        player.pandoraAnnounceBless = !!lot.bless;
-      }
-    } catch (e2) {}
-    try {
-      if (typeof logSys === "function") {
-        logSys(
-          '<span class="pandora-stock-log"><span class="text-purple-300 font-bold">📢【潘朵拉黑市】</span>新商品上架競標！<span class="' +
-            getItemColor(inst) +
-            ' font-bold">' +
-            getItemFullName(inst) +
-            "</span>，起標 <span class=\"text-yellow-300\">" +
-            Number(lot.startPrice || 0).toLocaleString() +
-            "</span> 金，競標 20 分鐘！" +
-            (rare ? '<span class="text-purple-300">（珍稀）</span>' : "") +
-            "</span>"
-        );
-      }
-    } catch (e3) {}
-    try {
-      if (typeof renderPandoraBanner === "function") renderPandoraBanner();
-    } catch (e4) {}
-    try {
-      if (typeof renderSyslogPandora === "function") renderSyslogPandora();
-    } catch (e5) {}
+  function pandoraDrawCostLocal(qty) {
+    var meta = window._pandoraGachaMeta || _gachaMeta || { drawCost: 100000 };
+    var q = Math.max(1, Math.min(10, Math.floor(Number(qty) || 1)));
+    var cost = Math.max(1, Math.floor(Number(meta.drawCost) || 100000)) * q;
+    if (q >= 10) cost = Math.floor(cost * 0.9);
+    return cost;
   }
 
   function pandoraSyncServerLot() {
+    // 競標已停用：只更新 gacha meta
     if (!pandoraServerEnabled()) return Promise.resolve(false);
-    var acc = _account();
-    var url = "/api/pandora/market" + (acc ? "?account=" + encodeURIComponent(acc) : "");
-    return fetch(url, { cache: "no-store" })
-      .then(function (res) {
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data || !data.ok) return false;
-        var lot = data.lot || null;
-        if (lot && lot.phase === "active" && lot.seq && lot.seq !== _pandoraLastLotSeq) {
-          _pandoraLastLotSeq = lot.seq;
-          pandoraAnnounceServerLot(lot);
-        } else if (lot && lot.phase === "gap") {
-          try {
-            if (typeof player !== "undefined" && player) {
-              player.pandoraAnnounce = null;
-              player.pandoraAnnounceBless = false;
-            }
-          } catch (e) {}
-        }
-        window._pandoraServerLot = lot;
+    return pandoraProbeServer().then(function (ok) {
+      window._pandoraServerLot = null;
+      try {
+        if (typeof renderSyslogPandora === "function") renderSyslogPandora();
+      } catch (e) {}
+      if (typeof _pandoraDiv !== "undefined" && _pandoraDiv && document.body.contains(_pandoraDiv)) {
         try {
-          if (typeof renderSyslogPandora === "function") renderSyslogPandora();
-        } catch (e6) {}
-        if (_pandoraDiv && document.body.contains(_pandoraDiv) && _pandoraDiv.querySelector("#pandora-msg")) {
-          try {
-            if (typeof pandoraRenderMarket === "function") pandoraRenderMarket(_pandoraDiv);
-          } catch (e7) {}
-        }
-        return true;
-      })
-      .catch(function () {
-        return false;
-      });
+          if (typeof pandoraRenderMarket === "function") pandoraRenderMarket(_pandoraDiv);
+        } catch (e2) {}
+      }
+      return !!ok;
+    });
   }
 
   function pandoraPollClaims() {
@@ -162,6 +119,15 @@
         var any = false;
         return Promise.all(
           data.claims.map(function (c) {
+            var cid = String(c.id || "");
+            if (cid && _appliedClaimIds[cid]) {
+              // 已由 draw 回應發放 → 仍需刪除伺服器 claim
+              return fetch("/api/pandora/claim", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account: acc, claimId: cid }),
+              }).catch(function () {});
+            }
             return fetch("/api/pandora/claim", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -188,9 +154,10 @@
       });
   }
 
-  function pandoraApplyClaim(claim) {
+  function pandoraApplyClaim(claim, opts) {
     if (!claim || typeof player === "undefined" || !player) return;
-    var cid = String(claim.id || "");
+    var silent = !!(opts && opts.silent);
+    var cid = String(claim.id || claim.claimId || "");
     if (cid) {
       if (_appliedClaimIds[cid]) return;
       _appliedClaimIds[cid] = 1;
@@ -199,15 +166,17 @@
       var amt = Math.max(0, Math.floor(Number(claim.amount) || 0));
       if (amt > 0) {
         player.gold = (player.gold || 0) + amt;
-        try {
-          if (typeof logSys === "function") {
-            logSys(
-              '<span class="text-amber-300">【潘朵拉競標】</span>出價被超越，已退還 <span class="text-yellow-300">' +
-                amt.toLocaleString() +
-                "</span> 金幣。"
-            );
-          }
-        } catch (e) {}
+        if (!silent) {
+          try {
+            if (typeof logSys === "function") {
+              logSys(
+                '<span class="text-amber-300">【潘朵拉】</span>退還 <span class="text-yellow-300">' +
+                  amt.toLocaleString() +
+                  "</span> 金幣。"
+              );
+            }
+          } catch (e) {}
+        }
         try {
           if (typeof updateUI === "function") updateUI();
         } catch (e2) {}
@@ -217,7 +186,7 @@
       }
       return;
     }
-    if (claim.type === "item" && claim.itemId) {
+    if ((claim.type === "item" || claim.itemId) && claim.itemId) {
       var inst;
       try {
         var d = DB.items[claim.itemId];
@@ -229,59 +198,67 @@
         }
       } catch (e4) {}
       inst = inst || { id: claim.itemId, bless: claim.bless === true };
-      try {
-        if (typeof logSys === "function") {
-          logSys(
-            '<span class="text-purple-300 font-bold">【潘朵拉競標】</span>你贏得 <span class="' +
-              getItemColor(inst) +
-              ' font-bold">' +
-              getItemFullName(inst) +
-              "</span>！"
-          );
-        }
-      } catch (e5) {}
+      if (!silent) {
+        try {
+          if (typeof logSys === "function") {
+            var rare = Number(claim.weight) === 1;
+            logSys(
+              '<span class="text-purple-300 font-bold">【潘朵拉抽抽樂】</span>獲得 <span class="' +
+                getItemColor(inst) +
+                ' font-bold">' +
+                getItemFullName(inst) +
+                "</span>" +
+                (rare ? '<span class="text-purple-300">（珍稀）</span>' : "") +
+                "！"
+            );
+          }
+        } catch (e5) {}
+      }
       try {
         if (typeof updateUI === "function") updateUI();
       } catch (e6) {}
       try {
         if (typeof saveGame === "function") saveGame();
       } catch (e7) {}
+      try {
+        if (typeof player !== "undefined" && player && Number(claim.weight) === 1) {
+          player.pandoraAnnounce = claim.itemId;
+          player.pandoraAnnounceBless = claim.bless === true;
+          if (typeof renderPandoraBanner === "function") renderPandoraBanner();
+        }
+      } catch (e8) {}
     }
   }
 
-  function pandoraPlaceServerBid(amount) {
+  function pandoraPlaceServerDraw(qty) {
+    if (_drawBusy) return Promise.resolve(false);
     var acc = _account();
     if (!acc) {
-      alert("請先登入帳號再參與全服競標。");
+      alert("請先登入帳號再抽獎。");
       return Promise.resolve(false);
     }
-    amount = Math.floor(Number(amount));
-    if (!Number.isFinite(amount) || amount <= 0) return Promise.resolve(false);
-    var prevLot = window._pandoraServerLot || {};
-    if (prevLot.phase === "gap") {
-      alert("本輪競標已結束，請等待下一件商品上架。");
+    qty = Math.max(1, Math.min(10, Math.floor(Number(qty) || 1)));
+    var need = pandoraDrawCostLocal(qty);
+    if ((player.gold || 0) < need) {
+      alert("金幣不足（需要 " + need.toLocaleString() + "）。");
       return Promise.resolve(false);
     }
-    var wasLeader = !!prevLot.isLeader;
-    var prevBid = wasLeader ? Math.max(0, Number(prevLot.highBid) || 0) : 0;
-    var pay = wasLeader ? Math.max(0, amount - prevBid) : amount;
-    if (pay <= 0) {
-      alert("出價必須高於你目前的競標價。");
-      return Promise.resolve(false);
-    }
-    if ((player.gold || 0) < pay) {
-      alert("金幣不足。");
-      return Promise.resolve(false);
-    }
-    return fetch("/api/pandora/bid", {
+    _drawBusy = true;
+    var auth = (typeof anticheatAuthExtras === "function") ? anticheatAuthExtras() : {};
+    var body = {
+      account: acc,
+      slot: _slot(),
+      qty: qty,
+      authToken: auth.authToken || "",
+      sessionId: auth.sessionId || "",
+    };
+    try {
+      if (player && player._walletRev != null) body.walletRev = Math.max(0, Math.floor(Number(player._walletRev) || 0));
+    } catch (eRev) {}
+    return fetch("/api/pandora/draw", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account: acc,
-        slot: _slot(),
-        charName: _charName(),
-        amount: amount,
-      }),
+      body: JSON.stringify(body),
     })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -290,50 +267,133 @@
       })
       .then(function (r) {
         var data = r.data || {};
-        if (data.lot) window._pandoraServerLot = data.lot;
         if (!data || !data.ok) {
           var msg =
-            data.error === "bid_too_low"
-              ? "出價過低，至少需要 " + (data.minBid || 0).toLocaleString() + " 金幣。"
-              : data.error === "lot_ended" || data.error === "lot_gap"
-                ? "本輪競標已結束，請稍候新商品。"
-                : "出價失敗。";
+            typeof econErrorMessage === "function"
+              ? econErrorMessage(data, "抽獎失敗。")
+              : data.error === "gold_short"
+                ? "金幣不足（雲端餘額）。"
+                : data.error === "daily_cap"
+                  ? data.message || "今日抽獎次數已達上限。"
+                  : data.error === "conflict"
+                    ? "雲端忙碌中，請稍後再抽。"
+                    : data.message || "抽獎失敗。";
+          if (data.error === "conflict" && typeof rtWalletPull === "function") {
+            try { rtWalletPull(); } catch (eP) {}
+          }
           alert(msg);
           return false;
         }
-        var lot = data.lot || window._pandoraServerLot || {};
-        player.gold -= pay;
+        var cost = Math.max(0, Math.floor(Number(data.cost) || need));
+        if (data.clientDebit !== false) {
+          if ((player.gold || 0) < cost) {
+            alert("金幣不足。");
+            return false;
+          }
+          player.gold -= cost;
+        } else if (data.goldAfter != null && Number.isFinite(Number(data.goldAfter))) {
+          player.gold = Math.max(0, Math.floor(Number(data.goldAfter)));
+        } else {
+          player.gold = Math.max(0, (player.gold || 0) - cost);
+        }
+        if (data.walletRev != null) {
+          try {
+            player._walletRev = Math.max(0, Math.floor(Number(data.walletRev)));
+          } catch (eW) {}
+        }
+        var results = Array.isArray(data.results) ? data.results : [];
+        var names = [];
+        var resultRows = [];
+        for (var i = 0; i < results.length; i++) {
+          var row = results[i];
+          if (!row || !row.itemId) continue;
+          pandoraApplyClaim(
+            {
+              id: row.claimId,
+              type: "item",
+              itemId: row.itemId,
+              bless: !!row.bless,
+              weight: row.weight,
+              source: "draw",
+            },
+            { silent: results.length > 1 }
+          );
+          try {
+            var inst = { id: row.itemId, bless: !!row.bless };
+            var nameHtml =
+              '<span class="' +
+              getItemColor(inst) +
+              ' font-bold">' +
+              getItemFullName(inst) +
+              "</span>";
+            names.push(nameHtml + (Number(row.weight) === 1 ? "✦" : ""));
+            resultRows.push({
+              itemId: row.itemId,
+              bless: !!row.bless,
+              weight: Number(row.weight) || 100,
+              rare: Number(row.weight) === 1,
+              nameHtml: nameHtml,
+            });
+          } catch (eN) {
+            resultRows.push({
+              itemId: row.itemId,
+              bless: !!row.bless,
+              weight: Number(row.weight) || 100,
+              rare: Number(row.weight) === 1,
+            });
+          }
+        }
         try {
           if (typeof logSys === "function") {
-            logSys(
-              '<span class="text-purple-300">【潘朵拉競標】</span>你出價 <span class="text-yellow-300">' +
-                amount.toLocaleString() +
-                "</span> 金幣，目前領先！"
-            );
+            if (results.length > 1) {
+              logSys(
+                '<span class="text-purple-300 font-bold">【潘朵拉抽抽樂】</span>十連／連抽 ×' +
+                  results.length +
+                  "，花費 <span class=\"text-yellow-300\">" +
+                  cost.toLocaleString() +
+                  "</span> 金：" +
+                  names.join("、")
+              );
+            } else if (results.length === 1) {
+              // 單抽已在 applyClaim 打日誌
+            }
           }
-        } catch (e) {}
+        } catch (eL) {}
         try {
           if (typeof updateUI === "function") updateUI();
-        } catch (e2) {}
+        } catch (eU) {}
         try {
           if (typeof saveGame === "function") saveGame();
-        } catch (e3) {}
-        if (_pandoraDiv) {
-          try {
-            if (typeof pandoraRenderMarket === "function") pandoraRenderMarket(_pandoraDiv);
-          } catch (e4) {}
-        }
+        } catch (eS) {}
+        try {
+          if (typeof pandoraOnDrawComplete === "function") {
+            pandoraOnDrawComplete(resultRows, cost);
+          } else if (typeof pandoraRenderMarket === "function" && typeof _pandoraDiv !== "undefined" && _pandoraDiv) {
+            pandoraRenderMarket(_pandoraDiv);
+          }
+        } catch (eR) {}
+        // 清掉已發放的 claim，避免重登重複領
+        pandoraPollClaims();
         return true;
       })
       .catch(function () {
-        alert("無法連線競標伺服器。");
+        alert("無法連線抽獎伺服器。");
         return false;
+      })
+      .finally(function () {
+        _drawBusy = false;
       });
+  }
+
+  /** @deprecated 競標已停用 */
+  function pandoraPlaceServerBid() {
+    alert("潘朵拉已改為抽抽樂，請使用抽獎按鈕。");
+    return Promise.resolve(false);
   }
 
   function pandoraServerTick() {
     if (!pandoraServerEnabled()) return;
-    pandoraSyncServerLot();
+    pandoraProbeServer();
     pandoraPollClaims();
   }
 
@@ -341,12 +401,15 @@
   window.pandoraSyncServerLot = pandoraSyncServerLot;
   window.pandoraPollClaims = pandoraPollClaims;
   window.pandoraPlaceServerBid = pandoraPlaceServerBid;
+  window.pandoraPlaceServerDraw = pandoraPlaceServerDraw;
+  window.pandoraDrawCostLocal = pandoraDrawCostLocal;
   window.pandoraServerTick = pandoraServerTick;
+  window.pandoraApplyClaim = pandoraApplyClaim;
 
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("DOMContentLoaded", function () {
       setTimeout(pandoraServerTick, 1500);
-      setInterval(pandoraServerTick, 15000);
+      setInterval(pandoraServerTick, 20000);
     });
   }
 })();

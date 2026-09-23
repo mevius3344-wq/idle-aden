@@ -1,0 +1,27 @@
+# 🌐 K｜回歸閘門：編碼／戰鬥 HUD／VFX（push／PR 自動跑）
+name: Regression Gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: regression-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: K regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run regression gate (+ P5 offline)
+        run: node tools/_regression-gate.js --p5
+      - name: P5 deploy checklist (offline)
+        run: node tools/_p5-deploy-check.js

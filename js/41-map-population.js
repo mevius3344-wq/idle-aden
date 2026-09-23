@@ -41,6 +41,8 @@
         if (!mapPopOnline()) return [];
         var mapId = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
         if (!mapId || String(mapId).indexOf('town_') === 0) return [];
+        // 🪵 修練場個人區：不顯示其他人
+        if (String(mapId) === 'training') return [];
         return (_mapPopPlayers || []).filter(function (m) {
             return m && m.key && m.cls;
         }).map(function (m) {
@@ -231,6 +233,31 @@
         mapPopUpdateIndicator();
     }
 
+    /** 🌐 WebSocket 同圖快照：只更新本圖人數／玩家，不清掉其他圖 count */
+    function mapPopApplyWsSnap(mapId, players, at, channel) {
+        var id = String(mapId || '');
+        if (!id) return;
+        if (id === 'training') {
+            _mapPopPlayers = [];
+            _mapPopCounts[id] = 1;
+            _mapPopAt = at || Date.now();
+            mapPopRefreshSelectOptions();
+            mapPopUpdateIndicator();
+            return;
+        }
+        var list = Array.isArray(players) ? players.filter(function (m) {
+            return m && m.key && m.cls;
+        }).slice(0, 24) : [];
+        _mapPopPlayers = list;
+        _mapPopCounts[id] = 1 + list.length;
+        _mapPopAt = at || Date.now();
+        if (channel != null) {
+            try { window.__rtWorldChannel = Math.max(1, Math.floor(Number(channel) || 1)); } catch (e) {}
+        }
+        mapPopRefreshSelectOptions();
+        mapPopUpdateIndicator();
+    }
+
     function mapPopRefreshSelectOptions() {
         if (!mapPopOnline()) return;
         var sel = document.getElementById('map-select');
@@ -271,8 +298,27 @@
         var slowHint = mult > 1.05 ? ' · 出怪較慢' : '';
         var shareHint = mapMobShouldSync() ? ' · 共用怪' : '';
         var pvpHint = (typeof fieldPvpSelfOn === 'function' && fieldPvpSelfOn()) ? ' · PK' : '';
-        el.textContent = '👥 ' + showN + ' 人' + shareHint + pvpHint + slowHint;
+        var ch = 1;
+        try {
+            if (typeof rtWorldChannel === 'function') ch = rtWorldChannel() || 1;
+            else if (window.__rtWorldChannel) ch = window.__rtWorldChannel;
+        } catch (eCh) {}
+        var chHint = (ch > 0) ? ('頻' + ch + ' · ') : '';
+        el.textContent = chHint + '👥 ' + showN + ' 人' + shareHint + pvpHint + slowHint;
         el.classList.remove('hidden');
+        el.title = '點擊切換頻道（1～8）';
+        el.style.cursor = 'pointer';
+        if (!el._chBound) {
+            el._chBound = true;
+            el.addEventListener('click', function () {
+                try {
+                    if (typeof rtWorldSwitchChannel !== 'function') return;
+                    var cur = (typeof rtWorldChannel === 'function') ? rtWorldChannel() : 1;
+                    var next = (cur % 8) + 1;
+                    rtWorldSwitchChannel(next);
+                } catch (eSw) {}
+            });
+        }
     }
 
     function mapPopIdentityQs() {
@@ -328,6 +374,7 @@
     window.mapPopSuffix = mapPopSuffix;
     window.mapPopSameMapPlayers = mapPopSameMapPlayers;
     window.mapPopApply = mapPopApply;
+    window.mapPopApplyWsSnap = mapPopApplyWsSnap;
     window.mapPopRefreshSelectOptions = mapPopRefreshSelectOptions;
     window.mapPopUpdateIndicator = mapPopUpdateIndicator;
     window.mapPopPollOnce = mapPopPollOnce;

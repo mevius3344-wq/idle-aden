@@ -268,7 +268,7 @@ function renderTabs(force) {
     let aDiv = document.getElementById('tab-armors'); aDiv.innerHTML = '';
     let iDiv = document.getElementById('tab-items'); iDiv.innerHTML = '';
 
-    // ⚡🗑️ 快速操作頭部：武器/防具分頁＝[快速強化][快速廢品]；道具分頁＝[快速廢品]
+    // ⚡🗑️ 快速操作頭部：武器/防具＝[快速強化][及時賣出][設定自動販賣]；道具＝[及時賣出][設定自動販賣]
     wDiv.appendChild(buildQuickHeader('wpn'));
     aDiv.appendChild(buildQuickHeader('arm'));
     iDiv.appendChild(buildQuickHeader('item'));
@@ -1342,12 +1342,12 @@ function buildItemDescHTML(item) {
 
 function compareCardHTML(eqItem, slotLabel) {
     let ed = DB.items[eqItem.id];
-    if(!ed) return `<div class="text-emerald-300 text-xs font-bold mb-1">【${slotLabel}】</div><div class="text-slate-500 text-sm">（無資料）</div>`;
+    if(!ed) return `<div class="modal-compare-slot"><div class="text-emerald-300 text-xs font-bold mb-1">【${slotLabel}】</div><div class="text-slate-500 text-sm">（無資料）</div></div>`;
     let glow = getGlowClass(eqItem, ed);
     let icon = `<img src="${getIconUrl(ed)}" onerror="this.style.display='none';" class="w-7 h-7 mr-2 object-contain pointer-events-none ${glow}">`;
-    let header = `<div class="flex items-center font-bold text-lg ${getItemColor(eqItem)} border-b border-slate-700 pb-2 mb-2">${icon}<span>${getItemFullName(eqItem)}</span></div>`;
+    let header = `<div class="flex items-center font-bold text-base ${getItemColor(eqItem)} border-b border-slate-700/80 pb-2 mb-2">${icon}<span>${getItemFullName(eqItem)}</span></div>`;
     let body = buildItemDescHTML(eqItem);
-    return `<div class="text-emerald-300 text-xs font-bold mb-1">【${slotLabel}】</div>${header}<div class="text-sm text-slate-300 leading-relaxed">${body}</div>`;
+    return `<div class="modal-compare-slot"><div class="text-emerald-300 text-xs font-bold mb-1 tracking-wide">【${slotLabel}】</div>${header}<div class="modal-compare-body text-sm text-slate-200 leading-relaxed">${body}</div></div>`;
 }
 
 function openModal(item, isEq, slot) {
@@ -1424,20 +1424,14 @@ function openModal(item, isEq, slot) {
         act += `<button class="col-span-2 w-full btn border-purple-700 bg-purple-900 hover:bg-purple-800 text-purple-200 py-3 text-lg font-bold mt-2" onclick="showEnhanceOptions('${item.uid}', ${isEq})">強化</button>`;
     }
 
-    // 廢品勾選（所有背包道具：武器/防具/飾品/藥水/卷軸/魔法書/技能書/材料/試煉道具等）：
-    //   勾選後，從「最後一次手動標示」起算 10 秒（掃描節奏；真正的寬限期是 autoSellRules.delaySec，預設 60 秒）沒有新動作，系統才自動賣出（autoSellJunk·每次手動標示會重置倒數）；鎖定中無法勾選且會自動取消。
-    if (!isEq && !(DB.items[item.id] && DB.items[item.id].noJunk)) {   // 🎴 noJunk(收集冊等)：不顯示「標記為廢品」
-        let locked = !!item.lock;
-        let checked = (item.junk && !locked) ? 'checked' : '';
-        act += `<label class="col-span-2 w-full btn ${locked ? 'border-slate-700 bg-slate-800/50 opacity-50 cursor-not-allowed' : 'border-amber-700 bg-amber-950 hover:bg-amber-900 cursor-pointer'} py-2 text-base font-bold flex items-center justify-center gap-2 mt-2">`
-             + `<input type="checkbox" class="w-4 h-4" ${checked} ${locked ? 'disabled' : ''} onchange="toggleJunk('${item.uid}')">`
-             + `<span class="text-amber-200">標記為廢品${locked ? '（鎖定中無法標記）' : ''}</span></label>`;
-    }
+    // 🩹 v3.8.420：物品詳情不再顯示「標記為廢品」（改用及時賣出／自動販賣規則）
 
     document.getElementById('modal-actions').innerHTML = act;
 
-    // === 旁邊顯示「目前裝備中」對應欄位，方便比對（僅背包中的武器/防具/飾品，箭矢除外）===
+    // === 「目前裝備中」比對卡（僅背包武器/防具/飾品；箭矢／寵物裝除外）===
     let _cmp = document.getElementById('modal-compare');
+    let _itemModal = document.getElementById('item-modal');
+    let _hasCompare = false;
     if(_cmp) {
         const SLOT_LABEL = { wpn:'武器', offwpn:'副手武器', helm:'頭盔', armor:'盔甲', shin:'脛甲', shield:'副手', cloak:'斗篷', tshirt:'內衣', gloves:'手套', boots:'鞋子', ring1:'戒指 1', ring2:'戒指 2', ring3:'戒指 3', ring4:'戒指 4', amulet:'項鍊', ear1:'耳環 1', ear2:'耳環 2', belt:'腰帶' };   // 🦴 v3.2.37 寵物裝備欄移除（改為每隻寵物於包武保管個別裝備）
         if(!isEq && !d.isArrow && d.slot !== 'petwpn' && d.slot !== 'petarm' && (d.type === 'wpn' || d.type === 'arm' || d.type === 'acc')) {   // 🦴 v3.2.42 稽核修：寵物武器/防具非玩家可穿→不顯示「目前裝備中」比較卡（原顯示 petwpn 原字誤導可穿）
@@ -1446,19 +1440,23 @@ function openModal(item, isEq, slot) {
                 let eq = player.eq[sl];
                 let label = SLOT_LABEL[sl] || sl;
                 return eq ? compareCardHTML(eq, label)
-                          : `<div class="text-emerald-300 text-xs font-bold mb-1">【${label}】</div><div class="text-slate-500 text-sm">（此欄位目前未裝備）</div>`;
+                          : `<div class="modal-compare-slot"><div class="text-emerald-300 text-xs font-bold mb-1">【${label}】</div><div class="text-slate-500 text-sm">（此欄位目前未裝備）</div></div>`;
             });
-            _cmp.innerHTML = `<div class="text-slate-300 text-sm font-bold border-b border-slate-600 pb-2 mb-3">目前裝備中（比對）</div>`
-                           + cards.join('<div class="my-3 border-t border-dashed border-slate-700"></div>');
+            _cmp.innerHTML = `<div class="modal-compare-title">目前裝備中（比對）</div>`
+                           + cards.join('<div class="modal-compare-sep"></div>');
             _cmp.classList.remove('hidden');
+            _hasCompare = true;
         } else {
             _cmp.classList.add('hidden');
             _cmp.innerHTML = '';
         }
     }
-
-    document.getElementById('item-modal').classList.remove('hidden');
+    if (_itemModal) {
+        _itemModal.classList.toggle('has-compare', _hasCompare);
+        _itemModal.classList.remove('hidden');
+    }
 }
+
 // 👇 新增功能：返回裝備視窗
 function returnToItemModal(uid, isEq) {
     let item = isEq ? Object.values(player.eq).find(e => e && e.uid === uid) : player.inv.find(i => i.uid === uid);
@@ -1549,6 +1547,13 @@ function showEnhanceOptions(uid, isEq) {
     act += `<button class="col-span-2 w-full btn py-3 bg-slate-700 text-lg font-bold mt-2" onclick="returnToItemModal('${item.uid}', ${isEq})">返回</button>`;
     
     document.getElementById('modal-actions').innerHTML = act;
+    // 強化選卷時收起比對，避免與操作鈕搶位
+    try {
+        let _cmp = document.getElementById('modal-compare');
+        let _m = document.getElementById('item-modal');
+        if (_cmp) { _cmp.classList.add('hidden'); _cmp.innerHTML = ''; }
+        if (_m) _m.classList.remove('has-compare');
+    } catch (eCmpHide) {}
 }
 
 // 👇 一鍵強化到指定值：逐級嘗試直到目標值。安定值前必定成功；安定值起依天堂經典衝裝規則（enhanceRollOutcome js/01），
@@ -1801,60 +1806,59 @@ function runQuickEnhance(type) {
     saveGame();
 }
 
-// ========== 🗑️ 快速廢品（批次標記廢品）==========
+// ========== 🗑️ 及時賣出（原快速廢品：勾選後立即賣出）==========
 // 🗑️ v3.5.87 共用資格判定（單一真相）：渲染端（背包列勾選框）與執行端（_qjEligibleItems）都用它（理由同 _qeCanSelect）
 // ⚠️ noJunk 現況：DB.items 靜態只有 8 筆（席琳遺骸 rem_*·全為 type:'acc'），另由本檔「娃娃硬保護」在載入後
 //    動態補上 50 筆魔法娃娃（doll·同樣是 type:'acc'）→ 兩者都落在防具分頁(arm)。
 //    因此下方 d.noJunk 判定實際只對 arm 分頁生效；道具分頁(item)現無任何 noJunk 資料命中（死條件），
 //    保留供日後出現 type:'misc'/藥水卷軸類的 noJunk 物品使用。
 function _qjCanSelect(d, i, type) {
-    if (!d || i.lock || d.noJunk) return false;   // 🎴 noJunk(收集冊等)不納入快速廢品
+    if (!d || i.lock || d.noJunk) return false;   // 🎴 noJunk(收集冊等)不納入及時賣出
+    if (d.noSell) return false;
+    if (typeof isRentalItem === 'function' && isRentalItem(i)) return false;
     if (type === 'wpn') return d.type === 'wpn';
     if (type === 'arm') return d.type === 'arm' || d.type === 'acc';
     return d.type !== 'wpn' && d.type !== 'arm' && d.type !== 'acc';
 }
-// 該分頁可批次標記廢品的背包物品（未鎖定）：wpn=武器(含箭矢)、arm=防具/飾品、item=其餘（藥水/卷軸/書/材料等）
+// 該分頁可勾選賣出的背包物品（未鎖定／可販售）：wpn=武器(含箭矢)、arm=防具/飾品、item=其餘
 function _qjEligibleItems(type) {
     return player.inv.filter(i => _qjCanSelect(DB.items[i.id], i, type));
 }
-// ⚡🗑️ 分頁頂端快速操作表頭：武器/防具＝[快速強化][快速廢品]；道具＝[快速廢品]（強化進行中沿用原強化表頭）
+// ⚡🗑️ 分頁頂端：武器/防具＝[快速強化][及時賣出][設定自動販賣]；道具＝[及時賣出][設定自動販賣]
 function buildQuickHeader(type) {
     let hasEnh = (type === 'wpn' || type === 'arm');
     if (hasEnh && quickEnh[type].active) return buildQuickEnhanceHeader(type);   // 強化進行中：沿用原強化表頭
     let jnk = quickJunk[type];
-    if (jnk.active) _qjSync(type);   // 🔧 渲染前先同步新掉落物品到面板狀態（新廢品預先勾選），確認時才不會誤取消其標記
+    if (jnk.active) _qjSync(type);
     let hdr = document.createElement('div');
-    hdr.className = 'sticky top-0 z-10 bg-slate-800 pb-2';   // 🔧 遮擋條改用與框底色(.panel=#1e293b=slate-800)相同色→融入面板不突兀；仍為不透明：滾動時物品不會從按鈕上/下方透出
-    // 🔧 表頭上緣亦覆蓋容器的 12px 上內距(p-3)：往上拉時 sticky 黏在裁切邊(top/margin-top:-12)、paddingTop:12 維持按鈕原位 → 物品也不會從按鈕「上方」透出（滾動後＝滾動前）。用 inline style（Tailwind CDN JIT 不保證新 class 即時生成）
+    hdr.className = 'sticky top-0 z-10 bg-slate-800 pb-2';
     hdr.style.top = '-12px'; hdr.style.marginTop = '-12px'; hdr.style.paddingTop = '12px';
-    if (jnk.active) {   // 快速廢品進行中：取消／確認／全選（無數值選擇）
+    if (jnk.active) {   // 及時賣出進行中：取消／賣出／全選
         let eligible = _qjEligibleItems(type);
         let allSel = eligible.length > 0 && eligible.every(i => jnk.sel[i.uid]);
         let someSel = eligible.some(i => jnk.sel[i.uid]);
         hdr.innerHTML = `<div class="flex items-center gap-1 bg-slate-900/80 border border-amber-800/60 rounded p-1">
             <button onclick="cancelQuickJunk('${type}')" class="btn border-slate-600 bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs font-bold text-white rounded">取消</button>
-            <button onclick="runQuickJunk('${type}')" class="btn border-amber-600 bg-amber-800 hover:bg-amber-700 px-2 py-1 text-xs font-bold text-amber-100 rounded">確認</button>
+            <button onclick="runQuickJunk('${type}')" class="btn border-amber-600 bg-amber-800 hover:bg-amber-700 px-2 py-1 text-xs font-bold text-amber-100 rounded">賣出</button>
             <label class="flex items-center gap-1 text-xs text-slate-300 cursor-pointer select-none whitespace-nowrap ml-auto"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="quickJunkSelectAll('${type}', this.checked)"> 全選</label>
         </div>`;
         let cb = hdr.querySelector('label input'); if (cb) cb.indeterminate = someSel && !allSel;
         return hdr;
     }
-    // 皆未啟用：顯示按鈕（武器/防具有強化＋廢品；道具僅廢品）
     let btns = '';
     if (hasEnh) btns += `<button onclick="toggleQuickEnhance('${type}')" class="flex-1 btn border-blue-700 bg-blue-900/70 hover:bg-blue-800 py-1.5 text-sm font-bold text-blue-200 rounded shadow">⚡ 快速強化</button>`;
-    btns += `<button onclick="toggleQuickJunk('${type}')" class="flex-1 btn border-amber-700 bg-amber-900/60 hover:bg-amber-800 py-1.5 text-sm font-bold text-amber-200 rounded shadow">🗑️ 快速廢品</button>`;
+    btns += `<button onclick="toggleQuickJunk('${type}')" class="flex-1 btn border-amber-700 bg-amber-900/60 hover:bg-amber-800 py-1.5 text-sm font-bold text-amber-200 rounded shadow">🗑️ 及時賣出</button>`;
+    btns += `<button onclick="openAutoSellRules()" class="flex-1 btn border-violet-700 bg-violet-900/60 hover:bg-violet-800 py-1.5 text-sm font-bold text-violet-200 rounded shadow">⚙ 設定自動販賣</button>`;
     hdr.innerHTML = `<div class="flex gap-1">${btns}</div>`;
     return hdr;
 }
-// 啟用快速廢品：取消同分頁快速強化＋預先勾選「已是廢品」者（用戶要求：廢品一開始就是勾選中）
+// 啟用及時賣出：取消同分頁快速強化＋預先勾選「已是廢品」者
 function toggleQuickJunk(type) {
     if ((type === 'wpn' || type === 'arm') && quickEnh[type].active) { quickEnh[type].active = false; quickEnh[type].sel = {}; }
     let st = quickJunk[type]; st.active = true; st.sel = {}; st.known = {};
-    _qjEligibleItems(type).forEach(i => { st.known[i.uid] = true; if (i.junk) st.sel[i.uid] = true; });   // 開啟當下：全部納入 known，已是廢品者預先勾選
+    _qjEligibleItems(type).forEach(i => { st.known[i.uid] = true; if (i.junk) st.sel[i.uid] = true; });
     renderTabs(true);
 }
-// 🔧 面板開啟後才掉落／新增的可廢品物品：比照「開啟當下」納入面板——標記 known，且「已是廢品(junkPrefs 自動標記)」者預先勾選。
-//    這樣確認時不會把這些新廢品當成「未勾選」而誤 i.junk=false＋刪除 junkPrefs（刪簽章＝整類廢品記憶被取消）。已在 known 者不再覆寫其勾選狀態（尊重使用者手動取消勾選）。
 function _qjSync(type) {
     let st = quickJunk[type]; if (!st.active) return;
     if (!st.known) st.known = {};
@@ -1863,23 +1867,43 @@ function _qjSync(type) {
 function cancelQuickJunk(type) { let st = quickJunk[type]; st.active = false; st.sel = {}; st.known = {}; renderTabs(true); }
 function quickJunkSelectAll(type, checked) { let st = quickJunk[type]; st.sel = {}; if (checked) _qjEligibleItems(type).forEach(i => st.sel[i.uid] = true); renderTabs(true); }
 function toggleQuickJunkItem(type, uid) { let st = quickJunk[type]; if (st.sel[uid]) delete st.sel[uid]; else st.sel[uid] = true; renderTabs(true); }
-// 確認：依勾選最終狀態設定每件 junk（勾＝廢品、未勾＝取消廢品），同步 junkPrefs（記憶/取消記憶）
+// 🩹 v3.8.375：確認＝立即賣出勾選物（不再只標記等自動販賣）
 function runQuickJunk(type) {
     let st = quickJunk[type];
-    _qjSync(type);   // 🔧 確認前再同步一次：戰鬥節流期間(renderTabs 被合併)剛掉落的廢品也納入並預先勾選，避免被當未勾選誤取消標記
+    _qjSync(type);
     if (!player.junkPrefs) player.junkPrefs = {};
-    let marked = 0, unmarked = 0;
-    _qjEligibleItems(type).forEach(i => {
-        let want = !!st.sel[i.uid];
-        if (want === !!i.junk) return;   // 無變動
-        i.junk = want;
-        if (want) { player.junkPrefs[itemSig(i)] = true; delete i._userKeep; marked++; }
-        else { delete player.junkPrefs[itemSig(i)]; unmarked++; if (i._ruleJunk) { i._userKeep = true; i._ruleJunk = false; delete i.junkSince; delete i._autoSellQty; } }   // 🛡️ v2.6.69 審計#10：取消「規則標記」的廢品→記住玩家意圖，自動販賣不再重標（直到重新儲存規則）
-    });
-    if (marked > 0) _bumpJunkSellTimer();   // 🗑️ 有新標記廢品→重置自動賣出倒數（標完 10 秒（掃描節奏；真正的寬限期是 autoSellRules.delaySec，預設 60 秒）才賣）
+    let selected = _qjEligibleItems(type).filter(i => st.sel[i.uid]);
     st.active = false; st.sel = {}; st.known = {};
-    logSys(`<span class="text-amber-300 font-bold">快速廢品完成：</span>標記 ${marked} 件、取消 ${unmarked} 件。`);
+    if (!selected.length) {
+        logSys('<span class="text-slate-400">未勾選任何物品，已取消及時賣出。</span>');
+        renderTabs(true);
+        return;
+    }
+    // 記住勾選簽章（之後掉落同詞綴會進自動販賣規則／廢品標記）
+    selected.forEach(i => {
+        player.junkPrefs[itemSig(i)] = true;
+        delete i._userKeep;
+        i.junk = true;
+        i.junkSince = 0;   // 立即賣：跳過寬限
+        delete i._autoSellQty;
+    });
+    let _grantSold = selected.some(i => DB.items[i.id] && DB.items[i.id].grantSkills);
+    let totalGold = 0, totalCount = 0;
+    let _gone = new Set();
+    selected.forEach(i => {
+        let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));
+        totalGold += getSellPrice(i) * cnt;
+        totalCount += cnt;
+        _gone.add(i.uid);
+    });
+    totalGold = Math.max(0, Math.floor(Number(totalGold) || 0));
+    if (_gone.size) player.inv = player.inv.filter(i => !_gone.has(i.uid));
+    if (typeof addPlayerGold === 'function') addPlayerGold(totalGold);
+    else player.gold = (Number(player.gold) || 0) + totalGold;
+    logSys(`<span class="text-amber-300 font-bold">及時賣出：</span>${selected.length} 件(共 ${totalCount} 個)，獲得 <span class="text-yellow-400 font-bold">${totalGold.toLocaleString()}</span> 金幣。`);
     renderTabs(true);
+    updateUI();
+    if (_grantSold) { calcStats(); renderSkillSelects(); }
     saveGame();
 }
 
@@ -2033,13 +2057,76 @@ function autoSellJunk(manual) {   // manual=true → 玩家按「一鍵賣出」
         if (i.junk && !i.junkSince) i.junkSince = _now;
         return i.junk && !i.lock && d && !d.noSell && !(typeof isRentalItem === 'function' && isRentalItem(i)) && (manual || (_now - i.junkSince >= _delayMs));
     });
-    if (toSell.length === 0) { if (manual) logSys('<span class="text-slate-400">目前沒有標記為廢品的物品可賣出（請先在 武器／防具／道具 分頁用「🗑️ 快速廢品」標記）。</span>'); return; }   // 無廢品→自動靜默、手動給提示
+    if (toSell.length === 0) { if (manual) logSys('<span class="text-slate-400">目前沒有可賣出的廢品（可用「🗑️ 及時賣出」勾選賣出，或在「設定自動販賣」設規則）。</span>'); return; }
     let _sellQty = function (i) {
         let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));   // 舊存檔缺 cnt → 視為 1，避免 Math.min(undefined)→NaN 把金幣弄壞
         let cap = Math.floor(Number(i._autoSellQty));
         if (!Number.isFinite(cap) || cap <= 0) cap = cnt;
         return Math.max(1, Math.min(cnt, cap));
     };
+
+    // 🌐 P5b：線上權威批次販售
+    try {
+        if (typeof rtShopSellSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            let lines = toSell.map(function (i) {
+                return { uid: i.uid, qty: _sellQty(i) };
+            }).filter(function (r) { return r.uid && r.qty > 0; });
+            // 伺服器 batch 上限 80；超出則分批（背景賣只送第一批，其餘下輪再賣）
+            if (lines.length > 80) lines = lines.slice(0, 80);
+            let _grantSold = toSell.some(i => DB.items[i.id] && DB.items[i.id].grantSkills);
+            let _manual = !!manual;
+            let _finishOk = function (r) {
+                let totalGold = Math.max(0, Math.floor(Number(r.credit) || 0));
+                let totalCount = 0;
+                let soldN = (r.sold && r.sold.length) || 0;
+                (r.sold || []).forEach(function (s) { totalCount += Math.max(1, Math.floor(Number(s.qty) || 1)); });
+                logSys(`<span class="text-amber-300">${_manual ? '一鍵賣出' : '系統自動賣出'} ${soldN} 件(共 ${totalCount} 個)廢品，獲得 <span class="text-yellow-400 font-bold">${totalGold.toLocaleString()}</span> 金幣。</span>`);
+                if (_grantSold) { try { calcStats(); renderSkillSelects(); } catch (eG) {} }
+                if (_manual) saveGame();
+            };
+            if (_manual) {
+                rtShopSellSecure(lines).then(function (r) {
+                    if (r === null) {
+                        autoSellJunkLocal(true, toSell, _sellQty);
+                        return;
+                    }
+                    if (!r || !r.ok) return;
+                    _finishOk(r);
+                });
+            } else if (typeof rtShopSell === 'function') {
+                // 背景自動賣：失敗不刷紅字（常見為尚未雲端同步）；網路／503 退回本地
+                rtShopSell(lines).then(function (data) {
+                    if (!data || !data.ok) {
+                        if (data && (data.error === 'network' || data.error === 'econ_off' || data._http === 503)) {
+                            autoSellJunkLocal(false, toSell, _sellQty);
+                        }
+                        return;
+                    }
+                    if (typeof rtShopSellApplyLocal === 'function') rtShopSellApplyLocal(data);
+                    else {
+                        try {
+                            if (typeof econApplyWallet === 'function') econApplyWallet(data);
+                        } catch (eW) {}
+                    }
+                    _finishOk(data);
+                });
+            }
+            return;
+        }
+    } catch (eEcon) {}
+    autoSellJunkLocal(manual, toSell, _sellQty);
+}
+
+function autoSellJunkLocal(manual, toSell, _sellQty) {
+    if (!toSell || !toSell.length) return;
+    if (!_sellQty) {
+        _sellQty = function (i) {
+            let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));
+            let cap = Math.floor(Number(i._autoSellQty));
+            if (!Number.isFinite(cap) || cap <= 0) cap = cnt;
+            return Math.max(1, Math.min(cnt, cap));
+        };
+    }
     let totalGold = 0, totalCount = 0;
     toSell.forEach(i => { let q = _sellQty(i); totalGold += getSellPrice(i) * q; totalCount += q; });
     totalGold = Math.max(0, Math.floor(Number(totalGold) || 0));
@@ -2215,11 +2302,12 @@ function applyAutoSellRules(force) {
     });
 }
 let _asBackup = null;   // 🛡️ v2.6.69 審計#11：規則視窗草稿制——開窗拍快照；Close＝還原（不生效）、儲存規則＝生效
+// 🩹 v3.8.375／395：設定自動販賣＝簡易版（啟用＋保護說明＋永遠賣掉）
 function openAutoSellRules() {
     let r = getAutoSellRules();
     if (!_asBackup) _asBackup = { rules: JSON.parse(JSON.stringify(r)), on: player.autoSellOn, global:!!player.autoSellGlobal };
     let old = document.getElementById('autosell-rule-modal'); if (old) old.remove();
-    // 已設例外（永遠保留／賣掉）的物品只顯示在下方清單，不再進下拉選項
+    // 已設例外的物品只顯示在下方清單，不再進下拉選項
     let _ovIds = r.overrides || {};
     let heldIds = [...new Set((player.inv || []).map(i => i.id).filter(id => DB.items[id] && !_ovIds[id]))]
         .sort((a,b) => (DB.items[a]?.n || a).localeCompare(DB.items[b]?.n || b, 'zh-Hant'));
@@ -2227,54 +2315,40 @@ function openAutoSellRules() {
         || '<option value="">背包目前沒有可選物品</option>';
     let rules = Object.entries(r.overrides).map(([id,v]) =>
         `<div class="as-ex"><span>${DB.items[id]?.n || id}</span><b>${v==='keep'?'保留':'賣掉'}</b><button type="button" onclick="deleteAutoSellOverride('${id}')">刪</button></div>`
-    ).join('') || '<div class="as-muted">無例外</div>';
+    ).join('');
     let el = document.createElement('div'); el.id = 'autosell-rule-modal';
     el.innerHTML = `<style>
       #autosell-rule-modal{position:fixed;inset:0;background:#020617aa;z-index:10050;display:flex;align-items:center;justify-content:center;color:#e2e8f0}
       .as-box{width:min(420px,92vw);max-height:88vh;overflow:auto;background:#172033;border:2px solid #b7791f;border-radius:14px;padding:16px;box-shadow:0 18px 60px #000}
       .as-head{display:flex;justify-content:space-between;align-items:center;font-size:20px;font-weight:bold;color:#fde68a}
       .as-sec{background:#0f172acc;border:1px solid #475569;border-radius:10px;padding:10px;margin-top:10px}
-      .as-title{font-weight:bold;color:#fbbf24;margin-bottom:6px}
       .as-row{display:flex;align-items:center;gap:8px;padding:6px 0;line-height:1.4;flex-wrap:wrap}
-      .as-row input[type=number]{width:52px;background:#020617;border:1px solid #64748b;border-radius:5px;padding:3px;text-align:center}
       .as-row input[type=checkbox]{width:16px;height:16px;vertical-align:middle}
-      .as-help,.as-muted{font-size:12px;color:#94a3b8;margin-top:4px}
+      .as-help{font-size:12px;color:#94a3b8;margin-top:8px;line-height:1.55}
       .as-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
       .as-actions button,.as-head button,.as-ex button{background:#334155;border:1px solid #64748b;border-radius:6px;padding:6px 12px;color:#e2e8f0;cursor:pointer}
       .as-actions .primary{background:#92400e;border-color:#f59e0b}
       .as-ex{display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #334155;font-size:13px}
       .as-ex span{flex:1}.as-ex b{color:#fcd34d}
-      .as-btnrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
-      .as-sell-now-btn{height:34px;padding:0 12px;border:2px solid #fb923c;border-radius:7px;background:#7c2d12;color:#ffedd5;font-weight:bold;cursor:pointer}
       .as-override-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-      .as-keep-btn{color:#bbf7d0;background:#14532d;border:1px solid #4ade80;border-radius:6px;padding:6px 10px;font-weight:bold;cursor:pointer}
       .as-sell-btn{color:#fecaca;background:#7f1d1d;border:1px solid #f87171;border-radius:6px;padding:6px 10px;font-weight:bold;cursor:pointer}
-      #as-item,#as-item-search{width:100%;background:#020617;border:1px solid #64748b;padding:6px;border-radius:6px;color:#e2e8f0;margin-top:4px;box-sizing:border-box}
+      #as-item{width:100%;background:#020617;border:1px solid #64748b;padding:6px;border-radius:6px;color:#e2e8f0;margin-top:4px;box-sizing:border-box}
     </style>
     <div class="as-box">
-      <div class="as-head"><span>自動販賣</span><button type="button" onclick="closeAutoSellRules()">關閉</button></div>
+      <div class="as-head"><span>設定自動販賣</span><button type="button" onclick="closeAutoSellRules()">關閉</button></div>
       <div class="as-sec">
         <label class="as-row"><input id="as-on" type="checkbox" ${player.autoSellOn!==false?'checked':''}> 啟用自動販賣</label>
-        <label class="as-row"><input id="as-global" type="checkbox" ${player.autoSellGlobal?'checked':''}> 全角色共用</label>
-        <div class="as-btnrow"><span>等待</span><input id="as-delay" type="number" min="10" max="86400" value="${r.delaySec}"><span>秒後賣</span>
-          <button type="button" class="as-sell-now-btn" onclick="sellAutoSellItemsNow()">立即賣出</button></div>
-        <label class="as-row"><input id="as-sell-equip" type="checkbox" ${r.sellEquip!==false?'checked':''}> 賣多餘裝備（武器／防具／飾品各留 1 件）</label>
-        <label class="as-row"><input id="as-sell-misc" type="checkbox" ${r.sellMisc!==false?'checked':''}> 賣多餘道具（各留 <input id="as-misc-keep" type="number" min="0" max="9999" value="${r.miscKeep||0}"> 個）</label>
-        <div class="as-help">鎖定、娃娃、任務道具不賣。祝福、遠古、屬性、套裝、傳說、遺物、古老系列、製作素材一律保護。</div>
+        <div class="as-help">鎖定、娃娃、任務道具不賣。祝福、遠古、屬性、套裝、傳說、遺物、古老系列、製作素材一律保護。多餘裝備／道具會自動賣出。要立刻賣掉請用裝備欄「及時賣出」。</div>
       </div>
       <div class="as-sec">
-        <div class="as-title">例外（可選）</div>
-        <input id="as-item-search" type="search" placeholder="搜尋背包物品" oninput="refreshAutoSellItemOptions()">
         <select id="as-item">${itemRows}</select>
         <div class="as-override-actions">
-          <button type="button" class="as-keep-btn" onclick="setAutoSellOverride('keep')">永遠保留</button>
           <button type="button" class="as-sell-btn" onclick="setAutoSellOverride('sell')">永遠賣掉</button>
         </div>
-        <div id="as-overrides">${rules}</div>
+        ${rules ? `<div id="as-overrides">${rules}</div>` : ''}
       </div>
       <div class="as-actions">
-        <button type="button" onclick="previewAutoSellRules()">預覽</button>
-        <button type="button" class="primary" onclick="saveAutoSellRules()">儲存</button>
+        <button type="button" class="primary" onclick="saveAutoSellRules()">儲存設定</button>
       </div>
     </div>`;
     document.body.appendChild(el);
@@ -2283,17 +2357,13 @@ function closeAutoSellRules(){ if(_asBackup){ player.autoSellRules=_asBackup.rul
     let e=document.getElementById('autosell-rule-modal'); if(e)e.remove(); }
 function _readAutoSellForm(ruleSnapshot){
     let r = ruleSnapshot || getAutoSellRules();
-    let delayEl = document.getElementById('as-delay');
     let onEl = document.getElementById('as-on');
-    let globalEl = document.getElementById('as-global');
-    r.delaySec = Math.max(10, Number(delayEl && delayEl.value) || 60);
     if (!ruleSnapshot && onEl) player.autoSellOn = onEl.checked;
-    var sellEquipEl = document.getElementById('as-sell-equip');
-    var sellMiscEl = document.getElementById('as-sell-misc');
-    var miscKeepEl = document.getElementById('as-misc-keep');
-    r.sellEquip = sellEquipEl ? sellEquipEl.checked : r.sellEquip !== false;
-    r.sellMisc = sellMiscEl ? sellMiscEl.checked : r.sellMisc !== false;
-    r.miscKeep = Math.max(0, Number(miscKeepEl && miscKeepEl.value) || 0);
+    // 簡易 UI：固定多餘裝備／道具會賣；延遲採既有值或缺省 60 秒
+    if (r.delaySec == null) r.delaySec = 60;
+    r.sellEquip = true;
+    r.sellMisc = true;
+    r.miscKeep = 0;
     r.equipKeep = 1;
     ['wpn', 'arm', 'acc'].forEach(function (k) {
         if (!r.equip[k]) r.equip[k] = { on: false, max: 99 };
@@ -2303,17 +2373,24 @@ function _readAutoSellForm(ruleSnapshot){
     AS_MISC_SIMPLE.forEach(function (t) {
         r.misc[t] = { on: r.sellMisc !== false, keep: r.miscKeep };
     });
-    // 簡化版：特殊裝備一律保護（含製作素材 1 次份量）
     r.protectBless = true; r.protectAnc = true; r.protectAttr = true; r.protectSet = true;
     r.protectLegend = true; r.protectRelic = true; r.protectOldSeries = true;
     r.protectCraftEquip = true;
     if (r.craftSets == null || r.craftSets < 1) r.craftSets = 1;
-    if (!ruleSnapshot && globalEl) player.autoSellGlobal = globalEl.checked;
     return r;
 }
-function saveAutoSellRules(){_readAutoSellForm();(player.inv||[]).forEach(i=>{delete i._userKeep;});_saveGlobalAutoSellSettings(player.autoSellGlobal);_asBackup=null;applyAutoSellRules(true);_renderAutoSellBtn();closeAutoSellRules();autoSellJunk(true);logSys('<span class="text-amber-300">已儲存自動販賣規則，並立即賣出符合的物品。</span>')}   // 🔧 v3.8.169：儲存＝立即販賣（不再先進防呆等待）；全域桶／_userKeep／草稿快照行為同前
-// 🔧 v2.6.77 立即賣出：以目前表單規則「提交生效」（比照儲存規則·但不清 _userKeep 豁免——玩家單件取消仍受保護）→ 關窗 → 走手動一鍵賣出（跳過等待秒數·autoSellJunk(true) 內含 saveGame）
-function sellAutoSellItemsNow(){_readAutoSellForm();_asBackup=null;applyAutoSellRules(true);_renderAutoSellBtn();closeAutoSellRules();autoSellJunk(true)}   // 🔧 v2.6.91 force=true：即使開關關閉也強制依規則標記後立即賣
+// 🩹 v3.8.375：儲存＝只存規則並套用標記；不再立即賣出（立即賣請用「及時賣出」）
+function saveAutoSellRules() {
+    _readAutoSellForm();
+    (player.inv || []).forEach(i => { delete i._userKeep; });
+    _saveGlobalAutoSellSettings(player.autoSellGlobal);
+    _asBackup = null;
+    applyAutoSellRules(true);
+    _renderAutoSellBtn();
+    closeAutoSellRules();
+    if (typeof saveGame === 'function') saveGame();
+    logSys('<span class="text-amber-300">已儲存自動販賣設定。</span>');
+}
 function _autoSellPlainItemName(item) {   // 🔧 v2.6.77 預覽清單去 HTML：getItemFullName 回傳含 <span> 上色 → 轉純文字
     let box = document.createElement('div');
     box.innerHTML = getItemFullName(item);
@@ -2377,16 +2454,15 @@ function setAutoSellOverride(v){
             i.junk = true;
             i._ruleJunk = true;
             i._autoSellQty = Math.max(1, Math.floor(Number(i.cnt) || 1));
-            if (!i.junkSince) i.junkSince = now;
+            if (!i.junkSince) i.junkSince = now;   // 走等待秒數，不立刻賣
             delete i._userKeep;
         });
-        autoSellJunk(true);
-        logSys(`<span class="text-amber-300">已設定永遠賣掉並立即賣出：${nm}</span>`);
+        logSys(`<span class="text-amber-300">已設定永遠賣掉：${nm}（等待秒數後自動賣出；要立刻賣請用「及時賣出」）</span>`);
     } else {
         logSys(`<span class="text-emerald-300">已設定永遠保留：${nm}</span>`);
     }
     if (player.autoSellGlobal) _saveGlobalAutoSellSettings(true);
-    else if (v !== 'sell') saveGame();
+    else if (typeof saveGame === 'function') saveGame();
     openAutoSellRules();
 }
 function deleteAutoSellOverride(id){
@@ -2426,6 +2502,41 @@ function sellItem(uid, count, unitPrice) {
     if (!item || item.lock) return;
     if (typeof isRentalItem === 'function' && isRentalItem(item)) { logSys('限時裝備無法販售。'); return; }
     if (DB.items[item.id] && DB.items[item.id].noSell && !(typeof trialDropBlocked === 'function' && trialDropBlocked(item.id))) { logSys('此物品無法販售。'); return; }   // 🏅 精通之證等不可販售；🔒 例外：「非本職的試煉道具」(誤撿/倉庫帶來、本職用不到)允許賣出清理，本職的試煉道具仍受保護
+
+    // 🌐 P5b：線上經濟權威販售（忽略客戶端 unitPrice）
+    try {
+        if (typeof rtShopSellSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+            let sellCount = Math.min(count, item.cnt);
+            let _wasGrant = !!(DB.items[item.id] && DB.items[item.id].grantSkills);
+            let _name = (DB.items[item.id] && DB.items[item.id].n) || item.id;
+            rtShopSellSecure(uid, sellCount).then(function (r) {
+                if (r === null) {
+                    sellItemLocal(uid, count, unitPrice);
+                    return;
+                }
+                if (!r || !r.ok) return;
+                let totalGot = Math.max(0, Math.floor(Number(r.credit) || 0));
+                logSys(`賣出了 ${sellCount} 個 ${_name}，獲得 ${totalGot} 金幣。`);
+                try {
+                    let left = player.inv.find(i => i && i.uid === uid);
+                    if (!left) closeModal();
+                    else openModal(left, false);
+                } catch (eM) { try { closeModal(); } catch (e2) {} }
+                renderTabs();
+                updateUI();
+                if (_wasGrant) { calcStats(); renderSkillSelects(); }
+            });
+            return;
+        }
+    } catch (eEcon) {}
+    sellItemLocal(uid, count, unitPrice);
+}
+
+function sellItemLocal(uid, count, unitPrice) {
+    let item = player.inv.find(i => i.uid === uid);
+    if (!item || item.lock) return;
+    if (typeof isRentalItem === 'function' && isRentalItem(item)) { logSys('限時裝備無法販售。'); return; }
+    if (DB.items[item.id] && DB.items[item.id].noSell && !(typeof trialDropBlocked === 'function' && trialDropBlocked(item.id))) { logSys('此物品無法販售。'); return; }
     let _wasGrant = !!(DB.items[item.id] && DB.items[item.id].grantSkills);   // 賣出授予技能頭盔時需重算
     let sellCount = Math.min(count, item.cnt);
     let totalGot = sellCount * unitPrice;
@@ -2444,7 +2555,14 @@ function sellItem(uid, count, unitPrice) {
     if(_wasGrant) { calcStats(); renderSkillSelects(); }   // 失去授予技能頭盔：立即更新
 }
 
-function closeModal() { document.getElementById('item-modal').classList.add('hidden'); }
+function closeModal() {
+    let m = document.getElementById('item-modal');
+    if (!m) return;
+    m.classList.add('hidden');
+    m.classList.remove('has-compare');
+    let cmp = document.getElementById('modal-compare');
+    if (cmp) { cmp.classList.add('hidden'); cmp.innerHTML = ''; }
+}
 function _pvpTabEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -2910,6 +3028,28 @@ function _syncMobileTabPrimary(group) {
     });
 }
 
+/** 🩹 v3.8.453：右側「選單」收合／展開（收納 能力／裝備／設定／社交） */
+function setChudRightMenuExpanded(open) {
+    let col = document.getElementById('col-right');
+    let btn = document.getElementById('btn-chud-menu');
+    if (!col) return;
+    let on = !!open;
+    col.classList.toggle('chud-menu-expanded', on);
+    if (btn) {
+        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+        btn.textContent = on ? '收合' : '選單';
+    }
+    if (!on) {
+        try { setMobileTabPanelOpen(false); } catch (e) {}
+    }
+}
+function toggleChudRightMenu() {
+    let col = document.getElementById('col-right');
+    if (!col) return;
+    setChudRightMenuExpanded(!col.classList.contains('chud-menu-expanded'));
+}
+try { window.setChudRightMenuExpanded = setChudRightMenuExpanded; window.toggleChudRightMenu = toggleChudRightMenu; } catch (eExp) {}
+
 function renderMobileTabSub() {
     let box = document.getElementById('mobile-tab-sub');
     if (!box) return;
@@ -2940,10 +3080,14 @@ function activateMobileTabSub(key) {
     let it = items.find(x => x.key === key) || items[0];
     if (!it) return;
     _mobileTabSubKey = it.key;
-    _mobileTabSubByGroup[_mobileTabGroup] = it.key;
+    // 🩹 v3.8.374：收藏／自動販賣是 overlay，不可寫入 prefer——否則再開「能力」會卡回收藏
+    if (!it.action) {
+        _mobileTabSubByGroup[_mobileTabGroup] = it.key;
+    }
     renderMobileTabSub();
     if (it.action === 'collection') {
         setMobileTabPanelOpen(false);
+        try { if (typeof closeAllCollectionOverlays === 'function') closeAllCollectionOverlays(); } catch (eC0) {}
         if (typeof openCollectionPanel === 'function') openCollectionPanel();
         return;
     }
@@ -2958,6 +3102,10 @@ function activateMobileTabSub(key) {
 
 function switchMobileTabGroup(group, btn) {
     if (!MOBILE_TAB_GROUPS[group]) return;
+    // 🩹 v3.8.374：從收藏／收集冊回來時先關 overlay，再進真實分頁
+    try { if (typeof closeAllCollectionOverlays === 'function') closeAllCollectionOverlays(); } catch (eOv) {}
+    // 🩹 v3.8.453：點分類前先展開右側選單
+    try { if (isMobileCompactUi()) setChudRightMenuExpanded(true); } catch (eMenu) {}
     // 手機：同一主分組再點一次且內容已展開 → 收合
     if (isMobileCompactUi() && group === _mobileTabGroup && btn && btn.classList.contains('active')) {
         let col = document.getElementById('col-right');
@@ -2968,8 +3116,11 @@ function switchMobileTabGroup(group, btn) {
     }
     _mobileTabGroup = group;
     _syncMobileTabPrimary(group);
-    renderMobileTabSub();   // 🔧 v3.8.258 先畫子選單（技能／道具／拍賣），再開面板
+    renderMobileTabSub();
     let prefer = _mobileTabSubByGroup[group] || MOBILE_TAB_DEFAULTS[group];
+    let preferItem = (MOBILE_TAB_GROUPS[group] || []).find(x => x.key === prefer);
+    // overlay 類 key 殘留時退回預設真實分頁
+    if (!preferItem || preferItem.action) prefer = MOBILE_TAB_DEFAULTS[group] || prefer;
     activateMobileTabSub(prefer);
 }
 
@@ -2978,36 +3129,67 @@ function setMobileTabPanelOpen(open) {
     if (!col) return;
     if (!isMobileCompactUi()) {
         col.classList.remove('mobile-tab-open');
+        _mountCombatHudSheet(false);
         return;
     }
     col.classList.toggle('mobile-tab-open', !!open);
-    // 🔧 v3.8.260 子選單掛到 #game-screen，避免被右側 52px 欄／pointer-events 吃掉
+    _mountCombatHudSheet(!!open);
+}
+/** 🩹 v3.8.327：sheet 開關時強制掛載／卸載（關＝移回右欄並清 sheet-open，開＝掛到 game-screen） */
+function _mountCombatHudSheet(open) {
     try {
+        let col = document.getElementById('col-right');
         let sub = document.getElementById('mobile-tab-sub');
+        let panel = document.getElementById('tab-content-panel');
         let screen = document.getElementById('game-screen');
-        if (sub && screen && screen.classList.contains('combat-hud')) {
-            if (open) {
-                if (sub.parentElement !== screen) screen.appendChild(sub);
-                renderMobileTabSub();
-            } else {
-                let bar = col.querySelector('.tab-bar');
-                if (bar && sub.parentElement !== bar) {
-                    let buttons = bar.querySelector('.tab-bar-buttons');
-                    if (buttons) bar.insertBefore(sub, buttons);
-                    else bar.appendChild(sub);
-                }
+        if (!screen || !screen.classList.contains('combat-hud')) {
+            if (screen) screen.classList.remove('sheet-open');
+            return;
+        }
+        if (open) {
+            if (panel && panel.parentElement !== screen) screen.appendChild(panel);
+            if (sub && sub.parentElement !== screen) screen.appendChild(sub);
+            screen.classList.add('sheet-open');
+            try { renderMobileTabSub(); } catch (eR) {}
+        } else {
+            screen.classList.remove('sheet-open');
+            let bar = col && col.querySelector('.tab-bar');
+            if (sub && bar && sub.parentElement !== bar) {
+                let buttons = bar.querySelector('.tab-bar-buttons');
+                if (buttons) bar.insertBefore(sub, buttons);
+                else bar.appendChild(sub);
+            }
+            if (panel && col && panel.parentElement !== col) col.appendChild(panel);
+            // 清掉可能殘留的展開 inline（避免再開卡死／擋點擊）
+            if (panel) {
+                try {
+                    panel.style.removeProperty('height');
+                    panel.style.removeProperty('max-height');
+                    panel.style.removeProperty('min-height');
+                    panel.style.removeProperty('pointer-events');
+                    panel.style.removeProperty('opacity');
+                    panel.style.removeProperty('visibility');
+                } catch (eP) {}
             }
         }
-        if (screen) screen.classList.toggle('sheet-open', !!open);
     } catch (e) {}
 }
 function collapseMobileTabPanel() {
     setMobileTabPanelOpen(false);
+    // 🩹 v3.8.453：收合內容時一併收起右側選單分類列
+    try { if (isMobileCompactUi()) setChudRightMenuExpanded(false); } catch (e) {}
 }
 function switchTab(t, btn, opts) {
     opts = opts || {};
-    // 📱 手機：同一分頁再點一次＝收合內容，避免下方內容區一直佔高
-    if (!opts.fromMobileSub && isMobileCompactUi() && btn && btn.classList.contains('active')) {
+    // 🩹 v3.8.319／374：切分頁時關掉收藏／收集冊；若剛關掉 overlay，勿走「再點收合」捷徑
+    var _hadCollection = false;
+    try {
+        var _cp = document.getElementById('collection-panel');
+        _hadCollection = !!(!_cp ? false : (!_cp.classList.contains('hidden')));
+        if (typeof closeAllCollectionOverlays === 'function') closeAllCollectionOverlays();
+    } catch (e0) {}
+    // 📱 手機：同一分頁再點一次＝收合內容（收藏剛關時改為重新展開能力，避免卡在空白／收藏）
+    if (!_hadCollection && !opts.fromMobileSub && isMobileCompactUi() && btn && btn.classList.contains('active')) {
         let col = document.getElementById('col-right');
         if (col && col.classList.contains('mobile-tab-open')) {
             setMobileTabPanelOpen(false);
@@ -3055,7 +3237,10 @@ function switchTab(t, btn, opts) {
         _syncMobileTabPrimary(g);
         if (!opts.fromMobileSub) renderMobileTabSub();
     }
-    if (isMobileCompactUi()) setMobileTabPanelOpen(true);
+    if (isMobileCompactUi()) {
+        try { setChudRightMenuExpanded(true); } catch (eM) {}
+        setMobileTabPanelOpen(true);
+    }
 }
 
 // 手機載入／轉橫豎時重建子選單

@@ -279,7 +279,7 @@ function manualCast(skId) {
         } else {
             let forceBoss = hasTeleportRing();
             doTeleport(forceBoss);
-            logCombat(`你使用了傳送術，當前的怪物消失了${forceBoss ? '；傳送控制戒指引動了強敵的氣息……' : ''}。`, 'magic');
+            logCombat(`你使用了傳送術，空間一瞬扭曲，你出現在地圖的另一處${forceBoss ? '；傳送控制戒指引動了強敵的氣息……' : ''}。`, 'magic');
         }
     } else if(sk.mEff === 'sense') {
         if(!t) { logSys('沒有目標可以偵測。'); return; }
@@ -643,7 +643,7 @@ function castSkillInner(skId) {
             player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if (sk.hpCost) player.hp = Math.max(1, player.hp - effHpCost(sk));
             let base = 50 + Math.max(0, (player.lv || 1) - 30);
-            targets.forEach(m => { if (player.dead) return; if (!m || m.curHp <= 0 || m._dead) return; let dmg = Math.max(1, Math.floor(base * fragileMult(m))); m.curHp -= dmg; if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, m, dmg); m.justHit = 'magic'; m._spellHurt = true; mobWake(m); if (typeof reflectWallOnDamage === 'function') reflectWallOnDamage(m, dmg, 'magic', null); });   // 🎬 v3.0.14 _spellHurt：法術傷害→hurt 動畫(含頭目)；🌑 v3.3.33 血壁空間魔法反射
+            targets.forEach(m => { if (player.dead) return; if (!m || m.curHp <= 0 || m._dead) return; let dmg = Math.max(1, Math.floor(base * fragileMult(m))); let _hb = m.curHp; m.curHp -= dmg; try { if (typeof rtWorldHit === 'function') rtWorldHit(m, dmg, _hb, 'magic'); } catch (eAHr) {} if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, m, dmg); m.justHit = 'magic'; m._spellHurt = true; mobWake(m); if (typeof reflectWallOnDamage === 'function') reflectWallOnDamage(m, dmg, 'magic', null); });   // 🎬 v3.0.14 _spellHurt：法術傷害→hurt 動畫(含頭目)；🌑 v3.3.33 血壁空間魔法反射
             if (player.dead) return true;   // ☠️ v3.5.87 反射反殺：死後不結算擊殺
             logCombat(`施放 <span style="font-weight:700;color:#7dd3fc">${sk.n}</span>，咆哮震懾全場，對所有敵人造成約 ${base} 點固定傷害。`, 'skill');
             targets.forEach(m => { if (m && m.curHp <= 0 && !m._dead) { let i = mapState.mobs.findIndex(x => x && x.uid === m.uid); if (i !== -1) killMob(i); } });
@@ -700,7 +700,7 @@ function castSkillInner(skId) {
                 let _ceFd = (typeof getClanTimedEffects === 'function') ? getClanTimedEffects(player) : null;
                 if (_ceFd && _ceFd.finalDmg > 0) dmg = Math.max(1, Math.floor(dmg * (1 + _ceFd.finalDmg)));
             } catch (eClanFdM) {}
-            t.curHp -= dmg; if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, t, dmg); t.justHit = sk.weaponDmg ? getWpnEle(player.eq.wpn, player.eq.wpn ? DB.items[player.eq.wpn.id] : null) : 'magic'; if (!sk.weaponDmg) t._spellHurt = true; mobWake(t);   // 🎬 v3.0.14 純魔法技→hurt(含頭目)
+            t.curHp -= dmg; try { if (typeof rtWorldHit === 'function') rtWorldHit(t, dmg, t.curHp + dmg, sk.weaponDmg ? 'phys' : 'magic'); } catch (eAH) {} if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, t, dmg); t.justHit = sk.weaponDmg ? getWpnEle(player.eq.wpn, player.eq.wpn ? DB.items[player.eq.wpn.id] : null) : 'magic'; if (!sk.weaponDmg) t._spellHurt = true; mobWake(t);   // 🎬 v3.0.14 純魔法技→hurt(含頭目)
             if (typeof reflectWallOnDamage === 'function' && t._reflectWall) { let _rwW = player.eq.wpn && DB.items[player.eq.wpn.id]; reflectWallOnDamage(t, dmg, sk.weaponDmg ? ((_rwW && (_rwW.isBow || _rwW.ranged)) ? 'ranged' : 'melee') : 'magic', null); }   // 🌑 v3.3.33 血壁空間：玩家技能傷害反射
             if (player.dead) return true;   // ☠️ v3.5.87 反射反殺：死後中止收尾（不結算擊殺）
             if (sk.mpDmgPct && t.st && t.st.mrhalf > 0) t.st.mrhalf = 0;   // 🔧 心靈破壞（魔法）：受一次魔法傷害後解除魔抗減半（與其他魔法路徑一致）
@@ -754,6 +754,7 @@ function castSkillInner(skId) {
                 // 遠距離物理技能命中滿血被動怪物，賦予 3 秒延遲（整段只觸發一次）
                 if(!delayDone && t.curHp === t.hp && t.beh === '被動' && res.ranged) { t._delayTicks = 30; delayDone = true; }
                 t.curHp -= res.dmg;
+                try { if (typeof rtWorldHit === 'function') rtWorldHit(t, res.dmg, t.curHp + res.dmg, 'phys'); } catch (eAHp) {}
                 if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, t, res.dmg);
                 t.justHit = getWpnEle(player.eq.wpn, wpn);
                 if (typeof reflectWallOnDamage === 'function') reflectWallOnDamage(t, res.dmg, res.ranged ? 'ranged' : 'melee', null);   // 🌑 v3.4.14 血壁空間：物理技能每擊反射（衝擊之暈/三重矢·玩家傭兵一致）
@@ -997,23 +998,32 @@ function autoActions() {
     let potThr = parseInt(document.getElementById('set-hp-pot').value) || 0;
     
     let _duelNoPot = (typeof pvpArenaPotionBlocked === 'function') && pvpArenaPotionBlocked();   // 🚫 v3.7.17 決鬥中禁治癒藥水（連「自動購買」一併跳過，免得在場上狂買卻喝不到）
-    if (!_duelNoPot && hpPct <= potThr && player.cds.pot <= 0) {
-        let item = player.inv.find(i => i.id === potId);
-        if (item) useItem(item.uid, true);
-        else if (document.getElementById('set-auto-buy-pot').checked) {
-            // 自動補貨至100瓶 (三種治癒藥水皆適用)
-            let current = player.inv.find(i => i.id === potId);
-            let count = current ? current.cnt : 0;
-            let needed = 100 - count;
-            let unitPrice = shopPrice(DB.items[potId].p);   // 攻城獲勝 8 折亦適用
-            if (needed > 0 && player.gold >= needed * unitPrice) {
-                player.gold -= needed * unitPrice;
-                gainItem(potId, needed, true, true);
-                logSys(`自動消耗 ${needed * unitPrice} 金幣購買了 ${needed} 瓶${DB.items[potId].n}。`);
-                let fresh = player.inv.find(i => i.id === potId);
-                if(fresh) useItem(fresh.uid, true);
+    // 🩹 v3.8.448：藥水不足自動買至 100——存量 <100 即補（非僅 0 瓶）；金幣不夠滿額時改買得起的數量
+    try {
+        let _buyEl = document.getElementById('set-auto-buy-pot');
+        if (_buyEl && _buyEl.checked && !_duelNoPot && potId && DB.items[potId]) {
+            let _cur = player.inv.find(i => i.id === potId);
+            let _cnt = _cur ? (Number(_cur.cnt) || 0) : 0;
+            if (_cnt < 100) {
+                let _need = 100 - _cnt;
+                let _unit = (typeof shopPrice === 'function') ? shopPrice(DB.items[potId].p) : (DB.items[potId].p || 0);
+                _unit = Math.max(0, Math.floor(Number(_unit) || 0));
+                if (_unit > 0) {
+                    let _can = Math.floor(Math.max(0, Number(player.gold) || 0) / _unit);
+                    let _buy = Math.min(_need, _can);
+                    if (_buy > 0) {
+                        player.gold -= _buy * _unit;
+                        gainItem(potId, _buy, true, true);
+                        logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${DB.items[potId].n}（補至存量 ${_cnt + _buy}/100）。`);
+                        try { if (typeof updateUI === 'function') updateUI(); } catch (eG) {}
+                    }
+                }
             }
         }
+    } catch (eBuyPot) {}
+    if (!_duelNoPot && hpPct <= potThr && player.cds.pot <= 0) {
+        let item = player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
+        if (item) useItem(item.uid, true);
     }
     
     const buffs = [   // 🗑️ v3.5.87 刪除六筆 buyId 欄位：v3.3.15「自動購買併入自動使用」時對應 DOM id 已移除·欄位零讀取（自動補購改由缺貨自動買一瓶邏輯處理）

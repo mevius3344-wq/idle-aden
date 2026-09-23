@@ -154,7 +154,7 @@ function loadWarehouse(){
         let items = w.items || [];
         try { let tombs = _whTombsRead(); items = items.filter(it => !(it && it.uid != null && tombs[it.uid])); } catch(e){}   // 🪦 墓碑 uid＝已被領出（他分頁復活殘留）→ 隱藏；下次任一寫入時自桶清除
         _whLoadUids = new Set(items.map(it => it && it.uid).filter(u => u != null));
-        return { items: items, gold: w.gold || 0 };
+        return { items: items, gold: w.gold || 0, _whRev: Math.max(0, Math.floor(Number(w._whRev) || 0)) };
     } catch(e){ _whLoadOk = false; return { items: [], gold: 0 }; }   // JSON 毀損→不可當成空倉庫
 }
 function saveWarehouse(w){
@@ -186,7 +186,7 @@ function saveWarehouse(w){
             }
         }
     } catch(e){}
-    let ok = _lzSet(key, JSON.stringify({ items: items, gold: (w && w.gold) || 0 }));
+    let ok = _lzSet(key, JSON.stringify({ items: items, gold: (w && w.gold) || 0, _whRev: Math.max(0, Math.floor(Number((w && w._whRev) || 0))) }));
     // 🪦 成功寫入後：本次自倉庫移除的 uid（快照有、最終沒有）記入墓碑——涵蓋 領出/製作消耗/兌換/清孤兒 全部移除路徑，防其他分頁舊快照復活。
     try {
         if (ok && _whLoadUids) {
@@ -198,10 +198,12 @@ function saveWarehouse(w){
     try { if (typeof _lkInvalidateWhCache === 'function') _lkInvalidateWhCache(); } catch(e){}   // ⚡ v3.5.89 倉庫已變 → 讓 js/14 的「鎖定件索引」快取立即失效（否則存/取後提示數字最多慢 0.5 秒）
     if (ok) {
       try {
-        if (typeof cloudPushShared === 'function') {
+        // 🌐 P5c：經濟權威開啟時倉庫改走 /api/warehouse/move，禁止自由 PUT shared
+        var _skipWhPush = (typeof econAuthActive === 'function' && econAuthActive());
+        if (!_skipWhPush && typeof cloudPushShared === 'function') {
           let _classic = !!(player && player.classicMode);
           let _name = _classic ? 'warehouse_classic' : 'warehouse';
-          cloudPushShared(_name, { items: items, gold: (w && w.gold) || 0 });
+          cloudPushShared(_name, { items: items, gold: (w && w.gold) || 0, _whRev: (w && w._whRev) || 0 });
         }
       } catch (_cloudWh) {}
     }
@@ -441,6 +443,55 @@ function whTxnCommit(w, snap){
 function whOneClickDeposit(){
     // 🏦 縱深守衛：倉庫只能在安全區使用（浮動視窗曾可被帶進狩獵區；closeNpcInteraction 已補關閉，這裡再擋一層）
     if (typeof mapState === 'undefined' || !mapState.current || !String(mapState.current).startsWith('town_')) { if (typeof logSys === 'function') logSys('<span class="text-red-400">離開安全區後無法使用倉庫。</span>'); return; }
+
+    // 🌐 P5c：權威模式逐件呼叫 API（避免一次本地抬多物）
+    if (typeof rtWarehouseMoveSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        let w = loadWarehouse();
+        let whSigs = new Set(w.items.map(whSig));
+        let cands = [];
+        for (let it of player.inv.slice()) {
+            if (WH_NO_STORE.includes(it.id)) continue;
+            if (typeof isRentalItem === 'function' && isRentalItem(it)) continue;
+            if (it.lock) continue;
+            if (!whSigs.has(whSig(it))) continue;
+            cands.push({ uid: it.uid, qty: it.cnt || 1 });
+        }
+        if (!cands.length) {
+            logSys(`背包中沒有與倉庫現有物品完全相同的可存入物品。`);
+            return;
+        }
+        let i = 0, deposited = 0, stopped = false;
+        function next() {
+            if (stopped || i >= cands.length) {
+                if (deposited > 0) logSys(`<span class="text-cyan-300 font-bold">一鍵存入：已存入 ${deposited} 項與倉庫現有物品相同的物品。</span>`);
+                else if (!stopped) logSys(`背包中沒有與倉庫現有物品完全相同的可存入物品。`);
+                try {
+                    let el = document.getElementById('warehouse-window-content') || document.getElementById('interaction-content');
+                    if (el && typeof renderWarehouseNPC === 'function') renderWarehouseNPC(el);
+                    if (typeof renderTabs === 'function') renderTabs(true);
+                    if (typeof updateUI === 'function') updateUI();
+                } catch (e) {}
+                return;
+            }
+            let c = cands[i++];
+            rtWarehouseMoveSecure({ dir: 'in', kind: 'item', uid: c.uid, qty: c.qty }).then(function (r) {
+                if (r === null) {
+                    // 退回本地一鍵
+                    whOneClickDepositLocal();
+                    stopped = true;
+                    return;
+                }
+                if (r === false) { stopped = true; next(); return; }
+                deposited++;
+                next();
+            });
+        }
+        next();
+        return;
+    }
+    whOneClickDepositLocal();
+}
+function whOneClickDepositLocal(){
     let w = loadWarehouse();
     let _txn = whTxnSnapshot();
     let whSigs = new Set(w.items.map(whSig));   // 倉庫現有物品簽章集合
@@ -477,6 +528,34 @@ function sortWarehouse(){
 function whDeposit(uidv, qty){
     // 🏦 縱深守衛：倉庫只能在安全區使用（浮動視窗曾可被帶進狩獵區；closeNpcInteraction 已補關閉，這裡再擋一層）
     if (typeof mapState === 'undefined' || !mapState.current || !String(mapState.current).startsWith('town_')) { if (typeof logSys === 'function') logSys('<span class="text-red-400">離開安全區後無法使用倉庫。</span>'); return; }
+    let idx0 = player.inv.findIndex(i => i.uid === uidv);
+    if(idx0 < 0) return;
+    let it0 = player.inv[idx0];
+    if(WH_NO_STORE.includes(it0.id)){ logSys(`<span class="text-red-400">此物品無法存入倉庫。</span>`); return; }
+    if(typeof isRentalItem === 'function' && isRentalItem(it0)){ logSys(`<span class="text-red-400">限時裝備無法存入倉庫。</span>`); return; }
+    if(it0.lock){ logSys(`<span class="text-red-400">鎖定物品需先解鎖才能存入倉庫。</span>`); return; }
+    let total0 = it0.cnt || 1;
+    if(qty === undefined){ let _q = _whQtyVal(); qty = (_q > 0) ? _q : total0; }
+    qty = Math.max(1, Math.min(total0, qty || total0));
+
+    // 🌐 P5c：線上經濟權威 → 伺服器存倉
+    if (typeof rtWarehouseMoveSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        rtWarehouseMoveSecure({ dir: 'in', kind: 'item', uid: uidv, qty: qty }).then(function (r) {
+            if (r === null) { whDepositLocal(uidv, qty); return; }
+            if (r === false) {
+                try {
+                    let el = document.getElementById('warehouse-window-content') || document.getElementById('interaction-content');
+                    if (el && typeof renderWarehouseNPC === 'function') renderWarehouseNPC(el);
+                    if (typeof renderTabs === 'function') renderTabs(true);
+                    if (typeof updateUI === 'function') updateUI();
+                } catch (e) {}
+            }
+        });
+        return;
+    }
+    whDepositLocal(uidv, qty);
+}
+function whDepositLocal(uidv, qty){
     let w = loadWarehouse();
     let _txn = whTxnSnapshot();
     let idx = player.inv.findIndex(i => i.uid === uidv);
@@ -506,6 +585,41 @@ function whDeposit(uidv, qty){
 function whWithdraw(uidv, qty){
     // 🏦 縱深守衛：倉庫只能在安全區使用（浮動視窗曾可被帶進狩獵區；closeNpcInteraction 已補關閉，這裡再擋一層）
     if (typeof mapState === 'undefined' || !mapState.current || !String(mapState.current).startsWith('town_')) { if (typeof logSys === 'function') logSys('<span class="text-red-400">離開安全區後無法使用倉庫。</span>'); return; }
+    let w0 = loadWarehouse();
+    let idx0 = w0.items.findIndex(i => i.uid === uidv);
+    if(idx0 < 0) return;
+    let it0 = w0.items[idx0];
+    let total0 = it0.cnt || 1;
+    if(qty === undefined){ let _q = _whQtyVal(); qty = (_q > 0) ? _q : total0; }
+    qty = Math.max(1, Math.min(total0, qty || total0));
+
+    // 🌐 P5c：線上經濟權威 → 伺服器領倉
+    if (typeof rtWarehouseMoveSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        let snap = null;
+        try {
+            snap = JSON.parse(JSON.stringify(it0));
+            snap.cnt = qty;
+        } catch (eS) { snap = null; }
+        rtWarehouseMoveSecure({ dir: 'out', kind: 'item', uid: uidv, qty: qty, _itemSnap: snap }).then(function (r) {
+            if (r === null) { whWithdrawLocal(uidv, qty); return; }
+            if (r === false) {
+                try {
+                    let el = document.getElementById('warehouse-window-content') || document.getElementById('interaction-content');
+                    if (el && typeof renderWarehouseNPC === 'function') renderWarehouseNPC(el);
+                } catch (e) {}
+                return;
+            }
+            try {
+                if (typeof registerEquipObtained === 'function') registerEquipObtained(it0.id);
+                if (typeof registerMiscObtained === 'function') registerMiscObtained(it0.id);
+                if (typeof registerRelicObtained === 'function') registerRelicObtained(it0.id);
+            } catch (eR) {}
+        });
+        return;
+    }
+    whWithdrawLocal(uidv, qty);
+}
+function whWithdrawLocal(uidv, qty){
     let w = loadWarehouse();
     let _txn = whTxnSnapshot();
     let idx = w.items.findIndex(i => i.uid === uidv);
@@ -539,6 +653,30 @@ function whGold(dir){
     // 🏦 縱深守衛：倉庫只能在安全區使用（浮動視窗曾可被帶進狩獵區；closeNpcInteraction 已補關閉，這裡再擋一層）
     if (typeof mapState === 'undefined' || !mapState.current || !String(mapState.current).startsWith('town_')) { if (typeof logSys === 'function') logSys('<span class="text-red-400">離開安全區後無法使用倉庫。</span>'); return; }
     let amt = parseInt(document.getElementById('wh-gold-amt').value) || 0;
+    if(amt <= 0) return;
+
+    // 🌐 P5c：線上經濟權威 → 伺服器轉金幣
+    if (typeof rtWarehouseMoveSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        let w0 = loadWarehouse();
+        if(dir === 'in') amt = Math.min(amt, player.gold);
+        else amt = Math.min(amt, w0.gold||0);
+        if(amt <= 0) return;
+        rtWarehouseMoveSecure({ dir: dir, kind: 'gold', amount: amt }).then(function (r) {
+            if (r === null) { whGoldLocal(dir, amt); return; }
+            if (r === false) {
+                try {
+                    let el = document.getElementById('warehouse-window-content') || document.getElementById('interaction-content');
+                    if (el && typeof renderWarehouseNPC === 'function') renderWarehouseNPC(el);
+                    if (typeof updateUI === 'function') updateUI();
+                } catch (e) {}
+            }
+        });
+        return;
+    }
+    whGoldLocal(dir, amt);
+}
+function whGoldLocal(dir, amtOpt){
+    let amt = amtOpt != null ? amtOpt : (parseInt(document.getElementById('wh-gold-amt').value) || 0);
     if(amt <= 0) return;
     let w = loadWarehouse();
     let _txn = whTxnSnapshot();

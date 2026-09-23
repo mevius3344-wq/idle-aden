@@ -90,6 +90,8 @@ function auditTrackKill(mob) {
     if (g > 0) _audit.exp += g;
     _audit.kills++;
 }
+function auditStats() { return _audit; }
+window.auditStats = auditStats;
 function auditTrackGain(res) {
     if (!res || !res.id || typeof DB === 'undefined' || !DB.items[res.id]) return;
     let nm = DB.items[res.id].n || '';
@@ -339,9 +341,51 @@ function monsterGoldRange(mob) {
     }
     return { min: Math.max(1, gMin), max: Math.max(Math.max(1, gMin), gMax) };
 }
+/** 🌐 P2：同圖參與者經驗（無掉落／金幣；掉落僅 lootKey） */
+function grantAuthKillExp(mobOrName) {
+    if (!player || player.dead) return 0;
+    let mob = mobOrName;
+    if (typeof mobOrName === 'string') {
+        let defId = null;
+        if (typeof DB !== 'undefined' && DB.mobs) {
+            for (let k in DB.mobs) {
+                if (DB.mobs[k] && DB.mobs[k].n === mobOrName) { defId = k; break; }
+            }
+        }
+        mob = defId && DB.mobs[defId] ? DB.mobs[defId] : { n: mobOrName, exp: 0 };
+    }
+    if (!mob || !(mob.exp > 0)) return 0;
+    let _expEach = mob.exp * (1 + (typeof partyExpBonusPct === 'function' ? partyExpBonusPct() : 0) / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
+    if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();
+    let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));
+    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));
+    if (_playerExpGain > 0) {
+        player.exp += _playerExpGain;
+        if (typeof checkLvUp === 'function') checkLvUp();
+        try {
+            logCombat(`<span class="text-sky-300">【同圖參與】</span>獲得 ${_playerExpGain} 點經驗（${mob.n || '敵人'}）。`, 'party');
+        } catch (eL) {}
+    }
+    if (typeof petsGainExp === 'function' && _petExpGain > 0) petsGainExp(_petExpGain);
+    return _playerExpGain;
+}
+try { window.grantAuthKillExp = grantAuthKillExp; } catch (eG) {}
+
 function killMob(idx) {
     let mob = mapState.mobs[idx];
     if (!mob || mob._dead) return;        // 冪等保護：同一隻怪只結算一次獎勵
+    // 🌐 P2：同圖共用怪須等伺服器 kill 授權（lootKey）才結算獎勵
+    try {
+        if (typeof rtWorldAuthCombatActive === 'function' && rtWorldAuthCombatActive()
+            && (mob._serverMobId || mob._sharedSnap || mob._awaitAuthKill)) {
+            if (!mob._authKillOk) {
+                mob._awaitAuthKill = true;
+                mob.curHp = 0;
+                try { if (typeof vfxKill === 'function') vfxKill(mob); } catch (eVk) {}
+                return;
+            }
+        }
+    } catch (eAuthK) {}
     if (mob._mapMirror && typeof mapMobShouldFollow === 'function' && mapMobShouldFollow()) return;   // 👥 同圖共用怪：鏡像由地圖主機結算
     if (mob._partyMirror && typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs()) return;   // 🤝 組隊共用怪：隊員鏡像怪由隊長結算，避免重複掉落
     if (mob._worldBossMirror && typeof wbShouldFollow === 'function' && wbShouldFollow()) return;   // 👑 世界王：鏡像怪由主機結算
@@ -366,6 +410,8 @@ function killMob(idx) {
         }
     }
     mob._dead = true;
+    mob._authKillOk = false;
+    mob._awaitAuthKill = false;
     try { vfxKill(mob); } catch(e){}   // ✨ VFX：擊殺粒子爆裂（趁格子 DOM 仍在、重繪前）
     try { playMobKill(mob); } catch(e){}   // 🔊 音效：怪物死亡（依怪名對應專屬死亡音，查無→通用擊殺音）
     if (mob.curHp > 0) mob.curHp = 0;     // 待清算期間不可被當成活目標
@@ -391,7 +437,7 @@ function killMob(idx) {
     if (typeof necroBookOnKill === 'function') necroBookOnKill(mob);   // 🏺 v3.8.12 死靈之書：全隊1%回復＋骷髏復生（建築由函式內排除）
     if(typeof auditTrackKill === 'function') auditTrackKill(mob);   // 統計：累計經驗/擊殺
     // 🔧 轉場建築（往上層的樓梯 / 遺忘之島傳送門）：擊敗即進入下一層/島，不顯示「擊敗了…」戰鬥訊息（race 建築且 noAutoTeleport，排除攻城塔/城門）
-    let _hideKillMsg = (mob.race === '建築' && mob.noAutoTeleport);
+    let _hideKillMsg = (mob.race === '建築' && mob.noAutoTeleport) || !!mob.trainingDummy;   // 🪵 木頭人不刷「擊敗了」洗版
     if(!_hideKillMsg) logCombat(`擊敗了 <span class="${getMobColor(mob.lv)}">${mob.n}</span>！`, 'player-heavy');  // 👈 新增
     // 🤝 v3.7.62 組隊經驗不再拆分：主玩家、每名未倒地傭兵、每隻未倒地寵物各取得完整經驗；既有組隊加成保留。
     let _expEach = mob.exp * (1 + partyExpBonusPct() / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
@@ -889,13 +935,24 @@ function startOblivion() {
         logSys('你目前無法行動（石化／麻痺／冰凍／暈眩），無法出發。'); return;
     }
     if ((player.gold || 0) < 100000) { logSys('<span class="text-red-400">金幣不足（前往遺忘之島需 100,000 金幣）。</span>'); return; }
+    function go() {
+        state.oblivion = 'travel';
+        state._oblivionAdvance = false;
+        logSys('<span class="text-cyan-300 font-bold">⛵ 你搭上依斯巴的船，前往遺忘之島……</span><span class="text-cyan-200"> 旅途中無法選擇地圖，也無法使用傳送術與瞬間移動卷軸。</span>');
+        enterOblivionMap('oblivion_travel');
+        updateUI();
+        saveGame();
+    }
+    if (typeof rtEconSinkSecure === 'function' && typeof econAuthActive === 'function' && econAuthActive()) {
+        rtEconSinkSecure('oblivion_boat').then(function (r) {
+            if (r === null) { player.gold -= 100000; go(); return; }
+            if (r === false) return;
+            go();
+        });
+        return;
+    }
     player.gold -= 100000;
-    state.oblivion = 'travel';
-    state._oblivionAdvance = false;
-    logSys('<span class="text-cyan-300 font-bold">⛵ 你搭上依斯巴的船，前往遺忘之島……</span><span class="text-cyan-200"> 旅途中無法選擇地圖，也無法使用傳送術與瞬間移動卷軸。</span>');
-    enterOblivionMap('oblivion_travel');
-    updateUI();
-    saveGame();
+    go();
 }
 // ======================= 🐉 侵蝕的安塔瑞斯巢穴（v3.7.57 副本）=======================
 // 由威頓村 NPC 多魯嘉貝爾進入；4 區推進（入口→通道→深處→棲息地），擊敗各區頭目自動深入，
@@ -1474,14 +1531,21 @@ function giltasKeepOnLeave() {
     }
 }
 function revive() {
+    // v3.8.281／439：死亡後必須回村甦醒；目標村莊寫入選單失敗時舊版會卡在戰場
+    if (!player) return;
+    if (!player.dead && player.hp > 0) return;
     player.dead = false;
-    player.statuses = { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0 };  // 復活清除所有異常(含中毒/灼燒/燙傷)，避免復活後立即被持續傷害再次擊殺
+    player.statuses = { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0, armorBreak: 0, slowAtk: 0, cleave: 0, evilAura: 0 };  // 復活清除所有異常
     player.summon = null; player.charmed = null; player.manualCd = {}; player.hots = {}; player.buffs.sk_charm = 0;   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制狀態一律存 hots(複數 dict)
     if (player.allies && player.allies.length) logSys('<span class="text-emerald-300">回城復活，協力傭兵仍在你身邊。</span>');   // 🔧 玩家死亡/復活不再解散傭兵，只有在傭兵公會選「解散」才會解除
-    player.skills.forEach(s => { if(DB.skills[s] && DB.skills[s].summon) player.buffs[s] = 0; });   // 清除召喚 buff，避免復活後召喚消失卻長時間不自動重新召喚
-    document.getElementById('btn-revive').classList.add('hidden');
-    { let ip = document.getElementById('btn-revive-inplace'); if(ip) ip.classList.add('hidden'); }
-    
+    try {
+        player.skills.forEach(s => { if (DB.skills[s] && DB.skills[s].summon) player.buffs[s] = 0; });
+    } catch (eSk) {}
+    try {
+        let b1 = document.getElementById('btn-revive'); if (b1) b1.classList.add('hidden');
+        let b2 = document.getElementById('btn-revive-inplace'); if (b2) b2.classList.add('hidden');
+    } catch (eBtn) {}
+
     // 🗼 傲慢之塔：於塔中死亡回城復活 → 結束攀登（排名先依目前樓層結算）
     if (state.prideClimb) {
         if (state.prideRanked) prideRecord(state.prideFloor || 2);
@@ -1490,31 +1554,85 @@ function revive() {
     if (state.riftRun) riftEndRun();   // 🌀 裂痕內死亡：結算停留時間並產生待領獎勵
     if (state.oblivion) { state.oblivion = null; state._oblivionAdvance = false; }   // 🏝️ 旅程中死亡：回村並結束遺忘之島旅程
     if (state.antharas) { state.antharas = 0; state._antAdvance = false; logSys('<span class="text-amber-300">🐉 你在侵蝕的安塔瑞斯巢穴倒下了……挑戰失敗不消耗每日次數，隨時可再次挑戰。</span>'); }   // 🐉 v3.7.57 副本內死亡＝失敗（不耗每日次數·通關才記日鍵）
-    // 🌑 v3.4.16 吉爾塔斯 HP 保留：改統一收口 giltasKeepOnLeave()——本函式尾端 changeMap(true) 會在切換地圖前觸發（回村/瞬移/切圖亦同一路徑），此處不再 inline 處理（避免雙重消耗）。
-    // 👇 正確的新版起點邏輯
+
+    // 🩹 v3.8.439：與「回村」同一套安全區（上次村莊→家鄉），含血盟據點；勿只寫職業出生村
     let startMap = 'town_silver_knight';
-    if (player.cls === 'mage') startMap = 'town_talking';
-    else if (player.cls === 'elf') startMap = 'town_elf';
-    else if (player.cls === 'dark') startMap = 'town_silent';
-    else if (player.cls === 'illusion') startMap = 'town_hyperia';
-    else if (player.cls === 'dragon') startMap = 'town_behemoth';
-    else if (player.cls === 'warrior') startMap = 'town_heine';   // ⚔️ 戰士：海音
-    else if (player.cls === 'royal') startMap = 'town_talking';   // 👑 王族：說話之島
+    try {
+        if (typeof getLastTown === 'function') startMap = getLastTown();
+        else if (typeof getHomeTown === 'function') startMap = getHomeTown();
+    } catch (eTown) {
+        try { if (typeof getHomeTown === 'function') startMap = getHomeTown(); } catch (e2) {}
+    }
+    if (!startMap || String(startMap).indexOf('town_') !== 0) startMap = 'town_silver_knight';
 
-    setMapSelectors(startMap);
+    // 確保下拉有目標村：否則 sel.value 寫不進去、changeMap 會停在原戰場
+    try {
+        let sel = document.getElementById('map-select');
+        if (sel) {
+            let has = false;
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === startMap) { has = true; break; }
+            }
+            if (!has) {
+                try { if (typeof setMapSelectors === 'function') setMapSelectors(startMap); } catch (eSet) {}
+                has = false;
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === startMap) { has = true; break; }
+                }
+            }
+            if (!has) {
+                let opt = document.createElement('option');
+                opt.value = startMap;
+                opt.textContent = (DB.towns && DB.towns[startMap] && DB.towns[startMap].n) ? DB.towns[startMap].n : startMap;
+                sel.appendChild(opt);
+            }
+            sel.value = startMap;
+        } else if (typeof setMapSelectors === 'function') {
+            setMapSelectors(startMap);
+        }
+    } catch (eSel) {
+        try { if (typeof setMapSelectors === 'function') setMapSelectors(startMap); } catch (e3) {}
+    }
 
-    calcStats();
-    changeMap(true);
-    
-    logSys(`<span class="text-green-300">一股神聖的力量將你的靈魂自虛空中召回，你在村莊甦醒了...</span>`);
-    saveGame();   // 城鎮復活成功後自動存檔：固化死亡懲罰（傭兵解散、召喚清除等），避免重載又把狀態帶回
+    try { calcStats(); } catch (eCs) {}
+    // 🪦 v3.8.353：死亡回村甦醒＝低血起步，靠村莊自然恢復慢慢回滿（勿立刻補滿）
+    player.hp = 1;
+    player.mp = Math.max(0, Math.min(Number(player.mmp) || 0, 1));
+
+    try { if (typeof changeMap === 'function') changeMap(true); } catch (eCm) {}
+
+    // 後備：changeMap 失敗或仍停在非村莊 → 強制進村畫面
+    try {
+        if (!mapState || String(mapState.current || '').indexOf('town_') !== 0) {
+            if (typeof mapState !== 'undefined' && mapState) mapState.current = startMap;
+            let bv = document.getElementById('battle-view');
+            let tv = document.getElementById('town-view');
+            let cl = document.getElementById('combat-log-panel');
+            if (bv) bv.classList.add('hidden');
+            if (cl) cl.classList.remove('hidden');
+            if (tv) { tv.classList.remove('hidden'); tv.classList.add('flex'); }
+            let tn = document.getElementById('town-name');
+            if (tn) {
+                let tData = (typeof DB !== 'undefined' && DB.towns) ? DB.towns[startMap] : null;
+                tn.innerText = (tData && tData.n) ? tData.n : startMap;
+            }
+            player.lastTownVisited = startMap;
+            try { if (typeof renderTownNPCs === 'function') renderTownNPCs(startMap); } catch (eNpc) {}
+            try { if (typeof exploreOnMapChange === 'function') exploreOnMapChange(); } catch (eEx) {}
+        }
+    } catch (eForce) {}
+
+    try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
+
+    logSys(`<span class="text-green-300">你在村莊甦醒了……傷勢未癒，請在村中休息恢復。</span>`);
+    try { saveGame(); } catch (eSv) {}
 }
 
-// 🪦 已停用玩家「原地復活」：死亡後僅能「祈求復活」回村甦醒。保留函式以免舊 onclick／離線結算報錯。
+// 🪦 已停用玩家「原地復活」：死亡後自動回村。保留函式以免舊 onclick／離線結算報錯。
 function reviveInPlace() {
     if (!player.dead) return;
     if (typeof logSys === 'function') {
-        logSys('<span class="text-amber-300">已取消原地復活。請點「祈求復活」回到村莊甦醒。</span>');
+        logSys('<span class="text-amber-300">死亡後會自動回村甦醒，無需手動復活。</span>');
     }
 }
 

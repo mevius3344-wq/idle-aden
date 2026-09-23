@@ -1168,18 +1168,15 @@ function doCraft(npcId, recipeIdx, sherine) {   // 🔮 sherine 參數保留簽�
     saveGame();
 }
 function renderPandoraGacha(div) {
-    // 🔧 潘朵拉黑市：全服每 20 分鐘上架 1 件競標商品（連線）／離線後備單格
+    // 🔧 潘朵拉抽抽樂：付費權重抽獎（連線）／離線本機抽
     _pandoraDiv = div;
     if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
         try { if (typeof pandoraSyncServerLot === 'function') pandoraSyncServerLot(); } catch (e) {}
         try { if (typeof pandoraPollClaims === 'function') pandoraPollClaims(); } catch (e2) {}
-    } else {
-        refreshPandoraMarket(false);
     }
-    player.pandoraAnnounce = null;            // 玩家點開潘朵拉 → 清除稀有公告橫幅
-    player.pandoraAnnounceBless = false;
+    // 進面板不強制清珍稀橫幅；玩家可看完再關
     try { renderPandoraBanner(); } catch (e) {}
-    try { saveGame(); } catch (e) {}          // 🔧 點擊潘朵拉即自動存檔，鎖定當下商品與剩餘時間
+    try { saveGame(); } catch (e) {}
     pandoraRenderMarket(div);
 }
 
@@ -1224,7 +1221,8 @@ function getWeightedGachaResult(doubleNonRare, excludeCards) {
     // 建立抽獎池並計算總權重
     for (let id in DB.items) {
         let item = DB.items[id];
-        if ((doubleNonRare || excludeCards) && item.eff === 'card') continue;   // 怪物卡僅加入黑市與收購 NPC；黑市達卡片上限時亦暫時排除
+        // 🎴 卡片：抽抽樂／血盟特殊掉寶／黑市達上限時排除（怪物卡仍可由擊殺掉／黑市未滿時出）
+        if ((doubleNonRare || excludeCards) && item && item.eff === 'card') continue;
         let weight = item.gachaWeight !== undefined ? item.gachaWeight : 0;   // 🎯 v3.4.2 沒有標示視同 0（initGachaWeights 已正規化·此為雙保險）
         if (weight > 0) {
             if (doubleNonRare && weight !== 1) weight *= 2;   // 🔧 血盟野外特殊掉落：潘朵拉權重 1 以外的物品以 2 倍權重計算（權重100→200）
@@ -1244,7 +1242,7 @@ function getWeightedGachaResult(doubleNonRare, excludeCards) {
             return item.id;
         }
     }
-    return pool[pool.length - 1].id;
+    return pool.length ? pool[pool.length - 1].id : null;
 }
 
 // ==========================================
@@ -1403,158 +1401,56 @@ function _pandoraLogLatest(slot) {
     logSys(`<span class="pandora-stock-log"><span class="text-purple-300 font-bold">📢【潘朵拉黑市】</span>新商品上架競標！<span class="${getItemColor(inst)}">${getItemFullName(inst)}</span>（${slot.price.toLocaleString()} 金幣）${rare ? '！' : '。'}</span>`);
 }
 
-// 黑市輪換（js/03 每 10 秒呼叫一次；force＝強制重置）。回傳本次是否有狀態變化。
+// 黑市輪換：抽抽樂模式下不再排程上架／競標
 function refreshPandoraMarket(force) {
     if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
-        try {
-            if (typeof pandoraSyncServerLot === 'function') pandoraSyncServerLot();
-        } catch (e) {}
         return false;
     }
-    if (typeof player === 'undefined' || !player) return false;
-    let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
-    let m = player.pandoraMarket2;
-    let changed = false, latest = null;
-
-    // 舊存檔遷移：無 phase 視為 active
-    if (m && !m.phase && Array.isArray(m.slots) && m.slots.length) {
-        m.phase = 'active';
-        m.phaseStartTick = m.slots[0] ? (m.slots[0].setTick || nowT) : nowT;
-    }
-
-    let bad = !m || !m.phase ||
-        (m.phase === 'active' && (!Array.isArray(m.slots) || m.slots.length !== PANDORA_SLOT_COUNT || !m.slots[0] || !DB.items[m.slots[0].id])) ||
-        (m.phase === 'gap' && !Number.isFinite(m.gapUntilTick));
-
-    if (force || bad) {
-        let s = _pandoraStock(nowT, { slots: [] });
-        m = player.pandoraMarket2 = {
-            phase: 'active', slots: [s], seq: 1, phaseStartTick: nowT, gapUntilTick: 0, notice: m && m.notice ? m.notice : null
-        };
-        latest = s; changed = true;
-    } else if (m.phase === 'active') {
-        let s = m.slots[0];
-        let start = s.setTick || m.phaseStartTick || nowT;
-        if ((nowT - start) >= PANDORA_SLOT_TICKS) {
-            m.phase = 'gap';
-            m.gapUntilTick = nowT + PANDORA_GAP_TICKS;
-            if (!s.sold) m.retainSlot = Object.assign({}, s, { sold: false });
-            else m.retainSlot = null;
-            m.slots = [];
-            if (player.pandoraAnnounce) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; }
-            changed = true;
-        }
-    } else if (m.phase === 'gap' && nowT >= (m.gapUntilTick || 0)) {
-        let s;
-        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
-            s = Object.assign({}, m.retainSlot, { setTick: nowT, sold: false });
-            m.retainSlot = null;
-        } else {
-            s = _pandoraStock(nowT, { slots: [] });
-            latest = s;
-        }
-        m.phase = 'active';
-        m.slots = [s];
-        m.phaseStartTick = nowT;
-        m.seq = (m.seq || 0) + 1;
-        changed = true;
-    }
-
-    if (!changed) return false;
-    if (latest) {
-        _pandoraLogLatest(latest);
-        player.pandoraAnnounce = latest.id;
-        player.pandoraAnnounceBless = latest.bless === true;
+    if (force && typeof player !== 'undefined' && player) {
+        player.pandoraMarket2 = null;
     }
     try { renderPandoraBanner(); } catch (e) {}
-    try { renderSyslogPandora(); } catch (e) {}
-    if (_pandoraDiv && document.body.contains(_pandoraDiv) && _pandoraDiv.querySelector('#pandora-msg')) { try { pandoraRenderMarket(_pandoraDiv); } catch (e) {} }
-    else { _pandoraDiv = null; }
-    return true;
+    try { renderSyslogPandora(); } catch (e2) {}
+    return false;
 }
 
-// 商品上架時的常駐橫幅：持續到商品輪換/售出或玩家點擊潘朵拉
+// 珍稀抽中常駐橫幅
 function renderPandoraBanner() {
     let el = document.getElementById('pandora-banner');
-    if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
-        let lot = window._pandoraServerLot;
-        if (!lot || lot.phase === 'gap' || !lot.itemId) {
-            if (el) el.style.display = 'none';
-            return;
-        }
-        let annInst = { id: lot.itemId, bless: !!lot.bless };
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'pandora-banner';
-            el.className = 'fixed top-1 left-1/2 -translate-x-1/2 z-40 bg-black/85 border border-purple-400 text-purple-200 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(192,132,252,0.6)] animate-pulse pointer-events-none max-w-[92vw] text-center';
-            document.body.appendChild(el);
-        }
-        let rare = lot.weight === 1;
-        el.innerHTML = `🌟 潘朵拉黑市競標中：${rare ? '珍稀 ' : ''}<span class="${getItemColor(annInst)}">${getItemFullName(annInst)}</span>！`;
-        el.style.display = '';
+    let id = (typeof player !== 'undefined' && player) ? player.pandoraAnnounce : null;
+    if (!id || !DB.items[id]) {
+        if (el) el.style.display = 'none';
         return;
     }
-    let annId = (typeof player !== 'undefined' && player) ? player.pandoraAnnounce : null;
-    let annInst = annId ? { id: annId, bless: !!player.pandoraAnnounceBless } : null;
-    if (annId && DB.items[annId]) {
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'pandora-banner';
-            el.className = 'fixed top-1 left-1/2 -translate-x-1/2 z-40 bg-black/85 border border-purple-400 text-purple-200 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(192,132,252,0.6)] animate-pulse pointer-events-none max-w-[92vw] text-center';
-            document.body.appendChild(el);
-        }
-        el.innerHTML = `🌟 潘朵拉黑市競標中：<span class="${getItemColor(annInst)}">${getItemFullName(annInst)}</span>！`;
-        el.style.display = '';
-    } else if (el) {
-        el.style.display = 'none';
+    let annInst = { id: id, bless: !!(player && player.pandoraAnnounceBless) };
+    let rare = (DB.items[id].gachaWeight === 1);
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'pandora-banner';
+        el.className = 'fixed top-1 left-1/2 -translate-x-1/2 z-40 bg-black/85 border border-purple-400 text-purple-200 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(192,132,252,0.6)] animate-pulse pointer-events-none max-w-[92vw] text-center';
+        document.body.appendChild(el);
     }
+    el.innerHTML = `🌟 潘朵拉抽抽樂：${rare ? '珍稀 ' : ''}<span class="${getItemColor(annInst)}">${getItemFullName(annInst)}</span>！`;
+    el.style.display = '';
 }
 
-// 系統與物品日誌標題列右側：顯示黑市競標狀態
+// 系統日誌標題列右側：抽抽樂狀態
 function renderSyslogPandora() {
     let el = document.getElementById('syslog-pandora');
     if (!el) return;
-    if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled() && window._pandoraServerLot) {
-        let lot = window._pandoraServerLot;
-        if (lot.phase === 'gap') {
-            let mins = Math.max(1, Math.ceil((lot.msUntilNext || 0) / 60000));
-            let retainNote = '';
-            if (lot.retainItemId && DB.items[lot.retainItemId]) {
-                let inst = { id: lot.retainItemId, bless: !!lot.retainBless };
-                retainNote = ` · 無人競標，保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span>`;
-            }
-            el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架${retainNote}</span>`;
-            return;
+    let cost = 100000;
+    try {
+        if (typeof pandoraDrawCostLocal === 'function') cost = pandoraDrawCostLocal(1);
+        else if (window._pandoraGachaMeta && window._pandoraGachaMeta.drawCost) cost = window._pandoraGachaMeta.drawCost;
+    } catch (e) {}
+    let last = '';
+    try {
+        if (player && player.pandoraAnnounce && DB.items[player.pandoraAnnounce]) {
+            let inst = { id: player.pandoraAnnounce, bless: !!player.pandoraAnnounceBless };
+            last = ` · 最近 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span>`;
         }
-        if (!lot.itemId) { el.innerHTML = ''; return; }
-        let d = DB.items[lot.itemId];
-        if (!d) { el.innerHTML = ''; return; }
-        let inst = { id: lot.itemId, bless: !!lot.bless };
-        let nameStyle = (lot.weight === 1) ? 'color:#c084fc;text-shadow:0 0 4px rgba(192,132,252,.5);' : '';
-        let bidTxt = lot.highBid > 0 ? lot.highBid.toLocaleString() + ' 金' : '尚無出價';
-        el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="font-bold ${getItemColor(inst)}" style="${nameStyle}">${getItemFullName(inst)}</span> <span class="text-yellow-300 text-xs">(${bidTxt})</span>`;
-        return;
-    }
-    let m = (typeof player !== 'undefined' && player) ? player.pandoraMarket2 : null;
-    if (m && m.phase === 'gap') {
-        let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
-        let mins = Math.max(1, Math.ceil(((m.gapUntilTick || 0) - nowT) / 600));
-        let retainNote = '';
-        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
-            let inst = { id: m.retainSlot.id, bless: m.retainSlot.bless === true };
-            retainNote = ` · 無人競標，保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span>`;
-        }
-        el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="text-slate-400 text-xs">下一件約 ${mins} 分鐘後上架${retainNote}</span>`;
-        return;
-    }
-    let s = (m && m.slots && m.slots.length) ? m.slots[0] : null;
-    let d = s ? DB.items[s.id] : null;
-    if (!d) { el.innerHTML = ''; return; }
-    let inst = { id: s.id, bless: s.bless === true };
-    let nameStyle = (s.weight === 1) ? 'color:#c084fc;text-shadow:0 0 4px rgba(192,132,252,.5);' : '';
-    let nameClass = getItemColor(inst);
-    let soldTxt = s.sold ? '<span class="text-xs ml-1" style="color:#64748b;">（已售出）</span>' : '';
-    el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">黑市競標：</span><span class="font-bold ${nameClass}" style="${nameStyle}">${getItemFullName(inst)}</span>${soldTxt}`;
+    } catch (e2) {}
+    el.innerHTML = `<span class="text-xs" style="color:#94a3b8;">抽抽樂：</span><span class="text-yellow-300 text-xs">${Number(cost).toLocaleString()} 金／抽</span>${last}`;
 }
 
 // ===== 黑市商品 tooltip（能力說明·跟隨滑鼠·掛 body 用視口座標，不受 #app-stage 縮放影響）=====
@@ -1592,189 +1488,385 @@ function pandoraTipMove(ev) {
 }
 function pandoraTipHide() { let el = document.getElementById('pandora-tooltip'); if (el) el.style.display = 'none'; }
 
-function pandoraRenderServerAuction(div, lot) {
+// 抽抽樂「查詢機率」：依本機 DB 權重池（與 getWeightedGachaResult 同語義）即時彙總
+let _pandoraOddsOpen = false;
+let _pandoraOddsExpandedW = null;
+
+function pandoraGachaOddsTierLabel(w) {
+    w = Number(w) || 0;
+    if (w === 1) return '極度稀有';
+    if (w === 10) return '稀有';
+    if (w === 20) return '罕見';
+    if (w === 50) return '一般';
+    if (w === 100) return '最常見';
+    if (w <= 5) return '極度稀有';
+    if (w <= 15) return '稀有';
+    if (w <= 30) return '罕見';
+    if (w <= 60) return '一般';
+    return '最常見';
+}
+
+function pandoraFmtOddsPct(rate) {
+    let pct = (Number(rate) || 0) * 100;
+    if (pct >= 10) return pct.toFixed(2) + '%';
+    if (pct >= 1) return pct.toFixed(2) + '%';
+    if (pct >= 0.01) return pct.toFixed(3) + '%';
+    return pct.toFixed(4) + '%';
+}
+
+/** 與 getWeightedGachaResult(false,true) 同一池：gachaWeight>0 且非卡片（遺物已於 init 歸 0） */
+function pandoraComputeGachaOdds() {
+    let totalWeight = 0;
+    let byW = Object.create(null);
+    if (typeof DB === 'undefined' || !DB.items) {
+        return { totalWeight: 0, totalItems: 0, tiers: [] };
+    }
+    for (let id in DB.items) {
+        let item = DB.items[id];
+        if (!item) continue;
+        if (item.eff === 'card') continue;   // 🎴 v3.8.498：抽抽樂機率不計怪物卡
+        let weight = item.gachaWeight !== undefined ? item.gachaWeight : 0;
+        if (!(weight > 0)) continue;
+        totalWeight += weight;
+        let key = String(weight);
+        if (!byW[key]) byW[key] = { weight: weight, count: 0, items: [] };
+        byW[key].count++;
+        byW[key].items.push({
+            id: id,
+            name: item.n || id,
+            weight: weight
+        });
+    }
+    let tiers = Object.keys(byW).map(Number).sort((a, b) => a - b).map(w => {
+        let g = byW[String(w)];
+        g.items.sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-Hant'));
+        let tierWeight = g.weight * g.count;
+        return {
+            weight: w,
+            label: pandoraGachaOddsTierLabel(w),
+            count: g.count,
+            tierWeight: tierWeight,
+            anyRate: totalWeight > 0 ? tierWeight / totalWeight : 0,
+            perItemRate: totalWeight > 0 ? g.weight / totalWeight : 0,
+            items: g.items
+        };
+    });
+    return {
+        totalWeight: totalWeight,
+        totalItems: tiers.reduce((n, t) => n + t.count, 0),
+        tiers: tiers
+    };
+}
+
+function pandoraToggleOddsPanel() {
+    _pandoraOddsOpen = !_pandoraOddsOpen;
+    if (!_pandoraOddsOpen) _pandoraOddsExpandedW = null;
+    if (_pandoraDiv) pandoraRenderGachaPanel(_pandoraDiv);
+}
+
+function pandoraToggleOddsTier(w) {
+    w = Number(w);
+    _pandoraOddsExpandedW = (_pandoraOddsExpandedW === w) ? null : w;
+    _pandoraOddsOpen = true;
+    if (_pandoraDiv) pandoraRenderGachaPanel(_pandoraDiv);
+}
+
+const PANDORA_RECENT_MAX = 20;
+let _pandoraRecentDraws = []; // { at, itemId, nameHtml, bless, weight, rare }
+
+function pandoraGachaLinkState() {
+    // online | offline | probing
+    try {
+        if (typeof location !== 'undefined') {
+            let p = String(location.protocol || '');
+            if (p !== 'http:' && p !== 'https:') return 'offline';
+        }
+    } catch (e0) {}
+    try {
+        if (typeof window !== 'undefined' && window._pandoraServerReady === true) return 'online';
+        if (typeof window !== 'undefined' && window._pandoraServerReady === false) return 'offline';
+    } catch (e1) {}
+    try {
+        if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) return 'probing';
+    } catch (e2) {}
+    return 'offline';
+}
+
+function pandoraGachaStatusBadgeHTML() {
+    let st = pandoraGachaLinkState();
+    if (st === 'online') {
+        return '<span class="pandora-gacha-badge online" title="連線權威抽獎（伺服器扣金／出貨）">連線權威</span>';
+    }
+    if (st === 'probing') {
+        return '<span class="pandora-gacha-badge probing" title="正在確認抽獎伺服器…">連線確認中</span>';
+    }
+    return '<span class="pandora-gacha-badge offline" title="本機權重池抽獎（金幣本機扣）">離線本機</span>';
+}
+
+function pandoraRecordDrawResults(rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    let at = Date.now();
+    for (let i = 0; i < rows.length; i++) {
+        let r = rows[i];
+        if (!r || !r.itemId) continue;
+        let w = Math.max(1, Math.floor(Number(r.weight) || 100));
+        let rare = w === 1 || !!r.rare;
+        let nameHtml = r.nameHtml || '';
+        if (!nameHtml) {
+            try {
+                let inst = { id: r.itemId, bless: !!r.bless };
+                nameHtml = '<span class="' + getItemColor(inst) + ' font-bold">' + getItemFullName(inst) + '</span>';
+            } catch (e) {
+                nameHtml = _pandoraEsc(String(r.itemId));
+            }
+        }
+        _pandoraRecentDraws.unshift({
+            at: at + i,
+            itemId: r.itemId,
+            nameHtml: nameHtml,
+            bless: !!r.bless,
+            weight: w,
+            rare: rare
+        });
+    }
+    if (_pandoraRecentDraws.length > PANDORA_RECENT_MAX) {
+        _pandoraRecentDraws.length = PANDORA_RECENT_MAX;
+    }
+}
+
+function pandoraRenderRecentHTML() {
+    if (!_pandoraRecentDraws.length) {
+        return '<div class="pandora-recent"><p class="pandora-recent-empty">尚無本場抽獎紀錄</p></div>';
+    }
+    let lis = _pandoraRecentDraws.map(r => {
+        let cls = 'pandora-recent-row' + (r.rare ? ' rare' : '') + (r.bless ? ' bless' : '');
+        let tags = '';
+        if (r.rare) tags += '<span class="pandora-tag rare">珍稀</span>';
+        if (r.bless) tags += '<span class="pandora-tag bless">祝福</span>';
+        return `<li class="${cls}"><span class="pandora-recent-name">${r.nameHtml}</span>${tags}</li>`;
+    }).join('');
+    return `<div class="pandora-recent">`
+        + `<p class="pandora-recent-head">最近 ${_pandoraRecentDraws.length} 抽</p>`
+        + `<ul class="pandora-recent-list">${lis}</ul>`
+        + `</div>`;
+}
+
+function pandoraCloseDrawOverlay() {
+    let el = document.getElementById('pandora-draw-overlay');
+    if (el) el.remove();
+}
+
+function pandoraShowDrawOverlay(rows, cost) {
+    if (!Array.isArray(rows) || rows.length < 2) return; // 十連／連抽浮層
+    pandoraCloseDrawOverlay();
+    let rareN = 0, blessN = 0;
+    let cards = rows.map((r, i) => {
+        let w = Math.max(1, Math.floor(Number(r.weight) || 100));
+        let rare = w === 1 || !!r.rare;
+        if (rare) rareN++;
+        if (r.bless) blessN++;
+        let nameHtml = r.nameHtml || '';
+        if (!nameHtml) {
+            try {
+                let inst = { id: r.itemId, bless: !!r.bless };
+                nameHtml = '<span class="' + getItemColor(inst) + ' font-bold">' + getItemFullName(inst) + '</span>';
+            } catch (e) {
+                nameHtml = _pandoraEsc(String(r.itemId || '?'));
+            }
+        }
+        return `<li class="pandora-draw-card${rare ? ' rare' : ''}${r.bless ? ' bless' : ''}">`
+            + `<span class="pandora-draw-idx">${i + 1}</span>`
+            + `<span class="pandora-draw-name">${nameHtml}</span>`
+            + (rare ? '<span class="pandora-tag rare">珍稀</span>' : '')
+            + (r.bless ? '<span class="pandora-tag bless">祝福</span>' : '')
+            + `</li>`;
+    }).join('');
+    let overlay = document.createElement('div');
+    overlay.id = 'pandora-draw-overlay';
+    overlay.className = 'pandora-draw-overlay';
+    overlay.innerHTML = `
+        <div class="pandora-draw-modal" role="dialog" aria-label="抽獎結果">
+            <h4 class="pandora-draw-title">連抽結果 ×${rows.length}</h4>
+            <p class="pandora-draw-meta">花費 <span class="text-yellow-300 font-bold">${Number(cost || 0).toLocaleString()}</span> 金`
+        + (rareN ? ` · <span class="text-purple-300">珍稀 ${rareN}</span>` : '')
+        + (blessN ? ` · <span class="text-sky-300">祝福 ${blessN}</span>` : '')
+        + `</p>
+            <ul class="pandora-draw-grid">${cards}</ul>
+            <button type="button" class="btn pandora-draw-close bg-purple-700 hover:bg-purple-600 border-purple-500 font-bold px-6 py-2 rounded"
+                onclick="pandoraCloseDrawOverlay()">關閉</button>
+        </div>`;
+    overlay.addEventListener('click', function (ev) {
+        if (ev.target === overlay) pandoraCloseDrawOverlay();
+    });
+    document.body.appendChild(overlay);
+}
+
+/** 抽獎完成後統一：紀錄＋浮層＋刷新面板 */
+function pandoraOnDrawComplete(rows, cost) {
+    pandoraRecordDrawResults(rows);
+    if (Array.isArray(rows) && rows.length >= 2) {
+        try { pandoraShowDrawOverlay(rows, cost); } catch (e) {}
+    }
+    try {
+        if (_pandoraDiv) pandoraRenderMarket(_pandoraDiv);
+    } catch (e2) {}
+}
+
+function pandoraRenderOddsPanelHTML() {
+    if (!_pandoraOddsOpen) return '';
+    let odds = pandoraComputeGachaOdds();
+    let rows = odds.tiers.map(t => {
+        let open = _pandoraOddsExpandedW === t.weight;
+        let itemsHtml = '';
+        if (open) {
+            let list = t.items.map(it => {
+                let rate = odds.totalWeight > 0 ? (it.weight / odds.totalWeight) : 0;
+                return `<li><span class="pandora-odds-item-name">${_pandoraEsc(it.name)}</span>`
+                    + `<span class="pandora-odds-item-pct">${pandoraFmtOddsPct(rate)}</span></li>`;
+            }).join('');
+            itemsHtml = `<ul class="pandora-odds-items">${list || '<li class="text-slate-500">（無）</li>'}</ul>`;
+        }
+        return `<div class="pandora-odds-tier${open ? ' open' : ''}">`
+            + `<button type="button" class="pandora-odds-tier-btn" onclick="pandoraToggleOddsTier(${t.weight})">`
+            + `<span class="pandora-odds-w">權重 ${t.weight}</span>`
+            + `<span class="pandora-odds-label">${_pandoraEsc(t.label)}</span>`
+            + `<span class="pandora-odds-any">任一 ${_pandoraEsc(pandoraFmtOddsPct(t.anyRate))}</span>`
+            + `<span class="pandora-odds-cnt">${t.count} 件</span>`
+            + `<span class="pandora-odds-chev">${open ? '▾' : '▸'} 展開</span>`
+            + `</button>${itemsHtml}</div>`;
+    }).join('');
+    return `<div class="pandora-odds-panel" id="pandora-odds-panel">`
+        + `<p class="pandora-odds-head">單抽 10萬｜十連九折｜祝福約1%｜次數不限</p>`
+        + `<p class="pandora-odds-meta">本機權重池 · ${odds.totalItems} 件 · 總權重 ${odds.totalWeight.toLocaleString()}`
+        + ` · 點階展開看單件機率</p>`
+        + `<div class="pandora-odds-list">${rows || '<p class="text-slate-500 text-xs">池為空</p>'}</div>`
+        + `</div>`;
+}
+
+function pandoraRenderGachaPanel(div) {
     if (!div) return;
     let relicBalance = '';
     try {
         if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
     } catch (e) {}
-    if (!lot || lot.phase === 'gap') {
-        let mins = lot && lot.msUntilNext ? Math.max(1, Math.ceil(lot.msUntilNext / 60000)) : '?';
-        let retainHtml = '';
-        if (lot && lot.retainItemId && DB.items[lot.retainItemId]) {
-            let inst = { id: lot.retainItemId, bless: !!lot.retainBless };
-            retainHtml = `<p class="text-purple-300 text-sm mt-3">無人競標，下輪將保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span></p>`;
-        }
-        div.innerHTML = `
-        <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
-            <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
-                <span class="text-slate-400 font-normal">全服競標·競標 20 分鐘·間歇 60 分鐘｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
-            </h3>
-            <div class="text-center text-slate-300 p-8 shrink-0">
-                <p class="text-lg font-bold text-amber-200 mb-2">本輪競標已結束</p>
-                <p>下一件商品約 <span class="text-yellow-300 font-bold">${mins}</span> 分鐘後上架</p>
-                ${retainHtml}
-                <p class="text-slate-500 text-xs mt-3">有人得標後才會換新商品；無人競標則保留同件商品</p>
-            </div>
-            <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
-        </div>`;
-        return;
-    }
-    if (!lot.itemId || !DB.items[lot.itemId]) {
-        div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市競標載入中……</div>';
-        return;
-    }
-    let d = DB.items[lot.itemId];
-    let inst = { id: lot.itemId, bless: !!lot.bless };
-    let rare = lot.weight === 1;
-    let mins = Math.max(1, Math.ceil((lot.msLeft || 0) / 60000));
-    let minBid = lot.minBid || lot.startPrice || 1;
-    let leader = lot.highBid > 0 ? (lot.highCharName || '匿名') : '尚無';
+    let cost1 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(1) : 100000;
+    let cost10 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(10) : Math.floor(100000 * 10 * 0.9);
+    let gold = Math.max(0, Math.floor(Number(player.gold) || 0));
+    let can1 = gold >= cost1;
+    let can10 = gold >= cost10;
+    let left1 = cost1 > 0 ? Math.floor(gold / cost1) : 0;
+    let affordNote = can1
+        ? (`約可單抽 <span class="text-amber-200 font-bold">${left1.toLocaleString()}</span> 次`
+            + (can10 ? '' : ' · <span class="text-rose-300">十連金幣不足</span>'))
+        : '<span class="text-rose-300 font-bold">金幣不足，無法抽獎</span>';
+    let oddsBtnLabel = _pandoraOddsOpen ? '收合機率' : '查詢機率';
+    let btn1Dis = can1 ? '' : ' disabled aria-disabled="true"';
+    let btn10Dis = can10 ? '' : ' disabled aria-disabled="true"';
+    let btn1Cls = can1
+        ? 'btn bg-purple-700 hover:bg-purple-600 border-purple-500 font-bold px-5 py-2 rounded'
+        : 'btn pandora-draw-btn-disabled bg-slate-800 border-slate-600 text-slate-500 font-bold px-5 py-2 rounded cursor-not-allowed opacity-60';
+    let btn10Cls = can10
+        ? 'btn bg-amber-800 hover:bg-amber-700 border-amber-600 font-bold px-5 py-2 rounded'
+        : 'btn pandora-draw-btn-disabled bg-slate-800 border-slate-600 text-slate-500 font-bold px-5 py-2 rounded cursor-not-allowed opacity-60';
     div.innerHTML = `
     <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
-        <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
-            <span class="text-slate-400 font-normal">全服競標·約 ${mins} 分鐘後結標｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
+        <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉抽抽樂
+            <span class="text-slate-400 font-normal">${pandoraGachaStatusBadgeHTML()}｜金幣 <span class="text-yellow-300 font-bold">${gold.toLocaleString()}</span>${relicBalance}</span>
         </h3>
-        <div class="pandora-auction-card rounded-lg border ${rare ? 'border-purple-400' : 'border-slate-600'} bg-slate-900/90 p-4 mx-2 my-2 shrink-0">
-            <div class="flex items-center gap-3">
-                <img src="${getIconUrl(d)}" class="w-16 h-16 object-contain ${getGlowClass(inst, d)}" alt="">
-                <div class="min-w-0 flex-1">
-                    <div class="font-bold text-lg ${getItemColor(inst)}">${getItemFullName(inst)}${rare ? ' <span class="text-purple-300 text-sm">珍稀</span>' : ''}</div>
-                    <div class="text-yellow-300">起標 ${Number(lot.startPrice || 0).toLocaleString()} 金 · 目前 <b>${Number(lot.highBid || 0).toLocaleString()}</b> 金</div>
-                    <div class="text-slate-300 text-sm">領先：<b class="text-amber-200">${_pandoraEsc(leader)}</b>${lot.isLeader ? ' <span class="text-green-400">（你）</span>' : ''}</div>
-                </div>
+        <div class="rounded-lg border border-purple-700/60 bg-slate-900/90 p-4 mx-2 my-2 shrink-0 text-center">
+            <p class="text-slate-300 text-sm mb-2">依物品權重隨機抽出 1 件寶物。裝備約 1% 機率祝福。十連九折。</p>
+            <p class="text-slate-400 text-xs mb-3">${affordNote}</p>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <button type="button" class="${btn1Cls}"${btn1Dis}
+                    onclick="pandoraDoDraw(1)">單抽 · ${Number(cost1).toLocaleString()} 金</button>
+                <button type="button" class="${btn10Cls}"${btn10Dis}
+                    onclick="pandoraDoDraw(10)">十連 · ${Number(cost10).toLocaleString()} 金</button>
+                <button type="button" class="btn pandora-odds-toggle bg-slate-800 hover:bg-slate-700 border-purple-600/70 text-purple-200 font-bold px-4 py-2 rounded"
+                    onclick="pandoraToggleOddsPanel()">${oddsBtnLabel}</button>
             </div>
-            <div class="flex items-center gap-2 mt-3">
-                <input id="pandora-bid-amount" type="text" inputmode="numeric" class="flex-1 px-2 py-1 rounded bg-slate-800 border border-slate-600 text-yellow-200" placeholder="出價至少 ${minBid.toLocaleString()} 金" autocomplete="off">
-                <button class="btn bg-purple-700 hover:bg-purple-600 border-purple-500 font-bold px-4 py-1 rounded" onclick="pandoraPlaceBid()">競標</button>
-            </div>
-            <p class="text-slate-500 text-xs mt-2">出價會先扣金幣；被超越時自動退還。結標後最高者得標。無人競標則保留同件商品；得標後間歇 60 分鐘再上架新商品。</p>
+            ${pandoraRenderOddsPanelHTML()}
+            ${pandoraRenderRecentHTML()}
+            <p class="text-slate-500 text-xs mt-3">次數不限（有金幣即可）。權重池與舊黑市／野外掉寶相同。</p>
         </div>
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
     </div>`;
 }
 
-function pandoraPlaceBid() {
-    let input = document.getElementById('pandora-bid-amount');
-    let amount = input ? parseInt(String(input.value || '').replace(/,/g, ''), 10) : 0;
-    if (!Number.isFinite(amount) || amount <= 0) { alert('請輸入有效出價。'); return; }
-    if (typeof pandoraPlaceServerBid === 'function') {
-        pandoraPlaceServerBid(amount);
-        return;
-    }
-    alert('請連線後參與全服競標。');
+/** @deprecated 競標 UI 已改抽抽樂 */
+function pandoraRenderServerAuction(div) {
+    pandoraRenderGachaPanel(div);
 }
 
-// 繪製黑市面板：連線＝全服單件競標；離線＝單格後備
+function pandoraDoDraw(qty) {
+    qty = Math.max(1, Math.min(10, Math.floor(Number(qty) || 1)));
+    if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled() && typeof pandoraPlaceServerDraw === 'function') {
+        pandoraPlaceServerDraw(qty);
+        return;
+    }
+    pandoraDoLocalDraw(qty);
+}
+
+function pandoraDoLocalDraw(qty) {
+    qty = Math.max(1, Math.min(10, Math.floor(Number(qty) || 1)));
+    let cost = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(qty) : (100000 * qty * (qty >= 10 ? 0.9 : 1));
+    cost = Math.floor(cost);
+    if ((player.gold || 0) < cost) { alert('金幣不足（需要 ' + cost.toLocaleString() + '）。'); return; }
+    player.gold -= cost;
+    let names = [];
+    let resultRows = [];
+    for (let i = 0; i < qty; i++) {
+        // 🎴 v3.8.498：抽抽樂一律排除怪物卡（excludeCards=true）
+        let id = getWeightedGachaResult(false, true);
+        if (!id) continue;
+        let bless = pandoraStockBless(id);
+        let d = DB.items[id];
+        let inst;
+        if (d && d.eff === 'card' && d.cardMob && d.cardTier && typeof acquireCard === 'function') {
+            // 雙重保險：理論上不該抽到卡
+            continue;
+        } else if (typeof gainItem === 'function') {
+            inst = gainItem(id, 1, true, false, false, false, { bless: bless });
+        }
+        inst = inst || { id: id, bless: bless };
+        let w = (d && d.gachaWeight) || 100;
+        let nameHtml = '<span class="' + getItemColor(inst) + ' font-bold">' + getItemFullName(inst) + '</span>';
+        names.push(nameHtml + (w === 1 ? '✦' : ''));
+        resultRows.push({ itemId: id, bless: !!bless, weight: w, rare: w === 1, nameHtml: nameHtml });
+        if (w === 1) {
+            player.pandoraAnnounce = id;
+            player.pandoraAnnounceBless = bless;
+        }
+        if (qty === 1) {
+            logSys('<span class="text-purple-300 font-bold">【潘朵拉抽抽樂】</span>獲得 <span class="' + getItemColor(inst) + ' font-bold">' + getItemFullName(inst) + '</span>' + (w === 1 ? '<span class="text-purple-300">（珍稀）</span>' : '') + '！');
+        }
+    }
+    if (qty > 1) {
+        logSys('<span class="text-purple-300 font-bold">【潘朵拉抽抽樂】</span>連抽 ×' + qty + '，花費 <span class="text-yellow-300">' + cost.toLocaleString() + '</span> 金：' + names.join('、'));
+    }
+    try { renderPandoraBanner(); } catch (e) {}
+    try { renderSyslogPandora(); } catch (e2) {}
+    try { updateUI(); } catch (e3) {}
+    try { saveGame(); } catch (e4) {}
+    try { pandoraOnDrawComplete(resultRows, cost); } catch (e5) {
+        if (_pandoraDiv) pandoraRenderMarket(_pandoraDiv);
+    }
+}
+
+function pandoraPlaceBid() {
+    alert('潘朵拉已改為抽抽樂，請使用抽獎按鈕。');
+}
+
+// 繪製抽抽樂面板
 function pandoraRenderMarket(div) {
     if (!div) return;
     _pandoraDiv = div;
-    if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled()) {
-        if (!window._pandoraServerLot && typeof pandoraSyncServerLot === 'function') {
-            div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市競標載入中……</div>';
-            pandoraSyncServerLot().then(function () {
-                if (_pandoraDiv === div) pandoraRenderServerAuction(div, window._pandoraServerLot);
-            });
-            return;
-        }
-        pandoraRenderServerAuction(div, window._pandoraServerLot);
-        return;
-    }
-    let m = player.pandoraMarket2;
-    if (!m || !m.phase) { refreshPandoraMarket(true); m = player.pandoraMarket2; }
-    if (!m) { div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市目前沒有商品，請稍候。</div>'; return; }
-    let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
-    let relicBalance = '';
-    try {
-        if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
-    } catch (e) {}
-    if (m.phase === 'gap') {
-        let mins = Math.max(1, Math.ceil(((m.gapUntilTick || 0) - nowT) / 600));
-        let retainHtml = '';
-        if (m.retainSlot && m.retainSlot.id && DB.items[m.retainSlot.id]) {
-            let inst = { id: m.retainSlot.id, bless: m.retainSlot.bless === true };
-            retainHtml = `<p class="text-purple-300 text-sm mt-3">無人競標，下輪將保留 <span class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</span></p>`;
-        }
-        div.innerHTML = `
-        <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
-            <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
-                <span class="text-slate-400 font-normal">離線模式·競標 20 分鐘·間歇 60 分鐘｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
-            </h3>
-            <div class="text-center text-slate-300 p-8 shrink-0">
-                <p class="text-lg font-bold text-amber-200 mb-2">本輪競標已結束</p>
-                <p>下一件商品約 <span class="text-yellow-300 font-bold">${mins}</span> 分鐘後上架</p>
-                ${retainHtml}
-            </div>
-            <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
-        </div>`;
-        return;
-    }
-    let s = m.slots && m.slots[0];
-    if (!s || !DB.items[s.id]) { refreshPandoraMarket(true); m = player.pandoraMarket2; s = m && m.slots && m.slots[0]; }
-    if (!s) { div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市目前沒有商品，請稍候。</div>'; return; }
-    let nextMin = Math.max(1, Math.ceil((PANDORA_SLOT_TICKS - (nowT - (s.setTick || m.phaseStartTick || 0))) / 600));
-    let d = DB.items[s.id];
-    let inst = { id: s.id, bless: s.bless === true };
-    let rare = s.weight === 1;
-    let afford = (player.gold || 0) >= s.price;
-    let border = s.sold ? 'border-slate-700' : rare ? 'border-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.45)]' : 'border-slate-600';
-    let btn = s.sold
-        ? `<button disabled class="btn shrink-0 bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed font-bold rounded pandora-card-buy">售出</button>`
-        : `<button onclick="buyPandoraItem(0)" ${afford ? '' : 'disabled'} class="btn shrink-0 ${afford ? 'bg-purple-700 hover:bg-purple-600 border-purple-500' : 'bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed'} font-bold rounded pandora-card-buy">購買</button>`;
-    let card = `<div class="pandora-market-card rounded-md border ${border} bg-slate-900/80 flex items-center ${s.sold ? 'opacity-70' : ''}"
-            onmouseenter="pandoraTipShow(event,0)" onmousemove="pandoraTipMove(event)" onmouseleave="pandoraTipHide()">
-            <div class="pandora-collection-icon pandora-card-icon-wrap">
-                <img src="${getIconUrl(d)}" onerror="this.src='https://placehold.co/40x40/1e293b/ffffff?text=?';" class="pandora-card-icon object-contain ${s.sold ? 'grayscale opacity-40' : getGlowClass(inst, d)}">
-                ${pandoraUncollectedBadgeHTML(s.id)}
-            </div>
-            <div class="min-w-0 flex-1">
-                <div class="pandora-card-name font-bold leading-none truncate ${getItemColor(inst)}">${getItemFullName(inst)}</div>
-                <div class="pandora-card-price text-yellow-300 font-bold leading-none truncate">${s.price.toLocaleString()}<span class="text-slate-500"> 金</span></div>
-            </div>
-            ${btn}
-        </div>`;
-    div.innerHTML = `
-    <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
-        <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
-            <span class="text-slate-400 font-normal">離線模式·約 ${nextMin} 分鐘後換貨｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
-        </h3>
-        <div class="pandora-market-grid">${card}</div>
-        <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
-    </div>`;
+    pandoraRenderGachaPanel(div);
 }
 
-// 購買指定格商品（上架時已決定祝福與否；售出格保持「已售出」直到該格輪換）
+
 function buyPandoraItem(i) {
-    let m = player.pandoraMarket2;
-    let s = m && m.slots && m.slots[i];
-    let msgEl = () => document.getElementById('pandora-msg');
-    if (!s || !DB.items[s.id]) { let e = msgEl(); if (e) e.innerHTML = '<span class="text-red-400">商品已不存在。</span>'; return; }
-    if (s.sold) { let e = msgEl(); if (e) e.innerHTML = '<span class="text-red-400">此商品已售出，請等待該格輪換。</span>'; return; }
-    if ((player.gold || 0) < s.price) { let e = msgEl(); if (e) e.innerHTML = `<span class="text-red-400">金幣不足！需 ${s.price.toLocaleString()} 金幣。</span>`; return; }
-    player.gold -= s.price;
-    _tradLootCtx = true;                              // 🏛️ 傳統模式殘留旗標（v3.0.83 傳統模式已取消·js/01:837 起無消費者）：實際不再賦予隨機強化值，購買恆 +0
-    // 怪物卡沿用卡片取得樞紐，未完成圖鑑時直接登錄；裝備則交付上架時保存的固定詞綴。
-    let gi;
-    try {
-        let d = DB.items[s.id];
-        if (d.eff === 'card' && d.cardMob && d.cardTier && typeof acquireCard === 'function') {
-            acquireCard(d.cardMob, d.cardTier, 1);
-            gi = { id: s.id };
-        } else {
-            gi = gainItem(s.id, 1, true, false, false, false, { bless: s.bless === true });
-        }
-    } finally { _tradLootCtx = false; }   // try/finally 防旗標殘留洩漏
-    let inst = gi || { id: s.id };
-    logSys(`在潘朵拉黑市花費 <span class="text-yellow-300">${s.price.toLocaleString()}</span> 金幣購買了 <span class="${getItemColor(inst)} font-bold">${getItemFullName(inst)}</span>。`);
-    s.sold = true;
-    if (player.pandoraAnnounce === s.id && !!player.pandoraAnnounceBless === (s.bless === true)) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; try { renderPandoraBanner(); } catch (e) {} }
-    updateUI(); saveGame();
-    pandoraTipHide();
-    pandoraRenderMarket(_pandoraDiv);
-    try { renderSyslogPandora(); } catch (e) {}
-    let e2 = msgEl(); if (e2) e2.innerHTML = '<span class="text-green-400">購買成功！</span>';
+    alert('潘朵拉已改為抽抽樂，請使用抽獎按鈕。');
 }
-
 
 /* ===== 玩家自訂名稱：僅未取名舊存檔可於狀態欄補填一次；取名後不可更改 ===== */
 function startEditName() {
@@ -1847,12 +1939,15 @@ function cancelEditName() {
     updateUI();
 }
 
-window.onload = () => {
+function _craftTitleBoot() {
     migrateSaves();
     try { _applyVfxPref(); } catch (e) {}   // 🎚️ 套用標題畫面的「戰鬥特效開關」偏好（持久化於 localStorage）
+    try { if (typeof _applyPlayerIdPref === 'function') _applyPlayerIdPref(); } catch (ePid) {}
     try { let _v = document.getElementById('login-version'); if (_v && typeof GAME_VERSION !== 'undefined') _v.textContent = GAME_VERSION; } catch (e) {}   // 🏷️ 登入頁面版本號：以 GAME_VERSION 為單一真相來源
     try { if (typeof wireBuffEnders === 'function') wireBuffEnders(); } catch (e) {}   // 🔧 藥水/卷軸維持型增益勾選框：取消打勾即立即結束
-};
+}
+if (document.readyState === 'complete') _craftTitleBoot();
+else window.addEventListener('load', _craftTitleBoot);
 
 /* ===== 城鎮商店/製作介面：游標移到物品圖片上顯示物品資訊（tooltip） ===== */
 (function(){

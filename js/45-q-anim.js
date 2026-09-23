@@ -1,24 +1,29 @@
-// ===== 🎨 v3.8.207 韓國 Q 版（人物多幀 Q 包 + 怪物可選 Q 包）=====
-// 人物：assets/qskin/player/<knight|elf|mage|royal>/ idle_*/walk_*/attack_* 輪播（非單張靜態）
-// 怪物：有 q.json 的真 Q 包才替換；否則播各怪唯一 anim
+// ===== 🎨 v3.8.207 韓國 Q 版（已停用）=====
+// 🩹 v3.8.348：新 Q 造型無動態→永久關閉；人物走 classanim、怪物走 assets/anim（舊版有動態）
 (function () {
     'use strict';
 
     var Q_FPS = 8;
-    var _mobPackCache = Object.create(null);   // name → { idle:[url], attack:[], hurt:[] } | 'probing' | null
-    var _playerPackCache = Object.create(null); // cls → { idle, walk, attack } | 'probing' | null
+    var _mobPackCache = Object.create(null);
+    var _playerPackCache = Object.create(null);
     var _bootOnce = false;
 
-    function qBattleSkinOn() {
-        try { if (window.Q_BATTLE_SKIN === false) return false; } catch (e) {}
-        return true;
-    }
+    try { window.Q_PLAYER_SKIN = false; } catch (e0) {}
+    try { window.Q_BATTLE_SKIN = false; } catch (e1) {}
+    try {
+        if (typeof _lsSet === 'function') {
+            _lsSet('fb5_q_player', '0');
+            _lsSet('fb5_q_battle', '0');
+        } else {
+            localStorage.setItem('fb5_q_player', '0');
+            localStorage.setItem('fb5_q_battle', '0');
+        }
+    } catch (e2) {}
 
-    /** 人物戰場用 Q 多幀包（idle 至少兩幀會輪播） */
-    function qPlayerPackEnabled() {
-        try { if (window.Q_PLAYER_SKIN === false) return false; } catch (e) {}
-        return true;
-    }
+    function qBattleSkinOn() { return false; }
+    function qPlayerPackEnabled() { return false; }
+    function setClassicPixelLook() { return true; }
+    function isClassicPixelLook() { return true; }
 
     function qSafeSeg(s) {
         return String(s || '').replace(/[\\\/:*?"<>|]/g, '_');
@@ -30,11 +35,10 @@
 
     function qPlayerPackDir(cls, avatar) {
         var c = String(cls || 'knight');
-        if (c === 'dark') c = 'elf';
         if (c === 'illusion') c = 'mage';
-        // 👑 王族用獨立 Q 包（紅金配色）；戰士／龍騎暫共用騎士
+        // 👑 王族獨立包；戰士／龍騎暫共用騎士；黑暗妖精用 dark／dark_f
         if (c === 'warrior' || c === 'dragon') c = 'knight';
-        if (c !== 'elf' && c !== 'mage' && c !== 'knight' && c !== 'royal') c = 'knight';
+        if (c !== 'elf' && c !== 'mage' && c !== 'knight' && c !== 'royal' && c !== 'dark') c = 'knight';
         var av = avatar;
         if (av == null) {
             try { av = (typeof player !== 'undefined' && player) ? player.avatar : ''; } catch (e) { av = ''; }
@@ -258,6 +262,8 @@
     window.qAnimApplyPlayer = qAnimApplyPlayer;
     window.qAnimTick = qTick;
     window.qMobPackDir = qMobPackDir;
+    window.setClassicPixelLook = setClassicPixelLook;
+    window.isClassicPixelLook = isClassicPixelLook;
 
     if (typeof setInterval === 'function') {
         setInterval(qTick, Math.max(50, Math.floor(1000 / Q_FPS)));
