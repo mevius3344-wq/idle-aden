@@ -994,11 +994,12 @@
   }
 }
 
-/* MMORPG 搖桿：左下常駐底座；拖曳時加深＋可跟手（v3.8.344 加大觸控） */
+/* MMORPG 搖桿：左下常駐底座；拖曳跟手＋類比（v3.9.41） */
 .chud-joystick {
   --chud-joy-size: 152px;
   --chud-joy-knob: 58px;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
   position: absolute;
   left: calc(18px + var(--chud-safe-l));
   top: auto;
@@ -1013,7 +1014,7 @@
   opacity: 0.58;
   visibility: visible;
   transform: none;
-  transition: opacity 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  transition: opacity 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
   z-index: 2;
 }
 #game-screen.combat-hud.chud-in-town .chud-joystick {
@@ -1025,11 +1026,17 @@
   border-color: rgba(226, 232, 240, 0.42);
   background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.32) 58%, rgba(0, 0, 0, 0.52));
 }
+.chud-joystick.is-dragging {
+  opacity: 1;
+  border-color: rgba(250, 204, 21, 0.55);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.28), 0 0 16px rgba(250, 204, 21, 0.22), 0 4px 14px rgba(0, 0, 0, 0.35);
+}
 .chud-joystick.is-dock {
   /* 常駐底座：固定左下，尚未拖曳 */
 }
 .chud-joystick.is-free {
   transform: translate(-50%, -50%);
+  transition: none;
 }
 .chud-joystick-knob {
   position: absolute;
@@ -1044,15 +1051,18 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   will-change: transform;
   opacity: 0.7;
+  transition: none;
+  transform: translate3d(0, 0, 0);
 }
-.chud-joystick.is-show .chud-joystick-knob {
+.chud-joystick.is-show .chud-joystick-knob,
+.chud-joystick.is-dragging .chud-joystick-knob {
   opacity: 1;
 }
 @media (pointer: coarse), (max-width: 900px) {
   .chud-joystick {
-    --chud-joy-size: 168px;
-    --chud-joy-knob: 64px;
-    opacity: 0.66;
+    --chud-joy-size: 176px;
+    --chud-joy-knob: 68px;
+    opacity: 0.7;
     bottom: calc(var(--chud-dock-h) + 118px + var(--chud-safe-b));
   }
 }

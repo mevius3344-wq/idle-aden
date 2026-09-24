@@ -1509,7 +1509,12 @@
         return Math.max(0.25, Math.min(2.8, m));
     }
     function explorePlayerWalkStep(dirx, diry) {
-        var step = PLAYER_SPEED * (TICK_MS / 1000) * explorePlayerSpeedMult();
+        // 🩹 v3.9.41：類比速度＝搖桿位移量（輕推慢走、外推全速）
+        var mag = Math.hypot(Number(dirx) || 0, Number(diry) || 0);
+        if (!(mag > 0.001)) return 0;
+        var t = Math.min(1, mag);
+        var speedK = 0.22 + 0.78 * Math.pow(t, 1.12);
+        var step = PLAYER_SPEED * (TICK_MS / 1000) * explorePlayerSpeedMult() * speedK;
         var r = exploreTryMoveFrom(_tx, _ty, dirx, diry, step);
         _tx = r.x;
         _ty = r.y;

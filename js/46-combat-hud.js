@@ -285,16 +285,16 @@
     function setKnob(dx, dy) {
         var knob = document.getElementById('chud-joystick-knob');
         if (!knob) return;
-        var max = 44;
+        var max = 52;
         var x = Math.max(-max, Math.min(max, dx));
         var y = Math.max(-max, Math.min(max, dy));
-        knob.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+        knob.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)';
     }
 
     function dockJoystick() {
         var joy = document.getElementById('chud-joystick');
         if (!joy) return;
-        joy.classList.remove('is-show', 'is-free');
+        joy.classList.remove('is-show', 'is-free', 'is-dragging');
         joy.classList.add('is-dock');
         joy.style.left = '';
         joy.style.top = '';
@@ -314,6 +314,7 @@
         joy.style.bottom = 'auto';
         joy.style.margin = '0';
         joy.classList.add('is-free');
+        joy.classList.remove('is-dock');
     }
 
     function placeJoystick(clientX, clientY) {
@@ -333,40 +334,48 @@
         joy.style.top = y + 'px';
         joy.style.bottom = 'auto';
         joy.style.margin = '0';
-        joy.classList.add('is-show', 'is-free');
+        joy.classList.add('is-show', 'is-free', 'is-dragging');
         joy.classList.remove('is-dock');
         setKnob(0, 0);
     }
 
     function hideJoystick() { dockJoystick(); }
 
+    /** 🩹 v3.9.41：超出底座立刻跟手；類比量維持，拖曳有遠近感 */
     function applyStick(clientX, clientY) {
         var dx = clientX - _stickOriginX;
         var dy = clientY - _stickOriginY;
-        var max = 68;
-        var len = Math.hypot(dx, dy) || 1;
-        // 超出範圍才緩緩跟手（門檻較高，精準走位不易漂）
-        if (len > max * 1.35) {
-            var push = len - max;
-            _stickOriginX += (dx / len) * push * 0.45;
-            _stickOriginY += (dy / len) * push * 0.45;
+        var max = 72;
+        var len = Math.hypot(dx, dy) || 0;
+        if (len > max) {
+            var over = len - max;
+            // 越往外跟手越緊（接近 1＝底座黏手指）
+            var follow = Math.min(1, 0.62 + over / (max * 0.9));
+            _stickOriginX += (dx / (len || 1)) * over * follow;
+            _stickOriginY += (dy / (len || 1)) * over * follow;
             syncJoystickDomPos();
+            var joy = document.getElementById('chud-joystick');
+            if (joy) {
+                joy.classList.add('is-show', 'is-dragging');
+            }
             dx = clientX - _stickOriginX;
             dy = clientY - _stickOriginY;
-            len = Math.hypot(dx, dy) || 1;
+            len = Math.hypot(dx, dy) || 0;
         }
-        var knobMax = 44;
-        setKnob(dx * knobMax / max, dy * knobMax / max);
+        var knobMax = 52;
+        var kScale = knobMax / max;
+        setKnob(dx * kScale, dy * kScale);
         var nx = dx / max;
         var ny = dy / max;
         var mag = Math.hypot(nx, ny);
-        if (mag < 0.08) {
+        if (mag < 0.06) {
             if (typeof exploreSetVirtualStick === 'function') exploreSetVirtualStick(0, 0, true);
             return;
         }
-        var curved = Math.min(1, mag);
-        nx = (nx / mag) * curved;
-        ny = (ny / mag) * curved;
+        // 保留類比量（ mag 可 >1 再夾），走步用方向×強度
+        var capped = Math.min(1, mag);
+        nx = (nx / mag) * capped;
+        ny = (ny / mag) * capped;
         if (typeof exploreSetVirtualStick === 'function') exploreSetVirtualStick(nx, ny, true);
     }
 
@@ -406,8 +415,8 @@
         var r = joy.getBoundingClientRect();
         var cx = r.left + r.width / 2;
         var cy = r.top + r.height / 2;
-        // 底座可點區（約 0.9 倍半徑）
-        return Math.hypot(clientX - cx, clientY - cy) <= Math.max(r.width, r.height) * 0.9;
+        // 底座可點區（略大於視覺圓，好抓）
+        return Math.hypot(clientX - cx, clientY - cy) <= Math.max(r.width, r.height) * 1.15;
     }
 
     function bindHud() {
@@ -458,7 +467,7 @@
 
             var onDock = pointerOnDock(e.clientX, e.clientY);
 
-            // 🩹 v3.8.351：左下搖桿＝虛擬搖桿；點螢幕其餘處＝走向該點（不再把搖桿搬過去／放大）
+            // 左下搖桿＝虛擬搖桿；點螢幕其餘處＝走向該點
             if (onDock) {
                 e.preventDefault();
                 cancelTapMove();
@@ -470,7 +479,7 @@
                     var jr = joy.getBoundingClientRect();
                     _stickOriginX = jr.left + jr.width / 2;
                     _stickOriginY = jr.top + jr.height / 2;
-                    joy.classList.add('is-show');
+                    joy.classList.add('is-show', 'is-dragging');
                     joy.classList.remove('is-dock', 'is-free');
                     joy.style.left = '';
                     joy.style.top = '';
@@ -517,8 +526,8 @@
             if (_stickActive) endStick();
             if (_tapMoveActive) endTapMove();
         });
+        // 🩹 v3.9.41：勿因 lostpointercapture 中斷拖曳（偶發丟 capture＝搖桿突然斷）
         screen.addEventListener('lostpointercapture', function () {
-            if (_stickActive) endStick();
             if (_tapMoveActive) endTapMove();
         });
     }
