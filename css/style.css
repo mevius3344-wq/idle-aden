@@ -1974,18 +1974,19 @@
             z-index: 4;
             margin: 0 !important;
         }
-        /* 🏷️ 場戰怪名：貼近精靈頂（勿飄太高）；血條在名下方 */
+        /* 🏷️ 場戰怪名／血條：貼精靈頭頂（192 框上方多透明空白，改用 top 對齊實際頭） */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-name {
-            bottom: calc(100% - 36px);
+            top: 52px;
+            bottom: auto;
             left: 50%;
             transform: translateX(-50%);
             overflow: visible !important;
             white-space: nowrap !important;
-            line-height: 1.35 !important;
-            font-size: 13px !important;
+            line-height: 1.2 !important;
+            font-size: 12px !important;
             height: auto !important;
             max-height: none !important;
-            padding: 2px 6px;
+            padding: 1px 5px;
             pointer-events: none;
             z-index: 20;
         }
@@ -1995,11 +1996,12 @@
             text-overflow: clip !important;
             max-width: none !important;
             white-space: nowrap !important;
-            line-height: 1.35 !important;
+            line-height: 1.2 !important;
             height: auto !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-badge-row {
-            bottom: calc(100% - 18px);
+            top: 34px;
+            bottom: auto;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-img-wrap {
             position: relative;
@@ -2040,9 +2042,9 @@
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
-            /* 🩹 v3.9.42：名稱下方、貼近頭頂（勿再 +14px 飄高） */
-            bottom: calc(100% - 50px);
-            top: auto;
+            /* 🩹 v3.9.44：名下方緊貼頭頂 */
+            top: 68px;
+            bottom: auto;
             z-index: 19;
             margin: 0 !important;
             pointer-events: none !important;
