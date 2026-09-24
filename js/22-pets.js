@@ -1181,7 +1181,7 @@ function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryP
     let pdef = DB.items[potId];
     if (!pdef || pdef.val == null) return;   // 只認固定 val 的治癒藥水（紅/橙/白）
     let stack = player.inv && player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
-    // 🩹 v3.8.448：寵物喝水前同樣補至 100（可部分購買）
+    // 🩹 v3.9.43：藥水用完（0 瓶）才買至 100——與玩家 autoActions 一致，勿 <100 狂補
     let _buyChk = (typeof document !== 'undefined') ? document.getElementById('set-auto-buy-pot') : null;
     if (_buyChk && _buyChk.checked) {
         let _have = 0;
@@ -1190,17 +1190,17 @@ function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryP
                 if (player.inv[_i] && player.inv[_i].id === potId) _have += (Number(player.inv[_i].cnt) || 0);
             }
         }
-        if (_have < 100) {
+        if (_have <= 0) {
             let _unit = (typeof shopPrice === 'function') ? shopPrice(pdef.p || 0) : (pdef.p || 0);
             _unit = Math.max(0, Math.floor(Number(_unit) || 0));
             if (_unit > 0) {
-                let _need = 100 - _have;
+                let _need = 100;
                 let _can = Math.floor(Math.max(0, Number(player.gold) || 0) / _unit);
                 let _buy = Math.min(_need, _can);
                 if (_buy > 0) {
                     player.gold -= _buy * _unit;
                     gainItem(potId, _buy, true, true);
-                    logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${pdef.n}（供寵物／補至 ${_have + _buy}/100）。`);
+                    logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${pdef.n}（用完補貨 ${_buy}/100）。`);
                     try { if (typeof updateUI === 'function') updateUI(); } catch (eG2) {}
                 }
             }
