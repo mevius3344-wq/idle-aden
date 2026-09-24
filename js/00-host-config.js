@@ -13,7 +13,7 @@
 
   var VERCEL_API = 'https://idle-aden.vercel.app';
   // 預設 Railway 公開網址（部署後若不同，設 PUBLIC_GAME_ORIGIN 或 window.__GAME_ORIGIN）
-  var DEFAULT_GAME_ORIGIN = 'https://idle-aden-production.up.railway.app';
+  var DEFAULT_GAME_ORIGIN = 'https://game-production-b224.up.railway.app';
 
   function host() {
     try {

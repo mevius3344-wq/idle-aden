@@ -18,7 +18,7 @@
           var m = document.querySelector('meta[name="game-origin"]');
           var c = m && m.content ? String(m.content).trim() : '';
           if (c && c.indexOf('__GAME_ORIGIN__') < 0) return c.replace(/\/$/, '');
-          return 'https://idle-aden-production.up.railway.app';
+          return 'https://game-production-b224.up.railway.app';
         })();
         try { window.__GAME_ORIGIN = ORIGIN; } catch (eG) {}
         var h = String(location.hostname || '').toLowerCase();

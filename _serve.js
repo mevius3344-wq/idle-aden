@@ -53,7 +53,7 @@ const PUBLIC_GAME_ORIGIN = (() => {
   if (fromEnv) return fromEnv;
   const rail = String(process.env.RAILWAY_PUBLIC_DOMAIN || "").trim().replace(/^https?:\/\//i, "").replace(/\/$/, "");
   if (rail) return "https://" + rail;
-  return "https://idle-aden-production.up.railway.app";
+  return "https://game-production-b224.up.railway.app";
 })();
 
 /** 部署指紋：index.html 內容 + _serve.js mtime/size。Manual Deploy 後變更，供線上玩家自動重載。 */

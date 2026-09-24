@@ -115,7 +115,7 @@
                 return '/api/version';
             }
             if (window.GAME_HOST && typeof GAME_HOST.isVercel === 'function' && GAME_HOST.isVercel()) {
-                var o = (GAME_HOST.gameOrigin || window.__GAME_ORIGIN || 'https://idle-aden-production.up.railway.app');
+                var o = (GAME_HOST.gameOrigin || window.__GAME_ORIGIN || 'https://game-production-b224.up.railway.app');
                 return String(o).replace(/\/$/, '') + '/api/version';
             }
         } catch (e) {}

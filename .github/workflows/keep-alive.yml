@@ -15,7 +15,7 @@ jobs:
         env:
           GAME_URL: ${{ secrets.RAILWAY_PUBLIC_URL }}
         run: |
-          URL="${GAME_URL:-https://idle-aden-production.up.railway.app}"
+          URL="${GAME_URL:-https://game-production-b224.up.railway.app}"
           for i in 1 2 3; do
             if curl -fsS --max-time 45 "${URL}/api/version?wake=$(date +%s)" >/tmp/ver.json; then
               echo "OK ${URL}"

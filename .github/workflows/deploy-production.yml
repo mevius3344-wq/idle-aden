@@ -42,7 +42,7 @@ jobs:
         env:
           GAME_URL: ${{ secrets.RAILWAY_PUBLIC_URL }}
         run: |
-          URL="${GAME_URL:-https://idle-aden-production.up.railway.app}"
+          URL="${GAME_URL:-https://game-production-b224.up.railway.app}"
           echo "等待遊戲主機啟動（60 秒）... $URL"
           sleep 60
           for i in 1 2 3 4 5 6; do

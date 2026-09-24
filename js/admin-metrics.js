@@ -3,7 +3,7 @@
 (function () {
   var TOKEN_KEY = "fb5_metrics_token";
   var POLL_MS = 10000;
-  var RENDER_METRICS = "https://idle-aden-production.up.railway.app/api/server/metrics";
+  var RENDER_METRICS = "https://game-production-b224.up.railway.app/api/server/metrics";
 
   var _timer = null;
   var _token = "";

@@ -55,7 +55,7 @@
         return "/api/version";
       }
       if (/\.vercel\.app$/i.test(h)) {
-        var origin = (window.__GAME_ORIGIN || "https://idle-aden-production.up.railway.app").replace(
+        var origin = (window.__GAME_ORIGIN || "https://game-production-b224.up.railway.app").replace(
           /\/$/,
           ""
         );
