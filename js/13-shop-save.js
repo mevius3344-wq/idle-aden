@@ -871,7 +871,7 @@ async function exportSave(slot){
         try {
             let handle = await window.showSaveFilePicker({
                 suggestedName: fname,
-                types: [{ description: desktopExport ? 'Idle Lineage 安裝版存檔' : '躺著變強網頁版存檔', accept: { 'application/json': ['.json'] } }]
+                types: [{ description: desktopExport ? 'Idle Lineage 安裝版存檔' : '重生放置網頁版存檔', accept: { 'application/json': ['.json'] } }]
             });
             let w = await handle.createWritable();
             await w.write(data);
@@ -931,7 +931,7 @@ function importSave(n){
                 return;
             }
             if(!d || typeof d !== 'object' || !d.p || typeof d.p !== 'object' || !d.p.cls){
-                alert('匯入失敗：檔案內容不是有效的躺著變強存檔。'); return;
+                alert('匯入失敗：檔案內容不是有效的重生放置存檔。'); return;
             }
             let existing = slotSummary(n);
             if(existing){ alert(`存檔 ${n} 已有角色，請先刪除角色後再匯入。`); return; }
@@ -2137,7 +2137,7 @@ function startGame() {
     if (typeof purgeSherineContent === 'function') purgeSherineContent();
     applySherineTheme();
     startGameTimers();
-    logSys(`===== 歡迎來到${typeof GAME_TITLE !== 'undefined' ? GAME_TITLE : '躺著變強'} =====`);
+    logSys(`===== 歡迎來到${typeof GAME_TITLE !== 'undefined' ? GAME_TITLE : '重生放置'} =====`);
     { let _rateMsg = (typeof serverRateEventLogHtml === 'function') ? serverRateEventLogHtml() : ''; if (_rateMsg) logSys(_rateMsg); }
     if (typeof applyGlobalAutoSellSettings === 'function') applyGlobalAutoSellSettings();   // 🔧 v2.6.91 功能5：新角色套用全域自動販賣設定（若已啟用共用）
     saveGame();   // 🔧 創角完成立即存檔：先前要等 5 分鐘自動存檔，期間關閉頁面角色會直接消失

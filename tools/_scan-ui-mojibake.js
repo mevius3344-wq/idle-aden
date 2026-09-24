@@ -69,7 +69,7 @@ for (const h of hits) {
 // Login-specific assertions on index.html
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const asserts = [
-  ["title 躺著變強", html.includes("躺著變強")],
+  ["title 重生放置", html.includes("重生放置")],
   ["btn 登入", />登入</.test(html)],
   ["btn 註冊", />註冊</.test(html)],
   ["placeholder 帳號", html.includes('placeholder="請輸入帳號"')],
@@ -93,7 +93,7 @@ for (const [n, ok] of asserts) {
 // Critical game strings in 00-data.js
 const data = fs.readFileSync(path.join(ROOT, "js", "00-data.js"), "utf8");
 const dataAsserts = [
-  ["GAME_TITLE 躺著變強", data.includes("躺著變強")],
+  ["GAME_TITLE 重生放置", data.includes("重生放置")],
   ["scroll_teleport 瞬間移動卷軸", data.includes("瞬間移動卷軸")],
   ["00-data no FFFD", !/\uFFFD/.test(data)],
   ["GAME_VERSION present", /GAME_VERSION\s*=\s*'v[\d.]+'/.test(data)],

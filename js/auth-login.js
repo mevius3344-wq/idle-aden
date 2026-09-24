@@ -292,7 +292,7 @@
       el.classList.remove("hidden");
     });
     const welcome = $("auth-welcome");
-    if (welcome) welcome.textContent = "歡迎「" + account + "」進入" + (typeof GAME_TITLE !== "undefined" ? GAME_TITLE : "躺著變強");
+    if (welcome) welcome.textContent = "歡迎「" + account + "」進入" + (typeof GAME_TITLE !== "undefined" ? GAME_TITLE : "重生放置");
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}

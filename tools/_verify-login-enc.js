@@ -15,8 +15,8 @@ const data = fs.readFileSync(path.join(ROOT, "js", "00-data.js"), "utf8");
 const boot = fs.readFileSync(path.join(ROOT, "js", "00-boot-game.js"), "utf8");
 
 const checks = [
-  ["index title", html.includes("<title>躺著變強</title>")],
-  ["index game-title", /account-auth-game-title[^>]*>躺著變強</.test(html)],
+  ["index title", html.includes("<title>重生放置</title>")],
+  ["index game-title", /account-auth-game-title[^>]*>重生放置</.test(html)],
   ["index tagline", html.includes("登入帳號 · 開始冒險")],
   ["index 登入 btn", />登入</.test(html)],
   ["index 註冊 btn", />註冊</.test(html)],
@@ -26,7 +26,7 @@ const checks = [
   ["index charset", /charset\s*=\s*"?UTF-8/i.test(html)],
   ["index no FFFD", !/\uFFFD/.test(html)],
   ["index no ?中文", !/[\u4e00-\u9fff]\?|\?[\u4e00-\u9fff]/.test(html)],
-  ["data GAME_TITLE", data.includes("GAME_TITLE = '躺著變強'")],
+  ["data GAME_TITLE", data.includes("GAME_TITLE = '重生放置'")],
   ["data version", /GAME_VERSION = 'v\d+\.\d+\.\d+'/.test(data)],
   ["data no FFFD", !/\uFFFD/.test(data)],
   ["boot no FFFD", !/\uFFFD/.test(boot)],

@@ -150,7 +150,7 @@ const DESKTOP_DIR = resolveDesktopPlayerDir();
 function ensureDesktopDir() {
   fs.mkdirSync(DESKTOP_DIR, { recursive: true });
   const readme = path.join(DESKTOP_DIR, "說明.txt");
-  const header = "躺著變強 - 玩家資料（可直接用記事本修改）";
+  const header = "重生放置 - 玩家資料（可直接用記事本修改）";
   const defaultBody = [
     header,
     "",
@@ -176,10 +176,10 @@ function ensureDesktopDir() {
       // 已有說明檔：只把舊標題（經典天堂／放置天堂等）改成目前遊戲名
       let raw = fs.readFileSync(readme, "utf8");
       let next = raw.replace(
-        /^(經典天堂|放置天堂(?:\s*-\s*日出之國)?|放置亞丁|Idle Lineage)\s*-\s*玩家資料[^\r\n]*/m,
+        /^(經典天堂|放置天堂(?:\s*-\s*日出之國)?|放置亞丁|Idle Lineage|躺著變強)\s*-\s*玩家資料[^\r\n]*/m,
         header
       );
-      if (next === raw && !/躺著變強\s*-\s*玩家資料/.test(raw)) {
+      if (next === raw && !/重生放置\s*-\s*玩家資料/.test(raw)) {
         next = raw.replace(/^[^\r\n]+/, header);
       }
       if (next !== raw) fs.writeFileSync(readme, next, "utf8");
@@ -306,7 +306,7 @@ async function handleServerStatusApi(req, res) {
     return res.end();
   }
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "method" });
-  const rates = _serverStatus.getServerRates();
+  const rates = getLocalEffectiveRates();
   // 當前遊玩人數＝Render 上活躍 presence（與地圖人數／組隊線上同一來源）。
   // 帳號 session 在 Neon，含選角閒置；不可再拿來當「正在遊玩」。
   let onlinePlayers = 0;
@@ -326,8 +326,11 @@ async function handleServerStatusApi(req, res) {
   return json(res, 200, {
     ok: true,
     onlinePlayers,
+    expMult: rates.expMult,
     goldMult: rates.goldMult,
     dropMult: rates.dropMult,
+    rateEndsAt: rates.rateEndsAt,
+    rateLabel: rates.rateLabel,
     ...closedBetaPayload(),
   });
 }
@@ -3486,6 +3489,62 @@ function writeJsonFile(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
 }
 
+const LOCAL_RATES_FILE = path.join(
+  process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(ROOT, "data"),
+  "gm-rates.json"
+);
+
+function clampLocalMult(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(50, Math.round(n * 10) / 10));
+}
+
+function getLocalEffectiveRates() {
+  const base = _serverStatus.getServerRates();
+  const out = {
+    expMult: 1,
+    goldMult: base.goldMult,
+    dropMult: base.dropMult,
+    rateEndsAt: 0,
+    rateLabel: "",
+  };
+  try {
+    if (!fs.existsSync(LOCAL_RATES_FILE)) return out;
+    const cfg = JSON.parse(fs.readFileSync(LOCAL_RATES_FILE, "utf8"));
+    if (!cfg || typeof cfg !== "object") return out;
+    const now = Date.now();
+    const endsAt = Math.max(0, Number(cfg.endsAt) || 0);
+    if (endsAt && endsAt <= now) return out;
+    out.expMult = clampLocalMult(cfg.expMult, 1);
+    out.goldMult = clampLocalMult(cfg.goldMult, base.goldMult);
+    out.dropMult = clampLocalMult(cfg.dropMult, base.dropMult);
+    out.rateEndsAt = endsAt;
+    out.rateLabel = String(cfg.label || "").slice(0, 40);
+  } catch (e) {}
+  return out;
+}
+
+function localBanPayload(row) {
+  const until = Number(row && (row.bannedUntil || row.banned_until)) || 0;
+  if (!(until > Date.now())) return null;
+  const reason = String((row && (row.banReason || row.ban_reason)) || "").trim();
+  let when = "永久";
+  if (until < 253402300799000) {
+    try {
+      when = new Date(until).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false }) + " 解除";
+    } catch (e) {
+      when = String(until);
+    }
+  }
+  return {
+    ok: false,
+    error: "banned",
+    bannedUntil: until,
+    message: "此帳號已被停權（" + when + "）。" + (reason ? "原因：" + reason : "如有疑問請聯絡管理員。"),
+  };
+}
+
 function normalizeAccountId(raw) {
   let s = String(raw == null ? "" : raw).replace(/^\s+|\s+$/g, "");
   try {
@@ -3663,6 +3722,8 @@ async function handleAccountsApi(req, res, u) {
     if (!pwOk) {
       return json(res, 401, { ok: false, error: "bad password", message: "帳號或密碼錯誤。" });
     }
+    const ban = localBanPayload(row);
+    if (ban) return json(res, 403, ban);
     if (_antiCheat && _antiCheat.needsPasswordUpgrade(row.password)) {
       row.password = _antiCheat.hashPassword(password);
       map[accountKey(account)] = row;
@@ -3700,7 +3761,30 @@ async function handleAccountsApi(req, res, u) {
       });
       if (!touch.ok) return json(res, 401, touch);
     }
-    return json(res, 200, { ok: true, account: auth.account });
+    const map = loadAccounts();
+    const row = map[accountKey(auth.account)];
+    const ban = localBanPayload(row);
+    if (ban) {
+      if (_accountSessions) {
+        try {
+          await _accountSessions.release(accountKey(auth.account), auth.sessionId);
+        } catch (eBan) {}
+      }
+      return json(res, 403, ban);
+    }
+    const rates = getLocalEffectiveRates();
+    return json(res, 200, {
+      ok: true,
+      account: auth.account,
+      rates: {
+        expMult: rates.expMult,
+        goldMult: rates.goldMult,
+        dropMult: rates.dropMult,
+        rateEndsAt: rates.rateEndsAt,
+        rateLabel: rates.rateLabel,
+      },
+      gmMail: 0,
+    });
   }
 
   if (u === "/api/accounts/logout" && req.method === "POST") {

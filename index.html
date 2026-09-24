@@ -40,7 +40,7 @@
     </script>
     <!-- 🔧 v3.5.87：viewport-fit=cover 已併入上方 meta；行動裝置偵測 IIFE 已移除 -->
 
-    <title>躺著變強</title>
+    <title>重生放置</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
 
     <link rel="stylesheet" href="css/style.css?v=v3.9.18">
@@ -54,17 +54,17 @@
     <!-- ??? v2.5.8 流動式版面：#app-stage 由 CSS position:fixed;inset:0 填滿整個視窗，內層三欄 flex 隨視窗大小自然撐開（無固定 1920×1080、無 transform 縮放、無 letterbox）。VFX/提示/游標光點掛在 body（舞台外）→ getBoundingClientRect 取真實視窗座標、天生相容。 -->
     <div id="app-stage">
 
-    <!-- 創角畫面（?? v3.0.40 起始UI：310.png 固定底圖＋273~300 左下逐幀動畫·標題/選單/版號絕對定位於 4:3 藝術舞台上） -->
+    <!-- 創角畫面（起始UI：310.jpg 固定底圖＋273~300 左下逐幀動畫·標題/選單/版號絕對定位於 4:3 藝術舞台上） -->
     <div id="creation-screen">
       <div id="login-art-stage">
-        <img id="login-bg-image" src="public/assets/login/310.png" alt="登入畫面背景">
+        <img id="login-bg-image" src="public/assets/login/310.jpg?v=v3.9.27" alt="登入畫面背景">
         <img id="login-anim-image" src="public/assets/login/273.png" alt="登入畫面動畫">
 
         <!-- 帳號密碼：預設空白，自行註冊／登入 -->
         <div id="account-auth-panel" class="account-auth-panel" aria-label="帳號登入註冊">
             <div class="account-auth-brand">
                 <div class="account-auth-title-row">
-                    <div class="account-auth-game-title">躺著變強</div>
+                    <div class="account-auth-game-title">重生放置</div>
                 </div>
                 <p class="account-auth-tagline">登入帳號 · 開始冒險</p>
                 <div id="auth-server-stats" class="account-auth-stats" aria-live="polite">
@@ -99,7 +99,7 @@
 
         <div id="login-title-layer" class="text-center account-gated hidden">
             <div class="login-title-row">
-                <h1 class="text-4xl font-bold text-yellow-400 mb-2">躺著變強</h1>
+                <h1 class="text-4xl font-bold text-yellow-400 mb-2">重生放置</h1>
             </div>
             <p class="text-base text-slate-400">選擇角色，繼續你的冒險</p>
         </div>

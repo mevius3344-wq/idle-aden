@@ -128,7 +128,7 @@
         try {
           acc = sessionStorage.getItem("fb5_auth_session") || "";
         } catch (eA) {}
-        if (acc) welcomeEl.textContent = "歡迎「" + acc + "」進入躺著變強";
+        if (acc) welcomeEl.textContent = "歡迎「" + acc + "」進入重生放置";
         else welcomeEl.textContent = "";
       }
     } catch (eW) {}
