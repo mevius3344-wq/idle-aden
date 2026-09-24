@@ -16,23 +16,31 @@ jobs:
     name: Deploy Railway + Vercel
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Railway (Deploy Hook)
+      - name: Deploy Railway (GitHub trigger / token / hook)
         env:
           HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          if [ -z "$HOOK" ]; then
-            echo "RAILWAY_DEPLOY_HOOK 未設定，略過（請在 Railway → Settings → Deploy → Deploy Hooks 建立後加到 GitHub Secrets）。"
+          # 優先：Railway 已連 GitHub main 自動部署時，這裡只作備援觸發
+          if [ -n "$HOOK" ]; then
+            curl -fsS -X POST "$HOOK"
+            echo "Railway deploy hook triggered."
             exit 0
           fi
-          curl -fsS -X POST "$HOOK"
-          echo "Railway deploy hook triggered."
+          if [ -n "$RAILWAY_TOKEN" ]; then
+            npm i -g @railway/cli
+            railway redeploy --service game --from-source -y
+            echo "Railway redeploy --from-source triggered."
+            exit 0
+          fi
+          echo "無 RAILWAY_DEPLOY_HOOK／RAILWAY_TOKEN；依賴 Railway GitHub Deployment Trigger（main）自動部署。"
 
       - name: Deploy Vercel (Deploy Hook)
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "VERCEL_DEPLOY_HOOK 未設定，略過。"
+            echo "VERCEL_DEPLOY_HOOK 未設定，略過（Vercel Git 整合仍可自動部署）。"
             exit 0
           fi
           curl -fsS -X POST "$HOOK"
