@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * IP 雙開限制：同一 IP 最多 2 個瀏覽器分頁／視窗同時佔位。
+ * IP 連線名額：同一 IP 同時佔位上限由伺服器 IP_SESSION_MAX 決定（封測預設 1）。
  * 線上環境必須成功 claim／heartbeat；僅 file:// 本機測試可離線放行。
  */
 (function () {
@@ -163,7 +163,7 @@
         stopHeartbeat();
         return r && r.data
           ? r.data
-          : { ok: false, error: "ip_limit", message: "此 IP 已達雙開上限。" };
+          : { ok: false, error: "ip_limit", message: "此 IP 連線數已達上限。" };
       })
       .catch(function () {
         _apiOk = false;

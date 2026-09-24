@@ -17,61 +17,78 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     rift_battle: 'assets/area/1920x1080/時空裂痕戰場.jpg',
     desert: 'assets/area/沙漠.jpg',   // 🏜️ 沙漠（野外·專屬背景·完整路徑直接用）
     // 🆕 新狩獵區背景（皆 area-fit 沙漠格式·需 1920×580 條狀圖·放 assets/area/）：
-    crystal_cave1: 'assets/area/水晶洞穴.jpg', crystal_cave2: 'assets/area/水晶洞穴.jpg', crystal_cave3: 'assets/area/水晶洞穴.jpg',   // 💎 水晶洞穴（地監·3樓共用）
-    fire_dragon: 'assets/area/火龍窟.jpg',   // 🔥 火龍窟（野外）
-    elf_forest: 'assets/area/森林.jpg', zone_01: 'assets/area/森林.jpg', mirror_forest: 'assets/area/森林.jpg',   // 🌲 妖魔森林/妖精森林周邊/鏡子森林（野外·共用森林背景）
-    silver_knight: 'assets/area/1920x1080/銀騎士地區.jpg',   // 🛡️ v3.8.468 銀騎士地區直指 1920
-    zone_15: 'assets/area/洞窟.jpg', zone_16: 'assets/area/洞窟.jpg',   // 🕳️ 眠龍洞穴1~2樓
-    zone_17: 'assets/area/龍之谷地監深層.jpg',   // 🐉 眠龍洞穴3樓（改龍之谷地監深層·area-fit）
-    zone_22: 'assets/area/洞窟.jpg', zone_23: 'assets/area/洞窟.jpg', zone_24: 'assets/area/洞窟.jpg', zone_25: 'assets/area/洞窟.jpg',   // 🕳️ 沙漠地監1~4樓
-    zone_26: 'assets/area/洞窟.jpg', zone_27: 'assets/area/洞窟.jpg', zone_28: 'assets/area/洞窟.jpg',   // 🕳️ 龍之谷地監1~3樓
-    zone_29: 'assets/area/龍之谷地監深層.jpg', zone_30: 'assets/area/龍之谷地監深層.jpg', zone_31: 'assets/area/龍之谷地監深層.jpg',   // 🐉 龍之谷地監4~6樓（改深層·area-fit）
-    zone_32: 'assets/area/洞窟.jpg',   // 🐜 螞蟻洞窟1樓（共用洞窟背景）
-    zone_33: 'assets/area/龍之谷地監深層.jpg',   // 🐜 螞蟻洞窟2樓（改龍之谷地監深層·area-fit）
-    zone_37: 'assets/area/象牙塔.jpg', zone_38: 'assets/area/象牙塔.jpg',   // 🏛️ 象牙塔4~5樓
-    zone_39: 'assets/area/象牙塔深層.jpg', zone_40: 'assets/area/象牙塔深層.jpg', zone_41: 'assets/area/象牙塔深層.jpg',   // 🏛️ 象牙塔6~8樓（改深層背景·area-fit）
-    hidden_lab_nolife: 'assets/area/象牙塔.jpg', hidden_lab_darkmagic: 'assets/area/象牙塔.jpg',   // 🏛️ 隱藏區域 fallback＝轉換前地圖背景（象牙塔4/5樓）；有同名 <區域名>.jpg 則優先
-    hidden_seal_spirit: 'assets/area/象牙塔深層.jpg', hidden_seal_monster: 'assets/area/象牙塔深層.jpg', hidden_seal_demon: 'assets/area/象牙塔深層.jpg',   // 🏛️ 隱藏區域 fallback＝象牙塔6~8樓深層背景
-    hidden_antqueen: 'assets/area/龍之谷地監深層.jpg',   // 🐜 巨蟻女皇棲息地 fallback＝螞蟻洞窟2樓背景
-    heine: 'assets/area/森林.jpg',   // 🌲 海音（野外狩獵·共用森林背景·安全區 town_heine 不變）
-    eva_kingdom: 'assets/area/伊娃王國.jpg',   // 🏰 伊娃王國（地監·專屬背景·area-fit）
-    windwood: 'assets/area/沙漠.jpg',   // 🏜️ 風木（野外·共用沙漠背景）
-    windwood_dungeon: 'assets/area/地監.jpg',   // 🏰 風木地監（攻城獲勝後開放的城堡狩獵區）：實際取此 fallback＝地監.jpg（經 upgradeAreaPath 升級成 1920×1080 版）。下方 applyAreaBackground 雖仍把顯示名補成「風木地監」，但該名不在 AREA_1920 → 不會有同名圖；日後真的放了 assets/area/1920x1080/風木地監.jpg，記得把檔名加進 AREA_1920 才會被採用
-    gludio: 'assets/area/城鎮周邊.jpg', kent: 'assets/area/城鎮周邊.jpg', giran: 'assets/area/城鎮周邊.jpg',   // 🏙️ 古魯丁/肯特/奇岩（野外·城鎮周邊·≠村莊周邊）
-    training: 'assets/area/1920x1080/新兵修練場.jpg',   // 🪵 v3.8.468 直指 1920（根目錄無舊檔）
-    dream_island: 'assets/area/夢幻之島.jpg',   // 🆕 夢幻之島（套 area-fit·專屬背景）
-    zone_02: 'assets/area/歐瑞.jpg', zone_03: 'assets/area/歐瑞雪原.jpg', zone_05: 'assets/area/歐瑞.jpg',   // 🗺️ 歐瑞周邊／歐瑞雪原／國境要塞（雪原專屬 1920）
-    zone_04: 'assets/area/艾爾摩.jpg',   // ⚔️ 艾爾摩激戰地（野外·專屬背景）
-    zone_09: 'assets/area/地監深層.jpg', zone_10: 'assets/area/地監深層.jpg', zone_11: 'assets/area/地監深層.jpg', zone_12: 'assets/area/地監深層.jpg',   // 🕳️ 古魯丁地監4~7樓（深層背景·area-fit）
-    zone_13: 'assets/area/說話之島地監1樓.jpg',   // 🕳️ 說話之島地監1樓
-    zone_14: 'assets/area/說話之島地監2樓.jpg',   // 🕳️ 說話之島地監2樓
-    dragon_valley: 'assets/area/龍之谷.jpg', twilight_mt: 'assets/area/龍之谷.jpg',   // 🐉 龍之谷/黃昏山脈（野外·共用龍之谷背景；地監龍之谷 zone_26~31 仍為洞窟.jpg）
-    elf_grave: 'assets/area/拉斯塔巴德.jpg', hidden_cave: 'assets/area/拉斯塔巴德.jpg', giant_tomb: 'assets/area/拉斯塔巴德.jpg',   // 🏚️ 精靈墓穴/大洞穴隱遁者村莊地區/古代巨人之墓（野外·拉斯塔巴德背景）
-    rastabad_cave1: 'assets/area/拉斯塔巴德.jpg', rastabad_cave2: 'assets/area/拉斯塔巴德.jpg', rastabad_cave3: 'assets/area/拉斯塔巴德.jpg', rastabad_gate: 'assets/area/拉斯塔巴德.jpg', rastabad_beast: 'assets/area/拉斯塔巴德.jpg', dark_magic_lab: 'assets/area/拉斯塔巴德.jpg', necro_training: 'assets/area/拉斯塔巴德.jpg',   // 🏚️ 拉斯塔巴德地下洞穴1~3樓/正門/魔獸訓練場/黑魔法研究室/冥法軍訓練場（地監·拉斯塔巴德背景）
-    talking_island_port: 'assets/area/說話之島港口.jpg', oblivion_travel: 'assets/area/說話之島港口.jpg',   // 🏝️ 說話之島港口/遺忘之島途中（共用說話之島港口背景·area-fit）
-    oblivion_island: 'assets/area/遺忘之島.jpg',   // 🏝️ 遺忘之島（專屬背景·area-fit）
-    antaras_lair: 'assets/area/安塔瑞斯.jpg',   // 🐉 安塔瑞斯棲息地
-    fafurion_lair: 'assets/area/法利昂.jpg',   // 🐉 法利昂洞穴
-    valakas_lair: 'assets/area/巴拉卡斯.jpg',   // 🐉 巴拉卡斯巢穴（專屬背景）
-    silent_outer: 'assets/area/拉斯塔巴德.jpg',   // 🏚️ 沉默洞穴周邊（狩獵·改拉斯塔巴德·area-fit）；安全區 town_silent 仍 silentcave.png 不變
-    king_baranka_room: 'assets/area/軍王之室.jpg',  // 👑 魔獸軍王之室（純BOSS房·4室共用軍王之室背景）
-    law_king_room: 'assets/area/軍王之室.jpg',      // 👑 法令軍王之室
-    necro_king_room: 'assets/area/軍王之室.jpg',    // 👑 冥法軍王之室
-    assassin_king_room: 'assets/area/軍王之室.jpg', // 👑 暗殺軍王之室
-    elder_room: 'assets/area/軍王之室.jpg',         // 🏛️ 格蘭肯神殿．長老之室（無專屬背景圖·借用軍王之室背景）
+    // 🩹 v3.9.12：地監／火窟逐樓專屬圖（停用 洞窟／地監／地監深層 共用）
+    crystal_cave1: 'assets/area/水晶洞穴1樓.jpg', crystal_cave2: 'assets/area/水晶洞穴2樓.jpg', crystal_cave3: 'assets/area/水晶洞穴3樓.jpg',
+    fire_dragon: 'assets/area/火龍窟.jpg',
+    elf_forest: 'assets/area/妖魔森林.jpg', zone_01: 'assets/area/妖精森林周邊.jpg', mirror_forest: 'assets/area/鏡子森林.jpg',
+    silver_knight: 'assets/area/1920x1080/銀騎士地區.jpg',
+    zone_15: 'assets/area/眠龍洞穴1樓.jpg', zone_16: 'assets/area/眠龍洞穴2樓.jpg', zone_17: 'assets/area/眠龍洞穴3樓.jpg',
+    zone_22: 'assets/area/沙漠地監1樓.jpg', zone_23: 'assets/area/沙漠地監2樓.jpg', zone_24: 'assets/area/沙漠地監3樓.jpg', zone_25: 'assets/area/沙漠地監4樓.jpg',
+    zone_26: 'assets/area/龍之谷地監1樓.jpg', zone_27: 'assets/area/龍之谷地監2樓.jpg', zone_28: 'assets/area/龍之谷地監3樓.jpg',
+    zone_29: 'assets/area/龍之谷地監4樓.jpg', zone_30: 'assets/area/龍之谷地監5樓.jpg', zone_31: 'assets/area/龍之谷地監6樓.jpg',
+    zone_32: 'assets/area/螞蟻洞窟1樓.jpg', zone_33: 'assets/area/螞蟻洞窟2樓.jpg',
+    zone_37: 'assets/area/象牙塔4樓.jpg', zone_38: 'assets/area/象牙塔5樓.jpg',
+    zone_39: 'assets/area/象牙塔6樓.jpg', zone_40: 'assets/area/象牙塔7樓.jpg', zone_41: 'assets/area/象牙塔8樓.jpg',
+    hidden_lab_nolife: 'assets/area/象牙塔4樓.jpg', hidden_lab_darkmagic: 'assets/area/象牙塔5樓.jpg',
+    hidden_seal_spirit: 'assets/area/象牙塔6樓.jpg', hidden_seal_monster: 'assets/area/象牙塔7樓.jpg', hidden_seal_demon: 'assets/area/象牙塔8樓.jpg',
+    hidden_antqueen: 'assets/area/螞蟻洞窟2樓.jpg',
+    heine: 'assets/area/海音.jpg',
+    eva_kingdom: 'assets/area/伊娃王國.jpg',
+    windwood: 'assets/area/風木.jpg',
+    windwood_dungeon: 'assets/area/地監.jpg',   // 風木地監尚無同名圖 → 通用地監 fallback
+    gludio: 'assets/area/古魯丁.jpg', kent: 'assets/area/肯特.jpg', giran: 'assets/area/奇岩.jpg',
+    training: 'assets/area/1920x1080/新兵修練場.jpg',
+    dream_island: 'assets/area/夢幻之島.jpg',
+    zone_02: 'assets/area/歐瑞.jpg', zone_03: 'assets/area/歐瑞雪原.jpg', zone_05: 'assets/area/國境要塞.jpg',
+    zone_04: 'assets/area/艾爾摩激戰地.jpg',
+    zone_06: 'assets/area/古魯丁地監1樓.jpg', zone_07: 'assets/area/古魯丁地監2樓.jpg', zone_08: 'assets/area/古魯丁地監3樓.jpg',
+    zone_09: 'assets/area/古魯丁地監4樓.jpg', zone_10: 'assets/area/古魯丁地監5樓.jpg', zone_11: 'assets/area/古魯丁地監6樓.jpg', zone_12: 'assets/area/古魯丁地監7樓.jpg',
+    zone_13: 'assets/area/說話之島地監1樓.jpg',
+    zone_14: 'assets/area/說話之島地監2樓.jpg',
+    zone_18: 'assets/area/奇岩地監1樓.jpg', zone_19: 'assets/area/奇岩地監2樓.jpg', zone_20: 'assets/area/奇岩地監3樓.jpg', zone_21: 'assets/area/奇岩地監4樓.jpg',
+    dragon_valley: 'assets/area/龍之谷.jpg', twilight_mt: 'assets/area/黃昏山脈.jpg',
+    elf_grave: 'assets/area/精靈墓穴.jpg', hidden_cave: 'assets/area/大洞穴隱遁者村莊地區.jpg', giant_tomb: 'assets/area/古代巨人之墓.jpg',
+    rastabad_cave1: 'assets/area/拉斯塔巴德地下洞穴1樓.jpg', rastabad_cave2: 'assets/area/拉斯塔巴德地下洞穴2樓.jpg', rastabad_cave3: 'assets/area/拉斯塔巴德地下洞穴3樓.jpg',
+    rastabad_gate: 'assets/area/拉斯塔巴德正門.jpg',
+    rastabad_beast: 'assets/area/魔獸訓練場.jpg',
+    dark_magic_lab: 'assets/area/黑魔法研究室.jpg',
+    necro_training: 'assets/area/冥法軍訓練場.jpg',
+    talking_island: 'assets/area/說話之島周邊.jpg',
+    talking_island_port: 'assets/area/說話之島港口.jpg', oblivion_travel: 'assets/area/說話之島港口.jpg',
+    oblivion_island: 'assets/area/遺忘之島.jpg',
+    antaras_lair: 'assets/area/安塔瑞斯棲息地.jpg',
+    fafurion_lair: 'assets/area/法利昂洞穴.jpg',
+    valakas_lair: 'assets/area/巴拉卡斯巢穴.jpg',
+    silent_outer: 'assets/area/沉默洞穴周邊.jpg',
+    king_baranka_room: 'assets/area/魔獸軍王之室.jpg',
+    law_king_room: 'assets/area/法令軍王之室.jpg',
+    necro_king_room: 'assets/area/冥法軍王之室.jpg',
+    assassin_king_room: 'assets/area/暗殺軍王之室.jpg',
+    elder_room: 'assets/area/格蘭肯神殿．長老之室.jpg',
+    demon_temple: 'assets/area/魔族神殿.jpg',
+    shadow_temple: 'assets/area/暗影神殿.jpg',
+    zone_34: 'assets/area/地下通道1樓.jpg', zone_35: 'assets/area/地下通道2樓.jpg', zone_36: 'assets/area/地下通道3樓.jpg',
+    pride_2_10: 'assets/area/傲慢之塔2~10樓.jpg', pride_11_20: 'assets/area/傲慢之塔11~20樓.jpg',
+    pride_21_30: 'assets/area/傲慢之塔21~30樓.jpg', pride_31_40: 'assets/area/傲慢之塔31~40樓.jpg',
+    pride_41_50: 'assets/area/傲慢之塔41~50樓.jpg', pride_51_60: 'assets/area/傲慢之塔51~60樓.jpg',
+    pride_61_70: 'assets/area/傲慢之塔61~70樓.jpg', pride_71_80: 'assets/area/傲慢之塔71~80樓.jpg',
+    pride_81_90: 'assets/area/傲慢之塔81~90樓.jpg', pride_91_100: 'assets/area/傲慢之塔91~100樓.jpg',
     dark_elf_sanctuary: 'assets/area/1920x1080/黑暗妖精聖地.jpg',
     cursed_dark_elf_sanctuary: 'assets/area/1920x1080/受詛咒的黑暗妖精聖地.jpg',
-    collapsed_elder_council_hall: 'assets/area/1920x1080/崩壞的長老會議廳.jpg',   // 🌑 v3.3.33 長老會議廳改為安全區 town_elder_council（背景走 TOWN_BG_1920）
-    thebes_desert: 'assets/area/底比斯沙漠.jpg',   // 🏛️ 底比斯 沙漠（專屬背景）
-    thebes_pyramid: 'assets/area/底比斯.jpg',      // 🏛️ 底比斯 金字塔內部（與祭壇共用底比斯背景）
-    thebes_temple: 'assets/area/底比斯.jpg',        // 🏛️ 底比斯 歐西里斯祭壇（純BOSS房）
+    collapsed_elder_council_hall: 'assets/area/1920x1080/崩壞的長老會議廳.jpg',
+    thebes_desert: 'assets/area/底比斯沙漠.jpg',
+    thebes_pyramid: 'assets/area/底比斯 金字塔內部.jpg',
+    thebes_temple: 'assets/area/底比斯 歐西里斯祭壇.jpg',
+    tikal_area: 'assets/area/提卡爾神廟地區.jpg',
+    tikal_deep: 'assets/area/提卡爾神廟地區深處.jpg',
+    tikal_altar: 'assets/area/提卡爾 庫庫爾坎祭壇.jpg',
     sunrise_castle: 'assets/area/1920x1080/日出之國城墎.jpg',
     sunrise_east: 'assets/area/1920x1080/日出之國東之地.jpg',
     sunrise_west: 'assets/area/1920x1080/日出之國西之地.jpg',
-    sunrise_north: 'assets/area/1920x1080/日出之國北之地.jpg',   // 🌅 日出之國四區（時空裂痕·日本風 1920×1080）
-    arena_pvp: 'assets/area/1920x1080/決鬥競技場.jpg',   // ⚔️ v3.7.13 決鬥競技場（不在 MAP_CATEGORIES→mapDisplayName 回 null·同名圖走不到，逐張指定完整路徑）
-    pirate_wild: 'assets/area/古魯丁.jpg',      // 🏴‍☠️ 海賊島（野外·借用古魯丁背景）
-    pirate_dungeon: 'assets/area/說話之島地監1樓.jpg' // 🏴‍☠️ 海賊島地監（借用說話之島地監1樓背景）
+    sunrise_north: 'assets/area/1920x1080/日出之國北之地.jpg',
+    arena_pvp: 'assets/area/1920x1080/決鬥競技場.jpg',
+    pirate_wild: 'assets/area/海賊島.jpg',
+    pirate_dungeon: 'assets/area/海賊島地監.jpg'
 };
 const CATEGORY_AREA_BG = { wild: 'assets/area/村莊周邊.jpg', dungeon: 'assets/area/地監.jpg', siege: 'castle.png', tower: 'assets/area/傲慢之塔.jpg', rift: 'Rift.png' };   // 🆕 野外/地監/傲慢之塔狩獵使用 area-fit；攻城/裂痕有 SPECIAL_AREA_BG 新圖時同樣使用 area-fit，只有退回舊 castle.png/Rift.png 時維持舊版面。🗼 塔狩獵=傲慢之塔.jpg，入口安全區另由 TOWN_AREA_BG.tower 保留 TowerofInsolence.png 不變；🏛️ 底比斯3圖另由 SPECIAL_AREA_BG 覆寫（底比斯沙漠.jpg／底比斯.jpg）
 // 🗑️ v3.5.83 移除 AREA_BG_FIT：自 v2.5.2 改為「預設套用 area-fit＋AREA_BG_NOFIT 反向黑名單」後即成零引用死表，

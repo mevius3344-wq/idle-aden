@@ -3,7 +3,7 @@
 /**
  * 登入閘門：帳號／密碼預設空白（不再固定為「天堂」）。
  * 線上：帳號全站唯一（/api/accounts）；本機快取密碼以便同瀏覽器自動續登。
- * 登入時佔用 IP 連線名額（同 IP 最多雙開）·帳號單一裝置登入。
+ * 登入時佔用 IP 連線名額 ·帳號單一裝置登入。
  */
 (function () {
   const ACC_PREFIX = "fb5_account_";
@@ -50,6 +50,9 @@
         onlinePlayers: Number(data.onlinePlayers) || 0,
         goldMult: Math.max(1, Number(data.goldMult) || 1),
         dropMult: Math.max(1, Number(data.dropMult) || 1),
+        closedBeta: !!data.closedBeta,
+        notice: data.notice ? String(data.notice) : "",
+        ipSessionMax: Math.max(1, Number(data.ipSessionMax) || 1),
       };
     } catch (e) {}
     var pel = $("auth-stat-players");
@@ -58,6 +61,17 @@
     if (pel) pel.textContent = String(data.onlinePlayers != null ? data.onlinePlayers : "—");
     if (gel) gel.textContent = formatMult(data.goldMult);
     if (del) del.textContent = formatMult(data.dropMult);
+    applyBetaNotice(data);
+  }
+
+  function applyBetaNotice(data) {
+    var el = $("auth-beta-notice");
+    if (!el) return;
+    var on = !!(data && data.closedBeta);
+    var text = data && data.notice ? String(data.notice) : "";
+    if (text) el.textContent = text;
+    if (on || text) el.classList.remove("hidden");
+    else el.classList.add("hidden");
   }
 
   function serverStatsUrl() {
@@ -363,7 +377,7 @@
       if (!r || !r.ok) {
         if (opts.onFail) {
           opts.onFail(
-            (r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。"
+            (r && r.message) || "此 IP 連線數已達上限。請先關閉其他視窗後再登入。"
           );
         }
         return;
@@ -404,7 +418,7 @@
     startServerStatsPolling();
     claimIp().then(function (r) {
       if (!r || !r.ok) {
-        kickToLogin((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗。", "err");
+        kickToLogin((r && r.message) || "此 IP 連線數已達上限。請先關閉其他視窗。", "err");
         return;
       }
       var password = getStoredPassword(account);
@@ -690,7 +704,7 @@
       saveAccount(acc || account, password);
       claimIp().then(function (r) {
         if (!r || !r.ok) {
-          setStatus((r && r.message) || "此 IP 已達雙開上限。請先關閉其他視窗後再登入。", "err");
+          setStatus((r && r.message) || "此 IP 連線數已達上限。請先關閉其他視窗後再登入。", "err");
           return;
         }
         enterGame(acc || account);
@@ -808,7 +822,7 @@
     setSession("");
     if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
-    setStatus("連線名額已失效（IP 雙開限制）。請重新登入。", "err");
+    setStatus("連線名額已失效。請重新登入。", "err");
   }
 
   var _sessionRecovering = false;

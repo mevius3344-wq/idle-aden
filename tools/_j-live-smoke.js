@@ -16,8 +16,9 @@ const { spawnSync } = require("child_process");
 const ROOT = path.join(__dirname, "..");
 const CANDIDATES = [
   process.env.BASE,
+  process.env.RAILWAY_PUBLIC_URL,
   process.env.RENDER_URL,
-  "https://idle-aden.onrender.com",
+  "https://idle-aden-production.up.railway.app",
   "https://idle-aden.vercel.app",
   "http://127.0.0.1:" + (process.env.PORT || "3000"),
 ].filter(Boolean);

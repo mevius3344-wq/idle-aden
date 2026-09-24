@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * 防止 Render 免費方案休眠：開頁即 ping、定時保活、登入前確保已喚醒。
+ * 遊戲主機保活 ping（Railway 通常不休眠；仍保留輕量心跳）。
  */
 (function () {
   var PULSE_MS = 4 * 60 * 1000;
@@ -27,32 +27,46 @@
     }
   }
 
-  function renderWakeUrl() {
-    // 本機開發不喚醒 Render
+  function gameWakeUrl() {
     if (isLocalHost()) return "";
     try {
       if (window.GAME_HOST) {
         if (GAME_HOST.assetBase) {
           return String(GAME_HOST.assetBase).replace(/\/$/, "") + "/api/version";
         }
+        if (typeof GAME_HOST.isGameHost === "function" && GAME_HOST.isGameHost()) {
+          return "/api/version";
+        }
         if (typeof GAME_HOST.isRender === "function" && GAME_HOST.isRender()) {
           return "/api/version";
         }
+        if (typeof GAME_HOST.isRailway === "function" && GAME_HOST.isRailway()) {
+          return "/api/version";
+        }
         if (typeof GAME_HOST.isVercel === "function" && GAME_HOST.isVercel()) {
-          return "https://idle-aden.onrender.com/api/version";
+          var o = GAME_HOST.gameOrigin || window.__GAME_ORIGIN || "";
+          if (o) return String(o).replace(/\/$/, "") + "/api/version";
         }
       }
     } catch (e) {}
     try {
       var h = String(location.hostname || "").toLowerCase();
-      if (/\.onrender\.com$/i.test(h)) return "/api/version";
-      if (/\.vercel\.app$/i.test(h)) return "https://idle-aden.onrender.com/api/version";
+      if (/\.up\.railway\.app$/i.test(h) || /\.railway\.app$/i.test(h) || /\.onrender\.com$/i.test(h)) {
+        return "/api/version";
+      }
+      if (/\.vercel\.app$/i.test(h)) {
+        var origin = (window.__GAME_ORIGIN || "https://idle-aden-production.up.railway.app").replace(
+          /\/$/,
+          ""
+        );
+        return origin + "/api/version";
+      }
     } catch (e2) {}
     return "";
   }
 
   function pingOnce(timeoutMs) {
-    var url = renderWakeUrl();
+    var url = gameWakeUrl();
     if (!url || !isOnlineHost()) return Promise.resolve(false);
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = controller
@@ -62,7 +76,7 @@
           } catch (e) {}
         }, Math.max(5000, Number(timeoutMs) || 30000))
       : null;
-    var full = url.indexOf("/api/") === 0 ? url + "?wake=" + Date.now() : url + "?wake=" + Date.now();
+    var full = url + (url.indexOf("?") >= 0 ? "&" : "?") + "wake=" + Date.now();
     return fetch(full, { method: "GET", cache: "no-store", signal: controller ? controller.signal : undefined })
       .then(function (res) {
         return res.json().then(
@@ -92,7 +106,7 @@
   }
 
   function startPulse() {
-    if (_timer || !renderWakeUrl()) return;
+    if (_timer || !gameWakeUrl()) return;
     pulse();
     _timer = setInterval(pulse, PULSE_MS);
     try {
@@ -102,12 +116,8 @@
     } catch (e) {}
   }
 
-  /**
-   * 登入／連線前確保 Render 已喚醒。冷啟動最多等 maxWaitMs（預設 25 秒）。
-   * 本機／無喚醒網址：直接放行，避免卡在「伺服器喚醒中」。
-   */
   function ensureAwake(maxWaitMs) {
-    if (isLocalHost() || !renderWakeUrl()) {
+    if (isLocalHost() || !gameWakeUrl()) {
       _lastOkMs = Date.now();
       return Promise.resolve({ ok: true, warm: true, local: true });
     }
@@ -135,7 +145,8 @@
   window.GameServerWake = {
     ping: pulse,
     ensureAwake: ensureAwake,
-    renderWakeUrl: renderWakeUrl,
+    renderWakeUrl: gameWakeUrl,
+    gameWakeUrl: gameWakeUrl,
     lastOkMs: function () {
       return _lastOkMs;
     },

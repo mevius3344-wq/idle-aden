@@ -3,7 +3,7 @@
     'use strict';
 
     var POLL_MS = 60000;
-    var RENDER_WAKE_MS = 4 * 60 * 1000;   // Render 約 15 分鐘無流量休眠；4 分鐘 ping 一次
+    var RENDER_WAKE_MS = 4 * 60 * 1000;
     var RELOAD_DELAY_MS = 800;
     var _bootGameVersion = null;
     var _reloading = false;
@@ -105,11 +105,18 @@
             if (window.GAME_HOST && GAME_HOST.assetBase) {
                 return String(GAME_HOST.assetBase).replace(/\/$/, '') + '/api/version';
             }
+            if (window.GAME_HOST && typeof GAME_HOST.isGameHost === 'function' && GAME_HOST.isGameHost()) {
+                return '/api/version';
+            }
+            if (window.GAME_HOST && typeof GAME_HOST.isRailway === 'function' && GAME_HOST.isRailway()) {
+                return '/api/version';
+            }
             if (window.GAME_HOST && typeof GAME_HOST.isRender === 'function' && GAME_HOST.isRender()) {
                 return '/api/version';
             }
             if (window.GAME_HOST && typeof GAME_HOST.isVercel === 'function' && GAME_HOST.isVercel()) {
-                return 'https://idle-aden.onrender.com/api/version';
+                var o = (GAME_HOST.gameOrigin || window.__GAME_ORIGIN || 'https://idle-aden-production.up.railway.app');
+                return String(o).replace(/\/$/, '') + '/api/version';
             }
         } catch (e) {}
         return '';
