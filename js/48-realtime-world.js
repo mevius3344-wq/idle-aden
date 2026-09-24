@@ -613,7 +613,27 @@
         _channel = Math.max(1, Math.min(8, Math.floor(Number(data.channel) || 1)));
         try { window.__rtWorldChannel = _channel; } catch (e) {}
         _pendingEnter = null;
+        // 進圖當下立刻套用「已在此地圖的玩家」名單（enter_ok.players）
         rtWorldApplyMap(data);
+        try {
+            var n = Array.isArray(data.players) ? data.players.length : 0;
+            if (typeof logSys === 'function') {
+                if (n > 0) {
+                    var names = data.players.slice(0, 6).map(function (p) {
+                        return (p && p.name) ? String(p.name) : '冒險者';
+                    }).join('、');
+                    var more = n > 6 ? ' 等' : '';
+                    logSys('<span class="text-sky-300">【同圖】此地圖已有 ' + n + ' 位冒險者：' + names + more + '。他們會出現在戰場上。</span>');
+                } else if (String(data.mapId).indexOf('town_') !== 0 && data.mapId !== 'training') {
+                    logSys('<span class="text-slate-400">【同圖】目前僅你一人在此頻道。</span>');
+                }
+            }
+        } catch (eLog) {}
+        // 立刻重繪遠端 sprite（不必等動畫 interval）
+        try {
+            if (typeof _remotePartySpritesApply === 'function') _remotePartySpritesApply();
+            else if (typeof window._remotePartySpritesApply === 'function') window._remotePartySpritesApply();
+        } catch (eSpr) {}
         if (data.full) {
             try {
                 if (typeof logSys === 'function') {
@@ -628,6 +648,8 @@
             } catch (e3) {}
         }
         try { if (typeof mapPopUpdateIndicator === 'function') mapPopUpdateIndicator(); } catch (e4) {}
+        // 進圖後再推一次座標，讓原住民立刻對上你的位置
+        try { setTimeout(function () { rtWorldPushMove(true); }, 80); } catch (eMv) {}
     }
 
     function rtWorldApplyEnterRej(data) {

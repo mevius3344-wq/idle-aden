@@ -234,6 +234,7 @@
     }
 
     /** 🌐 WebSocket 同圖快照：只更新本圖人數／玩家，不清掉其他圖 count */
+    var _mapPopPrevKeys = Object.create(null);
     function mapPopApplyWsSnap(mapId, players, at, channel) {
         var id = String(mapId || '');
         if (!id) return;
@@ -241,6 +242,7 @@
             _mapPopPlayers = [];
             _mapPopCounts[id] = 1;
             _mapPopAt = at || Date.now();
+            _mapPopPrevKeys = Object.create(null);
             mapPopRefreshSelectOptions();
             mapPopUpdateIndicator();
             return;
@@ -248,6 +250,26 @@
         var list = Array.isArray(players) ? players.filter(function (m) {
             return m && m.key && m.cls;
         }).slice(0, 24) : [];
+        // 🩹 v3.9.46：僅在「已在圖上」時提示新人加入（首包不把原住民全當新人）
+        try {
+            var curMap = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : '';
+            if (curMap && curMap === id) {
+                var hadPrev = false;
+                for (var _pk in _mapPopPrevKeys) { if (Object.prototype.hasOwnProperty.call(_mapPopPrevKeys, _pk)) { hadPrev = true; break; } }
+                var nextKeys = Object.create(null);
+                list.forEach(function (m) {
+                    if (!m || !m.key) return;
+                    nextKeys[m.key] = 1;
+                    if (hadPrev && !_mapPopPrevKeys[m.key] && typeof logSys === 'function') {
+                        var nm = m.name || '冒險者';
+                        logSys('<span class="text-emerald-300">【同圖】' + nm + ' 進入此地圖。</span>');
+                    }
+                });
+                _mapPopPrevKeys = nextKeys;
+            } else {
+                _mapPopPrevKeys = Object.create(null);
+            }
+        } catch (eJoinLog) {}
         _mapPopPlayers = list;
         _mapPopCounts[id] = 1 + list.length;
         _mapPopAt = at || Date.now();
@@ -256,6 +278,10 @@
         }
         mapPopRefreshSelectOptions();
         mapPopUpdateIndicator();
+        try {
+            if (typeof _remotePartySpritesApply === 'function') _remotePartySpritesApply();
+            else if (typeof window._remotePartySpritesApply === 'function') window._remotePartySpritesApply();
+        } catch (eSpr2) {}
     }
 
     function mapPopRefreshSelectOptions() {

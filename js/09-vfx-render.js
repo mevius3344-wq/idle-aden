@@ -4956,6 +4956,7 @@ try {
     window._mobAnimApply = _mobAnimApply;
     window._mobAnimTrigger = _mobAnimTrigger;
     window._animSetImgFrame = _animSetImgFrame;
+    window._remotePartySpritesApply = _remotePartySpritesApply;
 } catch (eExpAnim) {}
 
 // 🩹 v3.8.334／352／355：戰鬥視窗可見就換幀（勿只靠 game-screen；行動 HUD 偶發 class 不同步）
