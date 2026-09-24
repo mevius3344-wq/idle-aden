@@ -1849,7 +1849,7 @@ function renderArkataBuyback(el) {
                 <button class="btn ${ok ? 'bg-yellow-700 hover:bg-yellow-600 border-yellow-500' : 'bg-slate-600 border-slate-500 opacity-60 cursor-not-allowed'} py-2 px-4 font-bold shrink-0" ${ok ? '' : 'disabled'} onclick="arkataBuyback(${i})">買回</button>
             </div>`;
     }).join('');
-    // 🕊️ v3.6.84 裝備贖回（兩模式皆可）：邪惡狀態死亡遺失的裝備（player.pvpLostItems·上限 5 件）花 1000 龍鑽指定贖回一件
+    // 🕊️ v3.6.84／v3.9.35 裝備贖回（兩模式皆可）：性向死亡遺失的裝備（player.pvpLostItems·上限 5 件）花 1000 龍鑽指定贖回一件
     let lost = Array.isArray(player.pvpLostItems) ? player.pvpLostItems : [];
     let dia = (typeof pandoraGetSharedDiamonds === 'function') ? pandoraGetSharedDiamonds() : 0;
     let itemRows = lost.map((r, i) => {

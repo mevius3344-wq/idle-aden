@@ -1675,42 +1675,81 @@ function _enemyAttackAllyInner(mob, ally, isBasicAttack = false) {
     if (ally.curHp <= 0) { ally.curHp = 0; ally._downed = true; ally._reviveCd = 150; logCombat(`<span class="text-amber-400 font-bold">協力傭兵 ${ally._allyName} 倒下了！（可用返生術立即復活，或 15 秒後自動使用復活卷軸，或回村免費復活）</span>`, 'enemy', 'enemy'); try { renderSquadPanel(); } catch (e) {} }
 }
 
+// ⚖️ v3.9.35 死亡遺失自身物品＝比照天堂性向（正義／中立／邪惡）：
+//   正義≥501：正義越高機率越低，最多 1 件；滿正義極稀。
+//   中立 0~500：有機率遺失 1 件。
+//   邪惡<0：越邪惡機率越高，最多 1~3 件（滿邪惡附近可達 3）。
+//   ※ 名字顏色仍用 ±1000（js/03）；此處門檻採天堂經典 501／0。
+//   豁免：村莊安全區、攻城區、決鬥（呼叫端已擋）。
+function pvpDeathItemLossPlan(align) {
+    let a = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(align) : Math.max(-32767, Math.min(32767, Math.round(Number(align) || 0)));
+    if (a >= 32767) return { chance: 0.005, count: 1, tier: 'justice' };
+    if (a >= 30000) return { chance: 0.02, count: 1, tier: 'justice' };
+    if (a >= 20000) return { chance: 0.04, count: 1, tier: 'justice' };
+    if (a >= 10000) return { chance: 0.06, count: 1, tier: 'justice' };
+    if (a >= 501)   return { chance: 0.10, count: 1, tier: 'justice' };
+    if (a >= 0)     return { chance: 0.25, count: 1, tier: 'neutral' };
+    if (a > -10000) return { chance: 0.40, count: 1, tier: 'evil' };
+    if (a > -20000) return { chance: 0.55, count: 2, tier: 'evil' };
+    if (a > -30000) return { chance: 0.70, count: 2, tier: 'evil' };
+    return { chance: 0.85, count: 3, tier: 'evil' };
+}
 function pvpChaoticDeathItemLoss() {
     if (!player || !player.eq || !Array.isArray(player.inv)) return;
-    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區死亡不噴裝：邪惡玩家亦免除隨機遺失物品
-    if (typeof pvpClampAlignment === 'function' && pvpClampAlignment(player.alignmentValue) >= -10000) return;
-    if (typeof pvpClampAlignment !== 'function' && (Number(player.alignmentValue) || 0) >= -10000) return;
-    if (Math.random() >= 0.01) return;
-    let candidates = [];
-    for (let slot in player.eq) {
-        let it = player.eq[slot];
-        if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk) candidates.push({ kind: 'eq', slot: slot, item: it });   // 🔒 鎖定件與任務/收集冊類（noSell/noJunk）不列入掉落池，與全專案其他破壞性路徑一致
-    }
-    player.inv.forEach((it, index) => {
-        if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk) candidates.push({ kind: 'inv', index: index, item: it });
-    });
-    if (!candidates.length) return;
-    let pick = candidates[Math.floor(Math.random() * candidates.length)];
-    let name = (typeof getItemFullName === 'function') ? getItemFullName(pick.item) : (DB.items[pick.item.id] ? DB.items[pick.item.id].n : pick.item.id);
-    // 🗃️ v3.5.74 遺失紀錄：保存完整物品快照 player.pvpLostItems（含強化/詞綴/屬性）
-    //    🕊️ v3.6.84 接上聖使阿卡塔「裝備贖回」（1000 龍鑽指定贖回一件）→ 上限依用戶規格改為 **5 件**，滿了淘汰最舊。
-    try {
-        if (!Array.isArray(player.pvpLostItems)) player.pvpLostItems = [];
-        player.pvpLostItems.push({ t: Date.now(), from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null, item: JSON.parse(JSON.stringify(Object.assign({}, pick.item, { cnt: 1 }))) });
-        if (player.pvpLostItems.length > 5) player.pvpLostItems = player.pvpLostItems.slice(-5);
-    } catch (e) {}
-    if (pick.kind === 'eq') {
-        if ((pick.item.cnt || 1) > 1) pick.item.cnt -= 1;
-        else player.eq[pick.slot] = null;
-    } else {
-        let live = player.inv[pick.index];
-        if (!live || live !== pick.item) live = player.inv.find(it => it === pick.item || (pick.item.uid && it && it.uid === pick.item.uid));
-        if (live) {
-            if ((live.cnt || 1) > 1) live.cnt -= 1;
-            else player.inv = player.inv.filter(it => it !== live);
+    if (typeof mapState !== 'undefined' && mapState && mapState.current && String(mapState.current).indexOf('town_') === 0) return;   // 🏘️ 村莊安全區不噴
+    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區死亡不噴裝
+    let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player.alignmentValue) : (Number(player.alignmentValue) || 0);
+    let plan = pvpDeathItemLossPlan(align);
+    if (Math.random() >= plan.chance) return;
+    let lostNames = [];
+    let dropOne = function () {
+        let eqPool = [];
+        let invPool = [];
+        for (let slot in player.eq) {
+            let it = player.eq[slot];
+            if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk)
+                eqPool.push({ kind: 'eq', slot: slot, item: it });   // 🔒 鎖定／任務／收集冊類不噴
         }
+        player.inv.forEach((it, index) => {
+            if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk)
+                invPool.push({ kind: 'inv', index: index, item: it });
+        });
+        if (!eqPool.length && !invPool.length) return null;
+        // 比照天堂：優先遺失穿戴中裝備
+        let pool = (eqPool.length && (Math.random() < 0.7 || !invPool.length)) ? eqPool : (invPool.length ? invPool : eqPool);
+        let pick = pool[Math.floor(Math.random() * pool.length)];
+        let name = (typeof getItemFullName === 'function') ? getItemFullName(pick.item) : (DB.items[pick.item.id] ? DB.items[pick.item.id].n : pick.item.id);
+        // 🗃️ 遺失紀錄 → 聖使阿卡塔裝備贖回（上限 5 件，滿則淘汰最舊）
+        try {
+            if (!Array.isArray(player.pvpLostItems)) player.pvpLostItems = [];
+            player.pvpLostItems.push({ t: Date.now(), from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null, item: JSON.parse(JSON.stringify(Object.assign({}, pick.item, { cnt: 1 }))) });
+            if (player.pvpLostItems.length > 5) player.pvpLostItems = player.pvpLostItems.slice(-5);
+        } catch (e) {}
+        if (pick.kind === 'eq') {
+            if ((pick.item.cnt || 1) > 1) pick.item.cnt -= 1;
+            else player.eq[pick.slot] = null;
+        } else {
+            let live = player.inv[pick.index];
+            if (!live || live !== pick.item) live = player.inv.find(it => it === pick.item || (pick.item.uid && it && it.uid === pick.item.uid));
+            if (live) {
+                if ((live.cnt || 1) > 1) live.cnt -= 1;
+                else player.inv = player.inv.filter(it => it !== live);
+            }
+        }
+        return name;
+    };
+    for (let i = 0; i < plan.count; i++) {
+        let nm = dropOne();
+        if (!nm) break;
+        lostNames.push(nm);
     }
-    logSys(`<span class="text-red-400 font-bold">邪惡值過低，死亡時遺失了 ${name}。</span>`);
+    if (!lostNames.length) return;
+    let list = lostNames.map(n => `<span class="text-amber-200">${n}</span>`).join('、');
+    let msg;
+    if (plan.tier === 'justice') msg = `正義狀態下死亡，仍有極低機率遺失了 ${list}。`;
+    else if (plan.tier === 'neutral') msg = `中立狀態下死亡，遺失了 ${list}。`;
+    else msg = `邪惡狀態下死亡，遺失了 ${list}。`;
+    logSys(`<span class="text-red-400 font-bold">${msg}</span>`);
     try { calcStats(); renderTabs(true); updateUI(); } catch (e) {}
 }
 
