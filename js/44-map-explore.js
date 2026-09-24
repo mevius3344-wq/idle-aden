@@ -1572,9 +1572,10 @@
             biomeCls.forEach(function (c) { bv.classList.remove(c); });
             bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg', 'is-large-explore');
             bv.style.backgroundColor = '';
-            // 🩹 v3.8.475／485／v3.9.33：離開場戰／真地圖後，修練場重套背景；非修練場清掉殘留 training-yard
+            // 🩹 v3.8.475／485／v3.9.34：離開探索後必須還原側視背景（真地圖曾把 backgroundImage 清成 none＝黑圖／地圖異常）
             try {
-                if (typeof mapState !== 'undefined' && mapState && mapState.current === 'training') {
+                var curMap = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : '';
+                if (curMap === 'training') {
                     if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
                     else {
                         var _cbg = bv.style.getPropertyValue('--chud-battle-bg');
@@ -1583,6 +1584,17 @@
                         bv.style.backgroundPosition = 'center center';
                         bv.classList.add('training-yard', 'has-bg', 'area-fit');
                         bv.classList.remove('is-world-scroll', 'is-exploring');
+                    }
+                } else if (curMap && curMap.indexOf('town_') !== 0) {
+                    bv.classList.remove('training-yard');
+                    var _cbgHunt = bv.style.getPropertyValue('--chud-battle-bg');
+                    if (_cbgHunt && _cbgHunt !== 'none') {
+                        bv.style.backgroundImage = _cbgHunt;
+                        bv.style.backgroundSize = 'cover';
+                        bv.style.backgroundPosition = 'center center';
+                        bv.classList.add('has-bg', 'area-fit');
+                    } else if (typeof applyAreaBackground === 'function') {
+                        applyAreaBackground();
                     }
                 } else {
                     bv.classList.remove('training-yard');
@@ -1715,6 +1727,16 @@
             }
             bv.classList.remove('explore-bg-scroll', 'has-scenic-bg', 'is-topdown-3d');
             bv.style.backgroundColor = '';
+            // 🩹 v3.9.34：真地圖地板載入失敗時回退側視背景，避免整片黑
+            try {
+                var _fb = bv.style.getPropertyValue('--chud-battle-bg');
+                if (_fb && _fb !== 'none') {
+                    bv.style.backgroundImage = _fb;
+                    bv.style.backgroundSize = 'cover';
+                    bv.style.backgroundPosition = 'center center';
+                    bv.classList.add('has-bg');
+                }
+            } catch (eFb2) {}
         }
 
         {
@@ -2950,6 +2972,18 @@
                 exploreApplyWorld();
                 exploreRenderHint();
                 exploreRenderEdges();
+            } else {
+                // 🩹 v3.9.34：無 is-world-scroll 時仍檢查側視背景是否被清成 none（真地圖殘留）
+                try {
+                    var _bvOff = document.getElementById('battle-view');
+                    if (_bvOff && !_bvOff.classList.contains('hidden')) {
+                        var _bgNow = (_bvOff.style.backgroundImage || '').trim();
+                        var _cbgKeep = _bvOff.style.getPropertyValue('--chud-battle-bg');
+                        if ((!_bgNow || _bgNow === 'none') && _cbgKeep && _cbgKeep !== 'none') {
+                            exploreApplyWorld();
+                        }
+                    }
+                } catch (eBgFix) {}
             }
             return;
         }
@@ -3242,6 +3276,10 @@
         exploreEnsureUi();
         exploreReset('map');
         exploreRenderHint();
+        // 🩹 v3.9.34：非探索圖（修練／軍王等）切圖後強制再套側視背景，避免殘留 none
+        try {
+            if (!exploreAllowed() && typeof applyAreaBackground === 'function') applyAreaBackground();
+        } catch (eAb) {}
     }
 
     // 🩹 v3.8.389：真地圖＝人物螢幕偏移（世界−相機）；其餘鎖中央
