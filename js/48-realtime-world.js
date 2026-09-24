@@ -376,8 +376,14 @@
         var expKeys = Array.isArray(data.expKeys) ? data.expKeys : [];
         var isLoot = !!(myKey && lootKey && myKey === lootKey);
         var isExp = !!(myKey && expKeys.indexOf(myKey) >= 0);
+        // 🩹 v3.9.32：hello key 尚未對齊／lootKey 空時，本地已 await 的擊殺仍要入帳
+        if (!isLoot && mob && mob._awaitAuthKill && !mob._dead) {
+            if ((myKey && data.by && data.by === myKey) || mob._localKillPending) isLoot = true;
+        }
+        if (!isExp && myKey && data.by && data.by === myKey) isExp = true;
 
         if (isLoot) {
+            if (mob && mob._dead) return; // fallback 已結算
             if (!mob) {
                 // 本地已被清：用名稱補刷一隻再結算（極少見）
                 try {
@@ -390,6 +396,9 @@
                 } catch (eSp) {}
             }
             if (mob && idx >= 0) {
+                try {
+                    if (mob._authFbTimer) { clearTimeout(mob._authFbTimer); mob._authFbTimer = null; }
+                } catch (eClr) {}
                 mob._authKillOk = true;
                 mob._awaitAuthKill = false;
                 mob._dead = false;
@@ -409,8 +418,12 @@
         }
 
         // 非掉落者：靜默清怪
-        if (mob) rtWorldClearMobSilent(key);
-        else if (idx >= 0 && mapState.mobs) mapState.mobs[idx] = null;
+        if (mob) {
+            try {
+                if (mob._authFbTimer) { clearTimeout(mob._authFbTimer); mob._authFbTimer = null; }
+            } catch (eClr2) {}
+            rtWorldClearMobSilent(key);
+        } else if (idx >= 0 && mapState.mobs) mapState.mobs[idx] = null;
 
         try {
             if (data.byName && typeof logCombat === 'function' && !isExp) {
@@ -422,6 +435,24 @@
                 if (typeof renderMobs === 'function') renderMobs();
             }
         } catch (eR2) {}
+    }
+
+    /** 🩹 權威擊殺失敗／拒收時，立刻結算本地已打死仍在等授權的怪 */
+    function rtWorldFlushAuthKillFallback() {
+        try {
+            if (typeof mapState === 'undefined' || !mapState || !Array.isArray(mapState.mobs)) return;
+            for (var i = 0; i < mapState.mobs.length; i++) {
+                var m = mapState.mobs[i];
+                if (!m || m._dead || m._authKillOk) continue;
+                if (!(m._awaitAuthKill || m._localKillPending) || !(m.curHp <= 0)) continue;
+                try {
+                    if (m._authFbTimer) { clearTimeout(m._authFbTimer); m._authFbTimer = null; }
+                } catch (eC) {}
+                m._authKillOk = true;
+                m._authFallback = true;
+                try { if (typeof killMob === 'function') killMob(i); } catch (eK) {}
+            }
+        } catch (e) {}
     }
 
     function rtWorldIdentityBody() {
@@ -698,6 +729,7 @@
                 rtWorldApplyHitFx(data, false);
             }
             else if (data.t === 'kill') rtWorldApplyKill(data);
+            else if (data.t === 'hit_rej') rtWorldFlushAuthKillFallback();
             else if (data.t === 'mob_hp') {
                 var m = rtWorldFindMob(data.sid || data.uid);
                 if (m && data.hp != null) {

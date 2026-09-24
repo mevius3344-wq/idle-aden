@@ -380,12 +380,33 @@ function killMob(idx) {
             && (mob._serverMobId || mob._sharedSnap || mob._awaitAuthKill)) {
             if (!mob._authKillOk) {
                 mob._awaitAuthKill = true;
+                mob._localKillPending = true;
                 mob.curHp = 0;
                 try { if (typeof vfxKill === 'function') vfxKill(mob); } catch (eVk) {}
+                // 🩹 v3.9.32：伺服器 kill 遺失／hit 被節流／need_combat 拒收時，不可永遠卡住＝角色 0 經驗
+                try {
+                    if (mob._authFbTimer) { clearTimeout(mob._authFbTimer); mob._authFbTimer = null; }
+                    let _fbUid = mob.uid;
+                    let _fbIdx = idx;
+                    mob._authFbTimer = setTimeout(function () {
+                        try {
+                            if (typeof mapState === 'undefined' || !mapState || !mapState.mobs) return;
+                            let m = mapState.mobs[_fbIdx];
+                            if (!m || m.uid !== _fbUid || m._dead || m._authKillOk) return;
+                            m._authKillOk = true;
+                            m._authFallback = true;
+                            m._authFbTimer = null;
+                            if (typeof killMob === 'function') killMob(_fbIdx);
+                        } catch (eFb) {}
+                    }, 1200);
+                } catch (eT) {}
                 return;
             }
         }
     } catch (eAuthK) {}
+    try {
+        if (mob._authFbTimer) { clearTimeout(mob._authFbTimer); mob._authFbTimer = null; }
+    } catch (eClrT) {}
     if (mob._mapMirror && typeof mapMobShouldFollow === 'function' && mapMobShouldFollow()) return;   // 👥 同圖共用怪：鏡像由地圖主機結算
     if (mob._partyMirror && typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs()) return;   // 🤝 組隊共用怪：隊員鏡像怪由隊長結算，避免重複掉落
     if (mob._worldBossMirror && typeof wbShouldFollow === 'function' && wbShouldFollow()) return;   // 👑 世界王：鏡像怪由主機結算
@@ -412,6 +433,7 @@ function killMob(idx) {
     mob._dead = true;
     mob._authKillOk = false;
     mob._awaitAuthKill = false;
+    mob._localKillPending = false;
     try { vfxKill(mob); } catch(e){}   // ✨ VFX：擊殺粒子爆裂（趁格子 DOM 仍在、重繪前）
     try { playMobKill(mob); } catch(e){}   // 🔊 音效：怪物死亡（依怪名對應專屬死亡音，查無→通用擊殺音）
     if (mob.curHp > 0) mob.curHp = 0;     // 待清算期間不可被當成活目標
