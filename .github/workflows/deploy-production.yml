@@ -21,19 +21,22 @@ jobs:
           HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          # 優先：Railway 已連 GitHub main 自動部署時，這裡只作備援觸發
+          set +e
           if [ -n "$HOOK" ]; then
-            curl -fsS -X POST "$HOOK"
-            echo "Railway deploy hook triggered."
-            exit 0
+            curl -fsS -X POST "$HOOK" && echo "Railway deploy hook triggered." && exit 0
+            echo "::warning::RAILWAY_DEPLOY_HOOK 呼叫失敗"
           fi
           if [ -n "$RAILWAY_TOKEN" ]; then
             npm i -g @railway/cli
-            railway redeploy --service game --from-source -y
-            echo "Railway redeploy --from-source triggered."
+            if railway redeploy --service game --project 4f011df0-515e-4142-90bb-df1a2cf5e28c --environment production --from-source -y; then
+              echo "Railway redeploy --from-source triggered."
+              exit 0
+            fi
+            echo "::warning::RAILWAY_TOKEN 無效或無權限。請到 Railway → Account → Tokens 建 Project Token，更新 GitHub Secret RAILWAY_TOKEN。"
             exit 0
           fi
-          echo "無 RAILWAY_DEPLOY_HOOK／RAILWAY_TOKEN；依賴 Railway GitHub Deployment Trigger（main）自動部署。"
+          echo "無 RAILWAY_DEPLOY_HOOK／RAILWAY_TOKEN；請確認 Railway 已連 GitHub 或手動部署。"
+          exit 0
 
       - name: Deploy Vercel (Deploy Hook)
         env:
