@@ -135,6 +135,48 @@
         return 'assets/area/seamless/' + id + '.png?v=' + exploreFloorVer();
     }
     /**
+     * 🩹 v3.9.38：地板 URL 先預載；404（maps 未部署）改 seamless，避免純色綠底。
+     * cssUrl 形如 url("path?v=…") 或 path。
+     */
+    function exploreApplyFloorBg(el, cssUrl, fallbackUrl, opts) {
+        if (!el) return;
+        opts = opts || {};
+        var raw = String(cssUrl || '').trim();
+        var path = raw.replace(/^url\(\s*['"]?/i, '').replace(/['"]?\s*\)$/, '');
+        if (!path) {
+            if (fallbackUrl) exploreApplyFloorBg(el, fallbackUrl, '', opts);
+            return;
+        }
+        var apply = function (u, useOpts) {
+            var o = useOpts || opts;
+            var abs = String(u || '');
+            if (!abs) return;
+            if (abs.indexOf('url(') !== 0) abs = 'url("' + abs + '")';
+            el.style.backgroundImage = abs;
+            if (o.size) {
+                if (o.importantSize) el.style.setProperty('background-size', o.size, 'important');
+                else el.style.backgroundSize = o.size;
+            }
+            if (o.repeat) el.style.backgroundRepeat = o.repeat;
+            if (o.noHidden) el.classList.remove('hidden');
+        };
+        var img = new Image();
+        img.onload = function () { apply(path, opts); };
+        img.onerror = function () {
+            if (fallbackUrl && fallbackUrl !== path && fallbackUrl !== cssUrl) {
+                exploreApplyFloorBg(el, fallbackUrl, '', {
+                    size: opts.fallbackSize || (opts.tileSize || opts.size),
+                    repeat: opts.fallbackRepeat || 'repeat',
+                    importantSize: !!opts.fallbackImportant,
+                    noHidden: opts.noHidden
+                });
+            } else {
+                el.style.backgroundImage = '';
+            }
+        };
+        img.src = path;
+    }
+    /**
      * 真地圖地板：優先用可走 floor（Teon／手繪俯視），1:1 鎖世界座標＝真實感。
      * scenicFar 留給遠景氛圍，不當壁紙地板。
      * 🩹 v3.9.22：還原「站在地圖上」；不再用 1920 cover 當 mid。
@@ -1674,18 +1716,26 @@
         if (midImg) {
             if (mid) {
                 if (scenic) {
-                    mid.style.backgroundImage = midImg;
+                    // 🩹 v3.9.38：maps 地板 404 時改 seamless，避免 #3a6b32 純綠底
+                    exploreApplyFloorBg(mid, midImg, grassUrl, {
+                        size: scenicW + 'px ' + scenicH + 'px',
+                        importantSize: true,
+                        repeat: 'no-repeat',
+                        fallbackSize: tileSz + 'px ' + tileSz + 'px',
+                        fallbackRepeat: 'repeat',
+                        noHidden: true
+                    });
                     // 地板＝世界尺寸 1:1（人物／相機／碰撞對齊）
-                    mid.style.setProperty('background-size', scenicW + 'px ' + scenicH + 'px', 'important');
                     mid.style.backgroundPosition = '';
-                    mid.style.backgroundRepeat = 'no-repeat';
                     mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'hidden');
                     mid.classList.add('is-topdown-floor', 'is-scenic-topdown');
                     // 墊底：僅吃 inset 外圈，與地板同色調避免接縫假破圖
                     if (blend) {
-                        blend.style.backgroundImage = 'url("' + grassUrl + '")';
-                        blend.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
-                        blend.style.backgroundRepeat = 'repeat';
+                        exploreApplyFloorBg(blend, 'url("' + grassUrl + '")', '', {
+                            size: tileSz + 'px ' + tileSz + 'px',
+                            repeat: 'repeat',
+                            noHidden: true
+                        });
                         blend.classList.remove('hidden');
                         blend.classList.add('is-topdown-underfill', 'is-scenic-underfill');
                         blend.style.setProperty('display', 'block', 'important');
@@ -1694,9 +1744,11 @@
                     }
                     bv.style.backgroundColor = underColor;
                 } else {
-                    mid.style.backgroundImage = midImg;
-                    mid.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
-                    mid.style.backgroundRepeat = 'repeat';
+                    exploreApplyFloorBg(mid, midImg, grassUrl, {
+                        size: tileSz + 'px ' + tileSz + 'px',
+                        repeat: 'repeat',
+                        noHidden: true
+                    });
                     mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'is-scenic-topdown', 'hidden');
                     mid.classList.add('is-topdown-floor');
                     if (blend) {

@@ -2773,16 +2773,30 @@ function mobStillImg(name, staticUrl, preferSpawn) {
     return { src: list[0], fb: list.slice(1) };
 }
 // 通用 img onerror：依 data-fb（|分隔清單）逐張退回，用盡則停。
-// 🩹 v3.8.326／359：動畫引擎換幀中（dataset.animF）勿吃 data-fb；有經典 anim 的怪勿退到 icons（會整場變靜態圖）
+// 🩹 v3.8.326／359／v3.9.38：動畫引擎換幀中（dataset.animF）勿吃 data-fb；有經典 anim 的怪勿退到 icons（會整場變靜態圖）
 function _mobImgErr(img) {
     try {
         if (img && img.dataset && img.dataset.animF) return;
         let alt = (img.getAttribute('alt') || '').trim();
+        let cur = String(img.getAttribute('src') || img.src || '');
         if (alt && typeof MOB_ANIM_NAMES !== 'undefined' && MOB_ANIM_NAMES.has(alt)) {
-            // 釘回 idle_0，留給 _mobAnimApply 繼續換幀（勿掉進 icons）
+            // 舊版路徑 404 → 改釘主樹 idle（線上常無 _legacy_lineage）
+            if (/_legacy_lineage/.test(cur) && !img.dataset.mainAnimFallback) {
+                img.dataset.mainAnimFallback = '1';
+                try {
+                    let dir = encodeURIComponent((typeof _animDir === 'function') ? _animDir(alt) : alt);
+                    let bust = (typeof GAME_VERSION !== 'undefined') ? ('?v=' + GAME_VERSION) : '';
+                    let main = 'assets/anim/' + dir + '/idle_0.png' + bust;
+                    if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(alt)) {
+                        main = 'assets/anim/' + dir + '/d6/idle_0.png' + bust;
+                    }
+                    img.src = main;
+                    return;
+                } catch (eMain) {}
+            }
             try {
                 let u0 = _mobDirectFrameUrl(alt, 'idle', 0);
-                if (u0) { img.src = u0; return; }
+                if (u0 && cur.indexOf(u0.replace(/\?.*$/, '')) < 0) { img.src = u0; return; }
             } catch (e0) {}
             return;
         }
@@ -2804,7 +2818,7 @@ const MOB_ANIM_ALIAS = { '遺忘之島狼人': '狼人', '老虎': '虎男',   /
     '闇影格立特': '玩家男黑暗妖精' };
 function _animDir(name) { return (typeof MOB_ANIM_ALIAS !== 'undefined' && MOB_ANIM_ALIAS[name]) ? MOB_ANIM_ALIAS[name] : name; }
 // 🩹 v3.8.425：永遠優先舊版造型（不再為 walk 切主樹＝暗黑重製）
-var MOB_USE_LEGACY_LINEAGE = true;
+var MOB_USE_LEGACY_LINEAGE = false; // 🩹 v3.9.38：線上未部署 _legacy_lineage＝怪圖全 404 破圖；改走主樹 assets/anim
 var MOB_PREF_MAIN_WALK = new Set(); // 空：不強制主樹
 function _mobLegacyEnt() {
     try {
