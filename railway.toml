@@ -1,0 +1,17 @@
+# Railway：遊戲主機（取代 Render）
+# Dashboard → New Project → Deploy from GitHub → 選 idle-aden
+# Settings → Networking → Generate Domain 後會有 *.up.railway.app
+# Variables 建議：
+#   PUBLIC_GAME_ORIGIN=https://你的網域.up.railway.app
+#   NODE_VERSION=20
+#   （帳號／存檔若也要走這台 Neon，可加 DATABASE_URL；預設仍走 Vercel API）
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "node _serve.js"
+healthcheckPath = "/api/version"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

@@ -4,7 +4,7 @@
   "private": true,
   "description": "躺著變強 — idle web RPG",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node _serve.js",
     "serve": "node _serve.js",
     "build": "node scripts/inject-version.js",
     "vercel-build": "node scripts/inject-version.js",
@@ -23,6 +23,6 @@
     "dotenv": "^16.4.7"
   },
   "engines": {
-    "node": "24.x"
+    "node": "20.x"
   }
 }

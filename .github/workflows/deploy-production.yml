@@ -1,5 +1,4 @@
-# push 到 main → 自動部署 Render + Vercel
-# 首次設定：雙擊專案根目錄「幫我設定自動部署.bat」
+# push 到 main → 自動部署 Railway + Vercel
 name: Deploy Production
 
 on:
@@ -14,34 +13,19 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy Render + Vercel
+    name: Deploy Railway + Vercel
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Render (Deploy Hook)
+      - name: Deploy Railway (Deploy Hook)
         env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK 未設定，嘗試 API 方式..."
+            echo "RAILWAY_DEPLOY_HOOK 未設定，略過（請在 Railway → Settings → Deploy → Deploy Hooks 建立後加到 GitHub Secrets）。"
             exit 0
           fi
           curl -fsS -X POST "$HOOK"
-          echo "Render deploy hook triggered."
-
-      - name: Deploy Render (API)
-        env:
-          API_KEY: ${{ secrets.RENDER_API_KEY }}
-          SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-        run: |
-          if [ -z "$API_KEY" ] || [ -z "$SERVICE_ID" ]; then
-            echo "RENDER_API_KEY / RENDER_SERVICE_ID 未設定，略過 API 部署。"
-            exit 0
-          fi
-          curl -fsS -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
-            -H "Authorization: Bearer ${API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d '{}'
-          echo "Render API deploy triggered."
+          echo "Railway deploy hook triggered."
 
       - name: Deploy Vercel (Deploy Hook)
         env:
@@ -54,14 +38,17 @@ jobs:
           curl -fsS -X POST "$HOOK"
           echo "Vercel deploy hook triggered."
 
-      - name: Verify Render version
+      - name: Verify game host version
+        env:
+          GAME_URL: ${{ secrets.RAILWAY_PUBLIC_URL }}
         run: |
-          echo "等待 Render 啟動（90 秒）..."
-          sleep 90
+          URL="${GAME_URL:-https://idle-aden-production.up.railway.app}"
+          echo "等待遊戲主機啟動（60 秒）... $URL"
+          sleep 60
           for i in 1 2 3 4 5 6; do
-            BODY=$(curl -fsS "https://idle-aden.onrender.com/api/version?t=$RANDOM" 2>/dev/null || echo "{}")
+            BODY=$(curl -fsS "${URL}/api/version?t=$RANDOM" 2>/dev/null || echo "{}")
             echo "檢查 $i: $BODY"
             echo "$BODY" | grep -q '"gameVersion"' && echo "✅ 線上已更新" && exit 0
-            sleep 30
+            sleep 25
           done
-          echo "::warning::尚未偵測到 gameVersion，可能仍在部署中。"
+          echo "::warning::尚未偵測到 gameVersion，可能仍在部署中或網址未對。"

@@ -1,3 +1,4 @@
+# 舊 Render 設定（已改用 Railway；保留僅供參考）
 services:
   - type: web
     name: idle-aden

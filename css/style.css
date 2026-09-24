@@ -882,6 +882,19 @@
         #battle-view.is-topdown-3d .explore-world-bg-far.is-scenic-far {
             display: none !important;
         }
+        /* 🩹 v3.9.22：原圖當頂部遠景氛圍（軟遮罩），不蓋可走地板 */
+        #battle-view.is-topdown-3d #explore-world-bg-far.explore-world-bg-far.is-horizon-far,
+        #battle-view.is-topdown-3d .explore-world-bg-far.is-horizon-far {
+            display: block !important;
+            inset: -6% -10% auto -10%;
+            height: 46%;
+            z-index: 0;
+            opacity: 0.5;
+            filter: saturate(1.08) brightness(1.02) contrast(1.04);
+            -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 100%);
+            pointer-events: none;
+        }
         #battle-view.is-topdown-3d #explore-world-bg.explore-world-bg.is-topdown-floor {
             position: absolute;
             inset: -18%;
@@ -893,10 +906,10 @@
             mask-image: none;
             opacity: 1;
         }
-        /* 鳥視整幅圖景：近原生清晰度（勿過度拉伸） */
+        /* 鳥視整幅圖景：近原生清晰度（勿過度拉伸）；尺寸由 JS inline 鎖世界 */
         #battle-view.is-topdown-3d #explore-world-bg.explore-world-bg.is-scenic-topdown {
             inset: -8%;
-            filter: contrast(1.08) saturate(1.12) brightness(1.02);
+            filter: none !important;
             image-rendering: auto;
             z-index: 2;
             background-repeat: no-repeat !important;
@@ -908,8 +921,12 @@
             background-image: none !important;
         }
         #battle-view.is-real-map #explore-world-bg.explore-world-bg.is-scenic-topdown {
-            inset: -4%;
+            inset: -10%;
             z-index: 3 !important;
+            /* 蓋過通用 is-topdown-floor 的 512 瓦尺寸，避免破圖 */
+            background-size: unset;
+            background-repeat: no-repeat !important;
+            filter: none !important;
         }
         #battle-view.is-topdown-3d #explore-world-bg-blend.explore-world-bg-blend.is-scenic-underfill {
             display: block !important;
@@ -931,7 +948,8 @@
             transform: none !important;
             -webkit-mask-image: none;
             mask-image: none;
-            filter: contrast(1.1) saturate(1.12) brightness(1.02);
+            /* 🩹 v3.9.24：墊底勿加重濾鏡（與地板接縫會假破圖） */
+            filter: none !important;
         }
         #battle-view.is-topdown-3d {
             background-color: #3a6b32 !important;
@@ -1030,7 +1048,7 @@
             position: absolute;
             inset: -22%;
             z-index: 0; pointer-events: none;
-            display: none !important; /* 正俯視不用異速遠景，避免拼湊 */
+            display: none; /* 預設關；is-horizon-far 才開 */
         }
         #explore-world-bg.explore-world-bg,
         .explore-world-bg {
@@ -1224,7 +1242,7 @@
         }
         #battle-view.is-topdown-3d #explore-world-bg.explore-world-bg.is-scenic-topdown {
             inset: -12%;
-            filter: contrast(1.16) saturate(1.18) brightness(1.05);
+            filter: none !important;
             image-rendering: auto;
             z-index: 2;
         }
@@ -1498,10 +1516,16 @@
         }
         .explore-vignette {
             position: absolute; inset: 0; z-index: 5; pointer-events: none;
-            background: radial-gradient(ellipse at 50% 50%,
-                rgba(0, 0, 0, 0) 52%,
-                rgba(0, 0, 0, 0.12) 80%,
-                rgba(0, 0, 0, 0.28) 100%);
+            background:
+                radial-gradient(ellipse at 50% 48%,
+                    rgba(0, 0, 0, 0) 48%,
+                    rgba(0, 0, 0, 0.16) 78%,
+                    rgba(0, 0, 0, 0.38) 100%),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 0%, transparent 18%, transparent 72%, rgba(0, 0, 0, 0.22) 100%);
+        }
+        #battle-view.is-topdown-3d .explore-vignette,
+        #battle-view.is-real-map .explore-vignette {
+            opacity: 0.92;
         }
         /* 🗺️ v3.8.191 走道練功點標記 */
         .explore-grind-layer {
@@ -1775,14 +1799,28 @@
             max-height: 336px !important;
             max-width: 272px !important;
         }
+        /* 🩹 v3.9.23：大地圖＝人物略小＝鳥視探索感 */
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > #player-morph-sprite > img,
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > .party-sprite > img,
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > #player-morph-sprite .pm-body,
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > .party-sprite .pm-body,
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > #player-morph-sprite.q-chibi-actor .pm-body,
+        #battle-view.is-real-map.is-large-explore.is-world-scroll > .party-sprite.q-chibi-actor .pm-body {
+            max-height: 236px !important;
+            max-width: 196px !important;
+        }
+        #battle-view.is-real-map.is-large-explore.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner {
+            max-height: 168px;
+        }
         #battle-view.is-real-map.is-world-scroll > #player-morph-sprite::after,
         #battle-view.is-real-map.is-world-scroll > .party-sprite:not(.remote-party)::after {
-            width: 54%;
-            height: 28px;
-            bottom: 0;
-            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.8) 0%, rgba(24, 48, 12, 0.4) 44%, transparent 74%);
-            opacity: calc(0.5 + 0.5 * var(--foot-plant, 0));
-            transform: translateX(-50%) scaleX(calc(var(--walk-shadow-scale, 1) * (0.82 + 0.4 * var(--foot-plant, 0)))) scaleY(calc(0.7 + 0.5 * var(--foot-plant, 0)));
+            width: 62%;
+            height: 34px;
+            bottom: -2px;
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.88) 0%, rgba(18, 36, 10, 0.45) 42%, transparent 76%);
+            opacity: calc(0.62 + 0.38 * var(--foot-plant, 0));
+            transform: translateX(-50%) scaleX(calc(var(--walk-shadow-scale, 1) * (0.78 + 0.45 * var(--foot-plant, 0)))) scaleY(calc(0.65 + 0.55 * var(--foot-plant, 0)));
+            filter: blur(0.4px);
         }
         #explore-foot-patch {
             position: absolute;
@@ -1858,7 +1896,7 @@
                 radial-gradient(ellipse at 50% 70%, transparent 45%, rgba(8, 20, 14, 0.14) 100%);
         }
         #battle-view.is-real-map #explore-world-bg.explore-world-bg.is-scenic-topdown {
-            filter: contrast(1.1) saturate(1.12) brightness(1.02);
+            filter: none !important;
         }
         #battle-view.is-world-scroll > #explore-loot-layer {
             z-index: 28 !important;
@@ -1991,15 +2029,21 @@
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
-            /* 🦶 血條改疊在精靈上方，勿壓在腳底造成「離地」錯覺 */
-            bottom: calc(100% + 2px);
-            z-index: 3;
+            /* 🩹 v3.9.9：貼在精靈頂內側，勿再 bottom:100%+ 伸出卡外擋前後排／點擊 */
+            top: 6px;
+            bottom: auto;
+            z-index: 1;
             margin: 0 !important;
+            pointer-events: none !important;
             /* 🩹 v3.8.321：預設隱藏，僅攻擊目標顯示 */
             display: none !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-hp-bar {
             display: flex !important;
+            pointer-events: none !important;
+        }
+        .mob-hp-bar {
+            pointer-events: none !important;
         }
         /* 經典列：有開血量時也只顯示攻擊目標 */
         #battle-view:not(.is-world-scroll) .mob-target:not(.active) > .mob-hp-bar {
@@ -6520,6 +6564,23 @@ button.classic-skill-cell { cursor:pointer; }
   color: #f0d890;
   font-weight: 700;
   margin-left: 2px;
+}
+.account-auth-beta-notice {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(210, 140, 60, 0.55);
+  background: linear-gradient(180deg, rgba(72, 36, 10, 0.88), rgba(28, 14, 4, 0.92));
+  color: #f0c878;
+  font-size: clamp(11px, 1.05vw, 12.5px);
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+  box-shadow: 0 0 0 1px rgba(255, 200, 100, 0.08) inset;
+}
+.account-auth-beta-notice.hidden {
+  display: none !important;
 }
 .account-auth-box {
   position: relative;

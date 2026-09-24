@@ -2585,14 +2585,20 @@ function updatePvpButtonTone() {
 let _leaderboardBoard = 'level';
 let _leaderboardLoading = false;
 let _leaderboardRows = null;
+let _leaderboardMe = null;
 let _leaderboardError = '';
 let _leaderboardUpdatedAt = 0;
+let _leaderboardTotal = 0;
+let _leaderboardRefreshAt = 0;
+const LEADERBOARD_REFRESH_CD_MS = 5000;
 const LEADERBOARD_BOARD_LABELS = { level: '等級', gold: '金幣', pride: '傲慢之塔', rift: '時空裂痕' };
 function setLeaderboardBoard(board) {
     if (!LEADERBOARD_BOARD_LABELS[board]) board = 'level';
     _leaderboardBoard = board;
+    _leaderboardRows = null;
+    _leaderboardMe = null;
     renderPvpTab();
-    loadLeaderboard(true);
+    loadLeaderboard(true, { bypassCd: true });
 }
 function _leaderboardNavHtml() {
     return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
@@ -2602,11 +2608,21 @@ function _leaderboardNavHtml() {
         }).join('')}
     </div>`;
 }
-function _leaderboardRowHtml(row, selfName) {
-    let isSelf = !!(selfName && row.name && row.name === selfName);
+function _leaderboardSelfKey() {
+    if (typeof normalizeCharNameId === 'function') return normalizeCharNameId(player && player.name);
+    return String((player && player.name) || '').trim();
+}
+function _leaderboardNameKey(name) {
+    if (typeof charNameIdKey === 'function') return charNameIdKey(name);
+    let s = String(name || '').trim();
+    if (typeof normalizeCharNameId === 'function') s = normalizeCharNameId(s);
+    return s.toLowerCase();
+}
+function _leaderboardRowHtml(row, selfKey) {
+    let isSelf = !!(selfKey && row.name && _leaderboardNameKey(row.name) === selfKey);
     let medal = row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : ('#' + row.rank);
     let _nameEsc = _pvpTabEsc(row.name);
-    return `<div class="bg-slate-900/80 border ${isSelf ? 'border-amber-500/80 ring-1 ring-amber-500/30' : 'border-slate-700'} rounded p-3 flex items-center justify-between gap-3">
+    return `<div class="bg-slate-900/80 border ${isSelf ? 'border-amber-500/80 ring-1 ring-amber-500/30' : 'border-slate-700'} rounded p-3 flex items-center justify-between gap-3"${isSelf ? ' id="lb-self-row"' : ''}>
         <div class="flex items-center gap-3 min-w-0 flex-1">
             <div class="w-10 text-center shrink-0 text-lg font-bold text-amber-200">${medal}</div>
             <div class="min-w-0 flex-1">
@@ -2618,6 +2634,20 @@ function _leaderboardRowHtml(row, selfName) {
             <div class="text-amber-200 font-bold text-right">${_pvpTabEsc(row.valueLabel || '')}</div>
             <button type="button" class="btn px-2 py-0.5 text-[11px] font-bold bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700" onclick="viewLeaderboardEquip(${JSON.stringify(row.name || '')})">查看裝備</button>
         </div>
+    </div>`;
+}
+function _leaderboardMeBannerHtml() {
+    let me = _leaderboardMe;
+    if (!me || !me.rank) return '';
+    let tip = me.inTop
+        ? '你在本榜前排'
+        : ('未進入目前顯示的前 ' + ((_leaderboardRows && _leaderboardRows.length) || 50) + ' 名');
+    return `<div class="mb-3 rounded border border-amber-600/50 bg-amber-950/40 px-3 py-2 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+            <div class="text-sm font-bold text-amber-100">你的名次 #${me.rank}<span class="text-amber-200/90 font-normal"> · ${_pvpTabEsc(me.valueLabel || '')}</span></div>
+            <div class="text-[11px] text-amber-200/70 mt-0.5">${tip}${_leaderboardTotal ? (' · 上榜 ' + _leaderboardTotal + ' 人') : ''}</div>
+        </div>
+        ${me.inTop ? '<button type="button" class="btn px-2 py-1 text-[11px] font-bold bg-amber-900/80 border-amber-600 text-amber-100 shrink-0" onclick="document.getElementById(\'lb-self-row\')&&document.getElementById(\'lb-self-row\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">定位</button>' : ''}
     </div>`;
 }
 const LB_EQ_SLOT_LABELS = {
@@ -2740,32 +2770,47 @@ function viewLeaderboardEquip(name) {
             renderLeaderboardEquipModal();
         });
 }
-function loadLeaderboard(force) {
+function loadLeaderboard(force, opts) {
+    opts = opts || {};
     if (_leaderboardLoading && !force) return;
     if (!force && _leaderboardRows && Date.now() - _leaderboardUpdatedAt < 30000) return;
+    if (force && !opts.bypassCd && Date.now() - _leaderboardRefreshAt < LEADERBOARD_REFRESH_CD_MS) {
+        let left = Math.ceil((LEADERBOARD_REFRESH_CD_MS - (Date.now() - _leaderboardRefreshAt)) / 1000);
+        if (typeof logSys === 'function') logSys('<span class="text-slate-400">排行榜刷新冷卻中（' + left + ' 秒）</span>');
+        return;
+    }
     _leaderboardLoading = true;
     _leaderboardError = '';
+    if (force && !opts.bypassCd) _leaderboardRefreshAt = Date.now();
     renderPvpTab();
     try {
         if (location.protocol !== 'http:' && location.protocol !== 'https:') {
             _leaderboardLoading = false;
             _leaderboardRows = null;
+            _leaderboardMe = null;
             _leaderboardError = '排行榜需要連線至伺服器遊玩。';
             renderPvpTab();
             return;
         }
+        let me = _leaderboardSelfKey();
+        let url = '/api/leaderboard?board=' + encodeURIComponent(_leaderboardBoard) + '&limit=50';
+        if (me) url += '&me=' + encodeURIComponent(me);
+        url += '&t=' + Date.now();
         let xhr = new XMLHttpRequest();
-        xhr.open('GET', '/api/leaderboard?board=' + encodeURIComponent(_leaderboardBoard) + '&limit=50', true);
+        xhr.open('GET', url, true);
         xhr.onload = function () {
             _leaderboardLoading = false;
             let data = null;
             try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) { data = null; }
             if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
                 _leaderboardRows = data.rows || [];
+                _leaderboardMe = data.me || null;
+                _leaderboardTotal = Math.max(0, Number(data.total) || _leaderboardRows.length || 0);
                 _leaderboardUpdatedAt = Date.now();
                 _leaderboardError = '';
             } else {
                 _leaderboardRows = null;
+                _leaderboardMe = null;
                 _leaderboardError = (data && data.message) || (data && data.error === 'offline' ? '排行榜需要線上伺服器。' : '無法載入排行榜，請稍後再試。');
             }
             renderPvpTab();
@@ -2773,6 +2818,7 @@ function loadLeaderboard(force) {
         xhr.onerror = function () {
             _leaderboardLoading = false;
             _leaderboardRows = null;
+            _leaderboardMe = null;
             _leaderboardError = '無法連線至排行榜伺服器。';
             renderPvpTab();
         };
@@ -2780,6 +2826,7 @@ function loadLeaderboard(force) {
     } catch (e) {
         _leaderboardLoading = false;
         _leaderboardRows = null;
+        _leaderboardMe = null;
         _leaderboardError = '無法載入排行榜。';
         renderPvpTab();
     }
@@ -2802,17 +2849,22 @@ function renderPvpTab() {
         loadLeaderboard(false);
         return;
     }
-    let selfName = (typeof normalizeCharNameId === 'function') ? normalizeCharNameId(player.name) : String(player.name || '').trim();
+    let selfKey = _leaderboardNameKey(_leaderboardSelfKey());
     let updated = _leaderboardUpdatedAt ? new Date(_leaderboardUpdatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-    let rows = (_leaderboardRows || []).map(row => _leaderboardRowHtml(row, selfName)).join('');
+    let rows = (_leaderboardRows || []).map(row => _leaderboardRowHtml(row, selfKey)).join('');
+    let boardHint = '';
+    if (_leaderboardBoard === 'pride') boardHint = '僅顯示有傲慢之塔成績者';
+    else if (_leaderboardBoard === 'rift') boardHint = '僅顯示有時空裂痕停留紀錄者';
+    else if (_leaderboardBoard === 'gold') boardHint = '金幣取雲端存檔（較新錢包序號優先）';
     div.innerHTML = nav + `
         <div class="flex items-center justify-between gap-2 mb-2">
             <div class="text-sm font-bold text-amber-200">${LEADERBOARD_BOARD_LABELS[_leaderboardBoard] || '排行榜'}</div>
             <button class="btn px-3 py-1 text-xs font-bold bg-slate-800 border-slate-600 text-slate-200" onclick="loadLeaderboard(true)">刷新</button>
         </div>
-        <div class="text-xs text-slate-500 mb-3">${updated ? ('更新時間 ' + updated + ' · 全服角色榜') : '全服角色榜'}</div>
+        ${_leaderboardMeBannerHtml()}
+        <div class="text-xs text-slate-500 mb-3">${updated ? ('更新時間 ' + updated) : ''}${_leaderboardTotal ? (' · 上榜 ' + _leaderboardTotal + ' 人') : ''}${boardHint ? (' · ' + boardHint) : ''}</div>
         <div class="flex flex-col gap-2">
-            ${rows || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前尚無上榜資料，創角後會自動納入。</div>'}
+            ${rows || '<div class="text-slate-500 text-sm bg-slate-900/60 border border-slate-800 rounded p-4 text-center">目前尚無上榜資料。</div>'}
         </div>`;
 }
 function setPvpMode(on) {

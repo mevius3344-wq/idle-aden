@@ -1,4 +1,4 @@
-﻿const http = require("http");
+const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -48,6 +48,13 @@ const _serverMetrics = require("./lib/rt-server-metrics");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 5173);
+const PUBLIC_GAME_ORIGIN = (() => {
+  const fromEnv = String(process.env.PUBLIC_GAME_ORIGIN || "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  const rail = String(process.env.RAILWAY_PUBLIC_DOMAIN || "").trim().replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  if (rail) return "https://" + rail;
+  return "https://idle-aden-production.up.railway.app";
+})();
 
 /** 部署指紋：index.html 內容 + _serve.js mtime/size。Manual Deploy 後變更，供線上玩家自動重載。 */
 function computeBuildId() {
@@ -85,10 +92,22 @@ const ENABLE_DESKTOP_SAVES =
   process.env.DESKTOP_PLAYER_DATA === "1" ||
   (process.env.DESKTOP_PLAYER_DATA !== "0" && !process.env.RENDER && process.platform === "win32");
 
-// Same IP may keep at most 2 live clients (dual-open). Heartbeat refreshes; TTL drops dead tabs.
-const IP_SESSION_MAX = Math.max(1, Number(process.env.IP_SESSION_MAX || 2));
+// Closed beta: same IP single-open by default. Heartbeat refreshes; TTL drops dead tabs.
+const IP_SESSION_MAX = Math.max(1, Number(process.env.IP_SESSION_MAX || 1));
 const IP_SESSION_TTL_MS = Math.max(15000, Number(process.env.IP_SESSION_TTL_MS || 45000));
 const IP_SESSION_ENABLED = process.env.IP_SESSION_LIMIT !== "0";
+const CLOSED_BETA = String(process.env.CLOSED_BETA || "1") !== "0";
+const DEFAULT_SERVER_NOTICE =
+  "【封測／測試服】本服僅供測試，會不定期清檔，經濟與進度不保證保留。";
+const SERVER_NOTICE = String(process.env.SERVER_NOTICE || DEFAULT_SERVER_NOTICE).trim();
+
+function closedBetaPayload() {
+  return {
+    closedBeta: CLOSED_BETA,
+    notice: CLOSED_BETA ? SERVER_NOTICE : "",
+    ipSessionMax: IP_SESSION_MAX,
+  };
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -234,7 +253,7 @@ function claimIpSession(ip, clientId) {
     return {
       ok: false,
       error: "ip_limit",
-      message: "此 IP 已達雙開上限（最多 " + IP_SESSION_MAX + " 個連線）。請先關閉其他視窗後再試。",
+      message: "此 IP 連線數已達上限（最多 " + IP_SESSION_MAX + " 個）。請先關閉其他視窗後再試。",
       count: bucket.size,
       max: IP_SESSION_MAX,
     };
@@ -309,6 +328,7 @@ async function handleServerStatusApi(req, res) {
     onlinePlayers,
     goldMult: rates.goldMult,
     dropMult: rates.dropMult,
+    ...closedBetaPayload(),
   });
 }
 
@@ -1259,15 +1279,18 @@ function mapMobMapAllowed(mapId) {
   return true;
 }
 
-function mapMobElectHost(mapId, now) {
+function mapMobElectHost(mapId, now, channel) {
   const cur = String(mapId || "").slice(0, 64);
   if (!mapMobMapAllowed(cur)) return "";
   const t = now || Date.now();
+  const ch = Math.max(1, Math.min(8, Math.floor(Number(channel) || 1)));
   const keys = [];
   for (const pre of partyPresence.values()) {
     if (!pre || !pre.key) continue;
     if (t - (pre.lastSeen || 0) > PARTY_TTL_MS) continue;
     if (String(pre.mapId || "") !== cur) continue;
+    const pch = Math.max(1, Math.floor(Number(pre.channel) || 1));
+    if (pch !== ch) continue;
     keys.push(String(pre.key));
   }
   if (keys.length < 2) return "";
@@ -1494,6 +1517,7 @@ function partyUpsertPresence(body) {
       .replace(/[<>&"']/g, "")
       .trim()
       .slice(0, 40),
+    channel: Math.max(1, Math.min(8, Math.floor(pickNum(body.channel, base.channel) || 1))),
     hp: Math.max(0, pickNum(body.hp, base.hp) || 0),
     mhp: Math.max(0, pickNum(body.mhp, base.mhp) || 0),
     wx: Math.max(-3000, Math.min(3000, Math.round(pickNum(body.wx, base.wx) || 0))),
@@ -1540,15 +1564,20 @@ function partyMapPopulation(now) {
   return counts;
 }
 
-function partyMapPlayersHere(mapId, excludeKey, now) {
+function partyMapPlayersHere(mapId, excludeKey, now, channel) {
   const t = now || Date.now();
   const cur = String(mapId || "").slice(0, 64);
   if (!cur || cur.startsWith("town_")) return [];
+  const chFilter = channel != null ? Math.max(1, Math.min(8, Math.floor(Number(channel) || 1))) : 0;
   const out = [];
   for (const pre of partyPresence.values()) {
     if (!pre || !pre.mapId) continue;
     if (t - (pre.lastSeen || 0) > PARTY_TTL_MS) continue;
     if (String(pre.mapId) !== cur) continue;
+    if (chFilter) {
+      const pch = Math.max(1, Math.floor(Number(pre.channel) || 1));
+      if (pch !== chFilter) continue;
+    }
     if (excludeKey && pre.key === excludeKey) continue;
     out.push({
       key: pre.key,
@@ -1560,6 +1589,7 @@ function partyMapPlayersHere(mapId, excludeKey, now) {
       wx: Math.max(-3000, Math.min(3000, Math.round(Number(pre.wx) || 0))),
       wy: Math.max(-1500, Math.min(1500, Math.round(Number(pre.wy) || 0))),
       pvpOn: !!pre.pvpOn,
+      channel: Math.max(1, Math.floor(Number(pre.channel) || 1)),
       online: true,
     });
     if (out.length >= 24) break;
@@ -2726,6 +2756,7 @@ async function handleClanApi(req, res, u) {
 
 // ===== 🏛 Realtime auction house (player listings). Persisted to data/auction.json. =====
 const AUCTION_FILE = path.join(ROOT, "data", "auction.json");
+const GM_TRADE_LOG_FILE = path.join(ROOT, "data", "gm-trade-log.json");
 const AUCTION_MAX_LISTINGS = 2000;
 const AUCTION_MAX_PER_ACCOUNT = 20;
 const AUCTION_TTL_MS = 72 * 60 * 60 * 1000; // 72h
@@ -3021,6 +3052,44 @@ function auctionSaveToDiskSoon() {
   }, 400);
 }
 
+/** GM 交易日誌（拍賣上架／成交／取消） */
+function gmAppendTradeLog(entry) {
+  try {
+    ensureDataDir();
+    let log = { entries: [] };
+    if (fs.existsSync(GM_TRADE_LOG_FILE)) {
+      try {
+        log = JSON.parse(fs.readFileSync(GM_TRADE_LOG_FILE, "utf8")) || { entries: [] };
+      } catch (e0) {
+        log = { entries: [] };
+      }
+    }
+    if (!Array.isArray(log.entries)) log.entries = [];
+    const item = entry && entry.item;
+    const row = {
+      id: String((entry && entry.id) || ("T" + Date.now())),
+      type: String((entry && entry.type) || "trade"),
+      at: Number((entry && entry.at) || Date.now()),
+      sellerAccount: String((entry && entry.sellerAccount) || ""),
+      sellerName: String((entry && entry.sellerName) || ""),
+      buyerAccount: String((entry && entry.buyerAccount) || ""),
+      buyerName: String((entry && entry.buyerName) || ""),
+      price: Math.max(0, Math.floor(Number((entry && entry.price) || 0))),
+      itemId: item && item.id ? String(item.id) : String((entry && entry.itemId) || ""),
+      itemName: String((entry && entry.itemName) || (item && (item.n || item.id)) || ""),
+      status: String((entry && entry.status) || ""),
+      source: "trade-log",
+      listingId: String((entry && entry.listingId) || ""),
+    };
+    log.entries.push(row);
+    if (log.entries.length > 5000) log.entries = log.entries.slice(-5000);
+    log.savedAt = Date.now();
+    fs.writeFileSync(GM_TRADE_LOG_FILE, JSON.stringify(log, null, 2), "utf8");
+  } catch (e) {
+    console.warn("[gm-trade-log] write failed:", e && e.message ? e.message : e);
+  }
+}
+
 try {
   auctionLoadFromDisk();
 } catch (e) {}
@@ -3196,6 +3265,17 @@ async function handleAuctionApi(req, res, u) {
     };
     rtAuction.set(listing.id, listing);
     auctionSaveToDiskSoon();
+    gmAppendTradeLog({
+      id: listing.id,
+      type: "list",
+      at: now,
+      sellerAccount: account,
+      sellerName: name,
+      price: fees.price,
+      item: item,
+      status: "listed",
+      listingId: listing.id,
+    });
     return json(res, 200, {
       ok: true,
       listing: auctionPublic(listing, { mine: true }),
@@ -3248,6 +3328,19 @@ async function handleAuctionApi(req, res, u) {
       at: Date.now(),
     });
     auctionSaveToDiskSoon();
+    gmAppendTradeLog({
+      id: L.id,
+      type: "buy",
+      at: Date.now(),
+      sellerAccount: L.sellerAccount,
+      sellerName: L.sellerName,
+      buyerAccount: account,
+      buyerName: buyerName,
+      price: fees.price,
+      item: L.item,
+      status: "sold",
+      listingId: L.id,
+    });
     return json(res, 200, {
       ok: true,
       item: L.item,
@@ -3287,6 +3380,17 @@ async function handleAuctionApi(req, res, u) {
     }
     rtAuction.delete(listingId);
     auctionSaveToDiskSoon();
+    gmAppendTradeLog({
+      id: L.id,
+      type: "cancel",
+      at: Date.now(),
+      sellerAccount: L.sellerAccount,
+      sellerName: L.sellerName,
+      price: L.price,
+      item: L.item,
+      status: "cancelled",
+      listingId: L.id,
+    });
     return json(res, 200, {
       ok: true,
       item: L.item,
@@ -4076,6 +4180,13 @@ const server = http.createServer(async (req, res) => {
       await handleAuctionApi(req, res, u);
       return;
     }
+    if (
+      (u.startsWith("/api/wallet") || u.startsWith("/api/shop") || u.startsWith("/api/econ")) &&
+      _neonLeaderboardHandler
+    ) {
+      await _neonLeaderboardHandler(req, res, u);
+      return;
+    }
     if (u.startsWith("/api/pandora") && _pandoraApiHandler) {
       await _pandoraApiHandler(req, res, u);
       return;
@@ -4157,18 +4268,25 @@ const server = http.createServer(async (req, res) => {
     const ext = path.extname(full).toLowerCase();
     if (ext === ".html") {
       try {
-        data = Buffer.from(
-          data.toString("utf8").replace(/__GAME_VERSION__/g, GAME_VERSION),
-          "utf8"
-        );
+        let html = data.toString("utf8").replace(/__GAME_VERSION__/g, GAME_VERSION);
+        html = html.replace(/__GAME_ORIGIN__/g, PUBLIC_GAME_ORIGIN);
+        // 🩹 v3.8.459：強制把 ?v=vX.Y.Z 對齊 GAME_VERSION，避免 CSS/JS immutable 快取卡舊版
+        html = html.replace(/\?v=v\d+\.\d+\.\d+/g, "?v=" + GAME_VERSION);
+        data = Buffer.from(html, "utf8");
       } catch (e) {}
     }
     const headers = {
       "Content-Type": MIME[ext] || "application/octet-stream",
       "Cache-Control":
-        ext === ".html" || ext === ".js" || ext === ".css" ? "no-store, must-revalidate" : "no-store",
+        ext === ".html"
+          ? "no-store, must-revalidate"
+          : ext === ".js" || ext === ".css"
+            ? "public, max-age=86400, immutable"
+            : ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif" || ext === ".woff2"
+              ? "public, max-age=86400, immutable"
+              : "no-store",
     };
-    if (ext === ".html" || ext === ".js" || ext === ".css") headers.Pragma = "no-cache";
+    if (ext === ".html") headers.Pragma = "no-cache";
     res.writeHead(200, headers);
     res.end(data);
   });
@@ -4181,6 +4299,22 @@ server.on("error", (e) => {
   }
   throw e;
 });
+
+// 🌐 MMORPG：WebSocket 同圖即時通道（/ws/world）
+try {
+  const { attachWorldWs } = require("./lib/rt-world-ws");
+  attachWorldWs(server, {
+    upsertPresence: partyUpsertPresence,
+    mapPlayersHere: partyMapPlayersHere,
+    electHost: mapMobElectHost,
+    getPresenceValues: () => partyPresence.values(),
+    presenceTtlMs: PARTY_TTL_MS,
+    onLog: (m) => console.log("WS_WORLD " + m),
+  });
+  console.log("WS_WORLD /ws/world ready");
+} catch (eWs) {
+  console.log("WS_WORLD_ERR " + (eWs && eWs.message ? eWs.message : eWs));
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log("READY http://localhost:" + PORT);

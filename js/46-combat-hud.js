@@ -531,6 +531,12 @@
         return 'assets/icons/skills/' + encodeURIComponent(skId) + '.png';
     }
 
+    /** 🩹 v3.9.16：普攻改武器圖（勿用 emoji） */
+    function atkIconUrl() {
+        var ver = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'v3.9.16';
+        return 'assets/icons/weapons/' + encodeURIComponent('克特之劍') + '.png?v=' + ver;
+    }
+
     function refreshHotbar(force) {
         var bar = document.getElementById('chud-hotbar');
         if (!bar) return;
@@ -546,17 +552,20 @@
         var sig = skills.join('|');
         if (!force && sig === _hotbarSig && bar.childNodes.length) return;
         _hotbarSig = sig;
-        var html = '<button type="button" class="chud-hot-slot is-atk" title="一般攻擊" data-chud="atk">⚔</button>';
+        bar.classList.add('is-ring');
+        var html = '<button type="button" class="chud-hot-slot is-atk is-ready" title="一般攻擊" data-chud="atk">' +
+            '<img class="chud-hot-ico" src="' + atkIconUrl() + '" alt="" onerror="this.onerror=null;this.src=\'assets/icons/weapons/' + encodeURIComponent('侵略者之劍') + '.png\'">' +
+            '</button>';
         for (var i = 0; i < 5; i++) {
             var id = skills[i];
             if (!id) {
-                html += '<button type="button" class="chud-hot-slot is-empty" disabled></button>';
+                html += '<button type="button" class="chud-hot-slot is-empty" disabled aria-label="空技能格"></button>';
                 continue;
             }
             var name = (DB.skills[id] && DB.skills[id].n) || id;
-            html += '<button type="button" class="chud-hot-slot" title="' + name.replace(/"/g, '') + '" data-sk="' + id + '">' +
-                '<img src="' + skillIconUrl(id) + '" alt="" onerror="this.style.display=\'none\'">' +
-                '<span class="chud-hot-cd" hidden></span></button>';
+            html += '<button type="button" class="chud-hot-slot is-ready" title="' + name.replace(/"/g, '') + '" data-sk="' + id + '">' +
+                '<img class="chud-hot-ico" src="' + skillIconUrl(id) + '" alt="" onerror="this.style.opacity=\'0.2\'">' +
+                '<span class="chud-hot-cd" hidden><span class="chud-hot-cd-num"></span></span></button>';
         }
         bar.innerHTML = html;
         bar.onclick = function (e) {
@@ -585,16 +594,28 @@
             var btn = slots[i];
             var sk = btn.getAttribute('data-sk');
             var cdEl = btn.querySelector('.chud-hot-cd');
+            var numEl = btn.querySelector('.chud-hot-cd-num');
             if (!cdEl) continue;
             var ticks = cds ? (Number(cds[sk]) || 0) : 0;
             if (ticks > 0) {
+                var max = Number(btn.getAttribute('data-cd-max')) || 0;
+                if (ticks > max) {
+                    max = ticks;
+                    btn.setAttribute('data-cd-max', String(max));
+                }
+                var pct = max > 0 ? Math.max(0, Math.min(1, ticks / max)) : 0;
                 btn.classList.add('is-cd');
+                btn.classList.remove('is-ready');
                 cdEl.hidden = false;
-                cdEl.textContent = String(Math.max(1, Math.ceil(ticks / 10)));
+                cdEl.style.setProperty('--cd-pct', pct.toFixed(4));
+                if (numEl) numEl.textContent = String(Math.max(1, Math.ceil(ticks / 10)));
             } else {
                 btn.classList.remove('is-cd');
+                btn.classList.add('is-ready');
+                btn.removeAttribute('data-cd-max');
                 cdEl.hidden = true;
-                cdEl.textContent = '';
+                cdEl.style.removeProperty('--cd-pct');
+                if (numEl) numEl.textContent = '';
             }
         }
     }

@@ -3,7 +3,7 @@
 (function () {
   var TOKEN_KEY = "fb5_metrics_token";
   var POLL_MS = 10000;
-  var RENDER_METRICS = "https://idle-aden.onrender.com/api/server/metrics";
+  var RENDER_METRICS = "https://idle-aden-production.up.railway.app/api/server/metrics";
 
   var _timer = null;
   var _token = "";
@@ -42,7 +42,11 @@
         return String(GAME_HOST.assetBase).replace(/\/$/, "") + "/api/server/metrics";
       }
     } catch (e) {}
-    return RENDER_METRICS;
+    return (
+      (window.GAME_HOST && GAME_HOST.gameOrigin
+        ? String(GAME_HOST.gameOrigin).replace(/\/$/, "") + "/api/server/metrics"
+        : null) || RENDER_METRICS
+    );
   }
 
   function fetchMetrics(url) {
@@ -162,7 +166,7 @@
         "</strong>（含雲端存檔）</li>" +
         "<li>IP 連線 <strong>" +
         ip +
-        "</strong>（含雙開分頁）</li>";
+        "</strong>（含分頁連線）</li>";
     }
   }
 

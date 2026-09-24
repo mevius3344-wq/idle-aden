@@ -26,7 +26,8 @@
 .equipment-window.equipment-window-embedded{
     position:fixed;
     inset:auto;
-    z-index:20;
+    /* 🩹 v3.9.9：須高於 #game-screen.combat-hud(z40) 與 sheet(z58)，否則只剩 tab-equip 普通列表 */
+    z-index:62;
     overflow:hidden;
     pointer-events:none;
     background:#101218;
@@ -97,5 +98,13 @@
     #tab-content-panel.equipment-panel-host{
         height:var(--equipment-panel-height)!important;
         min-height:var(--equipment-panel-height)!important;
+    }
+    /* 視覺裝備框顯示時，底下 classic 列表藏起（避免「變成普通裝備欄」錯覺） */
+    #tab-content-panel.equipment-panel-host > #tab-equip{
+        visibility:hidden!important;
+        pointer-events:none!important;
+        position:absolute!important;
+        inset:0!important;
+        opacity:0!important;
     }
 }

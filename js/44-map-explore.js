@@ -108,29 +108,73 @@
     function exploreFloorVer() {
         return (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.360');
     }
+    /** CSS / img URL：路徑段含中文時編碼，避免破圖 */
+    function exploreAssetUrl(raw) {
+        var s = String(raw || '');
+        if (!s) return '';
+        var q = '';
+        var qi = s.indexOf('?');
+        if (qi >= 0) {
+            q = s.slice(qi);
+            s = s.slice(0, qi);
+        }
+        try {
+            s = s.split('/').map(function (seg) {
+                if (!seg) return seg;
+                try {
+                    return encodeURIComponent(decodeURIComponent(seg));
+                } catch (e0) {
+                    return encodeURIComponent(seg);
+                }
+            }).join('/');
+        } catch (e1) {}
+        return s + q;
+    }
     function exploreSeamlessFloorUrl(biome) {
         var id = String(biome || 'wild').replace(/[^a-z]/gi, '') || 'wild';
         return 'assets/area/seamless/' + id + '.png?v=' + exploreFloorVer();
     }
-    /** 真地圖：MapDef.floor 正俯視專用圖（1:1 對齊世界） */
+    /**
+     * 真地圖地板：優先用可走 floor（Teon／手繪俯視），1:1 鎖世界座標＝真實感。
+     * scenicFar 留給遠景氛圍，不當壁紙地板。
+     * 🩹 v3.9.22：還原「站在地圖上」；不再用 1920 cover 當 mid。
+     */
     function exploreMapFloorOverride(mapId) {
         try {
             if (typeof mapdefOf === 'function') {
                 var d = mapdefOf(mapId);
-                if (d && d.floor) return String(d.floor) + '?v=' + exploreFloorVer();
+                if (d) {
+                    var fl = d.floor ? String(d.floor) : '';
+                    var scene = d.scenicFar ? String(d.scenicFar) : '';
+                    var pick = fl || scene;
+                    if (pick) {
+                        pick = exploreAssetUrl(pick);
+                        return pick + (pick.indexOf('?') >= 0 ? '' : ('?v=' + exploreFloorVer()));
+                    }
+                }
             }
         } catch (eFl) {}
         return '';
     }
-    /** 有專用俯視地板＝鳥視圖景模式（鏡頭／遠景） */
+    /** mid 是否為俯視地板圖（非 1920 側視原圖） */
+    function exploreMidIsWalkFloor(url) {
+        var u = String(url || '');
+        if (!u) return false;
+        if (/\/1920x1080\//.test(u)) return false;
+        return /\/maps\//.test(u) || /_floor\./.test(u) || /\/seamless\//.test(u) || /\.png(\?|$)/i.test(u);
+    }
+    /** 有專用俯視地板／專屬場景＝鳥視圖景模式（勿把 1920 場景當 seamless 平鋪） */
     function exploreIsScenicMap(mapId) {
         if (exploreMapFloorOverride(mapId)) return true;
+        try {
+            if (exploreMapSceneBgUrl()) return true;
+        } catch (eScn) {}
         try {
             if (typeof mapdefIsReal === 'function' && mapdefIsReal(mapId)) return true;
         } catch (eSc) {}
         return false;
     }
-    /** 依地圖刷新可走邊界（真地圖讀 MapDef；圖景對齊地板像素） */
+    /** 依地圖刷新可走邊界（真地圖讀 MapDef 放大後 bounds；美術地板仍 1024） */
     function exploreRefreshCamLimits() {
         var mid = '';
         try {
@@ -141,8 +185,12 @@
             if (typeof mapdefOf === 'function') def = mapdefOf(mid);
         } catch (eDef) {}
         if (def && def.real && def.maxX != null && def.maxY != null) {
-            CAM_MAX_X = def.maxX;
-            CAM_MAX_Y = def.maxY;
+            var b = null;
+            try {
+                if (typeof mapdefBounds === 'function') b = mapdefBounds(def);
+            } catch (eB) {}
+            CAM_MAX_X = b && b.maxX != null ? b.maxX : def.maxX;
+            CAM_MAX_Y = b && b.maxY != null ? b.maxY : def.maxY;
         } else {
             var scenic = false;
             try { scenic = exploreIsScenicMap(mid); } catch (eLim) {}
@@ -165,7 +213,7 @@
             if (typeof mapdefOf === 'function') {
                 var d = mapdefOf(mapId);
                 if (d && d.scenicFar) {
-                    var far = String(d.scenicFar);
+                    var far = exploreAssetUrl(String(d.scenicFar));
                     return far + (far.indexOf('?') >= 0 ? '' : ('?v=' + exploreFloorVer()));
                 }
             }
@@ -173,6 +221,7 @@
         var sc = '';
         try { sc = exploreMapSceneBgUrl() || ''; } catch (eSc) {}
         if (!sc) sc = 'assets/area/1920x1080/' + encodeURIComponent('說話之島周邊') + '.jpg?v=' + exploreFloorVer();
+        else sc = exploreAssetUrl(sc);
         return sc;
     }
     function exploreTopdownStyles() {
@@ -563,6 +612,9 @@
             var mid = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
             var ov = exploreMapFloorOverride(mid);
             if (ov) return ov;
+            // 無 MapDef 時仍用專屬 1920，最後才落到共用 seamless
+            var sc = exploreMapSceneBgUrl();
+            if (sc) return sc + (String(sc).indexOf('?') >= 0 ? '' : ('?v=' + exploreFloorVer()));
         } catch (eOv) {}
         TOPDOWN_STYLES = exploreTopdownStyles();
         var st = exploreTopdownStyle();
@@ -843,6 +895,18 @@
                 a._gridFy = a._fy;
                 b._gridFx = b._fx;
                 b._gridFy = b._fy;
+                // v3.9.18 mob clamp：互推後夾回可走區
+                try {
+                    var defSep = exploreActiveMapDef();
+                    if (defSep && typeof mapdefResolveMove === 'function') {
+                        var ra = mapdefResolveMove(defSep, a._fx, a._fy, a._fx, a._fy);
+                        var rb = mapdefResolveMove(defSep, b._fx, b._fy, b._fx, b._fy);
+                        var pa = explorePushSolidList(ra.x, ra.y);
+                        var pb = explorePushSolidList(rb.x, rb.y);
+                        a._fx = a._gridFx = pa.x; a._fy = a._gridFy = pa.y;
+                        b._fx = b._gridFx = pb.x; b._fy = b._gridFy = pb.y;
+                    }
+                } catch (eClamp) {}
             }
         }
     }
@@ -1335,6 +1399,10 @@
         var def = exploreActiveMapDef();
         if (def && typeof mapdefResolveMove === 'function') {
             var r = mapdefResolveMove(def, ox0, oy0, nx, ny);
+            var psh = explorePushSolidList(r.x, r.y);
+            if (psh.hit) r.hit = true;
+            r.x = psh.x;
+            r.y = psh.y;
             return {
                 x: r.x,
                 y: r.y,
@@ -1376,6 +1444,10 @@
             var equipPct = (p.d && p.d.moveSpeedPct) ? Math.max(-95, Number(p.d.moveSpeedPct) || 0) : 0;
             if (equipPct) m *= (1 + equipPct / 100);
         } catch (eM) {}
+        // 大地圖略加快，避免橫跨太久
+        try {
+            if (exploreIsRealMap() && CAM_MAX_X > 700) m *= 1.12;
+        } catch (eLg) {}
         return Math.max(0.25, Math.min(2.8, m));
     }
     function explorePlayerWalkStep(dirx, diry) {
@@ -1498,7 +1570,7 @@
             if (ground) ground.classList.add('hidden');
             if (vig) vig.classList.add('hidden');
             biomeCls.forEach(function (c) { bv.classList.remove(c); });
-            bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg');
+            bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg', 'is-large-explore');
             bv.style.backgroundColor = '';
             // 🩹 v3.8.475／485：離開場戰／真地圖後，若在修練場把側視背景加回來
             try {
@@ -1533,6 +1605,8 @@
         bv.classList.remove('is-scenic-3d');
         bv.classList.toggle('is-topdown-3d', !!scenic);
         bv.classList.toggle('has-scenic-bg', !!scenic);
+        // 鳥視感改靠人物略小，不再用「世界＞地板」造成破圖
+        bv.classList.toggle('is-large-explore', !!realMap);
 
         // 🩹 v3.8.385：真地圖／鳥視啟用時關掉側視 has-bg（否則看起來「地圖沒變」）
         if (scenic || realMap) {
@@ -1542,7 +1616,7 @@
             } catch (eBg) {}
         }
 
-        // 🩹 v3.8.406：真地圖圖景＝世界×2（對齊 1024 地板，勿過度墊邊拉伸）
+        // 🩹 v3.9.24：地板尺寸＝可走世界（maxX*2），禁止「小圖＋外圈瓦」破圖
         exploreRefreshCamLimits();
         var tileSz = TILE_PX;
         var def = exploreActiveMapDef();
@@ -1551,30 +1625,54 @@
         var scenicW = CAM_MAX_X * 2 + scenicPadX * 2;
         var scenicH = CAM_MAX_Y * 2 + scenicPadY * 2;
         if (def && realMap) {
-            scenicW = def.maxX * 2 + scenicPadX * 2;
-            scenicH = def.maxY * 2 + scenicPadY * 2;
+            var bb = null;
+            try {
+                if (typeof mapdefBounds === 'function') bb = mapdefBounds(def);
+            } catch (eBb) {}
+            // 世界半幅優先；floorArt 僅當與世界一致時使用
+            var worldW = ((bb && bb.maxX) || def.maxX || CAM_MAX_X) * 2;
+            var worldH = ((bb && bb.maxY) || def.maxY || CAM_MAX_Y) * 2;
+            scenicW = worldW;
+            scenicH = worldH;
+            scenicPadX = 0;
+            scenicPadY = 0;
         }
-        var grassUrl = exploreSeamlessFloorUrl('wild');
+        // 🩹 v3.9.12：地監／熔岩墊底用對應 seamless，勿一律草地
+        var underBiome = (biome === 'lava') ? 'lava'
+            : (biome === 'dungeon' || biome === 'crystal' || biome === 'tower') ? 'dungeon'
+            : (biome === 'desert') ? 'desert'
+            : (biome === 'snow') ? 'snow'
+            : (biome === 'coast') ? 'coast'
+            : 'wild';
+        var grassUrl = exploreSeamlessFloorUrl(underBiome);
+        var underColor = (underBiome === 'lava') ? '#3a1810'
+            : (underBiome === 'dungeon' || underBiome === 'crystal' || underBiome === 'tower') ? '#1a1512'
+            : (underBiome === 'desert') ? '#c4a574'
+            : (underBiome === 'snow') ? '#c8d4e0'
+            : (underBiome === 'coast') ? '#2a5a6e'
+            : '#3a6b32';
         if (midImg) {
             if (mid) {
                 if (scenic) {
                     mid.style.backgroundImage = midImg;
-                    mid.style.backgroundSize = scenicW + 'px ' + scenicH + 'px';
+                    // 地板＝世界尺寸 1:1（人物／相機／碰撞對齊）
+                    mid.style.setProperty('background-size', scenicW + 'px ' + scenicH + 'px', 'important');
+                    mid.style.backgroundPosition = '';
                     mid.style.backgroundRepeat = 'no-repeat';
                     mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'hidden');
                     mid.classList.add('is-topdown-floor', 'is-scenic-topdown');
-                    // 墊底草地：永遠 repeat，圖景外不再露出深藍黑底
+                    // 墊底：僅吃 inset 外圈，與地板同色調避免接縫假破圖
                     if (blend) {
                         blend.style.backgroundImage = 'url("' + grassUrl + '")';
                         blend.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
                         blend.style.backgroundRepeat = 'repeat';
                         blend.classList.remove('hidden');
                         blend.classList.add('is-topdown-underfill', 'is-scenic-underfill');
-                        // 蓋過 CSS display:none !important（僅鳥視墊底需要）
                         blend.style.setProperty('display', 'block', 'important');
                         blend.style.setProperty('opacity', '1', 'important');
+                        blend.style.setProperty('filter', 'none', 'important');
                     }
-                    bv.style.backgroundColor = '#3a6b32';
+                    bv.style.backgroundColor = underColor;
                 } else {
                     mid.style.backgroundImage = midImg;
                     mid.style.backgroundSize = tileSz + 'px ' + tileSz + 'px';
@@ -1592,11 +1690,13 @@
                 }
                 mid.classList.remove('hidden');
             }
-            // 俯視圖景不再疊側視遠景（會破圖／黑帶）
+            // 🩹 v3.9.24：關掉側視遠景疊層（與俯視地板打架＝破圖／黑帶）
             if (far) {
                 far.classList.add('hidden');
-                far.classList.remove('is-scenic-far');
+                far.classList.remove('is-scenic-far', 'is-horizon-far');
                 far.style.backgroundImage = '';
+                far.style.removeProperty('display');
+                far.style.removeProperty('opacity');
             }
         } else {
             if (far) {
@@ -1632,6 +1732,11 @@
                 mid.style.setProperty('--tile-x', midX);
                 mid.style.setProperty('--tile-y', midY);
                 mid.style.setProperty('--tile-half', half);
+            }
+            if (far && far.classList.contains('is-horizon-far')) {
+                var farX = 'calc(50% + ' + (-_cx * BG_FAR_X).toFixed(1) + 'px)';
+                var farY = 'calc(42% + ' + (_cy * BG_FAR_Y).toFixed(1) + 'px)';
+                far.style.backgroundPosition = farX + ' ' + farY;
             }
             if (blend && scenic) {
                 blend.style.backgroundPosition = (-_cx * BG_MID_X).toFixed(1) + 'px ' + (_cy * BG_MID_Y).toFixed(1) + 'px';
@@ -1790,12 +1895,12 @@
             edgeBias: 0
         },
         lava: {
-            palette: ['rock', 'rock', 'path', 'rock'],
-            count: 16,
-            pathCount: 10,
-            pathAmp: 45,
-            cluster: 0.05,
-            edgeBias: 0
+            palette: ['rock', 'rock', 'rock', 'path', 'rock'],
+            count: 28,
+            pathCount: 12,
+            pathAmp: 40,
+            cluster: 0.12,
+            edgeBias: 0.45
         },
         crystal: {
             palette: ['rock', 'rock', 'path', 'bush'],
@@ -1806,20 +1911,20 @@
             edgeBias: 0
         },
         dungeon: {
-            palette: ['rock', 'rock', 'path', 'rock'],
-            count: 16,
-            pathCount: 11,
-            pathAmp: 30,
-            cluster: 0.1,
-            edgeBias: 0
+            palette: ['rock', 'rock', 'rock', 'path', 'rock'],
+            count: 30,
+            pathCount: 14,
+            pathAmp: 28,
+            cluster: 0.15,
+            edgeBias: 0.5
         },
         tower: {
             palette: ['rock', 'path', 'rock', 'rock'],
-            count: 14,
-            pathCount: 10,
+            count: 22,
+            pathCount: 12,
             pathAmp: 25,
-            cluster: 0.08,
-            edgeBias: 0
+            cluster: 0.1,
+            edgeBias: 0.35
         }
     };
     function exploreBiomePropConfig(biome) {
@@ -1858,6 +1963,17 @@
         var list = [];
         var pathCount = Math.max(4, cfg.pathCount | 0);
         var pathAmp = Number(cfg.pathAmp) || 50;
+        // 有專屬俯視地板＝地圖本體已具真實感；少放貼紙樹石，避免蓋掉場景
+        var paintedFloor = false;
+        try {
+            if (typeof mapdefOf === 'function') {
+                var md = mapdefOf(mapId);
+                paintedFloor = !!(md && md.floor);
+            }
+        } catch (ePf) {}
+        if (paintedFloor) {
+            pathCount = Math.min(pathCount, 2);
+        }
         // 路徑走練功點「之間」的走廊，不穿越點心
         var pathY = -420 + rnd() * 120;
         if (Math.abs(pathY) < 120) pathY = (pathY < 0 ? -1 : 1) * (140 + rnd() * 80);
@@ -1876,14 +1992,15 @@
             });
         }
         var n = Math.max(8, cfg.count | 0);
-        if (String(mapId) === 'dream_island' && biome === 'mist') n = Math.max(n, 28);
-        if (String(mapId) === 'talking_island' && biome === 'wild') n = Math.max(n, 26);
-        if (String(mapId) === 'talking_island_port' && biome === 'coast') n = Math.max(n, 18);
-        if ((String(mapId) === 'zone_13' || String(mapId) === 'zone_14' || /^zone_0[6-9]$/.test(String(mapId)) || String(mapId) === 'zone_10' || String(mapId) === 'zone_11' || String(mapId) === 'zone_12' || /^zone_1[8-9]$/.test(String(mapId)) || String(mapId) === 'zone_20' || String(mapId) === 'zone_21' || /^zone_2[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_30' || String(mapId) === 'zone_31' || /^zone_1[5-7]$/.test(String(mapId)) || /^zone_3[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_40' || String(mapId) === 'zone_41' || /^crystal_cave/.test(String(mapId)) || /^rastabad_/.test(String(mapId)) || String(mapId) === 'eva_kingdom' || String(mapId) === 'dark_magic_lab' || String(mapId) === 'necro_training' || String(mapId) === 'elder_room' || String(mapId) === 'demon_temple' || String(mapId) === 'shadow_temple') && biome === 'dungeon') n = Math.max(n, 16);
-        if (String(mapId).indexOf('pride_') === 0 && biome === 'tower') n = Math.max(n, 18);
-        if ((String(mapId) === 'pirate_dungeon' || String(mapId) === 'thebes_pyramid' || String(mapId) === 'thebes_temple' || String(mapId) === 'tikal_deep' || String(mapId) === 'tikal_altar') && (biome === 'dungeon' || biome === 'desert' || biome === 'crystal' || biome === 'wild')) n = Math.max(n, 14);
-        if (String(mapId) === 'silver_knight' && biome === 'wild') n = Math.max(n, 22);
-        if ((String(mapId) === 'zone_01' || String(mapId) === 'elf_forest') && biome === 'forest') n = Math.max(n, 24);
+        if (paintedFloor) n = Math.min(Math.max(n, 10), 14);
+        if (String(mapId) === 'dream_island' && biome === 'mist') n = paintedFloor ? Math.min(n, 8) : Math.max(n, 28);
+        if (String(mapId) === 'talking_island' && biome === 'wild') n = paintedFloor ? Math.min(n, 5) : Math.max(n, 26);
+        if (String(mapId) === 'talking_island_port' && biome === 'coast') n = paintedFloor ? Math.min(n, 4) : Math.max(n, 18);
+        if (!paintedFloor && (String(mapId) === 'zone_13' || String(mapId) === 'zone_14' || /^zone_0[6-9]$/.test(String(mapId)) || String(mapId) === 'zone_10' || String(mapId) === 'zone_11' || String(mapId) === 'zone_12' || /^zone_1[8-9]$/.test(String(mapId)) || String(mapId) === 'zone_20' || String(mapId) === 'zone_21' || /^zone_2[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_30' || String(mapId) === 'zone_31' || /^zone_1[5-7]$/.test(String(mapId)) || /^zone_3[2-9]$/.test(String(mapId)) || String(mapId) === 'zone_40' || String(mapId) === 'zone_41' || /^crystal_cave/.test(String(mapId)) || /^rastabad_/.test(String(mapId)) || String(mapId) === 'eva_kingdom' || String(mapId) === 'dark_magic_lab' || String(mapId) === 'necro_training' || String(mapId) === 'elder_room' || String(mapId) === 'demon_temple' || String(mapId) === 'shadow_temple') && biome === 'dungeon') n = Math.max(n, 16);
+        if (!paintedFloor && String(mapId).indexOf('pride_') === 0 && biome === 'tower') n = Math.max(n, 18);
+        if (!paintedFloor && (String(mapId) === 'pirate_dungeon' || String(mapId) === 'thebes_pyramid' || String(mapId) === 'thebes_temple' || String(mapId) === 'tikal_deep' || String(mapId) === 'tikal_altar') && (biome === 'dungeon' || biome === 'desert' || biome === 'crystal' || biome === 'wild')) n = Math.max(n, 14);
+        if (!paintedFloor && String(mapId) === 'silver_knight' && biome === 'wild') n = Math.max(n, 22);
+        if (!paintedFloor && (String(mapId) === 'zone_01' || String(mapId) === 'elf_forest') && biome === 'forest') n = Math.max(n, 24);
         var tries = 0;
         var cluster = Number(cfg.cluster) || 0;
         var edgeBias = Number(cfg.edgeBias) || 0;
@@ -1934,7 +2051,7 @@
             return;
         }
         var gy = exploreGroundYLive();
-        var key = String(mapId || '') + '|' + String(biome || 'wild') + '|g' + gy + '|p381|' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '');
+        var key = String(mapId || '') + '|' + String(biome || 'wild') + '|g' + gy + '|p418|' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '');
         if (_propCacheKey === key && layer.childNodes.length) return;
         _propCacheKey = key;
         var props = exploreBuildPropList(mapId, biome);
@@ -1989,7 +2106,7 @@
     /** 🩹 v3.8.383：真地圖＝MapDef 碰撞；其餘保留外框＋說話島海岸圓 */
     var _solidList = [];
     var _solidKey = '';
-    var PROP_SOLID_R = { tree: 0, rock: 0, bush: 0, path: 0 };
+    var PROP_SOLID_R = { tree: 20, rock: 30, bush: 10, path: 0 }; // v3.9.18 貼地固體（0＝可穿）
     function exploreScenicExtraSolids(mapId) {
         if (exploreIsRealMap(mapId)) return [];
         if (String(mapId || '') !== 'talking_island') return [];
@@ -2002,12 +2119,27 @@
         ];
     }
     function exploreRebuildSolids(mapId, biome, props) {
-        var key = String(mapId || '') + '|' + String(biome || '') + '|real383';
+        var key = String(mapId || '') + '|' + String(biome || '') + '|solid418';
         if (_solidKey === key && _solidList.length) return;
         _solidKey = key;
         var list = [];
         var extra = exploreScenicExtraSolids(mapId);
         for (var j = 0; j < extra.length; j++) list.push(extra[j]);
+        // MapDef rocks: mapdefPushOut only; here props solids
+        if (props && props.length) {
+            for (var i = 0; i < props.length; i++) {
+                var pr = props[i];
+                if (!pr) continue;
+                var baseR = PROP_SOLID_R[pr.kind] || 0;
+                if (!(baseR > 0)) continue;
+                var sc = Math.max(0.55, Number(pr.s) || 1);
+                list.push({
+                    x: Number(pr.wx) || 0,
+                    y: Number(pr.wy) || 0,
+                    r: Math.max(10, baseR * sc)
+                });
+            }
+        }
         _solidList = list;
     }
     function exploreEnsureSolids() {
@@ -2018,6 +2150,39 @@
             exploreRebuildSolids(mid, biome, null);
         } catch (eS) {}
     }
+
+    /** 🩹 v3.9.18：props／岩石固體推出 */
+    function explorePushSolidList(nx, ny) {
+        exploreEnsureSolids();
+        var x = Number(nx) || 0;
+        var y = Number(ny) || 0;
+        var hit = false;
+        var pad = 4;
+        for (var pass = 0; pass < 4; pass++) {
+            var moved = false;
+            for (var i = 0; i < _solidList.length; i++) {
+                var sld = _solidList[i];
+                if (!sld) continue;
+                var need = (Number(sld.r) || 20) + pad;
+                var dx = x - sld.x;
+                var dy = y - sld.y;
+                var d2 = dx * dx + dy * dy;
+                if (d2 >= need * need || d2 < 0.0001) continue;
+                var d = Math.sqrt(d2);
+                x = sld.x + (dx / d) * need;
+                y = sld.y + (dy / d) * need;
+                hit = true;
+                moved = true;
+            }
+            if (!moved) break;
+        }
+        if (x < -CAM_MAX_X) { x = -CAM_MAX_X; hit = true; }
+        if (x > CAM_MAX_X) { x = CAM_MAX_X; hit = true; }
+        if (y < -CAM_MAX_Y) { y = -CAM_MAX_Y; hit = true; }
+        if (y > CAM_MAX_Y) { y = CAM_MAX_Y; hit = true; }
+        return { x: x, y: y, hit: hit };
+    }
+
     /** 把座標推出固體；回傳是否有撞到 */
     function exploreResolveSolids(nx, ny, fromX, fromY) {
         var def = exploreActiveMapDef();
@@ -2460,10 +2625,11 @@
             if (bv0) bv0.classList.remove('at-map-edge', 'near-map-edge', 'edge-w', 'edge-e', 'edge-n', 'edge-s', 'portal-ready-left', 'portal-ready-right', 'map-walled');
             return;
         }
-        var w = _cx <= -CAM_MAX_X + EDGE_WARN;
-        var e = _cx >= CAM_MAX_X - EDGE_WARN;
-        var n = _cy >= CAM_MAX_Y - EDGE_WARN;
-        var s = _cy <= -CAM_MAX_Y + EDGE_WARN;
+        var edgeWarn = Math.max(160, Math.min(EDGE_WARN, Math.floor(CAM_MAX_X * 0.2)));
+        var w = _cx <= -CAM_MAX_X + edgeWarn;
+        var e = _cx >= CAM_MAX_X - edgeWarn;
+        var n = _cy >= CAM_MAX_Y - edgeWarn;
+        var s = _cy <= -CAM_MAX_Y + edgeWarn;
         var atW = _cx <= -CAM_MAX_X + 4;
         var atE = _cx >= CAM_MAX_X - 4;
         var atN = _cy >= CAM_MAX_Y - 4;
@@ -2569,6 +2735,16 @@
         var seaY = (def && def.seaY != null) ? def.seaY : -300;
         var maxX = (def && def.maxX) ? def.maxX : CAM_MAX_X;
         var maxY = (def && def.maxY) ? def.maxY : CAM_MAX_Y;
+        try {
+            if (def && typeof mapdefBounds === 'function') {
+                var sb = mapdefBounds(def);
+                if (sb) {
+                    if (sb.seaY != null) seaY = sb.seaY;
+                    if (sb.maxX != null) maxX = sb.maxX;
+                    if (sb.maxY != null) maxY = sb.maxY;
+                }
+            }
+        } catch (eSea) {}
         var h = Math.max(40, (-seaY) + maxY);
         mask.style.left = 'calc(50% - ' + maxX + 'px)';
         mask.style.width = (maxX * 2) + 'px';
