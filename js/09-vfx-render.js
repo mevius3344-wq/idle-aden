@@ -4300,35 +4300,36 @@ function _playerMorphApplyBody() {
         let _pw = form.qSkin ? Q_PLAYER_DISP_W : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
         // 🗺️ 以 CSS／探索圖為準鎖中央腳錨（避免 exploreAllowed／area-fit 瞬間 false 掉回 bottom:2~4px＝半身）
         let _worldScroll = !!(bv && bv.classList.contains('is-world-scroll'));
-        try { if (!_worldScroll && typeof exploreWorldActive === 'function') _worldScroll = !!exploreWorldActive(); } catch (eWs) {}
-        // 狩獵場戰圖：即使 class 尚未補上 is-world-scroll，也絕對不要掉回經典格位 bottom:2
-        if (!_worldScroll) {
-            try {
-                if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) _worldScroll = true;
-            } catch (eFcL) {}
-        }
-        // 🩹 v3.8.339：不在村莊＝一律場戰腳錨（修「突然半身」：探索模組晚一秒→bottom 掉回 4px）
-        if (!_worldScroll) {
-            try {
-                let _tv = document.getElementById('town-view');
-                let _inTown = !!(!_tv ? false : !_tv.classList.contains('hidden'));
-                if (!_inTown) _worldScroll = true;
-            } catch (eNt) {}
-        }
-        // 🩹 v3.8.328：新兵修練場永不走場戰捲動置中（固定站木頭人左側）
+        // 🩹 新兵修練場：必須最先判定，勿被「非村莊＝場戰腳錨」蓋掉
         let _isTrainingYard = false;
         try { _isTrainingYard = !!(typeof mapState !== 'undefined' && mapState && mapState.current === 'training'); } catch (eTr0) {}
         if (_isTrainingYard) {
             _worldScroll = false;
             try {
                 if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
-                else {
+                else if (bv) {
                     bv.classList.remove('is-world-scroll', 'is-exploring', 'is-real-map', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll', 'is-scenic-3d');
                     bv.classList.add('training-yard', 'area-fit', 'has-bg');
                     let _mlTr = document.getElementById('mob-list');
                     if (_mlTr) _mlTr.classList.remove('is-field-combat');
                 }
             } catch (eTr1) {}
+        } else {
+            try { if (!_worldScroll && typeof exploreWorldActive === 'function') _worldScroll = !!exploreWorldActive(); } catch (eWs) {}
+            // 狩獵場戰圖：即使 class 尚未補上 is-world-scroll，也絕對不要掉回經典格位 bottom:2
+            if (!_worldScroll) {
+                try {
+                    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) _worldScroll = true;
+                } catch (eFcL) {}
+            }
+            // 🩹 v3.8.339：不在村莊＝一律場戰腳錨（修「突然半身」：探索模組晚一秒→bottom 掉回 4px）
+            if (!_worldScroll) {
+                try {
+                    let _tv = document.getElementById('town-view');
+                    let _inTown = !!(!_tv ? false : !_tv.classList.contains('hidden'));
+                    if (!_inTown) _worldScroll = true;
+                } catch (eNt) {}
+            }
         }
         // 🩹 v3.8.323：探索允許時硬鎖 class＋腳錨（移動瞬間 class 閃掉＝人物掉到控鍵區被裁成半身）
         if (_worldScroll && bv) {

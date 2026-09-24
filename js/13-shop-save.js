@@ -1536,25 +1536,49 @@ function _confirmDeleteCharacter(slot, sum, oldPlayer){
 function _executeDeleteCharacter(slot, oldPlayer, expected){
     const fp = _roleFingerprint(oldPlayer);
     if(fp && !_roleMarkDeleted(fp)){ alert('無法建立刪除保護，為避免舊分頁寫回角色，本次刪除已取消。'); return { ok: false, reason: 'guard' }; }
+    const delSeed = String((oldPlayer && oldPlayer.enSeed) || '').trim();
+    const delName = expected === '未命名' ? ((oldPlayer && oldPlayer.name) || expected) : expected;
     try { if(typeof petReleaseSlotAssignments === 'function') petReleaseSlotAssignments(slot); } catch(e){ console.warn('pet delete cleanup', e); }
     try { if(typeof mercLedgerPurgeSlot === 'function') mercLedgerPurgeSlot(slot); } catch(e){ console.warn('merc delete cleanup', e); }
     try { if(typeof antharasForgetRoleClear === 'function') antharasForgetRoleClear(oldPlayer, slot); } catch(e){ console.warn('antharas clear cleanup', e); }
+    // 🪦 先登記刪除墓碑，再清本機——避免清完到雲端 DELETE 之間被同步拉回
+    try { if (typeof markCloudDeletedSeed === 'function' && delSeed) markCloudDeletedSeed(delSeed, { slot: slot, name: delName }); } catch (_tombE) {}
     _lsRemove('lineage_idle_save_' + slot);
     _lsRemove('lineage_idle_save_' + slot + '_bak');
+    try { _lsRemove('lineage_idle_save_' + slot + '_device_bak'); } catch (_bakE) {}
+    try {
+        if (delSeed && typeof _OFFLINE_STORE_PREFIX === 'string') {
+            _lsRemove(_OFFLINE_STORE_PREFIX + 'checkpoint_' + encodeURIComponent(delSeed));
+        }
+    } catch (_offE) {}
     try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(slot); } catch (_invDelE) {}
     if(_lsGet('lineage_idle_save_' + slot)){ alert('角色存檔刪除失敗，請重新整理後再試。'); return { ok: false, reason: 'storage' }; }
-    try { if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot); } catch (_deskDelE) {}
-    try { if (typeof cloudDeleteSlot === 'function') cloudDeleteSlot(slot); } catch (_cloudDelE) {}
+    let cloudDelOk = true;
+    try {
+        if (typeof cloudDeleteSlot === 'function') {
+            const cr = cloudDeleteSlot(slot, { enSeed: delSeed, name: delName });
+            if (cr && cr.skipped) cloudDelOk = true;
+            else if (cr && cr.ok === false) cloudDelOk = false;
+        }
+    } catch (_cloudDelE) { cloudDelOk = false; }
+    try {
+        if (typeof desktopDeleteSlot === 'function') desktopDeleteSlot(slot);
+    } catch (_deskDelE) {}
     try {
         if (typeof releaseCharNameId === 'function') {
-            releaseCharNameId(expected === '未命名' ? (oldPlayer && oldPlayer.name) : expected, {
+            releaseCharNameId(delName, {
                 slot: slot,
-                enSeed: (oldPlayer && oldPlayer.enSeed) || ''
+                enSeed: delSeed
             });
         }
     } catch (_nameRelE) {}
     try { if(typeof clanOnRoleDeleted === 'function') clanOnRoleDeleted(oldPlayer); } catch(e){ console.warn('clan delete cleanup', e); }
-    return { ok: true, name: expected, slot };
+    if (!cloudDelOk) {
+        try {
+            alert('本機角色已刪除，但雲端清除未完成（網路或伺服器忙碌）。\n已加上刪除鎖定，登入時不會把此角色拉回；請保持連線後再整理一次。');
+        } catch (_alE) {}
+    }
+    return { ok: true, name: expected, slot, cloudOk: cloudDelOk };
 }
 function deleteCharacterSlot(slot, opts){
     opts = opts || {};

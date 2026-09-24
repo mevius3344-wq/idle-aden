@@ -303,6 +303,7 @@
     if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return;
+    if (isCloudDeletedSeed(_seedOf(dataObj))) return;   // 🪦 已刪角色禁止再上傳
     try {
       fetch(_base() + '/slot/' + slot, {
         method: 'PUT',
@@ -329,6 +330,7 @@
     if (!cloudCanSync()) return false;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return false;
+    if (isCloudDeletedSeed(_seedOf(dataObj))) return false;   // 🪦 已刪角色禁止再上傳
     var r = _xhrJson('PUT', _base() + '/slot/' + slot, _cloudPutBody(dataObj), true);
     if (r && r.status === 409 && r.data && r.data.error === 'identity_conflict') {
       cloudPullSlotIntoStorage(slot);
@@ -358,16 +360,31 @@
     var localData = _readSlotLocal(slot);
     if (localData && _isForeignAccountSave(localData)) {
       // 他帳殘留：有雲端就改用雲端，否則清掉避免顯示錯角
-      if (cloudData) return _writeSlotLocal(slot, cloudData);
+      if (cloudData) {
+        if (_purgeLocalIfDeletedSeed(slot, cloudData)) {
+          try { _xhrJson('DELETE', _base() + '/slot/' + slot, null, true, 4000); } catch (eDel) {}
+          return false;
+        }
+        return _writeSlotLocal(slot, cloudData);
+      }
       _removeSlotLocal(slot);
       return !!cloudData;
     }
 
     if (!cloudData) {
       if (localData && localData.p && _localBelongsToCurrent(localData, true)) {
+        if (isCloudDeletedSeed(_seedOf(localData))) {
+          _removeSlotLocal(slot);
+          return false;
+        }
         if (opts.skipPush) cloudPushSlot(slot, localData);
         else cloudPushSlotSync(slot, localData);
       }
+      return false;
+    }
+    if (isCloudDeletedSeed(_seedOf(cloudData))) {
+      _removeSlotLocal(slot);
+      try { _xhrJson('DELETE', _base() + '/slot/' + slot, null, true, 4000); } catch (eDel2) {}
       return false;
     }
     if (!localData || !localData.p) return _writeSlotLocal(slot, cloudData);
@@ -394,12 +411,150 @@
     return false;
   }
 
-  function cloudDeleteSlot(slot) {
-    if (!cloudCanSync()) return;
-    slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
+  // 🪦 刪角墓碑：防止「本機已刪、雲端未刪／他機殘留」在登入同步時把角色推回或拉回
+  var DELETED_SEEDS_KEY = 'fb5_deleted_enseeds_v1';
+  var DELETED_CHARS_SHARED = 'deleted_chars';
+  var DELETED_SEED_TTL_MS = 90 * 86400000;
+
+  function _readDeletedSeeds() {
     try {
-      fetch(_base() + '/slot/' + slot, { method: 'DELETE' }).catch(function () {});
+      var v = JSON.parse((typeof _lsGet === 'function' ? _lsGet(DELETED_SEEDS_KEY) : null) || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function _writeDeletedSeeds(map) {
+    try {
+      if (typeof _lsSet === 'function') return !!_lsSet(DELETED_SEEDS_KEY, JSON.stringify(map || {}));
     } catch (e) {}
+    return false;
+  }
+
+  function _pruneDeletedSeeds(map, now) {
+    now = now || Date.now();
+    var out = map && typeof map === 'object' ? map : {};
+    Object.keys(out).forEach(function (k) {
+      var at = Number(out[k] && out[k].at) || 0;
+      if (!k || now - at > DELETED_SEED_TTL_MS) delete out[k];
+    });
+    return out;
+  }
+
+  function markCloudDeletedSeed(enSeed, meta) {
+    enSeed = String(enSeed || '').trim();
+    if (!enSeed) return false;
+    var map = _pruneDeletedSeeds(_readDeletedSeeds());
+    map[enSeed] = {
+      at: Date.now(),
+      slot: Math.max(0, Math.min(8, parseInt(meta && meta.slot, 10) || 0)),
+      name: String((meta && meta.name) || '').trim(),
+    };
+    return _writeDeletedSeeds(map);
+  }
+
+  function isCloudDeletedSeed(enSeed) {
+    enSeed = String(enSeed || '').trim();
+    if (!enSeed) return false;
+    var map = _pruneDeletedSeeds(_readDeletedSeeds());
+    _writeDeletedSeeds(map);
+    return !!map[enSeed];
+  }
+
+  function _mergeDeletedCharsShared(a, b) {
+    var seeds = {};
+    function ingest(obj) {
+      var src = (obj && obj.seeds) || obj || {};
+      if (!src || typeof src !== 'object') return;
+      Object.keys(src).forEach(function (k) {
+        var row = src[k];
+        if (!k || !row) return;
+        var prev = seeds[k];
+        var at = Number(row.at) || 0;
+        if (!prev || at >= (Number(prev.at) || 0)) seeds[k] = {
+          at: at,
+          slot: Math.max(0, Math.min(8, parseInt(row.slot, 10) || 0)),
+          name: String(row.name || '').trim(),
+        };
+      });
+    }
+    ingest(a);
+    ingest(b);
+    return { seeds: _pruneDeletedSeeds(seeds) };
+  }
+
+  function _persistDeletedCharsShared(merged) {
+    if (!cloudCanSync()) return false;
+    try {
+      var r = _xhrJson('PUT', _base() + '/shared/' + encodeURIComponent(DELETED_CHARS_SHARED), JSON.stringify(merged || { seeds: {} }), true, 4000);
+      return !!(r && r.ok);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _recordDeletedSeedEverywhere(enSeed, slot, name) {
+    markCloudDeletedSeed(enSeed, { slot: slot, name: name });
+    if (!cloudCanSync() || !enSeed) return;
+    try {
+      var local = { seeds: _readDeletedSeeds() };
+      var cloudObj = null;
+      var gr = _xhrJson('GET', _base() + '/shared/' + encodeURIComponent(DELETED_CHARS_SHARED), null, true, 2500);
+      if (gr && gr.ok && gr.data && gr.data.ok && gr.data.data) cloudObj = gr.data.data;
+      var merged = _mergeDeletedCharsShared(cloudObj, local);
+      if (!merged.seeds[enSeed]) {
+        merged.seeds[enSeed] = { at: Date.now(), slot: slot || 0, name: name || '' };
+      }
+      _writeDeletedSeeds(merged.seeds);
+      _persistDeletedCharsShared(merged);
+    } catch (e) {}
+  }
+
+  function _applyDeletedCharsFromShared(obj) {
+    if (!obj) return;
+    var merged = _mergeDeletedCharsShared({ seeds: _readDeletedSeeds() }, obj);
+    _writeDeletedSeeds(merged.seeds);
+  }
+
+  function _purgeLocalIfDeletedSeed(slot, data) {
+    var seed = _seedOf(data);
+    if (!seed || !isCloudDeletedSeed(seed)) return false;
+    _removeSlotLocal(slot);
+    try {
+      if (typeof _lsRemove === 'function') _lsRemove('lineage_idle_save_' + slot + '_device_bak');
+    } catch (e) {}
+    return true;
+  }
+
+  /**
+   * 同步刪除雲端存檔位（刪角必須等成功，否則登入同步會把角色拉回來）。
+   * @returns {{ ok:boolean, status:number, skipped?:boolean }}
+   */
+  function cloudDeleteSlot(slot, opts) {
+    opts = opts || {};
+    slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
+    var enSeed = String(opts.enSeed || '').trim();
+    var name = String(opts.name || '').trim();
+    if (!enSeed) {
+      try {
+        var loc = _readSlotLocal(slot);
+        if (loc && loc.p) {
+          enSeed = _seedOf(loc);
+          if (!name) name = String(loc.p.name || '').trim();
+        }
+      } catch (e0) {}
+    }
+    if (enSeed) _recordDeletedSeedEverywhere(enSeed, slot, name);
+    if (!cloudCanSync()) return { ok: true, status: 0, skipped: true };
+    try {
+      var r = _xhrJson('DELETE', _base() + '/slot/' + slot, null, true, 5000);
+      var ok = !!(r && (r.ok || r.status === 404));
+      // 失敗也保留墓碑，避免他機／稍後同步把殘留雲端灌回本機
+      return { ok: ok, status: r ? r.status : 0 };
+    } catch (e) {
+      return { ok: false, status: 0 };
+    }
   }
 
   function cloudPushShared(name, dataObj) {
@@ -569,13 +724,25 @@
     if (!bundle || !bundle.ok) return false;
     var any = false;
     try {
+      if (bundle.shared && bundle.shared[DELETED_CHARS_SHARED]) {
+        _applyDeletedCharsFromShared(bundle.shared[DELETED_CHARS_SHARED]);
+      }
       if (bundle.slots) {
         Object.keys(bundle.slots).forEach(function (k) {
           var data = bundle.slots[k];
           if (!data || !data.p) return;
           var slot = Math.max(1, Math.min(8, parseInt(k, 10) || 0));
           if (!slot) return;
+          if (isCloudDeletedSeed(_seedOf(data))) {
+            _removeSlotLocal(slot);
+            try { _xhrJson('DELETE', _base() + '/slot/' + slot, null, true, 4000); } catch (eDel) {}
+            return;
+          }
           var localData = _readSlotLocal(slot);
+          if (localData && isCloudDeletedSeed(_seedOf(localData))) {
+            _removeSlotLocal(slot);
+            localData = null;
+          }
           if (localData && _isForeignAccountSave(localData)) {
             if (_writeSlotLocal(slot, data)) any = true;
             return;
@@ -603,8 +770,17 @@
         };
         Object.keys(map).forEach(function (name) {
           if (!bundle.shared[name]) return;
+          if (name === DELETED_CHARS_SHARED) return;
           if (_mergeSharedPreferRicher(name, map[name], bundle.shared[name])) any = true;
         });
+      }
+      // 本機仍有「已刪種子」的殘留 → 清掉，避免稍後被推回雲端
+      for (var i = 1; i <= 8; i++) {
+        var loc = _readSlotLocal(i);
+        if (loc && loc.p && isCloudDeletedSeed(_seedOf(loc))) {
+          _removeSlotLocal(i);
+          any = true;
+        }
       }
     } catch (e) {}
     return any;
@@ -621,11 +797,14 @@
         releaseCharNameId(data.p.name, { slot: slot, enSeed: data.p.enSeed || '' });
       }
     } catch (e0) {}
+    try {
+      markCloudDeletedSeed(data.p.enSeed || '', { slot: slot, name: data.p.name || '' });
+    } catch (eTomb) {}
     _removeSlotLocal(slot);
     if (!cloudCanSync()) return true;
     try {
-      var r = _xhrJson('DELETE', _base() + '/slot/' + slot, null, true);
-      return !!(r && r.ok);
+      var r = cloudDeleteSlot(slot, { enSeed: data.p.enSeed || '', name: data.p.name || '' });
+      return !!(r && (r.ok || r.skipped));
     } catch (e1) {
       return false;
     }
@@ -817,14 +996,34 @@
               try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
               _stripClosedSlotsFromBundle(data);
               cloudApplyBundle(data);
+              try {
+                // 🪦 把本機刪角墓碑推上雲端，讓其他裝置登入時也能擋回寫
+                var tombs = _pruneDeletedSeeds(_readDeletedSeeds());
+                if (Object.keys(tombs).length) {
+                  _writeDeletedSeeds(tombs);
+                  var mergedTombs = _mergeDeletedCharsShared(
+                    (data.shared && data.shared[DELETED_CHARS_SHARED]) || null,
+                    { seeds: tombs }
+                  );
+                  _persistDeletedCharsShared(mergedTombs);
+                }
+              } catch (eTombSync) {}
               _cloudBundleSyncedAt = Date.now();
               try { window.__cloudBundleSyncedAt = _cloudBundleSyncedAt; } catch (eMark) {}
               try { purgeClosedClassCharacterSlots({ silent: true }); } catch (ePurge2) {}
               for (var s = 1; s <= 8; s++) {
                 var local = _readSlotLocal(s);
                 var cloud = data.slots && data.slots[s];
+                if (local && local.p && isCloudDeletedSeed(_seedOf(local))) {
+                  _removeSlotLocal(s);
+                  continue;
+                }
                 if (local && local.p && _localBelongsToCurrent(local) && !(cloud && cloud.p)) {
-                  cloudPushSlot(s, local);   // 🚀 非同步上傳，勿用 Sync XHR 卡死登入／選角
+                  if (isCloudDeletedSeed(_seedOf(local))) {
+                    _removeSlotLocal(s);
+                  } else {
+                    cloudPushSlot(s, local);   // 🚀 非同步上傳，勿用 Sync XHR 卡死登入／選角
+                  }
                 }
               }
               try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(null); } catch (eInv) {}
@@ -865,6 +1064,8 @@
   window.cloudPushSlotSync = cloudPushSlotSync;
   window.cloudPullSlotIntoStorage = cloudPullSlotIntoStorage;
   window.cloudDeleteSlot = cloudDeleteSlot;
+  window.markCloudDeletedSeed = markCloudDeletedSeed;
+  window.isCloudDeletedSeed = isCloudDeletedSeed;
   window.cloudMirrorAfterSave = cloudMirrorAfterSave;
   window.cloudPullBeforeLoad = cloudPullBeforeLoad;
   window.cloudPullSharedDeferred = cloudPullSharedDeferred;

@@ -782,6 +782,7 @@ async function handleCloudApi(req, res, u) {
         } catch (e) {}
         fs.unlinkSync(file);
       }
+      leaderboardCache.at = 0;
       return json(res, 200, { ok: true, account, slot });
     }
   }

@@ -112,11 +112,14 @@
   }
 
   function desktopDeleteSlot(slot) {
-    if (!desktopPlayerReady()) return;
+    if (!desktopPlayerReady()) return { ok: true, skipped: true, status: 0 };
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     try {
-      fetch('/api/player-data/slot/' + slot, { method: 'DELETE' }).catch(function () {});
-    } catch (e) {}
+      var r = _xhrJson('DELETE', '/api/player-data/slot/' + slot, null, true);
+      return { ok: !!(r && (r.ok || r.status === 404)), status: r ? r.status : 0 };
+    } catch (e) {
+      return { ok: false, status: 0 };
+    }
   }
 
   function _sharedName(kind) {

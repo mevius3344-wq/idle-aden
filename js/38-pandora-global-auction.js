@@ -75,9 +75,10 @@
   function pandoraServerEnabled() {
     if (!_httpOk()) return false;
     if (_ready === true) return true;
+    // 探測中／失敗：不可樂觀當「已連線」（否則會擋本機抽、或對未就緒 API 送 draw）
     if (_ready === false && Date.now() - _readyAt < 60000) return false;
     pandoraProbeServer();
-    return true;
+    return false;
   }
 
   function pandoraDrawCostLocal(qty) {
@@ -234,6 +235,11 @@
     if (_drawBusy) return Promise.resolve(false);
     var acc = _account();
     if (!acc) {
+      // 未登入帳號：改本機抽（單機／訪客仍可玩）
+      if (typeof pandoraDoLocalDraw === "function") {
+        pandoraDoLocalDraw(qty);
+        return Promise.resolve(true);
+      }
       alert("請先登入帳號再抽獎。");
       return Promise.resolve(false);
     }
@@ -377,6 +383,13 @@
         return true;
       })
       .catch(function () {
+        // 連線失敗：回退本機抽，避免點抽沒反應／只跳錯誤
+        try {
+          if (typeof pandoraDoLocalDraw === "function") {
+            pandoraDoLocalDraw(qty);
+            return true;
+          }
+        } catch (eLoc) {}
         alert("無法連線抽獎伺服器。");
         return false;
       })

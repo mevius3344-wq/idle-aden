@@ -1743,11 +1743,40 @@ function pandoraRenderOddsPanelHTML() {
         + `</div>`;
 }
 
+function pandoraSuggestRelicSearch(value) {
+    let box = document.getElementById('pandora-buy-suggestions');
+    if (!box) return;
+    let q = String(value || '').trim();
+    try { if (typeof pandoraRelicOnSearchInput === 'function') pandoraRelicOnSearchInput(q); } catch (e) {}
+    if (q.length < 2) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    try {
+        if (typeof pandoraRelicSuggestionHTML === 'function') {
+            let relicSuggestions = pandoraRelicSuggestionHTML(q);
+            if (relicSuggestions) {
+                box.innerHTML = relicSuggestions;
+                box.classList.remove('hidden');
+                return;
+            }
+        }
+    } catch (e2) {}
+    box.innerHTML = '<div class="pandora-buy-suggestion-empty">輸入「遺物」可搜尋武器／防具／飾品／未知遺物</div>';
+    box.classList.remove('hidden');
+}
+
+function pandoraSubmitRelicSearch() {
+    try {
+        if (typeof pandoraTryRelicSearchFromInputs === 'function' && pandoraTryRelicSearchFromInputs()) return;
+    } catch (e) {}
+    alert('請先輸入「遺物」並選擇類別後再搜尋。');
+}
+
 function pandoraRenderGachaPanel(div) {
     if (!div) return;
     let relicBalance = '';
+    let relicBoard = '';
     try {
         if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
+        if (typeof pandoraRelicBoardHTML === 'function') relicBoard = pandoraRelicBoardHTML();
     } catch (e) {}
     let cost1 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(1) : 100000;
     let cost10 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(10) : Math.floor(100000 * 10 * 0.9);
@@ -1788,8 +1817,26 @@ function pandoraRenderGachaPanel(div) {
             ${pandoraRenderRecentHTML()}
             <p class="text-slate-500 text-xs mt-3">次數不限（有金幣即可）。權重池與舊黑市／野外掉寶相同。</p>
         </div>
+        <div class="pandora-buy-box shrink-0 mx-2 mb-2">
+            <div class="pandora-buybar">
+                <span class="pandora-buy-word">搜</span>
+                <div class="pandora-buy-name-wrap">
+                    <input id="pandora-buy-name" type="text" value="" placeholder="輸入「遺物」選擇類別" autocomplete="off"
+                        oninput="pandoraSuggestRelicSearch(this.value)" onkeydown="if(event.key==='Enter'){pandoraSubmitRelicSearch()}">
+                    <div id="pandora-buy-suggestions" class="pandora-buy-suggestions hidden"></div>
+                </div>
+                <span class="pandora-buy-comma">，</span>
+                <input id="pandora-buy-price" type="text" value="" placeholder="搜尋費用" autocomplete="off" disabled
+                    onkeydown="if(event.key==='Enter'){pandoraSubmitRelicSearch()}">
+                <span class="pandora-buy-word">鑽</span>
+                <button type="button" class="btn pandora-buy-submit font-bold" onclick="pandoraSubmitRelicSearch()">搜尋遺物</button>
+            </div>
+            <p class="text-slate-500 text-xs px-2 pb-1">遺物搜尋消耗龍之鑽石；完成或取消後該欄冷卻 24 小時。</p>
+        </div>
+        ${relicBoard || ''}
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
     </div>`;
+    try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (eBind) {}
 }
 
 /** @deprecated 競標 UI 已改抽抽樂 */
@@ -1799,9 +1846,23 @@ function pandoraRenderServerAuction(div) {
 
 function pandoraDoDraw(qty) {
     qty = Math.max(1, Math.min(10, Math.floor(Number(qty) || 1)));
+    // 僅在探測確認雲端就緒時走伺服器；否則本機抽（訪客／探測失敗／Railway 靜態機）
     if (typeof pandoraServerEnabled === 'function' && pandoraServerEnabled() && typeof pandoraPlaceServerDraw === 'function') {
-        pandoraPlaceServerDraw(qty);
-        return;
+        try {
+            var p = pandoraPlaceServerDraw(qty);
+            if (p && typeof p.then === 'function') {
+                p.then(function (ok) {
+                    if (ok === false && typeof pandoraDoLocalDraw === 'function') {
+                        // 伺服器明確失敗且未扣款時，placeServerDraw 已 alert；不自動本機補抽以免雙抽
+                    }
+                }).catch(function () {
+                    try { pandoraDoLocalDraw(qty); } catch (e) {}
+                });
+            }
+            return;
+        } catch (eSrv) {
+            /* fall through */
+        }
     }
     pandoraDoLocalDraw(qty);
 }

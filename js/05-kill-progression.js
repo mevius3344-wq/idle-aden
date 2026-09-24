@@ -415,6 +415,13 @@ function killMob(idx) {
     try { vfxKill(mob); } catch(e){}   // ✨ VFX：擊殺粒子爆裂（趁格子 DOM 仍在、重繪前）
     try { playMobKill(mob); } catch(e){}   // 🔊 音效：怪物死亡（依怪名對應專屬死亡音，查無→通用擊殺音）
     if (mob.curHp > 0) mob.curHp = 0;     // 待清算期間不可被當成活目標
+    // 🪵 新兵修練場木頭人：只清格重生，不發經驗／金幣／掉落（避免誤走一般擊殺管線）
+    if (mob.trainingDummy) {
+        try { renderMobs(); } catch (eTrR) {}
+        try { updateUI(); } catch (eTrU) {}
+        if (!state.inTick) settleDeadMobs();
+        return;
+    }
     let _kbRoom = !!KING_ROOMS[mapState.current];   // 🔧 軍王之室
     let _kbNoReward = _kbRoom && !mob.boss;                     // 除頭目外（地獄束縛犬）：不給金錢/掉落
     _sherineLootCtx = mob._sherine ? { mad: !!mob._sherineMad } : null;   // 🔮 一般怪祝福率 ×3／×5；頭目由 rollAffixesNew 搭配 _lootMobInfo 固定為 20%／30%

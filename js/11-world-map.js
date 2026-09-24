@@ -1517,6 +1517,10 @@ function changeMap(force) {
                     var _tm = mapState.mobs[1];
                     if (_tm) _tm.trainingDummy = true;
                 } catch (eSid) {}
+                try {
+                    var _bvTr = document.getElementById('battle-view');
+                    if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(_bvTr);
+                } catch (eBgTr) {}
             } catch (eTrSpawn) {}
         } else if (_fieldInited) {
             setTimeout(function () {
@@ -1930,8 +1934,10 @@ function openPandoraShortcut() {
 function interactNPC(npcId, townId) {
     try { ensureTownAllyGuilds(); } catch (e) {}
     try { ensureTownTeleporters(); } catch (e) {}
-    let npc = DB.towns[townId].npcs.find(n => n.id === npcId);
-    if(!npc) return;
+    let town = (typeof DB !== 'undefined' && DB.towns) ? DB.towns[townId] : null;
+    if (!town || !Array.isArray(town.npcs)) return;
+    let npc = town.npcs.find(n => n && n.id === npcId);
+    if (!npc) return;
     normalizeClanGuildNpc(npc);
     if ((npc.id === 'npc_esti' || npc.id === 'npc_tros') && typeof clanNpcVisible === 'function' && !clanNpcVisible(npc.id, townId)) return;
     if (npc.classicHide && player.classicMode) return;   // 🔥 經典模式：漢 不可互動（縱深防護，正常情況卡片已不渲染；v3.0.77 碧恩經典可用）
@@ -2083,7 +2089,7 @@ function ensureTownTeleporters() {
             if (!t) return;
             if (!Array.isArray(t.npcs)) t.npcs = [];
             if (t.npcs.some(function (n) { return n && (n.type === 'teleport' || n.id === 'npc_teleport'); })) return;
-            t.npcs.unshift({
+            t.npcs.push({
                 id: 'npc_teleport',
                 n: '傳送師',
                 title: '傳送',
@@ -2347,31 +2353,31 @@ const TOWN_NPC_SPOTS = {
     town_heine: [[29, 67], [41, 26], [56, 29], [22, 41], [50, 50], [62, 45], [28, 88]],
     // 亞丁城鎮(白石王都)：拉溫=左宅邸前｜恬金=右上宮殿階梯｜烏普尼=噴泉台階旁｜諾斯=中央羅盤地磚｜包武=右下拱廊前｜聖使阿卡塔=左上迴廊前(經典限定)
     town_aden: [[19, 62], [76, 30], [64, 48], [42, 68], [69, 77], [31, 40]],
-    // 歐瑞村莊(雪山村·v3.3.32 依用戶截圖箭頭校正四點全下到路面)：畢伍德=右屋前雪路｜希林=上方倉庫門前地面｜創公會=村中央｜伊貝爾賓=左屋前空地(勿站台階)｜大衛=右屋角前雪路｜特羅斯=左下柴堆路口
-    town_oren: [[63, 52], [53, 29], [45, 55], [33, 49], [77, 59], [22, 72]],
+    // 歐瑞村莊(雪山村)：畢伍德=右屋前雪路｜希林=上方倉庫門前地面｜伊貝爾賓=左屋前空地(勿站台階)｜大衛=右屋角前雪路｜特羅斯=左下柴堆路口
+    town_oren: [[63, 52], [53, 29], [33, 49], [77, 59], [22, 72]],
     // 燃柳村莊：歐斯=鍛造屋前院(火爐鐵砧旁)
     town_gludio: [[62, 36]],
     // 古魯丁村莊(港口村)：巴魯特=廣場中左空地｜凱倫=左側藍屋大宅前石板路｜露西=左下攤棚前路面｜創公會=廣場中右｜奧斯丁=水井左下石地
     //   ⚠️[50,58] 是叫賣玩家固定點（TOWN_WANDERING_BUYER_SPOTS.town_gludin 同座標），NPC 一律避開。
-    town_gludin: [[38, 58], [23, 46], [33, 81], [70, 55], [48, 36]],
+    town_gludin: [[38, 58], [23, 46], [33, 81], [48, 36]],
     // 威頓村莊(火山村)：馬沙=大宅階梯前｜漢=村中央｜客盧亞=左上屋簷攤棚｜宙斯之熔岩高崙=左下鍛造爐(自家熔爐)｜魔法娃娃商人=右下屋前｜艾斯倫=右側貨箱堆旁｜多魯嘉貝爾=下方村口(副本入口)｜米米=左中攤位｜萊利的輔佐官=右上宅邸前（🐉 v3.7.57·573×323 扁平圖·橫向間距≥10%≈57px）
-    town_witon: [[70, 37], [48, 52], [27, 40], [13, 72], [66, 79], [38, 84], [24, 57], [88, 30]],
+    town_witon: [[70, 37], [48, 52], [27, 40], [13, 72], [66, 79], [38, 84], [24, 57], [55, 58], [88, 30]],
     // 希培利亞(天空神殿)：倉管=左上殿門階梯｜史菲爾=上方大殿門前｜巴特爾=右側步道橋頭｜希蓮恩=中央圓形圖紋
-    town_hyperia: [[15, 32], [68, 56], [48, 55]],
+    town_hyperia: [[15, 32], [68, 56], [72, 42], [48, 55]],
     // 象牙塔：帕羅=左階梯平台｜塔拉斯=上廳地磚(v3.3.32勿站上層平台)｜塔斯=星紋左側｜巴耶斯=右書牆前｜碧恩=右上水晶祭壇階下(賦屬)｜迪嘉勒廷=大階梯底｜迪泰特=中央星紋｜神秘的魔法師=閱讀角書桌右側地磚(v3.3.32勿站桌區)
-    town_ivory_tower: [[20, 60], [35, 31], [38, 55], [78, 50], [76, 28], [62, 32], [52, 58]],
+    town_ivory_tower: [[20, 60], [35, 31], [38, 55], [78, 50], [76, 28], [62, 32], [52, 58], [69, 63]],
     // 🌑 長老會議廳(環形議場·v3.3.33)：真‧冥皇丹特斯=上方大門前階台(骸骨王座坐像)｜亞提利歐=中央星紋右側石板
     town_elder_council: [[50, 38], [63, 60]],
     // 席琳神殿(圓形劇場遺跡)：席琳=劇場圓台中央(祈禱)｜伊奧=十字路星紋｜菈克希絲=左上拱門前；避開四處水池
     town_sherine: [[67, 48], [42, 64], [16, 33]],
     // 沉默洞穴(黑妖地城)：史克瓦提=左圓頂殿門廊｜雷亞斯=右上樓閣門前｜賽帝亞=大階梯底｜庫普=廣場左｜可羅蘭斯=左下禮拜堂前｜倫得=中央星紋｜康=右下高台走道｜布魯迪卡=廣場右；避開水晶簇/吊橋
-    town_silent: [[19, 44], [72, 37], [40, 58], [35, 80], [52, 50], [78, 68], [63, 60]],
+    town_silent: [[19, 44], [72, 37], [40, 58], [35, 80], [52, 50], [78, 68], [63, 60], [48, 72]],
     // 貝希摩斯(熔岩要塞)：倉管=左閘門房｜森帕爾=大階梯底｜皮爾=右走道方尖碑旁｜普洛凱爾=中央紋章
-    town_behemoth: [[28, 44], [66, 62], [44, 56]],
+    town_behemoth: [[28, 44], [66, 62], [44, 56], [52, 48]],
     // 炎魔謁見所：炎魔之影=中央紋章｜小惡魔=左下台階｜炎魔鐵匠=左壁爐火(鍛造)｜輔佐官=紅毯王座階下；避開岩漿
-    town_flame_audience: [[48, 60], [24, 80], [18, 42]],
+    town_flame_audience: [[48, 60], [24, 80], [18, 42], [58, 48]],
     // 海賊島村莊：波尼=沙灘小屋遮陽棚攤位前｜庫得=左高腳倉庫棧橋樓梯下(木桶堆)｜希米哲=右側水井邊
-    town_pirate_village: [[50, 28], [28, 40]],
+    town_pirate_village: [[50, 28], [28, 40], [72, 42]],
     // 傲慢之塔1樓：雜貨商人=左召喚法陣邊｜巴姆特=右階梯底｜入口告示=中央菱形法陣
     town_pride: [[24, 62], [72, 48]],
     // 時空裂痕入口：入口告示=中央圓形石紋

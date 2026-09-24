@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.27';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.30';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1936,7 +1936,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, hp: 800, ac: 10, mr: 0, exp: 0, goldMin: 0, goldMax: 0, atkSpd: 2, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 800, ac: 10, mr: 0, exp: 0, goldMin: 0, goldMax: 0, atkSpd: 2, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },
@@ -2511,7 +2511,7 @@ const DB = {
         "town_silver_knight": {
             n: "銀騎士村",
             npcs: [
-                { id: "npc_red", n: "格林", title: "雜貨商人", type: "quest", d: "櫃檯後堆滿了行囊與雜物，格林笑著招呼上門的冒險者，販賣各種日常消耗品。" },
+                { id: "npc_glin", n: "格林", title: "雜貨商人", type: "shop", d: "櫃檯後堆滿了行囊與雜物，格林笑著招呼上門的冒險者，販賣各種日常消耗品。" },
                 { id: "npc_wh_silver", n: "高特", title: "倉庫", type: "warehouse", d: "高特看守著厚重的鐵庫房，替旅人妥善存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_moli", n: "茉莉", title: "製作", type: "craft", d: "茉莉指間的針線從不停歇，能為冒險者製作皮革裝備。" },
 				{ id: "npc_finn", n: "芬", title: "製作", type: "craft", d: "芬在工坊裡敲打不停，提供物品製作服務。" },
@@ -2523,10 +2523,10 @@ const DB = {
         "town_kent_castle": {
             n: "肯特城",
             npcs: [
-                { id: "npc_tros", n: "尼奇", title: "雜貨商人", type: "castleguard", d: "硝煙散去後，尼奇在新得的城裡擺起攤子——攻城獲勝後開放的肯特城雜貨商。" },
+                { id: "npc_nichi", n: "尼奇", title: "雜貨商人", type: "shop", d: "硝煙散去後，尼奇在新得的城裡擺起攤子——攻城獲勝後開放的肯特城雜貨商。" },
                 { id: "npc_wh_kent", n: "巴歐", title: "倉庫", type: "warehouse", d: "巴歐替占領者看管著肯特城的庫房，存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ismael", n: "伊賽馬利", title: "交換物品", type: "exchange", d: "伊賽馬利精於以物易物，以卷軸或金幣交換稀有的祝福卷軸與飾品卷軸。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服隨機上架一件寶物競標，結束後間歇 60 分鐘再出下一件，價高者得。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉改為抽抽樂：付費權重抽寶物，並可用龍之鑽石搜尋遺物布告。" },
                 { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長統領藍色鯊魚部隊，招募血厚耐打的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
@@ -2536,7 +2536,7 @@ const DB = {
         "town_windwood_castle": {
             n: "風木城",
             npcs: [
-                { id: "npc_tros", n: "藍迪西", title: "雜貨商人", type: "castleguard", d: "風木城易主後，藍迪西重新支起攤位——攻下風木城後開放的雜貨商。" },
+                { id: "npc_landixi", n: "藍迪西", title: "雜貨商人", type: "shop", d: "風木城易主後，藍迪西重新支起攤位——攻下風木城後開放的雜貨商。" },
                 { id: "npc_wh_windwood", n: "寶金", title: "倉庫", type: "warehouse", d: "寶金在風木城的庫房裡清點貨物，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ww_guard", n: "風木傭兵隊長", title: "城堡護衛", type: "castleguard", d: "風木傭兵隊長統領暴風之刃部隊，招募攻速最快、輸出最高的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
@@ -2547,7 +2547,7 @@ const DB = {
         "town_heine_castle": {
             n: "海音城",
             npcs: [
-                { id: "npc_tros", n: "須凡", title: "雜貨商人", type: "castleguard", d: "海音城歸入麾下後，須凡在港邊開張——攻下海音城後開放的雜貨商。" },
+                { id: "npc_sufan", n: "須凡", title: "雜貨商人", type: "shop", d: "海音城歸入麾下後，須凡在港邊開張——攻下海音城後開放的雜貨商。" },
                 { id: "npc_wh_heine", n: "哈金", title: "倉庫", type: "warehouse", d: "哈金守著海音城的倉庫，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_heine_guard", n: "海音神官隊長", title: "城堡護衛", type: "castleguard", d: "海音神官隊長統領毒蛇之牙部隊，招募攻守均衡的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
@@ -2558,10 +2558,10 @@ const DB = {
         "town_talking": {
             n: "說話之島",
             npcs: [
-                { id: "npc_rabiani", n: "吉倫", title: "魔法傳授者", type: "craft", d: "吉倫是位循循善誘的魔法導師，提供玩家學習1~3級一般魔法。" },
+                { id: "npc_gilen", n: "吉倫", title: "魔法傳授者", type: "shop", d: "吉倫是位循循善誘的魔法導師，提供玩家學習1~3級一般魔法。" },
                 { id: "npc_basin", n: "巴辛", title: "妖魔商人", type: "shop", d: "巴辛是混跡市集的妖魔商人，販賣各種日常消耗品。" },
                 { id: "npc_wh_talking", n: "朵琳", title: "倉庫", type: "warehouse", d: "朵琳細心地替旅人看管行囊，存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市每 20 分鐘全服隨機上架一件寶物競標，結束後間歇 60 分鐘再出下一件，價高者得。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉改為抽抽樂：付費權重抽寶物，並可用龍之鑽石搜尋遺物布告。" },
                 { id: "npc_ladal", n: "拉達爾", title: "製作", type: "craft", d: "拉達爾揉皮裁料樣樣精通，能為冒險者製作皮革裝備。" },
 				{ id: "npc_falin", n: "法林", title: "製作", type: "craft", d: "法林手藝獨到，能製作銀釘皮裝備。" },
                 { id: "npc_ryan", n: "萊恩", title: "製作", type: "craft", d: "萊恩在爐火旁默默打磨成品，提供物品製作服務。" },
@@ -2574,7 +2574,7 @@ const DB = {
         "town_elf": {
             n: "妖精森林",
             npcs: [			
-                { id: "npc_mother", n: "埃爾頻", title: "雜貨商人", type: "quest", d: "店裡擺滿旅人路上少不了的小東西。販售各種日常消耗品。" },
+                { id: "npc_elpin", n: "埃爾頻", title: "雜貨商人", type: "shop", d: "店裡擺滿旅人路上少不了的小東西。販售各種日常消耗品。" },
                 { id: "npc_wh_elf", n: "艾爾", title: "倉庫", type: "warehouse", d: "沉默寡言的守庫人，替你看顧每一枚硬幣。存放物品與金幣，四個存檔角色共用。" },
 				{ id: "npc_linda", n: "琳達", title: "精靈魔法商人", type: "shop", d: "精靈族的水晶在她手中閃著微光。販賣各種基本精靈水晶。" },
                 { id: "npc_elion", n: "艾利溫", title: "妖精屬性學習", type: "quest", d: "掌管妖精元素契約的智者，他會引領你做出一生只有一次的抉擇。妖精選擇屬性魔法的重要NPC，四種屬性只能選擇一種。" },
@@ -2593,7 +2593,7 @@ const DB = {
 		"town_gludin": {
             n: "古魯丁村莊",
             npcs: [
-                { id: "npc_austin", n: "巴魯特", title: "鬥技場管理者", type: "petstore", d: "古魯丁港口的退役鬥士，如今替往來的冒險者安排決鬥。可產生你的「對戰名片」交給其他玩家，或貼上對方的名片後由他安排場地——決鬥不給經驗與金幣，只記錄勝負戰績；落敗方完全無損失——不扣經驗、不掉裝備、不影響性向值，也無須祈求復活。任一方倒下即分出勝負，接著可自行選擇留在競技場再戰，或回古魯丁村莊。" },
+                { id: "npc_arena", n: "巴魯特", title: "鬥技場管理者", type: "quest", d: "古魯丁港口的退役鬥士，如今替往來的冒險者安排決鬥。可產生你的「對戰名片」交給其他玩家，或貼上對方的名片後由他安排場地——決鬥不給經驗與金幣，只記錄勝負戰績；落敗方完全無損失——不扣經驗、不掉裝備、不影響性向值，也無須祈求復活。任一方倒下即分出勝負，接著可自行選擇留在競技場再戰，或回古魯丁村莊。" },
                 { id: "npc_wh_gludin", n: "凱倫", title: "倉庫", type: "warehouse", d: "凱倫在港邊的庫房裡清點著往來的貨物，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_lucy", n: "露西", title: "雜貨商人", type: "shop", d: "露西的攤子就擺在通往碼頭的路上，出海遠行前該備的東西一樣不缺。販售各種日常消耗品。" },
                 { id: "npc_austin", n: "奧斯丁", title: "寵物保管", type: "petstore", d: "看慣了碼頭來去的旅人，奧斯丁願替他們照看捕獲的寵物。最多保管 32 隻（同模式角色共通）；可在此讓寵物出戰、鎖定、放生，或讓等級 30 以上「一般型態」的寵物進化——用進化果實→對應高等，或用勝利果實→黃金龍（兩種果實都帶著時可自選）；高等型態與黃金龍皆為最終型態。" }
@@ -2608,7 +2608,7 @@ const DB = {
         "town_giran": {
             n: "奇岩",
             npcs: [
-                { id: "npc_isba", n: "邁爾", title: "雜貨商人", type: "travel", d: "親切的雜貨老闆，再偏遠的旅途也備齊了該有的補給。販售各種日常消耗品。" },
+                { id: "npc_maier", n: "邁爾", title: "雜貨商人", type: "shop", d: "親切的雜貨老闆，再偏遠的旅途也備齊了該有的補給。販售各種日常消耗品。" },
 				{ id: "npc_wino", n: "溫諾", title: "武器商人", type: "shop", d: "識貨的武器商人，架上每一把都曾飲過血。販賣各式各樣強大的武器。" },
 				{ id: "npc_vangil", n: "范吉爾", title: "防具商人", type: "shop", d: "防具商人，深知活著回來的人靠的是一身好甲。販售各種堅固耐用的防具。" },
                 { id: "npc_evert", n: "愛弗特", title: "布料商人", type: "shop", d: "眼光獨到的布料商，遠渡重洋的織品只為最講究的裁縫而備。販售製作高級服飾所需的進口布料。" },
@@ -2623,7 +2623,7 @@ const DB = {
         "town_heine": {
             n: "海音",
             npcs: [
-                { id: "npc_riley_aide", n: "比特", title: "雜貨商人", type: "exchange", d: "笑容可掬的雜貨商，總在你最需要時遞上補給。販售各種日常消耗品。" },
+                { id: "npc_bit", n: "比特", title: "雜貨商人", type: "shop", d: "笑容可掬的雜貨商，總在你最需要時遞上補給。販售各種日常消耗品。" },
                 { id: "npc_wh_heine", n: "哈金", title: "倉庫", type: "warehouse", d: "哈金守著海音城的倉庫，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ally_heine", n: "創立血盟", title: "血盟", type: "clan", d: "在此創立血盟。王族可花費 30,000 金幣創立；其他職業於王族創立後自動成為成員。" },
 				{ id: "npc_lumiel", n: "琉米埃爾", title: "製作", type: "craft", d: "受伊娃眷顧的鍛者，能將神聖的祝福織入凡鐵。交換受到伊娃祝福的裝備。" },
@@ -2635,7 +2635,7 @@ const DB = {
 		"town_oren": {
             n: "歐瑞村莊",
             npcs: [
-                { id: "npc_wh_aden", n: "畢伍德", title: "雜貨商人", type: "warehouse", d: "販售各種日常消耗品。" },
+                { id: "npc_biwood", n: "畢伍德", title: "雜貨商人", type: "shop", d: "販售各種日常消耗品。" },
                 { id: "npc_wh_oren", n: "希林", title: "倉庫", type: "warehouse", d: "存放物品與金幣，四個存檔角色共用。" },
 				{ id: "npc_ibelbin", n: "伊貝爾賓", title: "製作", type: "craft", d: "傳說中的鍛冶名匠伊貝爾賓，爐火曾淬煉過斬龍之鋒。能打造屠龍級神兵與護甲。" },
                 { id: "npc_david", n: "大衛", title: "寶石加工", type: "craft", d: "大衛擅長雕琢寶石與寒冰結晶，能將 冰之女王的耳環 逐級精煉至更高型態。" },
@@ -2645,7 +2645,7 @@ const DB = {
         "town_aden": {
             n: "亞丁",
             npcs: [
-                { id: "npc_mystic_mage", n: "拉溫", title: "雜貨商人", type: "craft", d: "販售各種日常消耗品。" },
+                { id: "npc_lawen", n: "拉溫", title: "雜貨商人", type: "shop", d: "販售各種日常消耗品。" },
                 { id: "npc_wh_aden", n: "恬金", title: "倉庫", type: "warehouse", d: "存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_upni", n: "烏普尼", title: "製作", type: "craft", d: "通曉禁忌符文的烏普尼，能將塔之力封入一紙。以 傲慢之塔傳送符 與 移動卷軸 製作 傲慢之塔支配符。" },
                 { id: "npc_norse", n: "諾斯", title: "寵物裝備製作", type: "craft", d: "獸語匠人諾斯，懂得讓忠犬之牙更加銳利。鍛造寵物裝備，強化你的寵物。" },
@@ -2656,14 +2656,14 @@ const DB = {
         "town_elder_council": {   // 🌑 黑暗妖精聖地樞紐（依《黑暗妖精聖地.md》·v3.3.33）
             n: "長老會議廳",
             npcs: [
-                { id: "npc_atelier", n: "真．冥皇丹特斯", title: "聖地引路人", type: "craft", d: "端坐於骸骨王座的真．冥皇丹特斯。交出 死亡騎士之書 可進入 黑暗妖精聖地 或 受詛咒的黑暗妖精聖地（各消耗 1 本）；交出 吉爾塔斯的封印 則會被傳送至 崩壞的長老會議廳（消耗 1 個）。" },
+                { id: "npc_dantes_lord", n: "真．冥皇丹特斯", title: "聖地引路人", type: "craft", d: "端坐於骸骨王座的真．冥皇丹特斯。交出 死亡騎士之書 可進入 黑暗妖精聖地 或 受詛咒的黑暗妖精聖地（各消耗 1 本）；交出 吉爾塔斯的封印 則會被傳送至 崩壞的長老會議廳（消耗 1 個）。" },
                 { id: "npc_atelier", n: "亞提利歐", title: "製作", type: "craft", d: "沉默寡言的矮人鐵匠亞提利歐，爐火中鍛著冥皇的遺志。以召喚球之核與碎片合成 完整的召喚球／真．冥皇製作防具秘笈，並以秘笈與材料鍛造 真．冥皇 系列防具。" }
             ]
         },
         "town_pride": {
             n: "傲慢之塔入口",
             npcs: [
-                { id: "npc_bamut", n: "雜貨商人", title: "雜貨商人", type: "craft", d: "販售各種日常消耗品。" },
+                { id: "npc_pride_shop", n: "雜貨商人", title: "雜貨商人", type: "shop", d: "販售各種日常消耗品。" },
                 { id: "npc_bamut", n: "巴姆特", title: "製作", type: "craft", d: "與墮落之物為伍的巴姆特，能將奇美拉之皮鞣成不祥的革。以奇美拉之皮製作詛咒的皮革，並打造四屬性斗篷。" }
             ]
         },
@@ -2674,7 +2674,7 @@ const DB = {
 		"town_ivory_tower": {
             n: "象牙塔",
             npcs: [
-                { id: "npc_digallatin", n: "帕羅", title: "雜貨商人", type: "quest", d: "販售各種日常消耗品。" },
+                { id: "npc_paro", n: "帕羅", title: "雜貨商人", type: "shop", d: "販售各種日常消耗品。" },
                 { id: "npc_taras", n: "塔拉斯", title: "試煉", type: "quest", d: "鑽研亡者學識的塔拉斯。主持法師的 30、45 級試煉：達等級後接取任務，收集不死族遺物，一次完成領取全部獎勵。" },
                 { id: "npc_tas", n: "塔斯", title: "製作", type: "craft", d: "煉藥師塔斯能將純白之力調和成各色靈藥。以 3 個純白的萬能藥，製作任一屬性的萬能藥。" },
                 { id: "npc_bayes", n: "巴耶斯", title: "魔法商人", type: "shop", d: "博覽群書的巴耶斯，書架上盡是深奧的咒文。販售各種高階魔法書。" },
@@ -2687,7 +2687,7 @@ const DB = {
         "town_witon": {
             n: "威頓村",
             npcs: [
-                { id: "npc_riley_aide", n: "馬沙", title: "試煉", type: "exchange", d: "沉默寡言的試煉者馬沙，靜候挑戰者前來。主持騎士、妖精與王族的 45 級試煉：達等級後接取任務，一次完成領取全部獎勵。" },
+                { id: "npc_masha", n: "馬沙", title: "試煉", type: "exchange", d: "沉默寡言的試煉者馬沙，靜候挑戰者前來。主持騎士、妖精與王族的 45 級試煉：達等級後接取任務，一次完成領取全部獎勵。" },
                 { id: "npc_han", n: "漢", title: "精通", type: "mastery", classicHide: true, d: "威頓村的傳奇人物漢，早已超越凡人的極限。等級 50 以上的強者，可在此接受超越自我的精通任務。" },   // 🏅
                 { id: "npc_keluya", n: "客盧亞", title: "製作", type: "craft", d: "客盧亞傳承著上古鍛造的失落技藝。以古代材料打造古代臂甲與傳說武器（古代神之槍／古代神之斧）。" },
                 { id: "npc_zeus_golem", n: "宙斯之熔岩高崙", title: "製作", type: "craft", d: "由熔岩鑄成的宙斯之熔岩高崙，爐心燃著遠古之火，專為戰士鍛兵。以惡魔斧頭與黑色米索莉金屬板為戰士鍛造「魔物的斧頭」；亦能以古老的盔甲融合 +7 以上的抗魔法鏈甲，鍛造出驅邪避魔的「滅魔」系列裝備。" },
@@ -2718,7 +2718,7 @@ const DB = {
         "town_hyperia": {   // 🔧 幻術士出生地：希培利亞村莊（試煉/製作 NPC 於後續階段補上）
             n: "希培利亞村莊",
             npcs: [
-                { id: "npc_shenien", n: "倉庫保管員", title: "倉庫", type: "quest", d: "存放物品與金幣，所有存檔角色共用。" },
+                { id: "npc_wh_hyperia", n: "倉庫保管員", title: "倉庫", type: "warehouse", d: "存放物品與金幣，所有存檔角色共用。" },
                 { id: "npc_sphere", n: "史菲爾", title: "魔法商人", type: "shop", d: "史菲爾守著幻術士代代相傳的記憶水晶，將虛實之術凝於晶中販售。" },
                 { id: "npc_bartel", n: "巴特爾", title: "製作", type: "craft", d: "巴特爾能以時空裂痕碎片打造龜裂之核，更擅長鍛造黑曜石奇古獸。" },
                 { id: "npc_shenien", n: "希蓮恩", title: "試煉", type: "quest", d: "希蓮恩主持幻術士的 15／30／45 級試煉與 50 級試煉：達等級後接取任務，試煉道具擊殺指定怪物必定掉落，一次完成領取全部獎勵。" }
@@ -2727,7 +2727,7 @@ const DB = {
         "town_behemoth": {   // 🐉 龍騎士出生地：貝希摩斯
             n: "貝希摩斯",
             npcs: [
-                { id: "npc_procel", n: "倉庫保管員", title: "倉庫", type: "quest", d: "存放物品與金幣，所有存檔角色共用。" },
+                { id: "npc_wh_behemoth", n: "倉庫保管員", title: "倉庫", type: "warehouse", d: "存放物品與金幣，所有存檔角色共用。" },
                 { id: "npc_sempal", n: "森帕爾", title: "龍魔法商人", type: "shop", d: "森帕爾販賣龍騎士書板與消滅者鎖鏈劍，言談間滿是對龍族秘術的敬畏。" },
                 { id: "npc_pir", n: "皮爾", title: "製作", type: "craft", d: "皮爾的爐火終年不熄，能鍛造破滅者鎖鏈劍與古代臂甲。" },
                 { id: "npc_procel", n: "普洛凱爾", title: "試煉", type: "quest", d: "普洛凱爾主持龍騎士的 15／30／45 級試煉與 50 級試煉：達等級後接取任務，試煉道具擊殺指定怪物必定掉落，一次完成領取全部獎勵。" }
@@ -2736,7 +2736,7 @@ const DB = {
         "town_flame_audience": {
             n: "炎魔謁見所",
             npcs: [
-                { id: "npc_flame_aide", n: "炎魔之影", title: "製作", type: "craft", d: "自炎獄投影而生的炎魔之影，能以墮落素材編織出炎魔的血光斗篷。" },
+                { id: "npc_flame_shadow", n: "炎魔之影", title: "製作", type: "craft", d: "自炎獄投影而生的炎魔之影，能以墮落素材編織出炎魔的血光斗篷。" },
                 { id: "npc_imp", n: "小惡魔", title: "製作", type: "craft", d: "狡黠的小惡魔以惡魔腳鐐與墮落素材，為人鍛造惡魔系列武器。" },
                 { id: "npc_flame_smith", n: "炎魔鐵匠", title: "製作", type: "craft", d: "炎魔鐵匠在熔岩爐前敲打不歇，鍛造銀金屬板、黑色米索莉金屬板等金屬板。" },
                 { id: "npc_flame_aide", n: "炎魔的輔佐官", title: "耳環製作", type: "craft", d: "炎魔身旁的輔佐官，以靈魂石碎片為人鍛造各式禁忌耳環。" }
@@ -2745,7 +2745,7 @@ const DB = {
         "town_pirate_village": {
             n: "海賊島村莊",
             npcs: [
-                { id: "npc_shimizhe", n: "波尼", title: "雜貨商人", type: "quest", d: "波尼在棧橋邊擺著攤子，販售各種航海日常與消耗品。" },
+                { id: "npc_boni", n: "波尼", title: "雜貨商人", type: "shop", d: "波尼在棧橋邊擺著攤子，販售各種航海日常與消耗品。" },
                 { id: "npc_wh_pirate", n: "庫得", title: "倉庫", type: "warehouse", d: "庫得替往來的海賊看守貨艙，存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_shimizhe", n: "希米哲", title: "任務", type: "quest", d: "希米哲在岸邊久候，盼著尋回亡子的遺物。帶來 兒子的信、兒子的遺骸、兒子的肖像畫 各一，可兌換 藍海賊頭巾。" }
             ]
@@ -3019,7 +3019,7 @@ const DB = {
         "arena_pvp": [],
         "pirate_wild": ["nm_035", "nm_003", "doberman", "pirate_wildpoison", "pirate_lizardrage", "pirate_wildfang", "pirate_wilddemon", "pirate_lizardhigh", "pirate_bluetail", "pirate_parrot", "pirate_chest", "wild_tiger", "wild_koreapup", "wild_raccoon"],
         "pirate_dungeon": ["pirate_lizardrage", "pirate_lizardhigh", "pirate_skeleton", "pirate_lizardheavy", "pirate_skelsoldier", "pirate_skelblade", "pirate_skelchief", "pirate_drake"],
-        "training": ["orc", "goblin", "orc_archer", "gremlin"],
+        "training": ["wood_dummy"],
         "silent_outer": ["orc", "orc_archer", "zombie", "nm_008", "fighter", "nm_002", "nm_001", "wolf", "skeleton", "orc_zombie", "skel_archer", "stone_golem", "bear", "lizardman", "sparto"],
         "elf_grave": ["elf_earthfang","elf_windfang","elf_waterfang","elf_firefang","elf_waterlord","abyss_ghoul","abyss_archer","elf_earthlord","elf_windlord","elf_firelord","abyss_sith","abyss_water","abyss_earth","abyss_wind","abyss_fire","mambo_rabbit","abyss_lord"],
         "hidden_cave": ["demon_bat","de_thief","dark_spirit_mob","armadillo","demon_bear","de_gate_xbow","de_gate_apprentice","ohm_militia","scorpion","dark_spirit_king","de_gate_spear","metal_centipede","monia","darkdweller","ohm_armor","de_train_blacktiger","dark_spirit_caller","de_train_summoner","de_gate_patrol","de_gate_soldier","de_lab_blackmage","fire_beast","beast_tamer","de_gate_general"],
