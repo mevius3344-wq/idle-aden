@@ -1021,38 +1021,54 @@ function newbieBoostRemainLabel(now) {
     return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
 }
 
-// ===== 全服經驗活動（固定截止時間·所有客戶端同窗）=====
-// 2026-08-25 15:45（UTC+8）起 ×5，48 小時後回復 ×1
-const SERVER_EXP_EVENT_MULT = 5;
-const SERVER_EXP_EVENT_EXPIRE_AT = Date.parse('2026-08-27T15:45:00+08:00');
-function serverExpEventActive(now) {
-    return (now == null ? Date.now() : now) < SERVER_EXP_EVENT_EXPIRE_AT;
+// ===== 全服經驗／金幣／掉寶倍率（GM 後台設定·/api/server/status 同步；預設 ×1）=====
+function _serverStatsEndsAt() {
+    try {
+        if (typeof window !== 'undefined' && window.__serverStats) return Number(window.__serverStats.rateEndsAt) || 0;
+    } catch (e) {}
+    return 0;
+}
+function _serverStatsMult(key, now) {
+    try {
+        if (typeof window === 'undefined' || !window.__serverStats) return 1;
+        let end = _serverStatsEndsAt();
+        if (end && (now == null ? Date.now() : now) >= end) return 1;
+        let m = Number(window.__serverStats[key]);
+        return m > 0 ? m : 1;
+    } catch (e) {}
+    return 1;
 }
 function serverExpEventMult(now) {
-    return serverExpEventActive(now) ? SERVER_EXP_EVENT_MULT : 1;
+    return _serverStatsMult('expMult', now);
+}
+function serverExpEventActive(now) {
+    return serverExpEventMult(now) > 1;
 }
 function serverExpEventRemainLabel(now) {
-    let left = Math.max(0, SERVER_EXP_EVENT_EXPIRE_AT - (now == null ? Date.now() : now));
+    let end = _serverStatsEndsAt();
+    if (!end) return '';
+    let left = Math.max(0, end - (now == null ? Date.now() : now));
     if (left <= 0) return '';
     return typeof formatRentalRemain === 'function' ? formatRentalRemain(left) : (Math.ceil(left / 3600000) + '小時');
 }
 
-// ===== 全服金幣／掉寶倍率（登入頁由 /api/server/status 同步；預設 ×1）=====
-function serverGoldEventMult() {
-    try {
-        if (typeof window !== 'undefined' && window.__serverStats && window.__serverStats.goldMult > 0) {
-            return window.__serverStats.goldMult;
-        }
-    } catch (e) {}
-    return 1;
+function serverGoldEventMult(now) {
+    return _serverStatsMult('goldMult', now);
 }
-function serverDropEventMult() {
-    try {
-        if (typeof window !== 'undefined' && window.__serverStats && window.__serverStats.dropMult > 0) {
-            return window.__serverStats.dropMult;
-        }
-    } catch (e) {}
-    return 1;
+function serverDropEventMult(now) {
+    return _serverStatsMult('dropMult', now);
+}
+function serverRateEventLogHtml(now) {
+    let parts = [];
+    let e = serverExpEventMult(now), g = serverGoldEventMult(now), d = serverDropEventMult(now);
+    if (e > 1) parts.push('經驗 ×' + e);
+    if (g > 1) parts.push('金幣 ×' + g);
+    if (d > 1) parts.push('掉寶 ×' + d);
+    if (!parts.length) return '';
+    let label = '';
+    try { label = String((window.__serverStats && window.__serverStats.rateLabel) || '').replace(/[<>&"']/g, ''); } catch (e0) {}
+    let rem = serverExpEventRemainLabel(now);
+    return `<span class="text-yellow-300 font-bold">🎉 ${label || '全服活動'}：${parts.join('、')} 進行中${rem ? '（剩餘 ' + rem + '）' : ''}！</span>`;
 }
 
 // ===== 🔧 架構#6：存檔版本與集中式預設值 =====

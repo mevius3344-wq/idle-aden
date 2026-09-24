@@ -1,0 +1,115 @@
+/* GM 後台（沿用 admin-metrics.css 基底） */
+body { margin: 0; background: #0c0a08; }
+.gm-wrap { max-width: 1100px; }
+
+.gm-toast {
+  position: sticky;
+  top: 8px;
+  z-index: 10;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(100, 180, 120, 0.6);
+  background: #13241a;
+  color: #bff0c8;
+}
+.gm-toast.err { border-color: rgba(220, 90, 70, 0.7); background: #2a1410; color: #f6c0b0; }
+
+.gm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.gm-form-grid.gm-form-1 { grid-template-columns: 1fr; }
+.gm-form-grid label,
+.gm-inline label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #a09888;
+}
+.gm-wrap input[type="text"],
+.gm-wrap input[type="number"],
+.gm-wrap input[type="datetime-local"],
+.gm-wrap input[type="password"],
+.gm-wrap select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #5a4a30;
+  background: #0a0806;
+  color: #f5ecd8;
+  font-size: 14px;
+  font-family: inherit;
+}
+.gm-wrap input:disabled { opacity: 0.45; }
+.gm-quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.8rem; color: #8a8070; }
+.gm-mini { padding: 5px 10px; font-size: 0.8rem; }
+.gm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.gm-danger { border-color: #c05040; background: linear-gradient(180deg, #5a2018, #301008); color: #ffd0c0; }
+
+.gm-results { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.gm-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #3a3020;
+  background: #0f0c09;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.gm-result:hover { border-color: #a08040; }
+.gm-result small { color: #8a8070; }
+.gm-empty { color: #7a7060; font-size: 0.85rem; }
+
+.gm-player-head { display: flex; align-items: center; gap: 10px; }
+.gm-player-head h2 { margin: 0 0 12px; }
+.gm-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; margin-bottom: 12px; }
+.gm-badge.ok { background: #1c3322; color: #9ddea8; }
+.gm-badge.ban { background: #3a1812; color: #f0a090; }
+.gm-badge.online { background: #1a2a3a; color: #9ccaf0; }
+.gm-h3 { font-size: 0.9rem; color: #c8b890; margin: 16px 0 8px; }
+
+.gm-table-wrap { overflow-x: auto; }
+.gm-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.gm-table th, .gm-table td { padding: 6px 8px; border-bottom: 1px solid #2a2418; text-align: left; white-space: nowrap; }
+.gm-table th { color: #9a9080; font-weight: 500; }
+.gm-table td { color: #e0d6c0; }
+.gm-table td.gm-wrap-cell { white-space: normal; min-width: 180px; }
+.gm-table .gm-link { background: none; border: none; color: #e8c878; cursor: pointer; padding: 0; font-size: 0.85rem; }
+.gm-table .gm-link:hover { text-decoration: underline; }
+.st-pending { color: #e8c060; }
+.st-claimed { color: #9ddea8; }
+.st-cancelled { color: #7a7060; text-decoration: line-through; }
+
+.gm-inv-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 260px; overflow-y: auto; }
+.gm-inv-chip { font-size: 0.8rem; padding: 3px 8px; border-radius: 4px; background: #17130e; border: 1px solid #3a3020; color: #e0d6c0; }
+.gm-inv-chip.bless { border-color: #c8a040; color: #ffe08a; }
+.gm-inv-chip.cursed { border-color: #803030; color: #f0a0a0; }
+
+.gm-tabs { display: flex; gap: 6px; }
+.gm-tab {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #5a5040;
+  background: transparent;
+  color: #c8b890;
+  cursor: pointer;
+}
+.gm-tab.active { border-color: #a08040; background: #2a2010; color: #ffe8a8; font-weight: 600; }
+
+.gm-item-list { max-height: 220px; overflow-y: auto; border: 1px solid #2a2418; border-radius: 6px; margin-top: 6px; }
+.gm-item-list:empty { display: none; }
+.gm-item-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid #1c1812; }
+.gm-item-row:hover, .gm-item-row.sel { background: #2a2010; }
+.gm-item-row small { color: #7a7060; }
+.gm-picked { font-size: 0.85rem; color: #e8c878; margin: 8px 0; }
+.gm-inline { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.gm-inline label { flex: 1; min-width: 90px; }
+.gm-inline .gm-check { flex-direction: row; align-items: center; gap: 6px; flex: 0 0 auto; padding-bottom: 8px; color: #e0d6c0; font-size: 0.9rem; }

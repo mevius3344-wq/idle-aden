@@ -48,17 +48,22 @@
     try {
       window.__serverStats = {
         onlinePlayers: Number(data.onlinePlayers) || 0,
+        expMult: Math.max(1, Number(data.expMult) || 1),
         goldMult: Math.max(1, Number(data.goldMult) || 1),
         dropMult: Math.max(1, Number(data.dropMult) || 1),
+        rateEndsAt: Math.max(0, Number(data.rateEndsAt) || 0),
+        rateLabel: data.rateLabel ? String(data.rateLabel) : "",
         closedBeta: !!data.closedBeta,
         notice: data.notice ? String(data.notice) : "",
         ipSessionMax: Math.max(1, Number(data.ipSessionMax) || 1),
       };
     } catch (e) {}
     var pel = $("auth-stat-players");
+    var eel = $("auth-stat-exp");
     var gel = $("auth-stat-gold");
     var del = $("auth-stat-drop");
     if (pel) pel.textContent = String(data.onlinePlayers != null ? data.onlinePlayers : "—");
+    if (eel) eel.textContent = formatMult(data.expMult);
     if (gel) gel.textContent = formatMult(data.goldMult);
     if (del) del.textContent = formatMult(data.dropMult);
     applyBetaNotice(data);

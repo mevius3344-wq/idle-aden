@@ -4191,6 +4191,13 @@ const server = http.createServer(async (req, res) => {
       await _pandoraApiHandler(req, res, u);
       return;
     }
+    if (u.startsWith("/api/gm/")) {
+      if (_neonLeaderboardHandler) {
+        await _neonLeaderboardHandler(req, res, u);
+        return;
+      }
+      return json(res, 503, { ok: false, error: "no_database", message: "GM 後台需要 DATABASE_URL（Neon）。" });
+    }
     if (u.startsWith("/api/worldboss") && _worldBossApiHandler) {
       await _worldBossApiHandler(req, res, u, json);
       return;

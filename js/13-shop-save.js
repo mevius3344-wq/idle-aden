@@ -2138,10 +2138,7 @@ function startGame() {
     applySherineTheme();
     startGameTimers();
     logSys(`===== 歡迎來到${typeof GAME_TITLE !== 'undefined' ? GAME_TITLE : '躺著變強'} =====`);
-    if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
-        let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
-        logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);
-    }
+    { let _rateMsg = (typeof serverRateEventLogHtml === 'function') ? serverRateEventLogHtml() : ''; if (_rateMsg) logSys(_rateMsg); }
     if (typeof applyGlobalAutoSellSettings === 'function') applyGlobalAutoSellSettings();   // 🔧 v2.6.91 功能5：新角色套用全域自動販賣設定（若已啟用共用）
     saveGame();   // 🔧 創角完成立即存檔：先前要等 5 分鐘自動存檔，期間關閉頁面角色會直接消失
 }
@@ -2750,10 +2747,7 @@ function loadGame() {
                 }, 400);
             }
         } catch (eEconLoad) {}
-        if (typeof serverExpEventActive === 'function' && serverExpEventActive()) {
-            let _rem = (typeof serverExpEventRemainLabel === 'function') ? serverExpEventRemainLabel() : '';
-            logSys(`<span class="text-yellow-300 font-bold">🎉 全服經驗 ×5 進行中${_rem ? '（剩餘 ' + _rem + '）' : ''}，打怪經驗提升！</span>`);
-        }
+        { let _rateMsg = (typeof serverRateEventLogHtml === 'function') ? serverRateEventLogHtml() : ''; if (_rateMsg) logSys(_rateMsg); }
         if (_masteryRepair && _masteryRepair.reset) {
             if (_masteryRepair.reason === 'class-mismatch') {
                 logSys('<span class="text-amber-300 font-bold">已修復舊版刪角殘留的跨職業精通資料；此角色可重新向威頓村的漢接取精通任務。</span>');

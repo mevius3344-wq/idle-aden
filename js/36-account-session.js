@@ -92,7 +92,13 @@
         lastActivityMs = window.IdleLogout.getLastActivityMs();
       }
     } catch (e4) {}
-    return { account: account, authToken: authToken, clientId: clientId, lastActivityMs: lastActivityMs };
+    var slot = 0;
+    try {
+      if (typeof player !== "undefined" && player && player.cls && typeof currentSlot !== "undefined") {
+        slot = Number(currentSlot) || 0;
+      }
+    } catch (e5) {}
+    return { account: account, authToken: authToken, clientId: clientId, lastActivityMs: lastActivityMs, slot: slot };
   }
 
   function stopHeartbeat() {
@@ -115,9 +121,32 @@
     } catch (e2) {}
   }
 
+  function applyRates(rates) {
+    if (!rates || typeof rates !== "object") return;
+    try {
+      var s = window.__serverStats || {};
+      s.expMult = Math.max(1, Number(rates.expMult) || 1);
+      s.goldMult = Math.max(1, Number(rates.goldMult) || 1);
+      s.dropMult = Math.max(1, Number(rates.dropMult) || 1);
+      s.rateEndsAt = Math.max(0, Number(rates.rateEndsAt) || 0);
+      s.rateLabel = rates.rateLabel ? String(rates.rateLabel) : "";
+      window.__serverStats = s;
+    } catch (e) {}
+  }
+
   function handleHeartbeatResult(r) {
     if (r && r.data && r.data.ok) {
       _hbFailStreak = 0;
+      applyRates(r.data.rates);
+      if (Number(r.data.gmMail) > 0) {
+        try {
+          if (window.GmMail && typeof window.GmMail.claim === "function") window.GmMail.claim();
+        } catch (eMail) {}
+      }
+      return;
+    }
+    if (r && r.data && r.data.error === "banned") {
+      onSessionLost(r.data);
       return;
     }
     var inGrace = _holdSinceMs > 0 && Date.now() - _holdSinceMs < LOGIN_GRACE_MS;

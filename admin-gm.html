@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>GM 後台 · 躺著變強</title>
+  <link rel="stylesheet" href="css/admin-metrics.css?v=v3.9.26">
+  <link rel="stylesheet" href="css/admin-gm.css?v=v3.9.26">
+</head>
+<body>
+  <div class="am-wrap gm-wrap">
+    <header class="am-header">
+      <h1>GM 後台</h1>
+      <p class="am-sub">全服倍率 · 帳號封鎖 · GM 信箱發道具／金幣（玩家上線後自動入包）</p>
+    </header>
+
+    <section id="gm-auth" class="am-card am-auth">
+      <h2>驗證</h2>
+      <p class="am-hint">請輸入 Vercel 環境變數 <code>GM_TOKEN</code>（至少 12 字元）。Token 只存在此分頁，關閉即清除。</p>
+      <div class="am-auth-row">
+        <input id="gm-token" type="password" placeholder="GM_TOKEN" autocomplete="off">
+        <button type="button" id="gm-token-save" class="am-btn">登入後台</button>
+      </div>
+      <p id="gm-auth-err" class="am-err hidden"></p>
+    </section>
+
+    <section id="gm-dashboard" class="hidden">
+      <div class="am-toolbar">
+        <span id="gm-updated" class="am-updated">尚未更新</span>
+        <button type="button" id="gm-refresh" class="am-btn am-btn-ghost">重新整理</button>
+        <button type="button" id="gm-logout" class="am-btn am-btn-ghost">登出後台</button>
+      </div>
+      <div id="gm-toast" class="gm-toast hidden"></div>
+
+      <div class="am-grid am-grid-3">
+        <div class="am-card am-kpi"><div class="am-kpi-label">註冊帳號</div><div class="am-kpi-value" id="gm-kpi-accounts">—</div></div>
+        <div class="am-card am-kpi"><div class="am-kpi-label">停權中</div><div class="am-kpi-value" id="gm-kpi-banned">—</div></div>
+        <div class="am-card am-kpi"><div class="am-kpi-label">待領 GM 信件</div><div class="am-kpi-value" id="gm-kpi-pending">—</div></div>
+      </div>
+
+      <article class="am-card">
+        <h2>全服倍率</h2>
+        <p class="am-hint" id="gm-rate-current">目前生效：—</p>
+        <div class="gm-form-grid">
+          <label>經驗倍率<input id="gm-rate-exp" type="number" min="1" max="50" step="0.5" value="1"></label>
+          <label>金幣倍率<input id="gm-rate-gold" type="number" min="1" max="50" step="0.5" value="1"></label>
+          <label>掉寶倍率<input id="gm-rate-drop" type="number" min="1" max="50" step="0.5" value="1"></label>
+          <label>活動名稱<input id="gm-rate-label" type="text" maxlength="40" placeholder="例：週末狂歡"></label>
+          <label>結束時間（空白＝不限時）<input id="gm-rate-end" type="datetime-local"></label>
+          <div class="gm-quick">
+            <span>快速：</span>
+            <button type="button" class="am-btn am-btn-ghost gm-mini" data-hours="2">2 小時</button>
+            <button type="button" class="am-btn am-btn-ghost gm-mini" data-hours="24">1 天</button>
+            <button type="button" class="am-btn am-btn-ghost gm-mini" data-hours="48">2 天</button>
+            <button type="button" class="am-btn am-btn-ghost gm-mini" data-hours="168">7 天</button>
+          </div>
+        </div>
+        <div class="gm-actions">
+          <button type="button" id="gm-rate-apply" class="am-btn">套用倍率</button>
+          <button type="button" id="gm-rate-reset" class="am-btn am-btn-ghost">恢復預設（×1）</button>
+        </div>
+        <p class="am-hint">玩家約 10 秒內（下一次心跳）套用，不需重新登入。倍率上限 ×50。</p>
+      </article>
+
+      <article class="am-card">
+        <h2>玩家查詢</h2>
+        <div class="am-auth-row">
+          <input id="gm-search" type="text" placeholder="輸入帳號（前綴）或角色名稱（部分）" autocomplete="off">
+          <button type="button" id="gm-search-btn" class="am-btn">搜尋</button>
+        </div>
+        <div id="gm-search-results" class="gm-results"></div>
+      </article>
+
+      <section id="gm-player" class="hidden">
+        <article class="am-card">
+          <div class="gm-player-head">
+            <h2 id="gm-p-title">帳號</h2>
+            <span id="gm-p-badge" class="gm-badge"></span>
+          </div>
+          <dl class="am-dl" id="gm-p-info"></dl>
+          <h3 class="gm-h3">角色</h3>
+          <div class="gm-table-wrap">
+            <table class="gm-table">
+              <thead><tr><th>欄位</th><th>角色名</th><th>職業</th><th>等級</th><th>金幣</th><th>背包格</th><th>最後存檔</th><th></th></tr></thead>
+              <tbody id="gm-p-slots"></tbody>
+            </table>
+          </div>
+          <div id="gm-inv-box" class="gm-inv hidden">
+            <h3 class="gm-h3" id="gm-inv-title">背包</h3>
+            <div id="gm-inv-list" class="gm-inv-list"></div>
+          </div>
+        </article>
+
+        <div class="am-grid am-grid-2">
+          <article class="am-card">
+            <h2>發送道具／金幣</h2>
+            <div class="gm-form-grid gm-form-1">
+              <label>收件角色
+                <select id="gm-g-slot"></select>
+              </label>
+              <div class="gm-tabs">
+                <button type="button" class="gm-tab active" data-kind="item">道具</button>
+                <button type="button" class="gm-tab" data-kind="gold">金幣</button>
+              </div>
+              <div id="gm-g-item-box">
+                <label>搜尋物品（名稱或代碼）
+                  <input id="gm-g-item-q" type="text" placeholder="例：屠龍劍、祝福卷軸、wpn_dragonslayer" autocomplete="off">
+                </label>
+                <div id="gm-g-item-list" class="gm-item-list"></div>
+                <p class="gm-picked" id="gm-g-picked">尚未選擇物品</p>
+                <div class="gm-inline">
+                  <label>數量<input id="gm-g-cnt" type="number" min="1" max="9999" value="1"></label>
+                  <label>強化 +<input id="gm-g-en" type="number" min="0" max="15" value="0" disabled></label>
+                  <label class="gm-check"><input id="gm-g-bless" type="checkbox" disabled> 祝福</label>
+                </div>
+              </div>
+              <div id="gm-g-gold-box" class="hidden">
+                <label>金幣數量<input id="gm-g-gold" type="number" min="1" max="500000000" value="100000"></label>
+              </div>
+              <label>備註（玩家看得到）<input id="gm-g-note" type="text" maxlength="60" placeholder="例：封測補償"></label>
+            </div>
+            <div class="gm-actions">
+              <button type="button" id="gm-g-send" class="am-btn">送出</button>
+            </div>
+            <p class="am-hint">放進 GM 信箱；玩家在線約 10 秒內入包，離線則下次上線領取。</p>
+          </article>
+
+          <article class="am-card">
+            <h2>停權／踢線</h2>
+            <div class="gm-form-grid gm-form-1">
+              <label>停權時間
+                <select id="gm-b-hours">
+                  <option value="1">1 小時</option>
+                  <option value="24">1 天</option>
+                  <option value="72">3 天</option>
+                  <option value="168">7 天</option>
+                  <option value="720">30 天</option>
+                  <option value="0">永久</option>
+                </select>
+              </label>
+              <label>原因（玩家登入時會看到）<input id="gm-b-reason" type="text" maxlength="100" placeholder="例：使用外掛"></label>
+            </div>
+            <div class="gm-actions">
+              <button type="button" id="gm-b-ban" class="am-btn gm-danger">停權並踢下線</button>
+              <button type="button" id="gm-b-unban" class="am-btn am-btn-ghost">解除停權</button>
+              <button type="button" id="gm-b-kick" class="am-btn am-btn-ghost">只踢下線</button>
+            </div>
+          </article>
+        </div>
+
+        <article class="am-card">
+          <h2>此帳號的 GM 信件</h2>
+          <div class="gm-table-wrap">
+            <table class="gm-table">
+              <thead><tr><th>#</th><th>內容</th><th>收件</th><th>備註</th><th>建立</th><th>狀態</th><th></th></tr></thead>
+              <tbody id="gm-p-grants"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <article class="am-card">
+        <h2>操作紀錄</h2>
+        <div class="gm-table-wrap">
+          <table class="gm-table">
+            <thead><tr><th>時間</th><th>動作</th><th>對象</th><th>內容</th><th>IP</th></tr></thead>
+            <tbody id="gm-audit"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </div>
+  <script src="js/00-host-config.js?v=v3.9.26"></script>
+  <script src="js/admin-gm.js?v=v3.9.26"></script>
+</body>
+</html>
