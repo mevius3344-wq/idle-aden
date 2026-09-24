@@ -71,8 +71,11 @@
         if (!account) return null;
         var wx = 0, wy = 0;
         try {
-            if (typeof exploreCamX === 'function') wx = Math.round(Number(exploreCamX()) || 0);
-            if (typeof exploreCamY === 'function') wy = Math.round(Number(exploreCamY()) || 0);
+            // 🩹 v3.9.45：組隊／人口心跳同樣送人物世界座標
+            if (typeof explorePlayerX === 'function') wx = Math.round(Number(explorePlayerX()) || 0);
+            else if (typeof exploreCamX === 'function') wx = Math.round(Number(exploreCamX()) || 0);
+            if (typeof explorePlayerY === 'function') wy = Math.round(Number(explorePlayerY()) || 0);
+            else if (typeof exploreCamY === 'function') wy = Math.round(Number(exploreCamY()) || 0);
         } catch (ePos) {}
         return {
             account: account,

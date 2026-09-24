@@ -3557,6 +3557,7 @@
                     rtWorldEnter(mapState.current);
                 }
             } catch (eEnt) {}
+            try { if (typeof mapPopPollOnce === 'function') mapPopPollOnce(); } catch (ePop) {}
             return r;
         };
     }

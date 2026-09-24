@@ -485,8 +485,11 @@
             }
         } catch (e3) {}
         try {
-            if (typeof exploreCamX === 'function') body.wx = Math.round(Number(exploreCamX()) || 0);
-            if (typeof exploreCamY === 'function') body.wy = Math.round(Number(exploreCamY()) || 0);
+            // 🩹 v3.9.45：廣播人物世界座標（非相機），同圖才能正確對位
+            if (typeof explorePlayerX === 'function') body.wx = Math.round(Number(explorePlayerX()) || 0);
+            else if (typeof exploreCamX === 'function') body.wx = Math.round(Number(exploreCamX()) || 0);
+            if (typeof explorePlayerY === 'function') body.wy = Math.round(Number(explorePlayerY()) || 0);
+            else if (typeof exploreCamY === 'function') body.wy = Math.round(Number(exploreCamY()) || 0);
         } catch (e4) {}
         try {
             if (typeof fieldPvpIsOn === 'function') body.pvpOn = !!fieldPvpIsOn();
@@ -559,6 +562,11 @@
 
     function rtWorldApplyMap(data) {
         if (!data || !data.mapId) return;
+        // 🩹 v3.9.45：忽略非當前地圖快照，避免進出圖清空／蓋掉同圖名單
+        try {
+            var cur = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : '';
+            if (cur && String(data.mapId) !== cur) return;
+        } catch (eCur) {}
         if (data.channel != null) {
             _channel = Math.max(1, Math.min(8, Math.floor(Number(data.channel) || 1)));
             try { window.__rtWorldChannel = _channel; } catch (eCh) {}

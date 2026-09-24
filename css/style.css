@@ -2443,11 +2443,11 @@
             0% { opacity: 1; transform: translate(-50%, 0); }
             100% { opacity: 0; transform: translate(-50%, -36px); }
         }
-        /* 遠端玩家死綁世界座標（隨捲動甩出／滑入） */
+        /* 🩹 v3.9.45：遠端玩家 left/bottom 已是相機相對，勿再吃 --wx/--wy（雙重偏移＝畫面外） */
         #battle-view.is-world-scroll > .party-sprite.remote-party {
-            transform: translate3d(var(--wx), var(--wy), 0);
-            transition: transform 0.05s linear, left 0s, bottom 0s;
-            will-change: transform;
+            transform: translateX(var(--walk-sway, 0px)) translateY(var(--walk-bob, 0px));
+            transition: left 0.05s linear, bottom 0.05s linear;
+            will-change: left, bottom;
         }
         /* 主角／本地傭兵／寵物層：不吃世界平移（保留 facing scaleX，勿用 transform:none 全殺） */
         #battle-view.is-world-scroll > #player-morph-sprite,
