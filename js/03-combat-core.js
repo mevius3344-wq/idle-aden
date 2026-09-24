@@ -508,11 +508,21 @@ function renderMobs() { if (state.inTick || (typeof catchupActive === 'function'
 function flushTickRender() { if (typeof catchupActive === 'function' && catchupActive()) return; if (_uiDirty) { _uiDirty = false; _updateUIImpl(); } if (_mobsDirty) { _mobsDirty = false; _renderMobsImpl(); } }
 // 🚀 怪物卡互動穩定：① 滑鼠所在怪的 uid 以 JS 追蹤(_hoverMobUid)、每次重繪都重新套用「顯示名字」class→避免重繪(每 tick 換掉 #mob-list 內容)使 :hover 瞬間失效造成名字一直閃；② 按住怪物卡期間(_mobPointerDown)延後重繪→避免 mousedown↔mouseup 之間整列被換掉使點擊切換目標失效。
 let _hoverMobUid = null, _mobPointerDown = false, _mobRebuildPending = false;
-function _applyHoverName() {   // 🩹 v3.9.3：只在 hover 顯示怪名；鎖定目標已有血條（＋combat-hud 頂部目標列），勿再常駐怪名＝上下重複
+function _applyHoverName() {   // 🩹 v3.9.40：hover 或鎖定目標皆顯怪名（頂部 chud-target 已關）
     let ml = document.getElementById('mob-list'); if (!ml) return;
+    let lockUid = null;
+    try {
+        if (typeof mapState !== 'undefined' && mapState && mapState.targetIdx >= 0 && mapState.mobs) {
+            let tm = mapState.mobs[mapState.targetIdx];
+            if (tm && !tm._dead && tm.uid != null) lockUid = String(tm.uid);
+        }
+    } catch (eLock) {}
     ml.querySelectorAll('.mob-target').forEach(c => {
         let uid = c.getAttribute('data-uid');
-        c.classList.toggle('name-show', !!_hoverMobUid && uid === _hoverMobUid);
+        let show = (!!_hoverMobUid && uid === _hoverMobUid)
+            || (!!lockUid && uid === lockUid)
+            || c.classList.contains('active');
+        c.classList.toggle('name-show', show);
     });
 }
 function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 innerHTML)上掛委派事件，跨重繪存活
@@ -2356,6 +2366,7 @@ function getTarget() {
 function setTarget(idx) {
     mapState.targetIdx = idx;
     renderMobs();
+    try { if (typeof _applyHoverName === 'function') _applyHoverName(); } catch (eHn) {}
 }
 
 // ===== 物理傷害與命中核心計算（遠近距離拆分）=====

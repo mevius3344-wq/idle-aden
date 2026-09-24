@@ -617,32 +617,41 @@
             image-rendering: crisp-edges; image-rendering: pixelated;
             filter: drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));
         }
-        /* 🪪 v3.8.472：玩家 ID 顯示於人物頭上（非左上狀態欄） */
+        /* 🪪 v3.8.472／v3.9.40：玩家 ID 顯示於人物頭上（非左上狀態欄）；場戰貼頭頂、字可讀 */
         #player-morph-sprite .pm-name {
             position: absolute;
             left: 50%;
             z-index: 8;
             transform: translateX(-50%);
             white-space: nowrap;
-            max-width: 140px;
+            max-width: 160px;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 800;
             line-height: 1.15;
+            letter-spacing: 0.02em;
             color: #f8fafc;
-            text-shadow: 0 1px 3px #000, 0 0 5px #000, 1px 0 0 #000, -1px 0 0 #000;
+            text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000, 0 0 4px #000;
             pointer-events: none;
             user-select: none;
+            padding: 0 2px;
         }
         body.hide-player-id #player-morph-sprite .pm-name {
             display: none !important;
         }
-        /* 鏡射朝向時反翻文字，避免名字左右顛倒 */
+        /* 鏡射朝向時反翻文字，避免名字左右顛倒（由 JS 寫 transform；此處作後援） */
         #player-morph-sprite.q-face-d0 .pm-name,
         #player-morph-sprite.q-face-d6 .pm-name,
         #player-morph-sprite.q-face-d7 .pm-name {
             transform: translateX(-50%) scaleX(-1);
+        }
+        /* 場戰俯視：名牌固定在精靈頂上方，勿跟身體高度漂 */
+        #battle-view.is-world-scroll #player-morph-sprite .pm-name {
+            bottom: calc(100% + 2px) !important;
+            top: auto !important;
+            font-size: 13px;
+            max-width: 180px;
         }
         .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
         .party-sprite.remote-party .remote-party-tag {
@@ -1965,9 +1974,9 @@
             z-index: 4;
             margin: 0 !important;
         }
-        /* 🏷️ 場戰怪名：維持 hover／.name-show 才顯示（勿常顯）；顯示時勿裁切字形 */
+        /* 🏷️ 場戰怪名：鎖定／hover 顯示；血條在名下方（頂部 chud-target 已廢） */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-name {
-            bottom: calc(100% + 4px);
+            bottom: calc(100% + 14px);
             left: 50%;
             transform: translateX(-50%);
             overflow: visible !important;
@@ -1990,7 +1999,7 @@
             height: auto !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-badge-row {
-            bottom: calc(100% + 22px);
+            bottom: calc(100% + 32px);
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-img-wrap {
             position: relative;
@@ -2031,13 +2040,12 @@
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
-            /* 🩹 v3.9.9：貼在精靈頂內側，勿再 bottom:100%+ 伸出卡外擋前後排／點擊 */
-            top: 6px;
-            bottom: auto;
-            z-index: 1;
+            /* 🩹 v3.9.40：名稱下方細血條（不再藏到 chud-target） */
+            bottom: calc(100% + 2px);
+            top: auto;
+            z-index: 19;
             margin: 0 !important;
             pointer-events: none !important;
-            /* 🩹 v3.8.321：預設隱藏，僅攻擊目標顯示 */
             display: none !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-hp-bar {

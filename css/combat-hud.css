@@ -1485,20 +1485,14 @@
 .tp-map-btn:disabled { opacity: 0.4; color: #64748b; cursor: not-allowed; }
 .tp-map-btn.is-here { border-color: rgba(52, 211, 153, 0.55); color: #6ee7b7; }
 
-/* 🩹 v3.9.3：頂部 #chud-target 已有目標名＋血量，怪卡上鎖定目標勿再疊怪名（上下重複） */
-#game-screen.combat-hud .mob-target.active > .mob-name {
-  opacity: 0 !important;
-  pointer-events: none;
-}
-#game-screen.combat-hud .mob-target.active:has(.mob-img-wrap:hover) > .mob-name,
-#game-screen.combat-hud .mob-target.active.name-show > .mob-name {
-  opacity: 1 !important;
-}
+/* 🩹 v3.9.40：取消頂部 #chud-target；鎖定怪改在怪卡上常顯名稱＋血條（見 style.css） */
 
-/* 🩹 v3.9.9：場戰頭頂血條與 #chud-target 重複，且 absolute 伸出卡外會擋前後排／人物／點選 */
-#game-screen.combat-hud #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-hp-bar,
-#game-screen.combat-hud #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-hp-bar {
+/* 🩹 v3.9.40：永久隱藏頂部戰鬥目標列（名稱／血量改掛怪物頭上） */
+#game-screen.combat-hud .chud-target,
+#game-screen.combat-hud #chud-target,
+.chud-target {
   display: none !important;
+  visibility: hidden !important;
   pointer-events: none !important;
 }
 

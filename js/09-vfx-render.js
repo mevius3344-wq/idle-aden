@@ -1649,21 +1649,33 @@ function _playerNameplateApply() {
     let show = (typeof window.__showPlayerId === 'undefined') ? true : !!window.__showPlayerId;
     nm.style.display = show ? '' : 'none';
     if (!show) return;
-    let text = (typeof player !== 'undefined' && player && player.name) ? String(player.name) : '未命名';
+    let text = (typeof player !== 'undefined' && player && player.name) ? String(player.name).trim() : '';
+    if (!text) text = '未命名';
     if (nm.textContent !== text) nm.textContent = text;
     try {
-        if (typeof pvpAlignmentColor === 'function' && player && player.name)
+        if (typeof pvpAlignmentColor === 'function' && player)
             nm.style.color = pvpAlignmentColor(player.alignmentValue);
         else nm.style.color = '';
-    } catch (eC) {}
-    let bd = (_pmState.imgs && _pmState.imgs.bd) ? _pmState.imgs.bd : null;
-    let h = 0;
-    try { h = (bd && (bd.offsetHeight || bd.clientHeight || 0)) || 0; } catch (eH) {}
-    if (!(h > 0)) {
-        try { h = (bd && bd.naturalHeight) ? Math.min(336, bd.naturalHeight) : 96; } catch (eH2) { h = 96; }
+    } catch (eC) { nm.style.color = ''; }
+    let worldScroll = false;
+    try {
+        let bv = document.getElementById('battle-view');
+        worldScroll = !!(bv && bv.classList.contains('is-world-scroll'));
+    } catch (eWs) {}
+    // 🩹 v3.9.40：場戰用 CSS bottom:100%；側視才依身體高度貼頭頂
+    if (worldScroll) {
+        nm.style.bottom = '';
+        nm.style.top = '';
+    } else {
+        let bd = (_pmState.imgs && _pmState.imgs.bd) ? _pmState.imgs.bd : null;
+        let h = 0;
+        try { h = (bd && (bd.offsetHeight || bd.clientHeight || 0)) || 0; } catch (eH) {}
+        if (!(h > 0)) {
+            try { h = (bd && bd.naturalHeight) ? Math.min(336, bd.naturalHeight) : 96; } catch (eH2) { h = 96; }
+        }
+        nm.style.bottom = Math.round(Math.max(36, h * 0.62)) + 'px';
+        nm.style.top = '';
     }
-    // 🩹 v3.8.474：貼近頭頂（畫布上方多透明空白，勿用整段高度）
-    nm.style.bottom = Math.round(Math.max(36, h * 0.62)) + 'px';
     nm.style.left = '50%';
     let flip = false;
     try {

@@ -620,41 +620,13 @@
         }
     }
 
+    /** 🩹 v3.9.40：頂部目標列停用；名稱／血條改怪卡上常顯 */
     function syncTargetHud() {
         var box = document.getElementById('chud-target');
-        var nameEl = document.getElementById('chud-target-name');
-        var fill = document.getElementById('chud-target-fill');
-        var hpEl = document.getElementById('chud-target-hp');
         if (!box) return;
-        if (isTownVisible()) {
-            box.classList.remove('is-show');
-            box.setAttribute('aria-hidden', 'true');
-            return;
-        }
-        var mob = null;
-        try {
-            if (typeof mapState !== 'undefined' && mapState && mapState.targetIdx >= 0 && mapState.mobs) {
-                mob = mapState.mobs[mapState.targetIdx];
-            }
-        } catch (e) {}
-        if (!mob || mob._dead || !(mob.curHp > 0)) {
-            box.classList.remove('is-show', 'is-boss');
-            box.setAttribute('aria-hidden', 'true');
-            return;
-        }
-        var maxHp = Math.max(1, Number(mob.hp) || Number(mob.mhp) || 1);
-        var cur = Math.max(0, Number(mob.curHp) || 0);
-        var pct = Math.max(0, Math.min(100, (cur / maxHp) * 100));
-        box.classList.add('is-show');
-        box.classList.toggle('is-boss', !!mob.boss);
-        box.setAttribute('aria-hidden', 'false');
-        if (nameEl) nameEl.textContent = String(mob.n || '目標') + (mob.lv != null ? '  Lv.' + mob.lv : '');
-        if (fill) fill.style.width = pct.toFixed(1) + '%';
-        if (hpEl) {
-            hpEl.textContent = (cur >= 10000 ? Math.floor(cur / 1000) + 'k' : Math.floor(cur))
-                + ' / '
-                + (maxHp >= 10000 ? Math.floor(maxHp / 1000) + 'k' : Math.floor(maxHp));
-        }
+        box.classList.remove('is-show', 'is-boss');
+        box.setAttribute('aria-hidden', 'true');
+        try { box.style.display = 'none'; } catch (eHide) {}
     }
 
     function syncVitalAlert() {
