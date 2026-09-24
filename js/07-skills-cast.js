@@ -998,14 +998,14 @@ function autoActions() {
     let potThr = parseInt(document.getElementById('set-hp-pot').value) || 0;
     
     let _duelNoPot = (typeof pvpArenaPotionBlocked === 'function') && pvpArenaPotionBlocked();   // 🚫 v3.7.17 決鬥中禁治癒藥水（連「自動購買」一併跳過，免得在場上狂買卻喝不到）
-    // 🩹 v3.8.448：藥水不足自動買至 100——存量 <100 即補（非僅 0 瓶）；金幣不夠滿額時改買得起的數量
+    // 🩹 v3.9.42：藥水用完（0 瓶）才自動買至 100——勿在 <100 時每 tick 狂補
     try {
         let _buyEl = document.getElementById('set-auto-buy-pot');
         if (_buyEl && _buyEl.checked && !_duelNoPot && potId && DB.items[potId]) {
             let _cur = player.inv.find(i => i.id === potId);
             let _cnt = _cur ? (Number(_cur.cnt) || 0) : 0;
-            if (_cnt < 100) {
-                let _need = 100 - _cnt;
+            if (_cnt <= 0) {
+                let _need = 100;
                 let _unit = (typeof shopPrice === 'function') ? shopPrice(DB.items[potId].p) : (DB.items[potId].p || 0);
                 _unit = Math.max(0, Math.floor(Number(_unit) || 0));
                 if (_unit > 0) {
@@ -1014,7 +1014,7 @@ function autoActions() {
                     if (_buy > 0) {
                         player.gold -= _buy * _unit;
                         gainItem(potId, _buy, true, true);
-                        logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${DB.items[potId].n}（補至存量 ${_cnt + _buy}/100）。`);
+                        logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${DB.items[potId].n}（用完補貨 ${_buy}/100）。`);
                         try { if (typeof updateUI === 'function') updateUI(); } catch (eG) {}
                     }
                 }

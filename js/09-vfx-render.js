@@ -4759,7 +4759,7 @@ function _remotePartyKeyHash(key) {
     return Math.abs(h);
 }
 function _remotePartySpritePos(i, key, mem) {
-    // C：場戰有世界座標時，依鏡頭相對位移顯示（同圖真實位置）
+    // 🩹 v3.9.42：場戰用相機相對座標（與人物／場怪同一套），勿塞世界絕對값＝人在畫面外
     try {
         if (mem && typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) {
             var wx = Number(mem.wx);
@@ -4769,15 +4769,14 @@ function _remotePartySpritePos(i, key, mem) {
                 var cy = (typeof exploreCamY === 'function') ? Number(exploreCamY()) || 0 : 0;
                 var dx = wx - cx;
                 var dy = wy - cy;
-                var gy = (typeof exploreFieldFootBottom === 'function')
-                    ? Number(exploreFieldFootBottom(0)) || 180
-                    : ((typeof exploreGroundY === 'function') ? Number(exploreGroundY()) || 186 : 186);
-                if (Math.hypot(dx, dy) < 1400) {
-                    // 與場怪同：left／bottom 用世界座標，再吃 --wx/--wy 相機平移
-                    var foot = (typeof exploreFieldFootBottom === 'function')
-                        ? Number(exploreFieldFootBottom(wy)) || (gy + wy)
-                        : (gy + wy);
-                    return { mode: 'field', dx: wx, bottom: foot };
+                if (Math.hypot(dx, dy) < 1600) {
+                    var foot = (typeof exploreMobScreenBottom === 'function')
+                        ? Number(exploreMobScreenBottom(wy))
+                        : ((typeof exploreFieldFootBottom === 'function')
+                            ? (Number(exploreFieldFootBottom(wy)) - cy)
+                            : (180 + dy));
+                    if (!Number.isFinite(foot)) foot = 180 + dy;
+                    return { mode: 'field', dx: dx, bottom: foot };
                 }
             }
         }
@@ -4807,7 +4806,8 @@ function _remoteSameMapMembersMerged() {
             partyKeys[m.key] = 1;
             byKey[m.key] = {
                 key: m.key, name: m.name || '隊員', cls: m.cls, lv: m.lv || 1,
-                hp: m.hp, mhp: m.mhp, wx: m.wx, wy: m.wy, online: m.online !== false, party: true
+                hp: m.hp, mhp: m.mhp, wx: m.wx, wy: m.wy, online: m.online !== false, party: true,
+                pvpOn: !!m.pvpOn
             };
         });
     } catch (e0) {}
@@ -4819,11 +4819,16 @@ function _remoteSameMapMembersMerged() {
                 byKey[m.key].party = byKey[m.key].party || !!partyKeys[m.key];
                 if (m.wx != null) byKey[m.key].wx = m.wx;
                 if (m.wy != null) byKey[m.key].wy = m.wy;
+                if (m.hp != null) byKey[m.key].hp = m.hp;
+                if (m.mhp != null) byKey[m.key].mhp = m.mhp;
+                if (m.pvpOn != null) byKey[m.key].pvpOn = !!m.pvpOn;
+                if (m.name) byKey[m.key].name = m.name;
                 return;
             }
             byKey[m.key] = {
                 key: m.key, name: m.name || '冒險者', cls: m.cls, lv: m.lv || 1,
-                hp: m.hp, mhp: m.mhp, wx: m.wx, wy: m.wy, online: m.online !== false, party: !!partyKeys[m.key]
+                hp: m.hp, mhp: m.mhp, wx: m.wx, wy: m.wy, online: m.online !== false, party: !!partyKeys[m.key],
+                pvpOn: !!m.pvpOn
             };
         });
     } catch (e1) {}
@@ -4836,7 +4841,12 @@ function _remoteSameMapMembersMerged() {
 }
 function _remotePartySpritesApply() {
     var bv = document.getElementById('battle-view');
-    var inBattle = bv && !bv.classList.contains('hidden') && bv.classList.contains('area-fit');
+    // 🩹 v3.9.42：場戰／世界捲動皆顯示同圖玩家（勿只認 area-fit）
+    var inBattle = !!(bv && !bv.classList.contains('hidden') && (
+        bv.classList.contains('area-fit') ||
+        bv.classList.contains('is-world-scroll') ||
+        bv.classList.contains('is-real-map')
+    ));
     var members = _remoteSameMapMembersMerged();
     var liveKeys = Object.create(null);
     members.forEach(function (m) { if (m && m.key) liveKeys[m.key] = 1; });
