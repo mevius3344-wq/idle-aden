@@ -393,7 +393,9 @@
             } else if (ev.type === 'pvp_hit' && typeof fieldPvpApplyHitEvent === 'function') {
                 fieldPvpApplyHitEvent(ev);
             } else if (ev.type === 'pvp_death' && typeof fieldPvpHandleDeath === 'function') {
-                fieldPvpHandleDeath(ev.fromName || '對手');
+                fieldPvpHandleDeath(ev.fromName || '對手', ev.fromKey || '');
+            } else if (ev.type === 'pvp_loot' && typeof fieldPvpApplyLootEvent === 'function') {
+                fieldPvpApplyLootEvent(ev);
             }
         });
     }

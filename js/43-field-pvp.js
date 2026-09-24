@@ -1,11 +1,12 @@
-// ===== ⚔️ 野外 PK（同圖・攻擊者 pvpOn・伺服器權威・無掉裝）=====
-// 單方開即可攻擊；未開者不能還手。
+// ===== ⚔️ 野外 PK（同圖・攻擊者 pvpOn・伺服器權威扣血）=====
+// ⚔️ v3.9.36：擊殺噴寶＝依性向真實扣除 → 同一批快照轉交擊殺者（不少不多）；未開 PK 者可被打但不能還手。
 (function () {
     'use strict';
 
     var _fpTargetKey = '';
     var _fpBusy = false;
     var _fpLastHitAt = 0;
+    var _fpDying = false;
 
     function fpMapAllowed(mapId) {
         var id = String(mapId || '');
@@ -47,7 +48,7 @@
         try {
             if (typeof logSys === 'function') {
                 logSys(fpSelfOn()
-                    ? '<span class="text-red-300 font-bold">【野外 PK】已開啟</span>：可攻擊同圖玩家；未開 PK 者無法還手。'
+                    ? '<span class="text-red-300 font-bold">【野外 PK】已開啟</span>：可攻擊同圖玩家；未開 PK 者無法還手。擊殺依性向噴寶，對方失去的物品會轉到你身上。'
                     : '<span class="text-slate-300">【野外 PK】已關閉</span>：你不能攻擊他人（仍可能被開 PK 者攻擊）。');
             }
         } catch (e) {}
@@ -60,16 +61,15 @@
             btn.classList.toggle('is-on', on);
             btn.textContent = on ? '⚔️ PK 開' : '⚔️ PK 關';
             btn.title = on
-                ? '野外 PK 開啟：可攻擊同圖玩家；對方未開則無法還手（不掉裝）'
+                ? '野外 PK 開啟：可攻擊同圖玩家；擊殺依性向噴寶（失去＝撿取 1:1）'
                 : '點擊開啟野外 PK（單方開即可攻擊；未開不能還手）';
         }
-        // 🩹 v3.8.397：戰鬥 HUD 下方 PK 鈕同步
         var chud = document.getElementById('chud-pvp');
         if (chud) {
             chud.classList.toggle('is-on', on);
             chud.setAttribute('aria-pressed', on ? 'true' : 'false');
             chud.title = on
-                ? '野外 PK 開啟：可攻擊同圖玩家'
+                ? '野外 PK 開啟：可攻擊同圖玩家；擊殺噴寶 1:1 轉交'
                 : '點擊開啟野外 PK';
             var sub = chud.querySelector('.chud-pvp-sub');
             if (sub) sub.textContent = on ? '開' : '關';
@@ -116,6 +116,74 @@
         return _fpTargetKey || '';
     }
 
+    function fpAuthBody() {
+        var body = {};
+        try {
+            if (typeof rtPartyBodyExtras === 'function') Object.assign(body, rtPartyBodyExtras() || {});
+            else if (typeof rtPartyIdentity === 'function') Object.assign(body, rtPartyIdentity() || {});
+            if (typeof anticheatAuthExtras === 'function') Object.assign(body, anticheatAuthExtras() || {});
+        } catch (e) {}
+        return body;
+    }
+
+    /** 被害方：真實扣除 → 回報伺服器轉交擊殺者（失敗則原樣還回，避免憑空少裝）。 */
+    function fpTransferDeathLoot(killerKey, killerName) {
+        if (!killerKey || typeof pvpResolveDeathItemLoss !== 'function') return;
+        var result = pvpResolveDeathItemLoss({ arkata: false });
+        if (!result || !result.items || !result.items.length) {
+            try {
+                if (typeof logSys === 'function') {
+                    logSys('<span class="text-slate-400">【野外 PK】本次死亡未遺失物品。</span>');
+                }
+            } catch (e0) {}
+            return;
+        }
+        var snaps = result.items.map(function (x) { return x.item; });
+        var names = result.items.map(function (x) { return x.name; });
+        var listHtml = names.map(function (n) {
+            return '<span class="text-amber-200">' + n + '</span>';
+        }).join('、');
+        try {
+            if (typeof logSys === 'function') {
+                logSys('<span class="text-red-400 font-bold">【野外 PK】你遺失了 ' + listHtml + '，由 ' + String(killerName || '對手') + ' 撿取。</span>');
+            }
+        } catch (e1) {}
+        try { if (typeof calcStats === 'function') calcStats(); } catch (e2) {}
+        try { if (typeof renderTabs === 'function') renderTabs(true); } catch (e3) {}
+        try { if (typeof updateUI === 'function') updateUI(); } catch (e4) {}
+
+        var body = fpAuthBody();
+        body.items = snaps;
+        fetch('/api/pvp/loot-transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function (res) { return res.json(); }).then(function (data) {
+            if (data && data.ok) {
+                try { if (typeof saveGame === 'function') saveGame(); } catch (e5) {}
+                return;
+            }
+            // 轉交失敗 → 原樣還回，避免「少了卻沒人拿到」
+            try {
+                if (typeof pvpGainTransferredItems === 'function') {
+                    pvpGainTransferredItems(snaps, '', { restore: true });
+                }
+                if (typeof logSys === 'function') {
+                    logSys('<span class="text-amber-300">【野外 PK】掉落轉交失敗，物品已退回你的背包。</span>');
+                }
+            } catch (e6) {}
+        }).catch(function () {
+            try {
+                if (typeof pvpGainTransferredItems === 'function') {
+                    pvpGainTransferredItems(snaps, '', { restore: true });
+                }
+                if (typeof logSys === 'function') {
+                    logSys('<span class="text-amber-300">【野外 PK】掉落轉交失敗，物品已退回你的背包。</span>');
+                }
+            } catch (e7) {}
+        });
+    }
+
     function fpApplyHitEvent(ev) {
         if (!ev || typeof player === 'undefined' || !player) return;
         var dmg = Math.max(0, Math.floor(Number(ev.dmg) || 0));
@@ -136,11 +204,22 @@
         }
         if (hp != null) player.hp = Math.min(player.hp || 0, hp);
         try { if (typeof updateUI === 'function') updateUI(); } catch (e2) {}
-        if (ev.killed || (player.hp || 0) <= 0) fpHandleDeath(ev.fromName || '對手');
+        if (ev.killed || (player.hp || 0) <= 0) fpHandleDeath(ev.fromName || '對手', ev.fromKey || '');
     }
 
-    function fpHandleDeath(fromName) {
+    function fpApplyLootEvent(ev) {
+        if (!ev || !Array.isArray(ev.items) || !ev.items.length) return;
+        if (typeof pvpGainTransferredItems === 'function') {
+            pvpGainTransferredItems(ev.items, ev.fromName || '對手');
+        }
+    }
+
+    function fpHandleDeath(fromName, fromKey) {
+        if (_fpDying) return;
+        _fpDying = true;
+        setTimeout(function () { _fpDying = false; }, 4000);
         fpClearTarget();
+        fpTransferDeathLoot(fromKey || '', fromName || '對手');
         try {
             if (typeof logSys === 'function') {
                 logSys('<span class="text-red-400 font-bold">【野外 PK】你被 ' + String(fromName || '對手') + ' 擊敗，已送回村莊。</span>');
@@ -166,12 +245,7 @@
         if (now - _fpLastHitAt < 850) return true;
         _fpBusy = true;
         _fpLastHitAt = now;
-        var body = {};
-        try {
-            if (typeof rtPartyBodyExtras === 'function') Object.assign(body, rtPartyBodyExtras() || {});
-            else if (typeof rtPartyIdentity === 'function') Object.assign(body, rtPartyIdentity() || {});
-            if (typeof anticheatAuthExtras === 'function') Object.assign(body, anticheatAuthExtras() || {});
-        } catch (e) {}
+        var body = fpAuthBody();
         body.targetKey = _fpTargetKey;
         body.mapId = mapState.current;
         body.pvpOn = true;
@@ -192,7 +266,7 @@
                         '<span class="text-red-300 font-bold">【野外 PK】</span>對 ' +
                         String(data.targetName || '對手') +
                         ' 造成 <span class="text-yellow-300 font-bold">' + (data.dmg || 0) + '</span> 點傷害' +
-                        (data.killed ? '（擊倒！）' : '') + '。',
+                        (data.killed ? '（擊倒！等待對方掉落物轉交…）' : '') + '。',
                         'player'
                     );
                 }
@@ -216,6 +290,7 @@
     window.fieldPvpSetMode = fpSetMode;
     window.fieldPvpTryAttack = fpTryAttack;
     window.fieldPvpApplyHitEvent = fpApplyHitEvent;
+    window.fieldPvpApplyLootEvent = fpApplyLootEvent;
     window.fieldPvpHandleDeath = fpHandleDeath;
     window.fieldPvpOnRemoteClick = fpOnRemoteClick;
     window.fieldPvpTargetKey = fpTargetKey;

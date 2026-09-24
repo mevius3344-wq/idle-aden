@@ -1681,6 +1681,7 @@ function _enemyAttackAllyInner(mob, ally, isBasicAttack = false) {
 //   邪惡<0：越邪惡機率越高，最多 1~3 件（滿邪惡附近可達 3）。
 //   ※ 名字顏色仍用 ±1000（js/03）；此處門檻採天堂經典 501／0。
 //   豁免：村莊安全區、攻城區、決鬥（呼叫端已擋）。
+// ⚔️ v3.9.36 真人野外 PK：同一批快照「失去→轉交擊殺者」，不少不多；怪殺仍走阿卡塔贖回。
 function pvpDeathItemLossPlan(align) {
     let a = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(align) : Math.max(-32767, Math.min(32767, Math.round(Number(align) || 0)));
     if (a >= 32767) return { chance: 0.005, count: 1, tier: 'justice' };
@@ -1694,60 +1695,132 @@ function pvpDeathItemLossPlan(align) {
     if (a > -30000) return { chance: 0.70, count: 2, tier: 'evil' };
     return { chance: 0.85, count: 3, tier: 'evil' };
 }
-function pvpChaoticDeathItemLoss() {
-    if (!player || !player.eq || !Array.isArray(player.inv)) return;
-    if (typeof mapState !== 'undefined' && mapState && mapState.current && String(mapState.current).indexOf('town_') === 0) return;   // 🏘️ 村莊安全區不噴
-    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區死亡不噴裝
-    let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player.alignmentValue) : (Number(player.alignmentValue) || 0);
-    let plan = pvpDeathItemLossPlan(align);
-    if (Math.random() >= plan.chance) return;
-    let lostNames = [];
-    let dropOne = function () {
-        let eqPool = [];
-        let invPool = [];
-        for (let slot in player.eq) {
-            let it = player.eq[slot];
-            if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk)
-                eqPool.push({ kind: 'eq', slot: slot, item: it });   // 🔒 鎖定／任務／收集冊類不噴
-        }
-        player.inv.forEach((it, index) => {
-            if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk)
-                invPool.push({ kind: 'inv', index: index, item: it });
-        });
-        if (!eqPool.length && !invPool.length) return null;
-        // 比照天堂：優先遺失穿戴中裝備
-        let pool = (eqPool.length && (Math.random() < 0.7 || !invPool.length)) ? eqPool : (invPool.length ? invPool : eqPool);
-        let pick = pool[Math.floor(Math.random() * pool.length)];
-        let name = (typeof getItemFullName === 'function') ? getItemFullName(pick.item) : (DB.items[pick.item.id] ? DB.items[pick.item.id].n : pick.item.id);
-        // 🗃️ 遺失紀錄 → 聖使阿卡塔裝備贖回（上限 5 件，滿則淘汰最舊）
+/** 從玩家身上真實取走 1 件（優先穿戴），回傳可轉交／贖回的快照；取不到回 null。 */
+function pvpTakeOneDeathItem(recordArkata) {
+    if (!player || !player.eq || !Array.isArray(player.inv)) return null;
+    let eqPool = [];
+    let invPool = [];
+    for (let slot in player.eq) {
+        let it = player.eq[slot];
+        if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk && !it.rental && !it.expireAt)
+            eqPool.push({ kind: 'eq', slot: slot, item: it });
+    }
+    player.inv.forEach((it, index) => {
+        if (it && it.id && DB.items[it.id] && !it.lock && !DB.items[it.id].noSell && !DB.items[it.id].noJunk && !it.rental && !it.expireAt)
+            invPool.push({ kind: 'inv', index: index, item: it });
+    });
+    if (!eqPool.length && !invPool.length) return null;
+    let pool = (eqPool.length && (Math.random() < 0.7 || !invPool.length)) ? eqPool : (invPool.length ? invPool : eqPool);
+    let pick = pool[Math.floor(Math.random() * pool.length)];
+    let snap;
+    try {
+        snap = JSON.parse(JSON.stringify(Object.assign({}, pick.item, { cnt: 1 })));
+    } catch (e) {
+        snap = { id: pick.item.id, cnt: 1, en: pick.item.en || 0, bless: !!pick.item.bless, anc: !!pick.item.anc, attr: pick.item.attr || false, seteff: !!pick.item.seteff };
+    }
+    delete snap.uid;
+    delete snap.lock;
+    delete snap.junk;
+    delete snap.rental;
+    delete snap.expireAt;
+    snap.cnt = 1;
+    let name = (typeof getItemFullName === 'function') ? getItemFullName(snap) : (DB.items[snap.id] ? DB.items[snap.id].n : snap.id);
+    if (recordArkata) {
         try {
             if (!Array.isArray(player.pvpLostItems)) player.pvpLostItems = [];
-            player.pvpLostItems.push({ t: Date.now(), from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null, item: JSON.parse(JSON.stringify(Object.assign({}, pick.item, { cnt: 1 }))) });
+            player.pvpLostItems.push({ t: Date.now(), from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null, item: JSON.parse(JSON.stringify(snap)) });
             if (player.pvpLostItems.length > 5) player.pvpLostItems = player.pvpLostItems.slice(-5);
-        } catch (e) {}
-        if (pick.kind === 'eq') {
-            if ((pick.item.cnt || 1) > 1) pick.item.cnt -= 1;
-            else player.eq[pick.slot] = null;
-        } else {
-            let live = player.inv[pick.index];
-            if (!live || live !== pick.item) live = player.inv.find(it => it === pick.item || (pick.item.uid && it && it.uid === pick.item.uid));
-            if (live) {
-                if ((live.cnt || 1) > 1) live.cnt -= 1;
-                else player.inv = player.inv.filter(it => it !== live);
-            }
-        }
-        return name;
-    };
-    for (let i = 0; i < plan.count; i++) {
-        let nm = dropOne();
-        if (!nm) break;
-        lostNames.push(nm);
+        } catch (e2) {}
     }
-    if (!lostNames.length) return;
-    let list = lostNames.map(n => `<span class="text-amber-200">${n}</span>`).join('、');
+    if (pick.kind === 'eq') {
+        if ((pick.item.cnt || 1) > 1) pick.item.cnt -= 1;
+        else player.eq[pick.slot] = null;
+    } else {
+        let live = player.inv[pick.index];
+        if (!live || live !== pick.item) live = player.inv.find(it => it === pick.item || (pick.item.uid && it && it.uid === pick.item.uid));
+        if (live) {
+            if ((live.cnt || 1) > 1) live.cnt -= 1;
+            else player.inv = player.inv.filter(it => it !== live);
+        }
+    }
+    return { item: snap, name: name, from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null };
+}
+/**
+ * 依性向計畫真實扣除物品。
+ * @param {{ arkata?: boolean, force?: boolean }} opts arkata＝記入贖回；force＝略過機率（測試用）
+ * @returns {{ tier: string, items: Array<{item:object,name:string}> }}
+ */
+function pvpResolveDeathItemLoss(opts) {
+    opts = opts || {};
+    let empty = { tier: 'neutral', items: [] };
+    if (!player || !player.eq || !Array.isArray(player.inv)) return empty;
+    if (typeof mapState !== 'undefined' && mapState && mapState.current && String(mapState.current).indexOf('town_') === 0) return empty;
+    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return empty;
+    let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player.alignmentValue) : (Number(player.alignmentValue) || 0);
+    let plan = pvpDeathItemLossPlan(align);
+    if (!opts.force && Math.random() >= plan.chance) return { tier: plan.tier, items: [] };
+    let items = [];
+    for (let i = 0; i < plan.count; i++) {
+        let one = pvpTakeOneDeathItem(!!opts.arkata);
+        if (!one) break;
+        items.push(one);
+    }
+    return { tier: plan.tier, items: items };
+}
+/**
+ * 把轉交來的完整快照原樣入包（新 uid；強化／祝福／詞綴不變）→ 與失去端 1:1。
+ * opts.restore＝轉交失敗退回（不記撿取日誌、不重登收集冊）。
+ */
+function pvpGainTransferredItems(rawItems, fromName, opts) {
+    opts = opts || {};
+    if (!player || !Array.isArray(rawItems) || !rawItems.length) return [];
+    if (!Array.isArray(player.inv)) player.inv = [];
+    let gained = [];
+    rawItems.forEach(function (raw) {
+        if (!raw || !raw.id || !DB.items[raw.id]) return;
+        let it = {
+            id: raw.id,
+            uid: (typeof uid === 'function') ? uid() : ('t' + Date.now() + Math.random().toString(36).slice(2, 8)),
+            cnt: 1,
+            en: Math.max(0, Math.min(15, Math.floor(Number(raw.en) || 0))),
+            bless: !!raw.bless,
+            anc: !!raw.anc,
+            attr: raw.attr || false,
+            seteff: !!raw.seteff,
+            lock: false,
+            junk: false
+        };
+        try {
+            if (typeof itemSig === 'function' && player.junkPrefs && player.junkPrefs[itemSig(it)]) it.junk = true;
+        } catch (e) {}
+        if (typeof invAddOrStack === 'function') invAddOrStack(it);
+        else player.inv.push(it);
+        if (!opts.restore) {
+            if (typeof registerEquipObtained === 'function') registerEquipObtained(it.id);
+            if (typeof auditTrackGain === 'function') auditTrackGain({ id: it.id, cnt: 1 });
+        }
+        let nm = (typeof getItemFullName === 'function') ? getItemFullName(it) : (DB.items[it.id].n || it.id);
+        gained.push({ item: it, name: nm });
+    });
+    if (gained.length && !opts.restore && !opts.silent) {
+        let list = gained.map(g => {
+            let col = (typeof getItemColor === 'function') ? getItemColor(g.item) : 'text-amber-200';
+            return `<span class="${col} font-bold">${g.name}</span>`;
+        }).join('、');
+        logSys(`<span class="text-amber-300 font-bold">【野外 PK】</span>你撿取了 ${String(fromName || '對手')} 遺失的 ${list}。`);
+    }
+    if (gained.length) {
+        try { calcStats(); renderTabs(true); updateUI(); if (typeof saveGame === 'function') saveGame(); } catch (e2) {}
+    }
+    return gained;
+}
+function pvpChaoticDeathItemLoss() {
+    let result = pvpResolveDeathItemLoss({ arkata: true });
+    if (!result.items.length) return;
+    let list = result.items.map(x => `<span class="text-amber-200">${x.name}</span>`).join('、');
     let msg;
-    if (plan.tier === 'justice') msg = `正義狀態下死亡，仍有極低機率遺失了 ${list}。`;
-    else if (plan.tier === 'neutral') msg = `中立狀態下死亡，遺失了 ${list}。`;
+    if (result.tier === 'justice') msg = `正義狀態下死亡，仍有極低機率遺失了 ${list}。`;
+    else if (result.tier === 'neutral') msg = `中立狀態下死亡，遺失了 ${list}。`;
     else msg = `邪惡狀態下死亡，遺失了 ${list}。`;
     logSys(`<span class="text-red-400 font-bold">${msg}</span>`);
     try { calcStats(); renderTabs(true); updateUI(); } catch (e) {}
