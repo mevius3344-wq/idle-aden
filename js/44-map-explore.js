@@ -1572,16 +1572,18 @@
             biomeCls.forEach(function (c) { bv.classList.remove(c); });
             bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg', 'is-large-explore');
             bv.style.backgroundColor = '';
-            // 🩹 v3.8.475／485／v3.9.34：離開探索後必須還原側視背景（真地圖曾把 backgroundImage 清成 none＝黑圖／地圖異常）
+            // 🩹 v3.8.475／485／v3.9.34／37：離開探索後必須還原側視背景（真地圖曾把 backgroundImage 清成 none＝黑圖／地圖異常）
             try {
                 var curMap = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : '';
                 if (curMap === 'training') {
                     if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
                     else {
                         var _cbg = bv.style.getPropertyValue('--chud-battle-bg');
-                        if (_cbg) bv.style.backgroundImage = _cbg;
-                        bv.style.backgroundSize = 'cover';
-                        bv.style.backgroundPosition = 'center center';
+                        if (_cbg) {
+                            bv.style.setProperty('background-image', _cbg, 'important');
+                            bv.style.setProperty('background-size', 'cover', 'important');
+                            bv.style.setProperty('background-position', 'center center', 'important');
+                        }
                         bv.classList.add('training-yard', 'has-bg', 'area-fit');
                         bv.classList.remove('is-world-scroll', 'is-exploring');
                     }
@@ -1589,13 +1591,17 @@
                     bv.classList.remove('training-yard');
                     var _cbgHunt = bv.style.getPropertyValue('--chud-battle-bg');
                     if (_cbgHunt && _cbgHunt !== 'none') {
-                        bv.style.backgroundImage = _cbgHunt;
-                        bv.style.backgroundSize = 'cover';
-                        bv.style.backgroundPosition = 'center center';
+                        bv.style.setProperty('background-image', _cbgHunt, 'important');
+                        bv.style.setProperty('background-size', 'cover', 'important');
+                        bv.style.setProperty('background-position', 'center center', 'important');
                         bv.classList.add('has-bg', 'area-fit');
                     } else if (typeof applyAreaBackground === 'function') {
                         applyAreaBackground();
                     }
+                    try {
+                        var _mlOff = document.getElementById('mob-list');
+                        if (_mlOff) _mlOff.classList.remove('is-field-combat');
+                    } catch (eMl) {}
                 } else {
                     bv.classList.remove('training-yard');
                 }
@@ -2318,6 +2324,54 @@
         }
     }
 
+    /**
+     * 🩹 v3.9.37：每 tick／切圖消毒戰鬥框——防 training-yard／is-real-map 殘留造成黑圖或怪全藏。
+     */
+    function exploreSanitizeDisplay() {
+        var bv = document.getElementById('battle-view');
+        if (!bv || bv.classList.contains('hidden')) return;
+        var cur = '';
+        try { cur = (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : ''; } catch (e0) {}
+        if (!cur || cur.indexOf('town_') === 0) return;
+        if (cur === 'training') {
+            try {
+                if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
+            } catch (e1) {}
+            return;
+        }
+        try { bv.classList.remove('training-yard'); } catch (e2) {}
+        if (!exploreAllowed()) {
+            try {
+                bv.classList.remove('is-world-scroll', 'is-exploring', 'is-real-map', 'is-topdown-map', 'is-topdown-3d', 'has-scenic-bg', 'explore-bg-scroll', 'is-scenic-3d', 'is-large-explore', 'is-explore-walking', 'is-explore-combat');
+            } catch (e3) {}
+            try {
+                var ml = document.getElementById('mob-list');
+                if (ml) {
+                    ml.classList.remove('is-field-combat');
+                    ml.style.transform = '';
+                }
+            } catch (e4) {}
+            try {
+                ['explore-world-bg', 'explore-world-bg-far', 'explore-world-bg-blend', 'explore-prop-layer', 'explore-sea-mask'].forEach(function (id) {
+                    var n = document.getElementById(id);
+                    if (n) n.classList.add('hidden');
+                });
+            } catch (e5) {}
+            try {
+                var cbg = bv.style.getPropertyValue('--chud-battle-bg');
+                var bgNow = (bv.style.backgroundImage || '').trim();
+                if ((!bgNow || bgNow === 'none') && cbg && cbg !== 'none') {
+                    bv.style.setProperty('background-image', cbg, 'important');
+                    bv.style.setProperty('background-size', 'cover', 'important');
+                    bv.style.setProperty('background-position', 'center center', 'important');
+                    bv.classList.add('has-bg', 'area-fit');
+                } else if ((!bgNow || bgNow === 'none') && typeof applyAreaBackground === 'function') {
+                    applyAreaBackground();
+                }
+            } catch (e6) {}
+        }
+    }
+
     function exploreApplyWorld() {
         var bv = document.getElementById('battle-view');
         if (!bv) return;
@@ -2351,6 +2405,7 @@
             var pm = document.getElementById('player-morph-sprite');
             if (pm) pm.style.zIndex = String(explorePlayerDepthZ());
         } catch (eZ) {}
+        exploreSanitizeDisplay();
     }
 
     /** 造景依世界 Y 景深；真地圖改相機相對座標以便與人／怪互遮 */
@@ -2963,6 +3018,7 @@
     }
 
     function exploreTick() {
+        exploreSanitizeDisplay();
         if (!exploreAllowed()) {
             if (_moving || document.getElementById('battle-view') && document.getElementById('battle-view').classList.contains('is-world-scroll')) {
                 _moving = false;
@@ -3276,9 +3332,11 @@
         exploreEnsureUi();
         exploreReset('map');
         exploreRenderHint();
-        // 🩹 v3.9.34：非探索圖（修練／軍王等）切圖後強制再套側視背景，避免殘留 none
+        // 🩹 v3.9.34／37：非探索圖切圖後強制再套側視背景＋消毒殘留 class
         try {
             if (!exploreAllowed() && typeof applyAreaBackground === 'function') applyAreaBackground();
+            exploreSanitizeDisplay();
+            exploreApplyWorld();
         } catch (eAb) {}
     }
 
@@ -3345,6 +3403,7 @@
     window.exploreEngageLimit = exploreEngageLimit;
     window.exploreTryPortal = exploreTryPortal;
     window.exploreOnMapChange = exploreOnMapChange;
+    window.exploreSanitizeDisplay = exploreSanitizeDisplay;
     window.exploreReset = exploreReset;
     window.exploreRandomTeleportOnMap = exploreRandomTeleportOnMap;
     window.exploreVacuumLoot = exploreVacuumLoot;

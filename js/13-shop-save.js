@@ -196,9 +196,9 @@ function applyAreaBackground() {
         else if (fbImg) { let _fb = upgradeAreaPath(fbImg); useSrc = _fb.indexOf('/') >= 0 ? _fb : `assets/background/${_fb}`; useFit = !AREA_BG_NOFIT.has(fbImg); }   // ⚔️ 預設 area-fit，僅舊 castle.png/Rift.png 例外；🖼️ fallback 圖亦經 upgradeAreaPath 升級 1920×1080(若有新圖)
         if (useSrc) {
             let _cssBg = areaBgCssUrl(useSrc);
-            bv.style.backgroundImage = _cssBg;
+            bv.style.setProperty('background-image', _cssBg, 'important');
             bv.style.setProperty('--chud-battle-bg', _cssBg);
-            bv.style.backgroundSize = useFit ? 'cover' : '';
+            bv.style.setProperty('background-size', useFit ? 'cover' : '', 'important');
             bv.classList.toggle('area-fit', useFit);
             bv.classList.add('has-bg');
         } else {
@@ -213,10 +213,11 @@ function applyAreaBackground() {
         if (cur === 'training') {
             ensureTrainingYardBackground(bv);
         } else if (!cur.startsWith('town_')) {
-            // 非真地圖狩獵也清殘留（避免從銀騎士地區帶 is-real-map）
+            // 🩹 v3.9.37：非修練狩獵圖一律清探索殘留（防黑圖／藏怪）
+            bv.classList.remove('training-yard');
             try {
                 if (typeof exploreIsRealMap === 'function' && !exploreIsRealMap(cur)) {
-                    bv.classList.remove('is-real-map', 'is-topdown-3d', 'has-scenic-bg');
+                    bv.classList.remove('is-real-map', 'is-topdown-3d', 'has-scenic-bg', 'is-topdown-map', 'is-scenic-3d', 'explore-bg-scroll', 'is-large-explore');
                 }
             } catch (eRm) {}
         }

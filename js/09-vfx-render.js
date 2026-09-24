@@ -4303,15 +4303,12 @@ function _playerMorphApplyBody() {
     {
         let _pw = form.qSkin ? Q_PLAYER_DISP_W : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
         // 🗺️ 以 CSS／探索圖為準鎖中央腳錨（避免 exploreAllowed／area-fit 瞬間 false 掉回 bottom:2~4px＝半身）
-        // 🩹 v3.9.31：腳錨(_elevFoot)與 is-world-scroll class(_lockWorld)分離——
-        //    舊制「非村莊一律」會把軍王／純BOSS／修練過渡等經典怪列誤套世界捲動 CSS＝怪物顯示異常
+        // 🩹 v3.9.31／37：腳錨只讀／跟探索狀態；is-world-scroll class 單一真相＝exploreApplyWorld（勿在此每幀強加＝地板未就緒就進捲動 CSS＝黑圖／怪消失）
         let _elevFoot = !!(bv && bv.classList.contains('is-world-scroll'));
-        let _lockWorld = false;
         let _isTrainingYard = false;
         try { _isTrainingYard = !!(typeof mapState !== 'undefined' && mapState && mapState.current === 'training'); } catch (eTr0) {}
         if (_isTrainingYard) {
             _elevFoot = false;
-            _lockWorld = false;
             try {
                 if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
                 else if (bv) {
@@ -4324,21 +4321,12 @@ function _playerMorphApplyBody() {
         } else {
             // 🩹 v3.9.33：離開修練場必須清 training-yard，否則 CSS 會把非木頭人全藏＝狩獵怪「顯示異常」
             try { if (bv) bv.classList.remove('training-yard'); } catch (eTrOff) {}
-            let _exOn = false, _fcOn = false, _allowEx = false;
-            try { _exOn = !!(typeof exploreWorldActive === 'function' && exploreWorldActive()); } catch (eWs) {}
-            try { _fcOn = !!(typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFcL) {}
-            try { _allowEx = !!(typeof exploreAllowed === 'function' && exploreAllowed()); } catch (eAl) {}
-            if (_exOn || _fcOn || _allowEx) {
-                _elevFoot = true;
-                _lockWorld = true;
-            } else {
-                // 非探索圖：腳錨回經典；is-world-scroll 交由 exploreApplyWorld 拆除（勿在此搶拆＝場戰怪卡失位）
-                _elevFoot = false;
-                _lockWorld = false;
-            }
-        }
-        if (_lockWorld && bv) {
-            try { bv.classList.add('is-world-scroll', 'area-fit'); } catch (eLock) {}
+            try {
+                if ((typeof exploreWorldActive === 'function' && exploreWorldActive())
+                    || (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive())) {
+                    _elevFoot = true;
+                }
+            } catch (eWs) {}
         }
         if (_elevFoot) {
             if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }

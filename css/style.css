@@ -915,9 +915,9 @@
             background-repeat: no-repeat !important;
             opacity: 1 !important;
         }
-        /* 🩹 v3.8.385：真地圖時徹底蓋住側視 has-bg，只留俯視島圖 */
-        #battle-view.is-real-map.has-bg:not(.training-yard),
-        #battle-view.is-topdown-3d.has-scenic-bg.has-bg:not(.training-yard) {
+        /* 🩹 v3.8.385／v3.9.37：真地圖側視 has-bg 僅在世界捲動開啟時關掉；勿殘留 is-real-map 就把側視背景永遠 none＝黑圖 */
+        #battle-view.is-world-scroll.is-real-map.has-bg:not(.training-yard),
+        #battle-view.is-world-scroll.is-topdown-3d.has-scenic-bg.has-bg:not(.training-yard) {
             background-image: none !important;
         }
         #battle-view.is-real-map #explore-world-bg.explore-world-bg.is-scenic-topdown {
