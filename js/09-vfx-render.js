@@ -4322,6 +4322,8 @@ function _playerMorphApplyBody() {
                 }
             } catch (eTr1) {}
         } else {
+            // 🩹 v3.9.33：離開修練場必須清 training-yard，否則 CSS 會把非木頭人全藏＝狩獵怪「顯示異常」
+            try { if (bv) bv.classList.remove('training-yard'); } catch (eTrOff) {}
             let _exOn = false, _fcOn = false, _allowEx = false;
             try { _exOn = !!(typeof exploreWorldActive === 'function' && exploreWorldActive()); } catch (eWs) {}
             try { _fcOn = !!(typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFcL) {}
@@ -4330,21 +4332,13 @@ function _playerMorphApplyBody() {
                 _elevFoot = true;
                 _lockWorld = true;
             } else {
-                // 非探索圖：勿沿用殘留 is-world-scroll（否則經典怪列被世界捲動 CSS 扭曲）
+                // 非探索圖：腳錨回經典；is-world-scroll 交由 exploreApplyWorld 拆除（勿在此搶拆＝場戰怪卡失位）
                 _elevFoot = false;
                 _lockWorld = false;
             }
-            // 探索允許但 class 尚未掛上的短暫橋接（修半身）；非探索圖不再誤鎖
         }
         if (_lockWorld && bv) {
             try { bv.classList.add('is-world-scroll', 'area-fit'); } catch (eLock) {}
-        } else if (!_isTrainingYard && bv) {
-            try {
-                if (bv.classList.contains('is-world-scroll')
-                    && !(typeof exploreAllowed === 'function' && exploreAllowed())) {
-                    bv.classList.remove('is-world-scroll');
-                }
-            } catch (eClrWs) {}
         }
         if (_elevFoot) {
             if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }

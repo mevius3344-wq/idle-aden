@@ -1546,7 +1546,7 @@
         var ground = document.getElementById('explore-ground');
         var vig = document.getElementById('explore-vignette');
         var biomeCls = ['explore-biome-wild', 'explore-biome-dungeon', 'explore-biome-tower', 'explore-biome-desert', 'explore-biome-snow', 'explore-biome-forest', 'explore-biome-lava', 'explore-biome-swamp', 'explore-biome-crystal', 'explore-biome-coast', 'explore-biome-heat', 'explore-biome-mist', 'explore-biome-cold'];
-        if (!on) {
+            if (!on) {
             if (far) {
                 far.classList.add('hidden');
                 far.classList.remove('is-scenic-far');
@@ -1572,7 +1572,7 @@
             biomeCls.forEach(function (c) { bv.classList.remove(c); });
             bv.classList.remove('explore-bg-scroll', 'is-explore-walking', 'is-explore-combat', 'is-topdown-map', 'is-scenic-3d', 'is-topdown-3d', 'is-real-map', 'portal-ready-left', 'portal-ready-right', 'has-scenic-bg', 'is-large-explore');
             bv.style.backgroundColor = '';
-            // 🩹 v3.8.475／485：離開場戰／真地圖後，若在修練場把側視背景加回來
+            // 🩹 v3.8.475／485／v3.9.33：離開場戰／真地圖後，修練場重套背景；非修練場清掉殘留 training-yard
             try {
                 if (typeof mapState !== 'undefined' && mapState && mapState.current === 'training') {
                     if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
@@ -1584,6 +1584,8 @@
                         bv.classList.add('training-yard', 'has-bg', 'area-fit');
                         bv.classList.remove('is-world-scroll', 'is-exploring');
                     }
+                } else {
+                    bv.classList.remove('training-yard');
                 }
             } catch (eTrBg) {}
             return;
@@ -2313,6 +2315,12 @@
         bv.classList.toggle('is-world-scroll', !!on);
         bv.classList.toggle('is-real-map', !!(on && exploreIsRealMap()));
         bv.classList.toggle('is-exploring', on && (Math.abs(_tx) > 1 || Math.abs(_ty) > 1));
+        // 🩹 v3.9.33：探索圖上勿殘留修練場 class（會藏怪）
+        try {
+            if (on || (typeof mapState !== 'undefined' && mapState && mapState.current !== 'training')) {
+                bv.classList.remove('training-yard');
+            }
+        } catch (eTy) {}
         bv.classList.remove('portal-ready-left', 'portal-ready-right');
         exploreSyncWorldBg(bv, on);
         exploreRenderGrindMarks(fieldOn);

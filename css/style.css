@@ -557,7 +557,7 @@
         #battle-view.area-fit .mob-target.duel-fixed { position: absolute; height: 242px; width: auto; min-width: 96px; transform: translate(-50%, -50%); z-index: 1; }
         /* 🪵 新兵修練場：木頭人與玩家同用 battle-view bottom 對齊（勿讓 #mob-list 當定位父層） */
         #battle-view.area-fit .mob-target.training-fixed { position: absolute; height: 220px; width: auto; min-width: 120px; transform: translateX(-50%); z-index: 1; }
-        #battle-view.area-fit.training-yard #mob-list .mob-target:not(.training-fixed) { display: none !important; }
+        #battle-view.area-fit.training-yard #mob-list .mob-target:not(.training-fixed):not(.field-mob) { display: none !important; }
         #battle-view.area-fit.training-yard #mob-list { position: static; height: 100%; background: transparent !important; }
         #battle-view.area-fit.training-yard.has-bg {
             background-size: cover !important;
