@@ -920,13 +920,15 @@
         #battle-view.is-world-scroll.is-topdown-3d.has-scenic-bg.has-bg:not(.training-yard) {
             background-image: none !important;
         }
-        #battle-view.is-real-map #explore-world-bg.explore-world-bg.is-scenic-topdown {
+        #battle-view.is-real-map #explore-world-bg.explore-world-bg.is-scenic-topdown,
+        #battle-view.is-topdown-3d #explore-world-bg.explore-world-bg.is-scenic-topdown {
             inset: -10%;
             z-index: 3 !important;
-            /* 蓋過通用 is-topdown-floor 的 512 瓦尺寸，避免破圖 */
-            background-size: unset;
+            /* 🩹 v3.9.39：整幅地板必須 no-repeat＋世界尺寸；禁止落到 512 瓦平鋪＝全圖破圖 */
+            background-size: var(--floor-art-w, 1024px) var(--floor-art-h, 1024px) !important;
             background-repeat: no-repeat !important;
             filter: none !important;
+            image-rendering: auto;
         }
         #battle-view.is-topdown-3d #explore-world-bg-blend.explore-world-bg-blend.is-scenic-underfill {
             display: block !important;

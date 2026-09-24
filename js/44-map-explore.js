@@ -135,8 +135,8 @@
         return 'assets/area/seamless/' + id + '.png?v=' + exploreFloorVer();
     }
     /**
-     * 🩹 v3.9.38：地板 URL 先預載；404（maps 未部署）改 seamless，避免純色綠底。
-     * cssUrl 形如 url("path?v=…") 或 path。
+     * 🩹 v3.9.38／39：同步套地板（尺寸／repeat 立刻寫上），再背景探測 404→seamless。
+     * 不可等 onload 才寫 size——否則 CSS 預設 512 平鋪會先把 1024 地板弄成破圖。
      */
     function exploreApplyFloorBg(el, cssUrl, fallbackUrl, opts) {
         if (!el) return;
@@ -147,34 +147,50 @@
             if (fallbackUrl) exploreApplyFloorBg(el, fallbackUrl, '', opts);
             return;
         }
-        var apply = function (u, useOpts) {
-            var o = useOpts || opts;
+        var toCssUrl = function (u) {
             var abs = String(u || '');
+            if (!abs) return '';
+            if (abs.indexOf('url(') === 0) return abs;
+            return 'url("' + abs + '")';
+        };
+        var applyNow = function (u, useOpts) {
+            var o = useOpts || opts;
+            var abs = toCssUrl(u);
             if (!abs) return;
-            if (abs.indexOf('url(') !== 0) abs = 'url("' + abs + '")';
             el.style.backgroundImage = abs;
             if (o.size) {
                 if (o.importantSize) el.style.setProperty('background-size', o.size, 'important');
                 else el.style.backgroundSize = o.size;
             }
-            if (o.repeat) el.style.backgroundRepeat = o.repeat;
+            if (o.repeat) {
+                if (o.importantRepeat) el.style.setProperty('background-repeat', o.repeat, 'important');
+                else el.style.backgroundRepeat = o.repeat;
+            }
             if (o.noHidden) el.classList.remove('hidden');
         };
-        var img = new Image();
-        img.onload = function () { apply(path, opts); };
-        img.onerror = function () {
-            if (fallbackUrl && fallbackUrl !== path && fallbackUrl !== cssUrl) {
-                exploreApplyFloorBg(el, fallbackUrl, '', {
-                    size: opts.fallbackSize || (opts.tileSize || opts.size),
+        // 先同步套上正確尺寸（防破圖）
+        applyNow(path, opts);
+        if (!fallbackUrl || fallbackUrl === path || fallbackUrl === cssUrl) return;
+        // 背景確認是否 404；失敗才換 seamless
+        try {
+            var img = new Image();
+            var token = String(Date.now()) + Math.random();
+            el.dataset.floorProbe = token;
+            img.onload = function () {
+                if (el.dataset.floorProbe !== token) return;
+            };
+            img.onerror = function () {
+                if (el.dataset.floorProbe !== token) return;
+                applyNow(fallbackUrl, {
+                    size: opts.fallbackSize || opts.size,
                     repeat: opts.fallbackRepeat || 'repeat',
-                    importantSize: !!opts.fallbackImportant,
+                    importantSize: !!opts.importantSize || !!opts.fallbackImportant,
+                    importantRepeat: !!opts.importantRepeat,
                     noHidden: opts.noHidden
                 });
-            } else {
-                el.style.backgroundImage = '';
-            }
-        };
-        img.src = path;
+            };
+            img.src = path;
+        } catch (eProbe) {}
     }
     /**
      * 真地圖地板：優先用可走 floor（Teon／手繪俯視），1:1 鎖世界座標＝真實感。
@@ -1721,10 +1737,15 @@
                         size: scenicW + 'px ' + scenicH + 'px',
                         importantSize: true,
                         repeat: 'no-repeat',
+                        importantRepeat: true,
                         fallbackSize: tileSz + 'px ' + tileSz + 'px',
                         fallbackRepeat: 'repeat',
                         noHidden: true
                     });
+                    try {
+                        bv.style.setProperty('--floor-art-w', scenicW + 'px');
+                        bv.style.setProperty('--floor-art-h', scenicH + 'px');
+                    } catch (eFw) {}
                     // 地板＝世界尺寸 1:1（人物／相機／碰撞對齊）
                     mid.style.backgroundPosition = '';
                     mid.classList.remove('is-ground-tile', 'is-map-scene', 'is-scenic-ground', 'hidden');
