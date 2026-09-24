@@ -449,8 +449,8 @@ function killMob(idx) {
     // 🤝 v3.7.62 組隊經驗不再拆分：主玩家、每名未倒地傭兵、每隻未倒地寵物各取得完整經驗；既有組隊加成保留。
     let _expEach = mob.exp * (1 + partyExpBonusPct() / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
     if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();   // 🎉 全服經驗活動（可疊加）
-    let _petExpGain = Math.floor(_expEach * (1 + dollFieldVal('expBonus') / 100));   // 🐾 每隻存活寵物各得完整玩家份額；玩家滿等不影響養寵
-    let _playerExpGain = Math.floor(_petExpGain * getExpGainMult(player.lv));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
+    let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));   // 🐾 每隻存活寵物各得完整玩家份額；玩家滿等不影響養寵
+    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
     player.exp += _playerExpGain;
     checkLvUp();
     // 🐾 寵物經驗：每隻未倒地出戰寵物各得完整份額；不受玩家 Lv100 經驗封頂影響（升級需求＝玩家表 1/10）

@@ -1805,7 +1805,16 @@ function _renderMobsImpl() {
             let _sfCls = '';
             let _fieldCombat = false;
             try { _fieldCombat = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFc) {}
-            if (_fieldCombat && !(m.siegeEnemy && m.race === '建築') && !m._pvpDuelFoe) {
+            try { if (mapState.current === 'training') _fieldCombat = false; } catch (eTrFc0) {}
+            // 🪵 修練場木頭人：優先於場戰分支（避免誤套 field-mob 後被 .training-yard CSS 藏掉）
+            let _isTrainDummy = !!(m.trainingDummy || m.n === '木頭人')
+                && typeof TRAINING_DUMMY_POS !== 'undefined'
+                && (typeof mapState !== 'undefined' && mapState && mapState.current === 'training');
+            if (_isTrainDummy) {
+                let _tb = (TRAINING_DUMMY_POS.bottom != null) ? TRAINING_DUMMY_POS.bottom : 190;
+                _scat = ` style="left:${TRAINING_DUMMY_POS.left}%;bottom:${_tb}px;"`;
+                _sfCls = ' training-fixed';
+            } else if (_fieldCombat && !(m.siegeEnemy && m.race === '建築') && !m._pvpDuelFoe) {
                 try { if (typeof exploreAssignFieldPos === 'function') exploreAssignFieldPos(m, i); } catch (eAp) {}
                 // 🗺️ v3.8.317：left/bottom/is-engage 不進 HTML diff——相機一動字串全變→每幀 innerHTML
                 //    整列重建＝所有 sprite <img> 被砍回靜態幀（看起來永遠不動）。座標只由 exploreApplyFieldDomPos 寫。
@@ -1823,11 +1832,6 @@ function _renderMobsImpl() {
                 } else if (m._pvpDuelFoe && typeof PVP_DUEL_FOE_POS !== 'undefined') {
                     _scat = ` style="left:${PVP_DUEL_FOE_POS.left}%;top:${PVP_DUEL_FOE_POS.top}%;"`;
                     _sfCls = ' duel-fixed';
-                } else if ((m.trainingDummy || m.n === '木頭人') && typeof TRAINING_DUMMY_POS !== 'undefined') {
-                    // 與玩家同一座標系（#battle-view bottom），木頭人跟人物一起往上
-                    let _tb = (TRAINING_DUMMY_POS.bottom != null) ? TRAINING_DUMMY_POS.bottom : 190;
-                    _scat = ` style="left:${TRAINING_DUMMY_POS.left}%;bottom:${_tb}px;"`;
-                    _sfCls = ' training-fixed';
                 }
             }
             // 🎨 僅「真有 Q 包」的怪才套粉彩名牌；經典 anim／變身不受影響
@@ -4299,12 +4303,15 @@ function _playerMorphApplyBody() {
     {
         let _pw = form.qSkin ? Q_PLAYER_DISP_W : ((a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100);
         // 🗺️ 以 CSS／探索圖為準鎖中央腳錨（避免 exploreAllowed／area-fit 瞬間 false 掉回 bottom:2~4px＝半身）
-        let _worldScroll = !!(bv && bv.classList.contains('is-world-scroll'));
-        // 🩹 新兵修練場：必須最先判定，勿被「非村莊＝場戰腳錨」蓋掉
+        // 🩹 v3.9.31：腳錨(_elevFoot)與 is-world-scroll class(_lockWorld)分離——
+        //    舊制「非村莊一律」會把軍王／純BOSS／修練過渡等經典怪列誤套世界捲動 CSS＝怪物顯示異常
+        let _elevFoot = !!(bv && bv.classList.contains('is-world-scroll'));
+        let _lockWorld = false;
         let _isTrainingYard = false;
         try { _isTrainingYard = !!(typeof mapState !== 'undefined' && mapState && mapState.current === 'training'); } catch (eTr0) {}
         if (_isTrainingYard) {
-            _worldScroll = false;
+            _elevFoot = false;
+            _lockWorld = false;
             try {
                 if (typeof ensureTrainingYardBackground === 'function') ensureTrainingYardBackground(bv);
                 else if (bv) {
@@ -4315,27 +4322,31 @@ function _playerMorphApplyBody() {
                 }
             } catch (eTr1) {}
         } else {
-            try { if (!_worldScroll && typeof exploreWorldActive === 'function') _worldScroll = !!exploreWorldActive(); } catch (eWs) {}
-            // 狩獵場戰圖：即使 class 尚未補上 is-world-scroll，也絕對不要掉回經典格位 bottom:2
-            if (!_worldScroll) {
-                try {
-                    if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) _worldScroll = true;
-                } catch (eFcL) {}
+            let _exOn = false, _fcOn = false, _allowEx = false;
+            try { _exOn = !!(typeof exploreWorldActive === 'function' && exploreWorldActive()); } catch (eWs) {}
+            try { _fcOn = !!(typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFcL) {}
+            try { _allowEx = !!(typeof exploreAllowed === 'function' && exploreAllowed()); } catch (eAl) {}
+            if (_exOn || _fcOn || _allowEx) {
+                _elevFoot = true;
+                _lockWorld = true;
+            } else {
+                // 非探索圖：勿沿用殘留 is-world-scroll（否則經典怪列被世界捲動 CSS 扭曲）
+                _elevFoot = false;
+                _lockWorld = false;
             }
-            // 🩹 v3.8.339：不在村莊＝一律場戰腳錨（修「突然半身」：探索模組晚一秒→bottom 掉回 4px）
-            if (!_worldScroll) {
-                try {
-                    let _tv = document.getElementById('town-view');
-                    let _inTown = !!(!_tv ? false : !_tv.classList.contains('hidden'));
-                    if (!_inTown) _worldScroll = true;
-                } catch (eNt) {}
-            }
+            // 探索允許但 class 尚未掛上的短暫橋接（修半身）；非探索圖不再誤鎖
         }
-        // 🩹 v3.8.323：探索允許時硬鎖 class＋腳錨（移動瞬間 class 閃掉＝人物掉到控鍵區被裁成半身）
-        if (_worldScroll && bv) {
+        if (_lockWorld && bv) {
             try { bv.classList.add('is-world-scroll', 'area-fit'); } catch (eLock) {}
+        } else if (!_isTrainingYard && bv) {
+            try {
+                if (bv.classList.contains('is-world-scroll')
+                    && !(typeof exploreAllowed === 'function' && exploreAllowed())) {
+                    bv.classList.remove('is-world-scroll');
+                }
+            } catch (eClrWs) {}
         }
-        if (_worldScroll) {
+        if (_elevFoot) {
             if (_pmState.el._moveTrans) { _pmState.el.style.transition = ''; _pmState.el._moveTrans = false; }
             // 🩹 v3.8.389：真地圖＝世界−相機腳錨（人在圖上走）；其餘鎖畫面中央
             let _realMap = false;
