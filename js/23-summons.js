@@ -592,12 +592,18 @@ function summonV2AttackOnce(s, d, t, owner) {
                 t.st = t.st || newMobStatus();
                 t.st.poison = 150; t.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); t.st.poisonStacks = 1; t.st.poisonUnit = t.st.poisonDmg; t.st.poisonTick = 30; t.st.poisonSrc = 'summon';   // 🎯 DPS：召喚中毒歸召喚
                 logCombat(`<span class="text-purple-300">${s.form}</span> 發動 <span class="text-green-300 font-bold">${pr.name}</span>，<span class="${getMobColor(t.lv)}">${t.n}</span> 中毒了！`, 'magic');
-            } else if (pr.kind === 'poisonAll') {   // 全體中毒
-                const all = mapState.mobs.filter(m => m && m.curHp > 0);
+            } else if (pr.kind === 'poisonAll') {   // 範圍中毒（場戰限錨點附近）
+                const all = (typeof filterSkillAoeTargets === 'function')
+                    ? filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0), { tier: 5 }, t)
+                    : mapState.mobs.filter(m => m && m.curHp > 0);
                 all.forEach(m => { m.st = m.st || newMobStatus(); m.st.poison = 150; m.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); m.st.poisonStacks = 1; m.st.poisonUnit = m.st.poisonDmg; m.st.poisonTick = 30; m.st.poisonSrc = 'summon'; });   // 🎯 DPS：召喚全體中毒歸召喚
-                if (all.length) logCombat(`<span class="text-purple-300">${s.form}</span> 發動 <span class="text-green-300 font-bold">${pr.name}</span>，敵方全體中毒！`, 'magic');
+                if (all.length) logCombat(`<span class="text-purple-300">${s.form}</span> 發動 <span class="text-green-300 font-bold">${pr.name}</span>，敵方中毒！`, 'magic');
             } else {   // magic / magicAll：屬性魔法傷害（吃魔抗/DR/屬性剋制·summonElementDamage）
-                const targets = (pr.kind === 'magicAll') ? mapState.mobs.filter(m => m && m.curHp > 0) : [t];
+                const targets = (pr.kind === 'magicAll')
+                    ? (typeof filterSkillAoeTargets === 'function'
+                        ? filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0), { tier: 5 }, t)
+                        : mapState.mobs.filter(m => m && m.curHp > 0))
+                    : [t];
                 const texts = [];
                 targets.forEach(m => {
                     let pd = summonElementDamage([2, Math.max(2, Math.ceil(s.lv * 0.6))], pr.ele || 'none', m, skillPower, _attackMult * (pr.heavy || 1), 0);
@@ -639,7 +645,9 @@ function spiritAttackOnce(s, t, owner) {
     // 👑 v3.2.26 精靈王：攻擊命中後 15% 機率釋放「同屬性全體法術」（冰雪暴/火風暴/龍捲風/震裂術·每目標約半發威力·吃魔抗/剋制/DR）
     if (spec.aoe && Math.random() < spec.aoe.p) {
         const spellN = (spec.aoe.names && spec.aoe.names[s.ele]) || '元素風暴';
-        const targets = mapState.mobs.filter(m => m && m.curHp > 0);
+        const targets = (typeof filterSkillAoeTargets === 'function')
+            ? filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0), { tier: 8 }, t)
+            : mapState.mobs.filter(m => m && m.curHp > 0);
         const texts = [];
         targets.forEach(m => {
             const pd = summonElementDamage([2, spec.dice[1]], s.ele, m, Math.floor(flat / 2), mult, mrPen);

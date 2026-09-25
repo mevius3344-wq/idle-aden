@@ -1050,7 +1050,11 @@ function petCastSkill(p, d, target) {
             p._hardenUntil = (state.ticks || 0) + (sk.dur || 6) * 10;
             logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，傷害減免 +${_hd}！（持續 ${sk.dur || 6} 秒）`, 'player-special');
         } else {   // magic：骰值+技能傷害加成·吃魔抗/DR/屬性剋制；必定命中
-            let targets = sk.aoe ? mapState.mobs.filter(m => m && m.curHp > 0) : [target];
+            let targets = sk.aoe
+                ? (typeof filterSkillAoeTargets === 'function'
+                    ? filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0), { aroundCaster: false, tier: 5 }, target)
+                    : mapState.mobs.filter(m => m && m.curHp > 0))
+                : [target];
             let texts = [];
             let _iaMd = (typeof teamIlluAura === 'function' && teamIlluAura(p, true)) ? (teamIlluAura(p, true).md || 0) : 0;   // 🩹 v3.2.67 幻覺攻擊光環（巫妖+2魔傷）全隊生效→注入寵物法術
             targets.forEach(m => {

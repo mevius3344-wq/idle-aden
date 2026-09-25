@@ -33,6 +33,8 @@
     var ENGAGE_MELEE = 48;     // 🩹 v3.8.423：對齊九宮格（鄰格含斜角可交戰）
     var ENGAGE_RANGED = GRID_PX * 8;
     var ENGAGE_PX = ENGAGE_MELEE;
+    // 🪄 v3.9.48：場戰範圍技半徑（約 5 格）——target:'all' 不可掃全圖，只打錨點附近集群
+    var AOE_RADIUS_PX = GRID_PX * 5;
     var APPROACH_WORLD = 420;
     var PICKUP_PX = 88;
     var CHASE_PULL = 4.0;
@@ -1059,6 +1061,67 @@
     function exploreMobWorldDist(mob) {
         if (!mob || mob._fx == null) return Infinity;
         return Math.hypot(mob._fx - _tx, (mob._fy || 0) - _ty);
+    }
+
+    function exploreMobPairDist(a, b) {
+        if (!a || !b || a._fx == null || b._fx == null) return Infinity;
+        return Math.hypot(a._fx - b._fx, (a._fy || 0) - (b._fy || 0));
+    }
+
+    function exploreAoeRadiusPx(sk) {
+        var base = AOE_RADIUS_PX;
+        if (!sk) return base;
+        // 高階大範圍略放大（流星雨／雷霆風暴等），仍遠小於全圖
+        var tier = sk.tier || 1;
+        if (tier >= 10) return base + GRID_PX * 2;
+        if (tier >= 8) return base + GRID_PX;
+        return base;
+    }
+
+    /**
+     * 場戰範圍技目標過濾：以施法者周身或主目標為圓心，半徑內才命中。
+     * 非場戰（區域遭遇）維持原「場上全體」——那些地圖本來就只有當前遭遇怪。
+     * @param {object[]} live 存活怪
+     * @param {object} [sk] 技能定義（stormInterval／aroundCaster／roarFixed → 周身）
+     * @param {object} [anchorOpt] 主目標錨點（可選）
+     */
+    function exploreFilterAoeTargets(live, sk, anchorOpt) {
+        if (!live || !live.length) return live || [];
+        if (!exploreFieldCombatActive()) return live;
+        var R = exploreAoeRadiusPx(sk);
+        var casterCentered = !!(sk && (sk.stormInterval || sk.aroundCaster || sk.roarFixed));
+        if (casterCentered) {
+            return live.filter(function (m) { return m && exploreMobWorldDist(m) <= R; });
+        }
+        var anchor = anchorOpt;
+        if (!anchor || !(anchor.curHp > 0) || anchor._dead) {
+            try {
+                if (typeof getTarget === 'function') anchor = getTarget();
+            } catch (eGt) { anchor = null; }
+        }
+        if (!anchor || !(anchor.curHp > 0) || anchor._dead) {
+            var best = null, bd = Infinity, i, m, d;
+            for (i = 0; i < live.length; i++) {
+                m = live[i];
+                if (!m || !(m.curHp > 0) || m._dead) continue;
+                d = exploreMobWorldDist(m);
+                if (d < bd) { bd = d; best = m; }
+            }
+            anchor = best;
+        }
+        if (!anchor) return [];
+        if (anchor._fx == null) {
+            return live.filter(function (m) {
+                return m && (m === anchor || m.uid === anchor.uid || exploreMobInEngageRange(m));
+            });
+        }
+        var ax = anchor._fx, ay = anchor._fy || 0;
+        return live.filter(function (m) {
+            if (!m || !(m.curHp > 0) || m._dead) return false;
+            if (m === anchor || m.uid === anchor.uid) return true;
+            if (m._fx == null) return false;
+            return Math.hypot(m._fx - ax, (m._fy || 0) - ay) <= R;
+        });
     }
 
     function exploreMobInEngageRange(mob) {
@@ -3477,6 +3540,9 @@
     window.exploreMobShouldSim = exploreMobShouldSim;
     window.exploreMobShouldRender = exploreMobShouldRender;
     window.exploreMobWorldDist = exploreMobWorldDist;
+    window.exploreMobPairDist = exploreMobPairDist;
+    window.exploreAoeRadiusPx = exploreAoeRadiusPx;
+    window.exploreFilterAoeTargets = exploreFilterAoeTargets;
     window.exploreEngagePx = function () { return exploreEngageLimit(); };
     window.exploreEngageLimit = exploreEngageLimit;
     window.exploreTryPortal = exploreTryPortal;

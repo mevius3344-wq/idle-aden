@@ -415,9 +415,15 @@ const STORM_BUFF_SKILLS = ['sk_blizzard_storm', 'sk_fire_prison'];
 const STORM_ELE_GLOW = { fire: '#fca5a5;text-shadow:0 0 6px #dc2626', water: '#a5f3fc;text-shadow:0 0 6px #38bdf8', wind: '#67e8f9;text-shadow:0 0 6px #06b6d4', earth: '#fcd34d;text-shadow:0 0 6px #b45309', none: '#d8b4fe;text-shadow:0 0 6px #a855f7' };
 // 🗑️ v3.5.83 移除 STORM_ELE_COUNTER：零引用，且其四組剋制配對與 isElementCounter()（js/08）逐字重複，
 //    註解所述的「命中該屬性 +6 固定」規則已被 elementCounterMult ×1.4/×0.6 取代。要調整剋制倍率請改 ELEM_COUNTER_UP/DOWN（js/08）。
+/** 🪄 v3.9.48 場戰範圍技：僅打錨點附近；非場戰維持原場上全體。sk／anchor 可省略。 */
+function filterSkillAoeTargets(live, sk, anchor) {
+    if (!live || !live.length) return live || [];
+    if (typeof exploreFilterAoeTargets === 'function') return exploreFilterAoeTargets(live, sk, anchor);
+    return live;
+}
 function stormBuffTick(sk, noMageBonus) {
     if (!sk) return;
-    let targets = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
+    let targets = filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead), sk, null);
     if (!targets.length) return;
     let mageDmgMult = mageSpellDmgMult(player, noMageBonus);
     let dice = sk.dmgDice || [1, 10];
@@ -738,7 +744,8 @@ function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp)
     if (!sk || !t || t.curHp <= 0) return;
     if (sk.reqJustice && typeof pvpIsJustice === 'function' && !pvpIsJustice()) return;   // 💙 v3.5.75 究極光裂術：限正義性向（免費 proc 施放亦擋·靜默）
     if (sk.target === 'all' && !areaHit) {
-        let uids = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead).map(m => m.uid);
+        // 🪄 v3.9.48：場戰以觸發點 t 為圓心過濾，勿掃全圖
+        let uids = filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead), sk, t).map(m => m.uid);
         uids.forEach((uid, i) => {
             let mob = mapState.mobs.find(m => m && m.uid === uid && m.curHp > 0 && !m._dead);
             if (mob) procFreeMagicSkill(mob, skId, en, true, sourceItem, i === 0);

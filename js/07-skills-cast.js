@@ -637,7 +637,7 @@ function castSkillInner(skId) {
         }
         // ⚔️ 咆哮：對所有敵人造成 50+(等級-30) 的固定無屬性傷害（不計 MR / DR / 元素）
         if (sk.roarFixed) {
-            let targets = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
+            let targets = filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead), sk, null);
             if (!targets.length) return false;
             if (player.mp < cost) return false;
             player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
@@ -788,7 +788,10 @@ function castSkillInner(skId) {
             }
             return true;
         } else {
-            let targets = sk.target === 'all' ? mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead) : [getTarget()].filter(m => m && m.curHp > 0);   // 🛡️ v2.6.69 審計#7：排除同 tick 已死屍體（killMob 只標記·settleDeadMobs 才移除）——原本對屍體結算的傷害會灌進 _burstDmg 使魔爆總量膨脹；與傭兵 allyCastMagic 過濾一致
+            // 🛡️ v2.6.69 審計#7：排除同 tick 已死屍體；🪄 v3.9.48 場戰範圍技改打錨點附近，勿掃全圖
+            let targets = sk.target === 'all'
+                ? filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead), sk, getTarget())
+                : [getTarget()].filter(m => m && m.curHp > 0);
             if(sk.bossOnly) targets = targets.filter(m => m && m.boss);   // 🌊 頭目限定技能（污濁之水）：非頭目不施放、不扣 MP／冷卻
             if(targets.length === 0) return false;
 
@@ -914,10 +917,11 @@ function castSkillInner(skId) {
                             let _mt = (targets && targets.find(x => x && x.curHp > 0)) || mapState.mobs.find(m => m && m.curHp > 0 && !m._dead);
                             if (_mt) procMagicStrike(_mt);
                         } else {
-                        let _live = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
+                        // 🪄 v3.9.48：魔爆波及改為施法目標附近（場戰不再真·全圖）
+                        let _live = filterSkillAoeTargets(mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead), sk, (targets && targets[0]) || getTarget());
                         if (_live.length) {
                             let _ex = Math.max(1, Math.floor(_burstDmg * 0.3 / _live.length));   // 🔧 v2.6.63：總量30%均分給場上敵人（原每隻各吃30%）
-                            logCombat(`<span class="font-bold" style="color:#f0abfc;text-shadow:0 0 6px #c026d3;">【魔爆】</span>魔力過載爆炸，波及全場！`, 'player-special');
+                            logCombat(`<span class="font-bold" style="color:#f0abfc;text-shadow:0 0 6px #c026d3;">【魔爆】</span>魔力過載爆炸，波及附近敵人！`, 'player-special');
                             _live.forEach((m, i) => {
                                 let _d = Math.max(1, Math.floor(_ex * fragileMult(m)));
                                 _d = illusionMagicDmg(_d, true, i === 0); m.curHp -= _d; if (typeof moonShatterOnDamage === 'function') moonShatterOnDamage(player, m, _d); if (typeof terrorVisageOnDamage === 'function') terrorVisageOnDamage(m, _d, 'magic'); m.justHit = 'magic'; mobWake(m);   // 🔮 魔爆每次發動只回一次MP，5件仍逐目標生效；🌅 巨大骷髏視為魔法
