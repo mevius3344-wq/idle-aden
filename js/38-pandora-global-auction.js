@@ -257,6 +257,7 @@
       qty: qty,
       authToken: auth.authToken || "",
       sessionId: auth.sessionId || "",
+      charName: (typeof player !== "undefined" && player && player.name) ? String(player.name).slice(0, 16) : "",
     };
     try {
       if (player && player._walletRev != null) body.walletRev = Math.max(0, Math.floor(Number(player._walletRev) || 0));

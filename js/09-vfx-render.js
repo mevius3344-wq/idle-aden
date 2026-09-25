@@ -1577,12 +1577,37 @@ function vfxBossRage(mob) {
 // 🎚️ 戰鬥特效／傷害數字開關（設定分頁）：偏好持久化於 localStorage，載入時套用到 window.__vfxOff / __vfxNumOff
 const _VFX_PREF_KEY = 'lineage_vfx_off';
 const _VFX_NUM_PREF_KEY = 'lineage_vfx_num_off';   // 🔢 v3.0.2 「只關傷害數字」獨立偏好
+const _POWER_SAVE_PREF_KEY = 'lineage_power_save';  // 📱 v3.9.50 低耗能（減發熱）
+function _isLikelyMobileDevice() {
+    try {
+        if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1) return true;
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+        if (typeof window !== 'undefined' && Math.min(window.innerWidth || 9999, window.innerHeight || 9999) <= 820) return true;
+    } catch (e) {}
+    return false;
+}
 function _applyVfxPref() {
+    let powerSave = false;
+    try {
+        let ps = localStorage.getItem(_POWER_SAVE_PREF_KEY);
+        if (ps === null && _isLikelyMobileDevice()) {
+            // 手機首次進入：預設開低耗能（可在設定關掉）
+            powerSave = true;
+            try { localStorage.setItem(_POWER_SAVE_PREF_KEY, '1'); } catch (e0) {}
+        } else {
+            powerSave = (ps === '1');
+        }
+    } catch (ePs) {}
+    window.__powerSave = powerSave;
+    let cbPs = document.getElementById('set-power-save');
+    if (cbPs) cbPs.checked = powerSave;
+
     let off = false;
     try { off = localStorage.getItem(_VFX_PREF_KEY) === '1'; } catch (e) {}
+    if (powerSave) off = true;
     window.__vfxOff = off;
     let cb = document.getElementById('set-vfx-on');
-    if (cb) cb.checked = !off;
+    if (cb) { cb.checked = !off; if (powerSave) cb.disabled = true; else cb.disabled = false; }
     let b = document.getElementById('btn-vfx-toggle');
     if (b) {
         b.textContent = off ? '✨ 戰鬥特效：關閉' : '✨ 戰鬥特效：開啟';
@@ -1593,9 +1618,10 @@ function _applyVfxPref() {
     // 🔢 v3.0.2 傷害數字獨立開關（與「戰鬥特效」互不影響：可全開只關數字）
     let numOff = false;
     try { numOff = localStorage.getItem(_VFX_NUM_PREF_KEY) === '1'; } catch (e) {}
+    if (powerSave) numOff = true;
     window.__vfxNumOff = numOff;
     let cbn = document.getElementById('set-vfxnum-on');
-    if (cbn) cbn.checked = !numOff;
+    if (cbn) { cbn.checked = !numOff; if (powerSave) cbn.disabled = true; else cbn.disabled = false; }
     let bn = document.getElementById('btn-vfxnum-toggle');
     if (bn) {
         bn.textContent = numOff ? '🔢 傷害數字：關閉' : '🔢 傷害數字：開啟';
@@ -1603,6 +1629,11 @@ function _applyVfxPref() {
             ? 'bg-rose-900 hover:bg-rose-800 border-rose-700'
             : 'bg-emerald-800 hover:bg-emerald-700 border-emerald-600');
     }
+    try { document.body.classList.toggle('power-save', !!powerSave); } catch (eBody) {}
+}
+function setPowerSaveOn(on) {
+    try { localStorage.setItem(_POWER_SAVE_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+    _applyVfxPref();
 }
 function setVfxOn(on) {
     try { localStorage.setItem(_VFX_PREF_KEY, on ? '0' : '1'); } catch (e) {}
@@ -1696,7 +1727,10 @@ if (typeof castSkill === 'function' && !castSkill._vfxWrapped) {
         let before = null;
         if (proj) { before = mapState.mobs.map(m => (m && !m._dead) ? { uid: m.uid, hp: m.curHp, rect: _vfxSlotRect(m.uid) } : null); }
         let r = _vfxOrigCastSkill(skId);
-        if (r) { try { if (typeof _playerMorphTrigger === 'function') _playerMorphTrigger('skill', skId); } catch (e) {} }   // 🧝 v3.0.105 施法動作只在「實際施放成功(r)」才播（修：自動恢復/維持技即使沒真的施放·仍每 tick 觸發施法動畫→sprite 卡在施法姿勢）
+        // 🪄 v3.9.50：轉換／治癒／增益勿播武器「skill」施法動作（外觀像異常魔法施法）
+        if (r) {
+            try { if (typeof _playerMorphTrigger === 'function') _playerMorphTrigger('skill', skId); } catch (e) {}
+        }
         if (proj) { try { _vfxCastProjectiles(before, _pele); } catch (e) {} }
         return r;
     };
@@ -4019,7 +4053,19 @@ function _pmCurActivePrio() {   // 目前「仍在播放中」動作的權重（
         : (st.act === 'skill') ? _skillFrameMs(n) : (1000 / MOB_ANIM_FPS);
     return ((Date.now() - st.t) < n * fms) ? (_PM_PRIO[st.act] || 0) : 0;   // 仍在播→其權重·已播完→0(idle)
 }
+function _playerMorphSkillSkip(skId) {
+    // 🪄 v3.9.50：轉換／治癒／增益勿播「skill」施法姿（外觀像異常魔法）
+    try {
+        let sk = (typeof DB !== 'undefined' && DB.skills) ? DB.skills[skId] : null;
+        if (!sk) return false;
+        let t = sk.type;
+        return t === 'convert' || t === 'heal' || t === 'buff' || t === 'self_buff'
+            || t === 'self_haste' || t === 'self_heal' || t === 'heal_allies'
+            || t === 'pray' || t === 'bless' || t === 'dispel';
+    } catch (e) { return false; }
+}
 function _playerMorphTrigger(k, skId) {   // js/04 attack／castSkill·manualCast 包裝 skill／HP-delta hurt 呼叫（🗡️ v3.0.67 職業形態亦適用·呼叫端零改動）
+    if (k === 'skill' && skId && _playerMorphSkillSkip(skId)) return;
     let form = _playerBattleForm(); if (!form) return;
     let st = _pmState;
     if (st.act === 'death') return;   // 死亡鎖定：復活前不接受任何動作（最高權重）
@@ -4606,10 +4652,13 @@ function _playerMorphApplyBody() {
     if (ws && ws[f]) { if (I.wp.style.visibility === 'hidden') I.wp.style.visibility = ''; if (I.wp.src !== ws[f].src) I.wp.src = ws[f].src; }
     else if (I.wp.style.visibility !== 'hidden') I.wp.style.visibility = 'hidden';
 }
-// 🧝 施法觸發：包裝 manualCast（castSkill 已於上方 VFX 包裝內加掛）
+// 🧝 施法觸發：包裝 manualCast（castSkill 已於上方 VFX 包裝內加掛；轉換／治癒／增益由 _playerMorphTrigger 內略過）
 if (typeof manualCast === 'function' && !manualCast._pmWrapped) {
     let _pmOrigManualCast = manualCast;
-    manualCast = function (skId) { try { if (typeof _playerMorphTrigger === 'function') _playerMorphTrigger('skill', skId); } catch (e) {} return _pmOrigManualCast.apply(this, arguments); };
+    manualCast = function (skId) {
+        try { if (typeof _playerMorphTrigger === 'function') _playerMorphTrigger('skill', skId); } catch (e) {}
+        return _pmOrigManualCast.apply(this, arguments);
+    };
     manualCast._pmWrapped = true;
 }
 // ===== 🤝 v3.0.70 隊員戰場 sprite（隊員1=主玩家組動畫·主玩家左側；隊員2/3=<avatar>2 組·中間偏右/更右；一律職業動畫·變身限定主玩家）=====
@@ -4957,6 +5006,10 @@ try {
     window._mobAnimTrigger = _mobAnimTrigger;
     window._animSetImgFrame = _animSetImgFrame;
     window._remotePartySpritesApply = _remotePartySpritesApply;
+    window.setPowerSaveOn = setPowerSaveOn;
+    window.setVfxOn = setVfxOn;
+    window.setVfxNumOn = setVfxNumOn;
+    window._applyVfxPref = _applyVfxPref;
 } catch (eExpAnim) {}
 
 // 🩹 v3.8.334／352／355：戰鬥視窗可見就換幀（勿只靠 game-screen；行動 HUD 偶發 class 不同步）
@@ -4989,7 +5042,9 @@ setInterval(() => {
     let last = 0;
     function tick(ts) {
         try {
-            if (!document.hidden && ts - last >= (1000 / MOB_ANIM_FPS) - 2) {
+            // 📱 低耗能：約半幀率換幀，減輕解碼／合成發熱
+            let gap = (window.__powerSave ? 2 : 1) * (1000 / MOB_ANIM_FPS) - 2;
+            if (!document.hidden && ts - last >= gap) {
                 let gs = document.getElementById('game-screen');
                 let bv = document.getElementById('battle-view');
                 let gsOk = !!(gs && !gs.classList.contains('hidden'));

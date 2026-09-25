@@ -1414,12 +1414,14 @@ function refreshPandoraMarket(force) {
     return false;
 }
 
-// 珍稀抽中常駐橫幅
+// 珍稀抽中常駐橫幅（自動收起，避免一直佔畫面）
+let _pandoraBannerHideTimer = null;
 function renderPandoraBanner() {
     let el = document.getElementById('pandora-banner');
     let id = (typeof player !== 'undefined' && player) ? player.pandoraAnnounce : null;
     if (!id || !DB.items[id]) {
         if (el) el.style.display = 'none';
+        if (_pandoraBannerHideTimer) { clearTimeout(_pandoraBannerHideTimer); _pandoraBannerHideTimer = null; }
         return;
     }
     let annInst = { id: id, bless: !!(player && player.pandoraAnnounceBless) };
@@ -1432,6 +1434,15 @@ function renderPandoraBanner() {
     }
     el.innerHTML = `🌟 潘朵拉抽抽樂：${rare ? '珍稀 ' : ''}<span class="${getItemColor(annInst)}">${getItemFullName(annInst)}</span>！`;
     el.style.display = '';
+    if (_pandoraBannerHideTimer) clearTimeout(_pandoraBannerHideTimer);
+    _pandoraBannerHideTimer = setTimeout(function () {
+        try {
+            if (player) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; }
+            let b = document.getElementById('pandora-banner');
+            if (b) b.style.display = 'none';
+        } catch (e) {}
+        _pandoraBannerHideTimer = null;
+    }, 12000);
 }
 
 // 系統日誌標題列右側：抽抽樂狀態

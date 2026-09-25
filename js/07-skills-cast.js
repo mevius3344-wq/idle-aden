@@ -511,6 +511,11 @@ function castSkillInner(skId) {
         if(sk.drain) {
             let _t = getTarget();
             if(!_t || _t.curHp <= 0) return false;   // 沒有目標：不施放、不耗 HP
+            // 🪄 v3.9.50：場戰需在交戰距離內才吸魔，避免遠距空放像「施放異常」洗版
+            try {
+                if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
+                    && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(_t)) return false;
+            } catch (eDr) {}
             player.mp -= cost;
             player.hp = Math.max(1, player.hp - (sk.hpCost || 0));
             if(abnormalMagicHit(_t)) {

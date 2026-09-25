@@ -2315,6 +2315,21 @@ function _chatDeliver(payload, fromRemote) {
                 pushBossMarquee('<span class="boss-announce-tag">頭目戰報</span> ' + String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]), null);
             } catch (e) {}
         }
+        // 🌟 潘朵拉珍稀抽獎廣播 → 跑馬燈顯示「角色名＋中文品名」（勿直接秀 itemId 代碼）
+        if (payload.ch === 'world' && payload.pandoraDraw && payload.pandoraDraw.itemId && typeof pushBossMarquee === 'function') {
+            try {
+                let pd = payload.pandoraDraw;
+                let itemId = String(pd.itemId || '');
+                let d = (typeof DB !== 'undefined' && DB.items) ? DB.items[itemId] : null;
+                let itemN = (d && d.n) ? d.n : '珍稀寶物';
+                let who = String(pd.charName || '').trim() || '有人';
+                let esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); };
+                let inst = { id: itemId, bless: !!pd.bless };
+                let color = (typeof getItemColor === 'function') ? getItemColor(inst) : 'text-purple-300';
+                let html = '<span class="boss-announce-tag">抽抽樂</span> <span class="boss-announce-player">' + esc(who) + '</span> 抽中 <span class="' + color + ' font-bold">' + esc(itemN) + '</span>！';
+                pushBossMarquee(html, null);
+            } catch (ePd) {}
+        }
     }
 }
 function _chatBroadcast(payload) {

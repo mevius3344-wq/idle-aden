@@ -3308,8 +3308,17 @@
 .classic-inventory-viewport input[type="checkbox"] { position:absolute; z-index:5; right:1px; top:1px; width:12px; height:12px; margin:0; }
 .classic-inventory-viewport > .list-item > div { position:relative; width:100%; height:100%; min-width:0; }
 .classic-item-lock-badge { position:absolute; z-index:6; right:1px; top:1px; display:flex; align-items:center; justify-content:center; width:34%; height:34%; max-width:16px; max-height:16px; color:#f8d36a; font-size:clamp(7px,.65vw,11px); line-height:1; filter:drop-shadow(0 1px 2px #000); pointer-events:none; }
-.classic-item-junk .classic-icon-box img { opacity:.48 !important; filter:grayscale(1) brightness(.62) !important; }
+/* 🗑️ v3.9.50：已有自動販售／及時賣出，廢品不再把圖示變暗灰階（僅保留小標籤） */
+.classic-item-junk .classic-icon-box img { opacity:1 !important; filter:none !important; }
 .classic-item-junk-label { position:absolute; z-index:6; left:1px; right:1px; bottom:1px; color:#ff5b5b; background:rgba(25,0,0,.70); font-size:clamp(6px,.5vw,8px); font-weight:800; line-height:1.1; text-align:center; text-shadow:0 1px 2px #000; pointer-events:none; }
+/* 📱 v3.9.50 低耗能：降動畫／陰影以減輕手機發熱（與 __vfxOff 搭配） */
+body.power-save .spell-fx,
+body.power-save .vfx-projectile,
+body.power-save .dmg-float { display:none !important; }
+body.power-save #battle-view,
+body.power-save #mob-list { animation:none !important; }
+body.power-save .list-item,
+body.power-save .classic-icon-box { box-shadow:none !important; filter:none !important; }
 /* 🔒 上鎖物品：原本只加 .classic-item-locked class 但三份樣式表皆無定義(純無效果)，比照上方廢品補上視覺區別。
    語彙刻意與廢品(琥珀灰／灰階圖示＋紅字標籤)分流：改用低飽和藍青底＋左側青色條，讀作「保護中」而非「待丟棄」，且不動圖示明度(上鎖物品仍要看得清楚)。
    ⚠️ 選擇器用 .list-item.classic-item-locked(0,2,0) 而非單一 class：tailwind-built.css 排在 style.css 之後，平手時 bg-slate-800 等 utility 會勝出。
