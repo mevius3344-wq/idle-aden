@@ -504,6 +504,7 @@ function killMob(idx) {
             if (typeof newbieBoostMult === 'function') g = Math.floor(g * newbieBoostMult());   // 🎁 新手啟程：金幣 ×3（48h）
             g = Math.max(1, Math.floor(Number(g) || 0));
             _shareGold = g;
+            try { mob._killGoldRoll = g; } catch (eRoll) {} // 🩹 離線取樣：場戰延遲入帳時仍記本擊金幣
             if (_worldLootDefer) {
                 // 🗺️ 場戰：金幣落地待撿，不直接入帳
                 try {

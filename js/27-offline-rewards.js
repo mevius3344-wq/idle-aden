@@ -1547,6 +1547,36 @@
         return Math.max(0, Math.floor(value + 1e-7));
     }
 
+    /** 🩹 v3.9.47：舊樣本因場戰延遲金幣→goldPerMin=0；用怪等級曲線估算補齊 */
+    function _offlineRepairGoldPerMin(profile) {
+        if (!profile) return profile;
+        let gpm = Number(profile.goldPerMin) || 0;
+        let kpm = Number(profile.killsPerMin) || 0;
+        if (gpm > 0.05 || !(kpm > 0)) return profile;
+        if (typeof monsterGoldRange !== 'function') return profile;
+        let sum = 0, n = 0;
+        let mobs = Array.isArray(profile.mobs) ? profile.mobs : [];
+        for (let i = 0; i < mobs.length; i++) {
+            let row = mobs[i];
+            if (!row) continue;
+            let fake = { n: row.n, lv: row.lv || 1, hard: !!row.hard, boss: false };
+            let cnt = Math.max(1, Math.floor(Number(row.count) || 1));
+            try {
+                let r = monsterGoldRange(fake);
+                if (r && r.max > 0) {
+                    let mid = (Math.max(1, r.min) + Math.max(1, r.max)) / 2;
+                    sum += mid * 0.7 * cnt; // 一般怪 70% 掉金率
+                    n += cnt;
+                }
+            } catch (eR) {}
+        }
+        if (!(n > 0) || !(sum > 0)) return profile;
+        let avgPerKill = sum / n;
+        let repaired = avgPerKill * kpm;
+        if (!(repaired > 0)) return profile;
+        return Object.assign({}, profile, { goldPerMin: repaired });
+    }
+
     function _offlineReduce(obj, key, amount) {
         if (!obj || !(Number(obj[key]) > 0)) return false;
         let before = Number(obj[key]);
@@ -1652,6 +1682,7 @@
         options = options || {};
         let now = options.now || _offlineNow();
         let requestedElapsed = elapsed;
+        profile = _offlineRepairGoldPerMin(profile) || profile;
         let survivalPlan = _offlineSurvivalPlan(profile, elapsed, efficiency, true);
         // 進結算時若角色已死亡，不再套用「離線戰鬥死亡」路徑（避免重複鎖頭目／清召喚）
         if (player && player.dead) {
@@ -2002,7 +2033,13 @@
                 let afterProgress = _offlineExpProgress(player.lv, player.exp);
                 let now = _offlineNow();
                 let expGain = afterProgress - beforeProgress;
+                // 🩹 v3.9.47：場戰金幣落地待撿時 player.gold 當下不變→改用本擊 _killGoldRoll
                 let goldGain = Math.max(0, (Number(player.gold) || 0) - beforeGold);
+                if (!(goldGain > 0)) {
+                    let rolled = Math.max(0, Math.floor(Number(mob._killGoldRoll) || 0));
+                    if (rolled > 0) goldGain = rolled;
+                }
+                try { delete mob._killGoldRoll; } catch (eClrG) {}
                 if (validBoss) {
                     let petGain = partyExp.pet;
                     let allyGain = partyExp.ally;
