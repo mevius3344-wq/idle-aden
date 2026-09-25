@@ -1683,73 +1683,17 @@
     }
 
     function pandoraRelicBalanceHTML() {
-        let st = _readState();
-        return `｜龍之鑽石 <span class="pandora-diamond-count">${st.diamonds.toLocaleString()}</span>`;
+        // 🪄 v3.9.49：抽抽樂面板不再顯示龍之鑽石（遺物搜尋已下架）
+        return '';
     }
 
     function pandoraRelicBoardHTML() {
-        let st = _readState();
-        let now = Date.now();
-        let cards = st.boards.map((b, i) => {
-            if (b.contract) {
-                let c = b.contract;
-                let d = DB.items[c.relicId];
-                let match = _findMatches(c.requirements || [], st);
-                let reqHtml = (c.requirements || []).map(req => {
-                    let one = _findMatches([req], st).ok;
-                    let rd = DB.items[req.id];
-                    return `<div class="pandora-relic-req ${one ? 'has' : 'missing'}"
-                        onmouseenter="pandoraRelicTipShow(event,'${_esc(req.id)}')" onmousemove="pandoraTipMove(event)" onmouseleave="pandoraTipHide()">
-                        <img src="${rd ? _esc(getIconUrl(rd)) : ''}" alt="">
-                        <span>${_esc(_requirementText(req.id, req.en))}</span>
-                    </div>`;
-                }).join('');
-                let category = RELIC_CATEGORIES[c.category] || { short: '遺物' };
-                return `<div class="pandora-relic-slot active">
-                    <div class="pandora-relic-slot-no">布告 ${i + 1}・${category.short}</div>
-                    <div class="pandora-relic-target" onmouseenter="pandoraRelicTipShow(event,'${_esc(c.relicId)}')" onmousemove="pandoraTipMove(event)" onmouseleave="pandoraTipHide()">
-                        <div class="pandora-collection-icon pandora-relic-icon-wrap">
-                            <img src="${d ? _esc(getIconUrl(d)) : ''}" alt="">
-                            ${typeof pandoraUncollectedBadgeHTML === 'function' ? pandoraUncollectedBadgeHTML(c.relicId) : ''}
-                        </div>
-                        <b class="${d ? getItemColor({ id: c.relicId }) : ''}">${_esc(d ? d.n : c.relicId)}</b>
-                    </div>
-                    <div class="pandora-relic-reqs">${reqHtml}</div>
-                    <div class="pandora-relic-actions">
-                        <button class="btn pandora-relic-exchange ${match.ok ? '' : 'opacity-60'}" onclick="pandoraExchangeRelic(${i})">兌換</button>
-                        <button class="pandora-relic-cancel" onclick="pandoraCancelRelicBoard(${i})">取消布告</button>
-                    </div>
-                </div>`;
-            }
-            if (Number(b.cooldownUntil || 0) > now) {
-                return `<div class="pandora-relic-slot cooling">
-                    <div class="pandora-relic-slot-no">布告 ${i + 1}</div>
-                    <div class="pandora-relic-empty-icon">⌛</div>
-                    <div>欄位冷卻中</div>
-                    <small class="pandora-relic-cd" data-until="${Math.floor(b.cooldownUntil)}">${_remainingText(b.cooldownUntil - now)}</small>
-                </div>`;
-            }
-            return `<div class="pandora-relic-slot empty">
-                <div class="pandora-relic-slot-no">布告 ${i + 1}</div>
-                <div class="pandora-relic-empty-icon">◇</div>
-                <div>尚未搜尋遺物</div>
-                <small>在上方輸入「遺物」選擇類別</small>
-            </div>`;
-        }).join('');
-        return `<section class="pandora-relic-board">
-            <div class="pandora-relic-board-head">
-                <b>遺物布告欄</b>
-                <span>搜尋費用 ${RELIC_SEARCH_COST} 龍之鑽石・完成或取消後，該欄冷卻 24 小時</span>
-            </div>
-            <div class="pandora-relic-grid">${cards}</div>
-        </section>`;
+        // 🪄 v3.9.49：遺物布告欄下架（與 v3.8.144 一致；抽抽樂改版時曾誤加回）
+        return '';
     }
 
     function pandoraRelicBindBoardCountdowns() {
-        document.querySelectorAll('.pandora-relic-cd[data-until]').forEach(el => {
-            let until = Number(el.dataset.until) || 0;
-            el.textContent = until > Date.now() ? _remainingText(until - Date.now()) : '冷卻完成，重新開啟黑市即可使用';
-        });
+        /* no-op：布告欄已下架 */
     }
 
     function pandoraRelicTipShow(ev, id) {

@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.48';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.49';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1936,7 +1936,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 800, ac: 10, mr: 0, exp: 0, goldMin: 0, goldMax: 0, atkSpd: 2, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 0, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.49：血量改回 40（曾誤設 800）
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },
@@ -2526,7 +2526,7 @@ const DB = {
                 { id: "npc_nichi", n: "尼奇", title: "雜貨商人", type: "shop", d: "硝煙散去後，尼奇在新得的城裡擺起攤子——攻城獲勝後開放的肯特城雜貨商。" },
                 { id: "npc_wh_kent", n: "巴歐", title: "倉庫", type: "warehouse", d: "巴歐替占領者看管著肯特城的庫房，存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ismael", n: "伊賽馬利", title: "交換物品", type: "exchange", d: "伊賽馬利精於以物易物，以卷軸或金幣交換稀有的祝福卷軸與飾品卷軸。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉改為抽抽樂：付費權重抽寶物，並可用龍之鑽石搜尋遺物布告。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉抽抽樂：付費依權重抽出寶物（單抽／十連）。" },
                 { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長統領藍色鯊魚部隊，招募血厚耐打的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
@@ -2561,7 +2561,7 @@ const DB = {
                 { id: "npc_gilen", n: "吉倫", title: "魔法傳授者", type: "shop", d: "吉倫是位循循善誘的魔法導師，提供玩家學習1~3級一般魔法。" },
                 { id: "npc_basin", n: "巴辛", title: "妖魔商人", type: "shop", d: "巴辛是混跡市集的妖魔商人，販賣各種日常消耗品。" },
                 { id: "npc_wh_talking", n: "朵琳", title: "倉庫", type: "warehouse", d: "朵琳細心地替旅人看管行囊，存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉改為抽抽樂：付費權重抽寶物，並可用龍之鑽石搜尋遺物布告。" },
+                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉抽抽樂：付費依權重抽出寶物（單抽／十連）。" },
                 { id: "npc_ladal", n: "拉達爾", title: "製作", type: "craft", d: "拉達爾揉皮裁料樣樣精通，能為冒險者製作皮革裝備。" },
 				{ id: "npc_falin", n: "法林", title: "製作", type: "craft", d: "法林手藝獨到，能製作銀釘皮裝備。" },
                 { id: "npc_ryan", n: "萊恩", title: "製作", type: "craft", d: "萊恩在爐火旁默默打磨成品，提供物品製作服務。" },

@@ -1638,15 +1638,16 @@ function pandoraRenderRecentHTML() {
     if (!_pandoraRecentDraws.length) {
         return '<div class="pandora-recent"><p class="pandora-recent-empty">尚無本場抽獎紀錄</p></div>';
     }
-    let lis = _pandoraRecentDraws.map(r => {
+    let lis = _pandoraRecentDraws.slice(0, 8).map(r => {
         let cls = 'pandora-recent-row' + (r.rare ? ' rare' : '') + (r.bless ? ' bless' : '');
         let tags = '';
         if (r.rare) tags += '<span class="pandora-tag rare">珍稀</span>';
         if (r.bless) tags += '<span class="pandora-tag bless">祝福</span>';
         return `<li class="${cls}"><span class="pandora-recent-name">${r.nameHtml}</span>${tags}</li>`;
     }).join('');
+    let more = _pandoraRecentDraws.length > 8 ? `（顯示最近 8／${_pandoraRecentDraws.length}）` : '';
     return `<div class="pandora-recent">`
-        + `<p class="pandora-recent-head">最近 ${_pandoraRecentDraws.length} 抽</p>`
+        + `<p class="pandora-recent-head">最近紀錄${more}</p>`
         + `<ul class="pandora-recent-list">${lis}</ul>`
         + `</div>`;
 }
@@ -1728,56 +1729,31 @@ function pandoraRenderOddsPanelHTML() {
         }
         return `<div class="pandora-odds-tier${open ? ' open' : ''}">`
             + `<button type="button" class="pandora-odds-tier-btn" onclick="pandoraToggleOddsTier(${t.weight})">`
-            + `<span class="pandora-odds-w">權重 ${t.weight}</span>`
+            + `<span class="pandora-odds-w">W${t.weight}</span>`
             + `<span class="pandora-odds-label">${_pandoraEsc(t.label)}</span>`
-            + `<span class="pandora-odds-any">任一 ${_pandoraEsc(pandoraFmtOddsPct(t.anyRate))}</span>`
-            + `<span class="pandora-odds-cnt">${t.count} 件</span>`
-            + `<span class="pandora-odds-chev">${open ? '▾' : '▸'} 展開</span>`
+            + `<span class="pandora-odds-any">${_pandoraEsc(pandoraFmtOddsPct(t.anyRate))}</span>`
+            + `<span class="pandora-odds-cnt">${t.count}</span>`
+            + `<span class="pandora-odds-chev">${open ? '▾' : '▸'}</span>`
             + `</button>${itemsHtml}</div>`;
     }).join('');
     return `<div class="pandora-odds-panel" id="pandora-odds-panel">`
-        + `<p class="pandora-odds-head">單抽 10萬｜十連九折｜祝福約1%｜次數不限</p>`
-        + `<p class="pandora-odds-meta">本機權重池 · ${odds.totalItems} 件 · 總權重 ${odds.totalWeight.toLocaleString()}`
-        + ` · 點階展開看單件機率</p>`
+        + `<p class="pandora-odds-meta">${odds.totalItems} 件 · 總權重 ${odds.totalWeight.toLocaleString()} · 點階展開單件</p>`
         + `<div class="pandora-odds-list">${rows || '<p class="text-slate-500 text-xs">池為空</p>'}</div>`
         + `</div>`;
 }
 
 function pandoraSuggestRelicSearch(value) {
+    // 🪄 v3.9.49：遺物搜尋已下架（與 v3.8.144 一致）
     let box = document.getElementById('pandora-buy-suggestions');
-    if (!box) return;
-    let q = String(value || '').trim();
-    try { if (typeof pandoraRelicOnSearchInput === 'function') pandoraRelicOnSearchInput(q); } catch (e) {}
-    if (q.length < 2) { box.innerHTML = ''; box.classList.add('hidden'); return; }
-    try {
-        if (typeof pandoraRelicSuggestionHTML === 'function') {
-            let relicSuggestions = pandoraRelicSuggestionHTML(q);
-            if (relicSuggestions) {
-                box.innerHTML = relicSuggestions;
-                box.classList.remove('hidden');
-                return;
-            }
-        }
-    } catch (e2) {}
-    box.innerHTML = '<div class="pandora-buy-suggestion-empty">輸入「遺物」可搜尋武器／防具／飾品／未知遺物</div>';
-    box.classList.remove('hidden');
+    if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
 }
 
 function pandoraSubmitRelicSearch() {
-    try {
-        if (typeof pandoraTryRelicSearchFromInputs === 'function' && pandoraTryRelicSearchFromInputs()) return;
-    } catch (e) {}
-    alert('請先輸入「遺物」並選擇類別後再搜尋。');
+    alert('遺物搜尋已下架。');
 }
 
 function pandoraRenderGachaPanel(div) {
     if (!div) return;
-    let relicBalance = '';
-    let relicBoard = '';
-    try {
-        if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
-        if (typeof pandoraRelicBoardHTML === 'function') relicBoard = pandoraRelicBoardHTML();
-    } catch (e) {}
     let cost1 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(1) : 100000;
     let cost10 = (typeof pandoraDrawCostLocal === 'function') ? pandoraDrawCostLocal(10) : Math.floor(100000 * 10 * 0.9);
     let gold = Math.max(0, Math.floor(Number(player.gold) || 0));
@@ -1785,58 +1761,39 @@ function pandoraRenderGachaPanel(div) {
     let can10 = gold >= cost10;
     let left1 = cost1 > 0 ? Math.floor(gold / cost1) : 0;
     let affordNote = can1
-        ? (`約可單抽 <span class="text-amber-200 font-bold">${left1.toLocaleString()}</span> 次`
-            + (can10 ? '' : ' · <span class="text-rose-300">十連金幣不足</span>'))
-        : '<span class="text-rose-300 font-bold">金幣不足，無法抽獎</span>';
+        ? `約可抽 ${left1.toLocaleString()} 次`
+        : '金幣不足';
     let oddsBtnLabel = _pandoraOddsOpen ? '收合機率' : '查詢機率';
     let btn1Dis = can1 ? '' : ' disabled aria-disabled="true"';
     let btn10Dis = can10 ? '' : ' disabled aria-disabled="true"';
     let btn1Cls = can1
-        ? 'btn bg-purple-700 hover:bg-purple-600 border-purple-500 font-bold px-5 py-2 rounded'
-        : 'btn pandora-draw-btn-disabled bg-slate-800 border-slate-600 text-slate-500 font-bold px-5 py-2 rounded cursor-not-allowed opacity-60';
+        ? 'btn pandora-draw-btn pandora-draw-1'
+        : 'btn pandora-draw-btn pandora-draw-btn-disabled';
     let btn10Cls = can10
-        ? 'btn bg-amber-800 hover:bg-amber-700 border-amber-600 font-bold px-5 py-2 rounded'
-        : 'btn pandora-draw-btn-disabled bg-slate-800 border-slate-600 text-slate-500 font-bold px-5 py-2 rounded cursor-not-allowed opacity-60';
+        ? 'btn pandora-draw-btn pandora-draw-10'
+        : 'btn pandora-draw-btn pandora-draw-btn-disabled';
     div.innerHTML = `
-    <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
-        <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉抽抽樂
-            <span class="text-slate-400 font-normal">${pandoraGachaStatusBadgeHTML()}｜金幣 <span class="text-yellow-300 font-bold">${gold.toLocaleString()}</span>${relicBalance}</span>
-        </h3>
-        <div class="rounded-lg border border-purple-700/60 bg-slate-900/90 p-4 mx-2 my-2 shrink-0 text-center">
-            <p class="text-slate-300 text-sm mb-2">依物品權重隨機抽出 1 件寶物。裝備約 1% 機率祝福。十連九折。</p>
-            <p class="text-slate-400 text-xs mb-3">${affordNote}</p>
-            <div class="flex flex-wrap items-center justify-center gap-3">
-                <button type="button" class="${btn1Cls}"${btn1Dis}
-                    onclick="pandoraDoDraw(1)">單抽 · ${Number(cost1).toLocaleString()} 金</button>
-                <button type="button" class="${btn10Cls}"${btn10Dis}
-                    onclick="pandoraDoDraw(10)">十連 · ${Number(cost10).toLocaleString()} 金</button>
-                <button type="button" class="btn pandora-odds-toggle bg-slate-800 hover:bg-slate-700 border-purple-600/70 text-purple-200 font-bold px-4 py-2 rounded"
-                    onclick="pandoraToggleOddsPanel()">${oddsBtnLabel}</button>
+    <div class="pandora-market-panel pandora-gacha-panel flex flex-col h-full w-full overflow-y-auto">
+        <header class="pandora-gacha-head shrink-0">
+            <h3 class="pandora-market-title">抽抽樂</h3>
+            <div class="pandora-gacha-meta">
+                ${pandoraGachaStatusBadgeHTML()}
+                <span class="pandora-gacha-gold">金幣 <b>${gold.toLocaleString()}</b></span>
+                <span class="pandora-gacha-afford">${affordNote}</span>
             </div>
-            ${pandoraRenderOddsPanelHTML()}
-            ${pandoraRenderRecentHTML()}
-            <p class="text-slate-500 text-xs mt-3">次數不限（有金幣即可）。權重池與舊黑市／野外掉寶相同。</p>
+        </header>
+        <div class="pandora-gacha-actions shrink-0">
+            <button type="button" class="${btn1Cls}"${btn1Dis}
+                onclick="pandoraDoDraw(1)"><span class="pandora-draw-label">單抽</span><span class="pandora-draw-cost">${Number(cost1).toLocaleString()} 金</span></button>
+            <button type="button" class="${btn10Cls}"${btn10Dis}
+                onclick="pandoraDoDraw(10)"><span class="pandora-draw-label">十連</span><span class="pandora-draw-cost">${Number(cost10).toLocaleString()} 金 · 九折</span></button>
+            <button type="button" class="btn pandora-odds-toggle" onclick="pandoraToggleOddsPanel()">${oddsBtnLabel}</button>
         </div>
-        <div class="pandora-buy-box shrink-0 mx-2 mb-2">
-            <div class="pandora-buybar">
-                <span class="pandora-buy-word">搜</span>
-                <div class="pandora-buy-name-wrap">
-                    <input id="pandora-buy-name" type="text" value="" placeholder="輸入「遺物」選擇類別" autocomplete="off"
-                        oninput="pandoraSuggestRelicSearch(this.value)" onkeydown="if(event.key==='Enter'){pandoraSubmitRelicSearch()}">
-                    <div id="pandora-buy-suggestions" class="pandora-buy-suggestions hidden"></div>
-                </div>
-                <span class="pandora-buy-comma">，</span>
-                <input id="pandora-buy-price" type="text" value="" placeholder="搜尋費用" autocomplete="off" disabled
-                    onkeydown="if(event.key==='Enter'){pandoraSubmitRelicSearch()}">
-                <span class="pandora-buy-word">鑽</span>
-                <button type="button" class="btn pandora-buy-submit font-bold" onclick="pandoraSubmitRelicSearch()">搜尋遺物</button>
-            </div>
-            <p class="text-slate-500 text-xs px-2 pb-1">遺物搜尋消耗龍之鑽石；完成或取消後該欄冷卻 24 小時。</p>
-        </div>
-        ${relicBoard || ''}
+        <p class="pandora-gacha-hint shrink-0">依權重隨機 1 件 · 裝備約 1% 祝福 · 次數不限</p>
+        ${pandoraRenderOddsPanelHTML()}
+        ${pandoraRenderRecentHTML()}
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden"></p>
     </div>`;
-    try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (eBind) {}
 }
 
 /** @deprecated 競標 UI 已改抽抽樂 */
