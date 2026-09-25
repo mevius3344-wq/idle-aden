@@ -2186,10 +2186,12 @@ function _chatOnlineSend(payload) {
 }
 function _chatOnlineApplyBatch(messages) {
     if (!Array.isArray(messages) || !messages.length) return;
+    // 📜 首次 since=0 拉回歷史：只寫聊天、勿重播跑馬燈（否則每次進遊戲潘朵拉／頭目公告會連播數十秒）
+    let isHistory = !(_chatOnlineSince > 0);
     messages.forEach(function (m) {
         if (!m) return;
         if (m.seq && m.seq > _chatOnlineSince) _chatOnlineSince = m.seq;
-        _chatDeliver(m, true);
+        _chatDeliver(m, true, isHistory);
     });
 }
 function _chatOnlinePollOnce() {
@@ -2296,7 +2298,24 @@ function _chatNotifyUnread(ch) {
     if (dot) dot.classList.remove('hidden');
 }
 let _chatSeenIds = Object.create(null);
-function _chatDeliver(payload, fromRemote) {
+/** 跑馬燈用角色名：拒收物品代碼／控制字元，避免顯示成亂碼 */
+function _marqueeSafeCharName(raw) {
+    let s = String(raw == null ? '' : raw).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    if (!s) return '';
+    // 物品 id（wpn_xxx／arm_59／scroll_teleport…）不當作玩家名
+    if (/^[a-z]{2,12}_[a-z0-9_]{1,40}$/i.test(s)) return '';
+    // 純代碼／過長無中文英數空白的怪字串
+    if (/^代碼\s/i.test(s)) return '';
+    return s.slice(0, 16);
+}
+function _marqueeFreshEnough(payload) {
+    try {
+        let at = Number(payload && payload.at) || 0;
+        if (!(at > 0)) return true;   // 無時間戳：交由 isHistory 閘門
+        return (Date.now() - at) <= 45000;
+    } catch (e) { return true; }
+}
+function _chatDeliver(payload, fromRemote, isHistory) {
     if (!_chatCanReceive(payload)) return;
     if (fromRemote && payload.sessionId && typeof _roleSessionId !== 'undefined' && payload.sessionId === _roleSessionId) return;
     if (payload.id) {
@@ -2308,24 +2327,30 @@ function _chatDeliver(payload, fromRemote) {
     _chatAppend(payload.ch, _chatRenderLine(payload, !fromRemote), fromRemote ? 'wc-remote' : 'wc-local');
     if (fromRemote) {
         _chatNotifyUnread(payload.ch);
+        // 歷史回補／過舊訊息：只進聊天，不推跑馬燈
+        let allowMarquee = !isHistory && _marqueeFreshEnough(payload);
         // 📢 他方頭目擊殺廣播 → 本機跑馬燈同步
-        if (payload.ch === 'world' && payload.name === '系統' && typeof payload.text === 'string' && payload.text.indexOf('【頭目戰報】') === 0 && typeof pushBossMarquee === 'function') {
+        if (allowMarquee && payload.ch === 'world' && payload.name === '系統' && typeof payload.text === 'string' && payload.text.indexOf('【頭目戰報】') === 0 && typeof pushBossMarquee === 'function') {
             try {
                 let t = String(payload.text).replace(/^【頭目戰報】\s*/, '');
                 pushBossMarquee('<span class="boss-announce-tag">頭目戰報</span> ' + String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]), null);
             } catch (e) {}
         }
         // 🌟 潘朵拉珍稀抽獎廣播 → 跑馬燈顯示「角色名＋中文品名」（勿直接秀 itemId 代碼）
-        if (payload.ch === 'world' && payload.pandoraDraw && payload.pandoraDraw.itemId && typeof pushBossMarquee === 'function') {
+        if (allowMarquee && payload.ch === 'world' && payload.pandoraDraw && payload.pandoraDraw.itemId && typeof pushBossMarquee === 'function') {
             try {
                 let pd = payload.pandoraDraw;
-                let itemId = String(pd.itemId || '');
-                let d = (typeof DB !== 'undefined' && DB.items) ? DB.items[itemId] : null;
-                let itemN = (d && d.n) ? d.n : '珍稀寶物';
-                let who = String(pd.charName || '').trim() || '有人';
+                let itemId = String(pd.itemId || '').trim();
+                if (/^代碼\b/i.test(itemId) || /\s/.test(itemId)) itemId = '';
+                let d = (itemId && typeof DB !== 'undefined' && DB.items) ? DB.items[itemId] : null;
+                let itemN = String(pd.itemName || '').trim();
+                if (!itemN && d && d.n) itemN = String(d.n);
+                // 絕不把物品代碼當品名；查不到就用通稱
+                if (!itemN || /^[a-z]{2,12}_[a-z0-9_]+$/i.test(itemN)) itemN = '珍稀寶物';
+                let who = _marqueeSafeCharName(pd.charName) || '有人';
                 let esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); };
-                let inst = { id: itemId, bless: !!pd.bless };
-                let color = (typeof getItemColor === 'function') ? getItemColor(inst) : 'text-purple-300';
+                let inst = itemId ? { id: itemId, bless: !!pd.bless } : { bless: !!pd.bless };
+                let color = (itemId && typeof getItemColor === 'function') ? getItemColor(inst) : 'text-purple-300';
                 let html = '<span class="boss-announce-tag">抽抽樂</span> <span class="boss-announce-player">' + esc(who) + '</span> 抽中 <span class="' + color + ' font-bold">' + esc(itemN) + '</span>！';
                 pushBossMarquee(html, null);
             } catch (ePd) {}

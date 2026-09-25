@@ -1416,12 +1416,18 @@ function refreshPandoraMarket(force) {
 
 // 珍稀抽中常駐橫幅（自動收起，避免一直佔畫面）
 let _pandoraBannerHideTimer = null;
+let _pandoraBannerShowingId = null;
 function renderPandoraBanner() {
     let el = document.getElementById('pandora-banner');
     let id = (typeof player !== 'undefined' && player) ? player.pandoraAnnounce : null;
     if (!id || !DB.items[id]) {
         if (el) el.style.display = 'none';
         if (_pandoraBannerHideTimer) { clearTimeout(_pandoraBannerHideTimer); _pandoraBannerHideTimer = null; }
+        _pandoraBannerShowingId = null;
+        return;
+    }
+    // 已在顯示同一則：勿重設 12 秒計時（進面板／refresh 會反覆呼叫→橫幅永遠不關）
+    if (_pandoraBannerShowingId === id && el && el.style.display !== 'none' && _pandoraBannerHideTimer) {
         return;
     }
     let annInst = { id: id, bless: !!(player && player.pandoraAnnounceBless) };
@@ -1434,12 +1440,15 @@ function renderPandoraBanner() {
     }
     el.innerHTML = `🌟 潘朵拉抽抽樂：${rare ? '珍稀 ' : ''}<span class="${getItemColor(annInst)}">${getItemFullName(annInst)}</span>！`;
     el.style.display = '';
+    _pandoraBannerShowingId = id;
     if (_pandoraBannerHideTimer) clearTimeout(_pandoraBannerHideTimer);
     _pandoraBannerHideTimer = setTimeout(function () {
         try {
             if (player) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; }
             let b = document.getElementById('pandora-banner');
             if (b) b.style.display = 'none';
+            _pandoraBannerShowingId = null;
+            try { if (typeof saveGame === 'function') saveGame(); } catch (eSave) {}
         } catch (e) {}
         _pandoraBannerHideTimer = null;
     }, 12000);

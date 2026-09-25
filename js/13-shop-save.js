@@ -2758,6 +2758,13 @@ function loadGame() {
         try { if (typeof _renderAutoSellBtn === 'function') _renderAutoSellBtn(); } catch (e) {}   // 🗑️ 還原「自動賣出」按鈕點亮/變暗狀態（player.autoSellOn）
         _uiConfigReady = true;   // 🛡️ 審計#1：config→DOM 還原完成，此後 saveGame 才可用 DOM 重建 config
 
+        // 🌟 潘朵拉珍稀橫幅不跨登入重播（存檔裡的 pandoraAnnounce 會讓橫幅／跑馬燈感一直卡住）
+        try {
+            if (player) { player.pandoraAnnounce = null; player.pandoraAnnounceBless = false; }
+            let _pb = document.getElementById('pandora-banner');
+            if (_pb) _pb.style.display = 'none';
+        } catch (ePb) {}
+
         state.running = true;
         _roleSessionHeartbeat();   // 立即登記，不等待第一個 2 秒心跳
         // 自然恢復（每 16 秒）已由主迴圈 tick() 內的 state.ticks % 160 統一驅動，不再額外 setInterval。
