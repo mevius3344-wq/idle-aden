@@ -3298,7 +3298,24 @@
 .classic-icon-corner-value,.equipment-slot-enhance,.equipment-slot-count { position:absolute; z-index:9; right:2px; bottom:1px; max-width:88%; overflow:hidden; color:#d5a94f; font:800 clamp(10px,.9vw,15px)/1 Arial,sans-serif; letter-spacing:0; text-align:right; white-space:nowrap; text-shadow:1px 1px 2px #000,-1px -1px 2px #000; pointer-events:none; }
 .classic-icon-corner-value.is-enhance,.equipment-slot-enhance { color:#39a9ff !important; text-shadow:0 0 3px #0b4f99,1px 1px 2px #000 !important; }
 .classic-icon-corner-value.is-count,.equipment-slot-count { color:#d5a94f; }
-.classic-item-junk .classic-icon-corner-value { bottom:11px; }
+/* 🗑️ v3.9.52：廢品圖示與一般物品同亮（取消灰階／降透明度）；僅保留角標提醒 */
+#game-screen .list-item.classic-item-junk .classic-icon-box img,
+#game-screen .classic-item-junk .classic-icon-box img,
+.list-item.classic-item-junk .classic-icon-box img,
+.classic-item-junk .classic-icon-box img,
+.classic-item-junk img {
+    opacity: 1 !important;
+    /* 勿用 filter:none（會蓋掉祝福光）；只用與一般圖示相同的對比，明確排除灰階變暗 */
+    filter: contrast(1.06) saturate(1.05) !important;
+}
+.classic-item-junk-label {
+    position: absolute; z-index: 6; left: 1px; top: 1px; right: auto; bottom: auto;
+    min-width: 14px; padding: 0 3px; color: #ffb4b4;
+    background: rgba(80, 0, 0, .72); border: 1px solid #7f1d1d; border-radius: 2px;
+    font-size: clamp(7px, .55vw, 9px); font-weight: 800; line-height: 1.15;
+    text-align: center; text-shadow: 0 1px 1px #000; pointer-events: none;
+}
+.classic-item-junk .classic-icon-corner-value { bottom: 1px; }
 .classic-name-box { display:flex; align-items:center; gap:5px; min-width:0; overflow:hidden; color:#e5e7eb; text-shadow:0 1px 2px #000; white-space:nowrap; }
 .classic-name-box > span:not(.classic-slot-name):first-of-type { overflow:hidden; text-overflow:ellipsis; }
 .classic-slot-name { color:#9ca3af; font-size:11px; flex:0 0 auto; }
@@ -3308,9 +3325,6 @@
 .classic-inventory-viewport input[type="checkbox"] { position:absolute; z-index:5; right:1px; top:1px; width:12px; height:12px; margin:0; }
 .classic-inventory-viewport > .list-item > div { position:relative; width:100%; height:100%; min-width:0; }
 .classic-item-lock-badge { position:absolute; z-index:6; right:1px; top:1px; display:flex; align-items:center; justify-content:center; width:34%; height:34%; max-width:16px; max-height:16px; color:#f8d36a; font-size:clamp(7px,.65vw,11px); line-height:1; filter:drop-shadow(0 1px 2px #000); pointer-events:none; }
-/* 🗑️ v3.9.50：已有自動販售／及時賣出，廢品不再把圖示變暗灰階（僅保留小標籤） */
-.classic-item-junk .classic-icon-box img { opacity:1 !important; filter:none !important; }
-.classic-item-junk-label { position:absolute; z-index:6; left:1px; right:1px; bottom:1px; color:#ff5b5b; background:rgba(25,0,0,.70); font-size:clamp(6px,.5vw,8px); font-weight:800; line-height:1.1; text-align:center; text-shadow:0 1px 2px #000; pointer-events:none; }
 /* 📱 v3.9.50 低耗能：降動畫／陰影以減輕手機發熱（與 __vfxOff 搭配） */
 body.power-save .spell-fx,
 body.power-save .vfx-projectile,

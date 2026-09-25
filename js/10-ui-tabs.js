@@ -303,7 +303,8 @@ player.inv.forEach(i => {
     if (!canEquip) {
         statusTag = '<span class="text-red-500 text-[10px] font-bold">[無法裝備]</span>';
         itemBg = 'bg-red-950/40'; // 職業/技能不符，顯示暗紅色底
-        dimIcon = true; // 🔅 圖示黯淡化
+        // 🗑️ v3.9.52：廢品已有自動販售／及時賣出，圖示不再變暗（僅保留「無法裝備」文字標）
+        if (!i.junk) dimIcon = true;
     }
 }
 
@@ -325,7 +326,7 @@ player.inv.forEach(i => {
         : ((i.cnt || 1) > 1 ? `<span class="classic-icon-corner-value is-count">${(i.cnt || 1).toLocaleString()}</span>` : '');
     
     // 內容組合 (加入了 statusTag)
-    let _rowInner = `<div class="classic-item-main"><div class="classic-icon-box">${imgHtml}${_invCornerValue}</div><div class="classic-name-box"><span class="${getItemColor(i)} font-bold">${getItemFullName(i)}</span><span class="classic-item-flags">${statusTag}</span></div>${i.lock ? '<span class="classic-item-lock-badge" aria-hidden="true">🔒</span>' : ''}${(i.junk && !i.lock) ? '<span class="classic-item-junk-label">廢品</span>' : ''}</div>`;   // 方格狀態：上鎖右上角；廢品灰階＋底部紅字
+    let _rowInner = `<div class="classic-item-main"><div class="classic-icon-box">${imgHtml}${_invCornerValue}</div><div class="classic-name-box"><span class="${getItemColor(i)} font-bold">${getItemFullName(i)}</span><span class="classic-item-flags">${statusTag}</span></div>${i.lock ? '<span class="classic-item-lock-badge" aria-hidden="true">🔒</span>' : ''}${(i.junk && !i.lock) ? '<span class="classic-item-junk-label">廢</span>' : ''}</div>`;   // 方格：上鎖右上角；廢品僅小標、圖示不變暗
 
     // ⚡ 快速強化模式：對應分頁啟用且為可強化裝備（未鎖定）時，右側顯示勾選欄，點整列切換勾選
     let _qeType = (d.type === 'wpn' && !d.isArrow) ? 'wpn' : ((d.type === 'arm' || d.type === 'acc') ? 'arm' : null);
