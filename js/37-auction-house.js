@@ -167,7 +167,7 @@
         if (!snap || !snap.id) return false;
         var it = {
             id: snap.id,
-            uid: (typeof uid === 'function' ? uid() : ('ah' + Date.now().toString(36))),
+            uid: snap.uid || (typeof uid === 'function' ? uid() : ('ah' + Date.now().toString(36))),
             cnt: Math.max(1, Math.floor(Number(snap.cnt) || 1)),
             en: Math.floor(Number(snap.en) || 0),
             bless: snap.bless || false,
@@ -177,12 +177,51 @@
             lock: false,
             junk: false
         };
+        // 伺服器已入包時沿用同一 uid，避免雲端／本機各一份
+        if (snap.uid && Array.isArray(player.inv)) {
+            var exist = player.inv.find(function (i) { return i && String(i.uid) === String(snap.uid); });
+            if (exist) {
+                exist.cnt = Math.max(1, Math.floor(Number(exist.cnt) || 1)) + it.cnt;
+                return true;
+            }
+        }
         if (typeof invAddOrStack === 'function') invAddOrStack(it);
         else {
             if (!Array.isArray(player.inv)) player.inv = [];
             player.inv.push(it);
         }
         return true;
+    }
+
+    function _ahEnsureItemUid(item) {
+        if (!item) return '';
+        if (!item.uid) {
+            item.uid = (typeof uid === 'function' ? uid() : ('ah' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)));
+        }
+        return String(item.uid);
+    }
+
+    function _ahSyncCloudBeforeWrite() {
+        try {
+            if (typeof saveGame === 'function') saveGame();
+        } catch (e0) {}
+        if (typeof cloudPushSlotSync !== 'function' || typeof saveStateJson !== 'function' || typeof currentSlot === 'undefined') {
+            return { ok: false, error: 'no_cloud', message: '雲端同步未就緒，請重新登入後再試。' };
+        }
+        var pushed = false;
+        try {
+            pushed = !!cloudPushSlotSync(currentSlot, JSON.parse(saveStateJson()));
+        } catch (e1) {
+            return { ok: false, error: 'sync_error', message: '雲端同步失敗，請稍後再試。' };
+        }
+        if (!pushed) {
+            return {
+                ok: false,
+                error: 'sync_rejected',
+                message: '雲端存檔同步失敗（可能進度衝突）。請重新整理或重登後再使用拍賣行。'
+            };
+        }
+        return { ok: true };
     }
 
     function _ahRemoveInv(uid, cnt) {
@@ -477,32 +516,25 @@
             var d0 = (typeof DB !== 'undefined' && DB.items) ? DB.items[item.id] : null;
             itemName = d0 && d0.n ? String(d0.n) : String(item.id);
         } catch (e0) { itemName = String(item.id); }
+        var uidStr = _ahEnsureItemUid(item);
         _auctionBusy = true;
-        // 先同步雲端（同步 PUT），讓伺服器能扣到正確背包／金幣
-        try {
-            if (typeof saveGame === 'function') saveGame();
-            if (typeof cloudPushSlotSync === 'function' && typeof saveStateJson === 'function' && typeof currentSlot !== 'undefined') {
-                cloudPushSlotSync(currentSlot, JSON.parse(saveStateJson()));
-            }
-        } catch (eSave0) {}
-        // B2：金幣由伺服器雲端錢包扣除；本機只樂觀移除物品
-        if (!_ahRemoveInv(uidStr, cnt)) {
+        var sync = _ahSyncCloudBeforeWrite();
+        if (!sync.ok) {
             _auctionBusy = false;
-            if (typeof logSys === 'function') logSys('扣除物品失敗。');
+            if (typeof logSys === 'function') logSys(sync.message || '雲端同步失敗。');
             return;
         }
-        try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
-
+        // 等伺服器扣物成功後再從本機移除，避免 item_missing 時物品短暫消失
         _ahPost('create', { price: fees.price, item: snap, itemName: itemName, sourceUid: uidStr }).then(function (data) {
             _auctionBusy = false;
             if (!data || !data.ok) {
-                // 回滾物品（金幣未在本機預扣）
-                _ahGrantItem(snap);
-                try { if (typeof updateUI === 'function') updateUI(); } catch (e2) {}
-                try { if (typeof renderTabs === 'function') renderTabs(); } catch (e3) {}
                 if (typeof logSys === 'function') logSys((data && data.message) || '上架失敗。');
                 renderAuctionTab();
                 return;
+            }
+            if (!_ahRemoveInv(uidStr, cnt)) {
+                // 伺服器已扣；本機對齊失敗時仍以伺服器為準
+                try { if (typeof cloudPullSlotIntoStorage === 'function') cloudPullSlotIntoStorage(currentSlot); } catch (ePull) {}
             }
             _ahApplyWallet(data);
             if (data.goldAfter == null) {
@@ -539,12 +571,12 @@
         }
 
         _auctionBusy = true;
-        try {
-            if (typeof saveGame === 'function') saveGame();
-            if (typeof cloudPushSlotSync === 'function' && typeof saveStateJson === 'function' && typeof currentSlot !== 'undefined') {
-                cloudPushSlotSync(currentSlot, JSON.parse(saveStateJson()));
-            }
-        } catch (eBuySync) {}
+        var syncBuy = _ahSyncCloudBeforeWrite();
+        if (!syncBuy.ok) {
+            _auctionBusy = false;
+            if (typeof logSys === 'function') logSys(syncBuy.message || '雲端同步失敗。');
+            return;
+        }
         _ahPost('buy', { listingId: listingId }).then(function (data) {
             _auctionBusy = false;
             if (!data || !data.ok) {
@@ -552,7 +584,7 @@
                 auctionRefreshBrowse(true);
                 return;
             }
-            // B2：以伺服器雲端扣款結果為準
+            // B2：以伺服器雲端扣款＋入包結果為準
             _ahApplyWallet(data);
             if (data.goldAfter == null) {
                 var total = Math.max(0, Math.floor(Number(data.totalPaid) || ((data.price || 0) + (data.buyFee || 0))));
@@ -578,7 +610,8 @@
                 auctionRefreshMine(true);
                 return;
             }
-            _ahGrantItem(data.item);
+            _ahApplyWallet(data);
+            if (!data.deferred) _ahGrantItem(data.item);
             if (typeof logSys === 'function') logSys('<span class="text-sky-300">' + (data.message || '已下架') + '</span>');
             try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
             try { if (typeof renderTabs === 'function') renderTabs(); } catch (e2) {}
@@ -590,9 +623,15 @@
     function _ahApplyClaims(claims) {
         if (!Array.isArray(claims) || !claims.length) return { gold: 0, items: 0 };
         var gold = 0, items = 0;
+        var mySlot = typeof currentSlot !== 'undefined' ? currentSlot : 0;
         claims.forEach(function (c) {
-            if (!c) return;
+            if (!c || !c.applied) return;
+            var cSlot = c.slot != null && c.slot !== '' ? Math.floor(Number(c.slot) || 0) : mySlot;
+            // 其他角色槽的入帳只寫雲端；本機僅套用目前角色
+            if (cSlot && mySlot && cSlot !== mySlot) return;
             if (c.type === 'gold') {
+                // goldAfter 已由 _ahApplyWallet 套用時略過累加，避免雙加
+                if (c._skipLocalGold) return;
                 var amt = Math.max(0, Math.floor(Number(c.amount) || 0));
                 player.gold = (player.gold || 0) + amt;
                 gold += amt;
@@ -614,12 +653,17 @@
                 auctionRefreshMine(true);
                 return;
             }
-            var r = _ahApplyClaims(data.claims);
+            _ahApplyWallet(data);
+            var claims = data.claims || [];
+            if (data.goldAfter != null) {
+                claims.forEach(function (c) { if (c && c.type === 'gold') c._skipLocalGold = true; });
+            }
+            var r = _ahApplyClaims(claims);
             if (typeof logSys === 'function') {
-                logSys('<span class="text-amber-300">已領取' +
+                logSys('<span class="text-amber-300">' + (data.message || ('已領取' +
                     (r.gold ? (' 金幣 ' + r.gold.toLocaleString()) : '') +
                     (r.items ? (' 物品 ' + r.items + ' 件') : '') +
-                    '。</span>');
+                    '。')) + '</span>');
             }
             try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
             try { if (typeof renderTabs === 'function') renderTabs(); } catch (e2) {}
@@ -638,14 +682,19 @@
                 auctionRefreshMine(true);
                 return;
             }
-            var r = _ahApplyClaims(data.claims);
-            if (!r.gold && !r.items) {
-                if (typeof logSys === 'function') logSys('沒有待領取內容。');
+            _ahApplyWallet(data);
+            var claims = data.claims || [];
+            if (data.goldAfter != null) {
+                claims.forEach(function (c) { if (c && c.type === 'gold') c._skipLocalGold = true; });
+            }
+            var r = _ahApplyClaims(claims);
+            if (!r.gold && !r.items && !(data.claims && data.claims.length)) {
+                if (typeof logSys === 'function') logSys(data.message || '沒有待領取內容。');
             } else if (typeof logSys === 'function') {
-                logSys('<span class="text-amber-300">已領取' +
+                logSys('<span class="text-amber-300">' + (data.message || ('已領取' +
                     (r.gold ? (' 金幣 ' + r.gold.toLocaleString()) : '') +
                     (r.items ? ('、物品 ' + r.items + ' 件') : '') +
-                    '。</span>');
+                    '。')) + '</span>');
             }
             try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
             try { if (typeof renderTabs === 'function') renderTabs(); } catch (e2) {}

@@ -4262,6 +4262,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (u.startsWith("/api/auction")) {
+      // 有 Neon 時與 Vercel 同源（rt-auction），避免本機 auction.json 與雲端錢包分裂
+      if (_neonLeaderboardHandler) {
+        await _neonLeaderboardHandler(req, res, u);
+        return;
+      }
       await handleAuctionApi(req, res, u);
       return;
     }
