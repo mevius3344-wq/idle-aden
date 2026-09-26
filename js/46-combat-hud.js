@@ -749,9 +749,12 @@
             syncDpsChips();
             syncAutoBtn();
         }, 1200);
+        var _hudFastN = 0;
         setInterval(function () {
             var s = gs();
             if (!s || s.classList.contains('hidden') || !s.classList.contains('combat-hud')) return;
+            _hudFastN++;
+            if (window.__powerSave && (_hudFastN % 2) !== 0) return;   // 📱 低耗能：HUD 刷新降半
             if (isTownVisible()) {
                 syncTargetHud();
                 return;

@@ -8,7 +8,7 @@
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <!-- 版本號（_serve.js 部署時替換 v3.8.503） -->
-    <meta name="game-version" content="v3.9.52">
+    <meta name="game-version" content="v3.9.53">
     <meta name="game-origin" content="__GAME_ORIGIN__">
     <script>
     (function () {
@@ -43,11 +43,11 @@
     <title>重生放置</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
 
-    <link rel="stylesheet" href="css/style.css?v=v3.9.52">
-    <link rel="stylesheet" href="css/floating-ui.css?v=v3.9.52">
+    <link rel="stylesheet" href="css/style.css?v=v3.9.53">
+    <link rel="stylesheet" href="css/floating-ui.css?v=v3.9.53">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 預編譯 Tailwind -->
-    <link rel="stylesheet" href="css/mobile-ui.css?v=v3.9.52"><!-- 手機優先版面 -->
-    <link rel="stylesheet" href="css/combat-hud.css?v=v3.9.52"><!-- 戰鬥 HUD -->
+    <link rel="stylesheet" href="css/mobile-ui.css?v=v3.9.53"><!-- 手機優先版面 -->
+    <link rel="stylesheet" href="css/combat-hud.css?v=v3.9.53"><!-- 戰鬥 HUD -->
 </head>
 <body class="h-screen w-screen overflow-hidden">
 
@@ -57,7 +57,7 @@
     <!-- 創角畫面（起始UI：310.jpg 固定底圖＋273~300 左下逐幀動畫·標題/選單/版號絕對定位於 4:3 藝術舞台上） -->
     <div id="creation-screen">
       <div id="login-art-stage">
-        <img id="login-bg-image" src="public/assets/login/310.jpg?v=v3.9.52" alt="登入畫面背景">
+        <img id="login-bg-image" src="public/assets/login/310.jpg?v=v3.9.53" alt="登入畫面背景">
         <img id="login-anim-image" src="public/assets/login/273.png" alt="登入畫面動畫">
 
         <!-- 帳號密碼：預設空白，自行註冊／登入 -->
@@ -244,7 +244,7 @@
             <!-- 新增了 id="status-panel"，並加入去底色與加深背景的樣式確保文字可讀 -->
             <div id="status-panel" class="panel bg-cover bg-top bg-no-repeat" style="background-blend-mode: multiply; background-color: rgba(30, 41, 59, 0.85);">
                 <img id="status-avatar" class="status-avatar" alt="" draggable="false" aria-hidden="true">
-                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="align-badge" class="font-bold ml-1" style="color:#e2e8f0;text-shadow:0 0 5px rgba(0,0,0,0.7);font-size:0.85rem;line-height:1;" title="正義值（天堂善惡）">中立 0</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.9.52" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold rounded px-2 inline-block min-w-[4.5rem] text-right" title="角色名稱"></span></div>
+                <div class="panel-header text-center flex justify-between bg-transparent border-b border-slate-700"><span class="flex items-center shrink-0"><span id="st-classname">職業</span><span id="align-badge" class="font-bold ml-1" style="color:#e2e8f0;text-shadow:0 0 5px rgba(0,0,0,0.7);font-size:0.85rem;line-height:1;" title="正義值（天堂善惡）">中立 0</span></span><span id="victory-badge" class="hidden font-bold" style="color:#fde68a;text-shadow:0 0 6px rgba(253,230,138,0.85);font-size:1.05rem;line-height:1;align-items:center;gap:0.15rem;white-space:nowrap;flex-shrink:0;" title="城主：血盟持有城堡，全商店 8 折、開放城堡"><img id="victory-badge-crown" src="assets/ui/castle-crown.gif?v=v3.9.53" alt="" draggable="false" style="width:16px;height:12px;object-fit:contain;image-rendering:pixelated;position:relative;top:-0.08em;filter:drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));"><span id="victory-badge-text" style="line-height:1;">城主</span></span><span id="st-class" class="text-white text-lg font-bold rounded px-2 inline-block min-w-[4.5rem] text-right" title="角色名稱"></span></div>
                 <div class="status-compact-body text-base">
                     <div class="status-level-row text-slate-400">
                         <span>等級</span><span class="text-white font-bold text-xl" id="st-lv">1</span>
@@ -523,11 +523,11 @@
                                 <input type="checkbox" id="set-vfxnum-on" class="w-4 h-4" checked onchange="try{setVfxNumOn(this.checked)}catch(e){}">
                                 <span class="text-sm text-amber-100 font-bold">💥 傷害數字</span>
                             </label>
-                            <label class="cursor-pointer flex items-center gap-2" title="手機／平板建議開啟：自動關閉特效與傷害數字，降低發熱與耗電">
+                            <label class="cursor-pointer flex items-center gap-2" title="手機／平板強烈建議開啟：關閉特效與傷害數字、降低動畫幀率與圖示濾鏡，明顯減輕發熱與耗電">
                                 <input type="checkbox" id="set-power-save" class="w-4 h-4" onchange="try{setPowerSaveOn(this.checked)}catch(e){}">
                                 <span class="text-sm text-sky-200 font-bold">📱 低耗能模式</span>
                             </label>
-                            <p class="text-xs text-slate-500 leading-relaxed m-0">戰鬥特效與傷害數字可分別開關；低耗能模式會關閉兩者以減輕手機發熱。設定保存在本機，所有角色共用。</p>
+                            <p class="text-xs text-slate-500 leading-relaxed m-0">低耗能會關閉戰鬥特效／傷害數字，並降低角色與怪物換幀、關掉圖示濾鏡與發光動畫。手機預設開啟；電量偏低時也會自動建議開啟。可隨時在此關閉。</p>
                         </div>
                     </div>
                     <div class="bg-slate-800 p-3 rounded-lg border border-slate-700">
@@ -673,62 +673,62 @@
     </script>
 
     
-    <script src="js/00-host-config.js?v=v3.9.52"></script>
-    <script src="js/00-server-wake.js?v=v3.9.52"></script>
-    <script src="js/34-ip-session-limit.js?v=v3.9.52"></script>
-    <script src="js/41-anti-cheat.js?v=v3.9.52"></script>
-    <script src="js/36-account-session.js?v=v3.9.52"></script>
-    <script src="js/35-cloud-save.js?v=v3.9.52"></script>
-    <script src="js/auth-login.js?v=v3.9.52"></script>
-    <script src="js/anim-manifest.js?v=v3.9.52"></script>
-    <script src="js/00-data.js?v=v3.9.52"></script>
-    <script src="js/01-drops-config.js?v=v3.9.52"></script>
-    <script src="js/42-idle-logout.js?v=v3.9.52"></script>
-    <script src="js/02-stats-recompute.js?v=v3.9.52"></script>
-    <script src="js/39-talent-tree.js?v=v3.9.52"></script>
-    <script src="js/03-combat-core.js?v=v3.9.52"></script>
-    <script src="js/04-combat-attack.js?v=v3.9.52"></script>
-    <script src="js/05-kill-progression.js?v=v3.9.52"></script>
-    <script src="js/06-status-allies.js?v=v3.9.52"></script>
-    <script src="js/07-skills-cast.js?v=v3.9.52"></script>
-    <script src="js/08-items-equip.js?v=v3.9.52"></script>
-    <script src="js/45-q-anim.js?v=v3.9.52"></script>
-    <script src="js/09-vfx-render.js?v=v3.9.52"></script>
-    <script src="js/10-ui-tabs.js?v=v3.9.52"></script>
-    <script src="js/11-world-map.js?v=v3.9.52"></script>
-    <script src="js/12-npc-quests.js?v=v3.9.52"></script>
-    <script src="js/13-shop-save.js?v=v3.9.52"></script>
-    <script src="js/14-craft-pandora.js?v=v3.9.52"></script>
-    <script src="js/15-cards.js?v=v3.9.52"></script>
-    <script src="js/16-equip-book.js?v=v3.9.52"></script>
-    <script src="js/18-misc-book.js?v=v3.9.52"></script>
-    <script src="js/17-audio.js?v=v3.9.52"></script>
-    <script src="js/19-equipment-window.js?v=v3.9.52"></script>
-    <script src="js/20-warehouse-window.js?v=v3.9.52"></script>
-    <script src="js/21-relic-book.js?v=v3.9.52"></script>
-    <script src="js/23-summons.js?v=v3.9.52"></script>
-    <script src="js/22-pets.js?v=v3.9.52"></script>
-    <script src="js/24-pandora-relic-market.js?v=v3.9.52"></script>
-    <script src="js/25-clan-system.js?v=v3.9.52"></script>
-    <script src="js/26-world-channel.js?v=v3.9.52"></script>
-    <script src="js/36-realtime-party.js?v=v3.9.52"></script>
-    <script src="js/40-world-boss.js?v=v3.9.52"></script>
-    <script src="js/41-map-population.js?v=v3.9.52"></script>
-    <script src="js/48-realtime-world.js?v=v3.9.52"></script>
-    <script src="js/43-field-pvp.js?v=v3.9.52"></script>
-    <script src="js/47-mapdef.js?v=v3.9.52"></script>
-    <script src="js/44-map-explore.js?v=v3.9.52"></script>
-    <script src="js/46-combat-hud.js?v=v3.9.52"></script>
-    <script src="js/37-auction-house.js?v=v3.9.52"></script>
-    <script src="js/27-offline-rewards.js?v=v3.9.52"></script>
-    <script src="js/28-pvp-arena.js?v=v3.9.52"></script>
-    <script src="js/29-siege-v2-data.js?v=v3.9.52"></script>
-    <script src="js/30-siege-v2.js?v=v3.9.52"></script>
-    <script src="js/31-castle-guards.js?v=v3.9.52"></script>
-    <script src="js/32-threat.js?v=v3.9.52"></script>
-    <script src="js/33-desktop-player-files.js?v=v3.9.52"></script>
-    <script src="js/38-pandora-global-auction.js?v=v3.9.52"></script>
-    <script src="js/38-live-update.js?v=v3.9.52"></script>
-    <script src="js/50-gm-mail.js?v=v3.9.52"></script>
+    <script src="js/00-host-config.js?v=v3.9.53"></script>
+    <script src="js/00-server-wake.js?v=v3.9.53"></script>
+    <script src="js/34-ip-session-limit.js?v=v3.9.53"></script>
+    <script src="js/41-anti-cheat.js?v=v3.9.53"></script>
+    <script src="js/36-account-session.js?v=v3.9.53"></script>
+    <script src="js/35-cloud-save.js?v=v3.9.53"></script>
+    <script src="js/auth-login.js?v=v3.9.53"></script>
+    <script src="js/anim-manifest.js?v=v3.9.53"></script>
+    <script src="js/00-data.js?v=v3.9.53"></script>
+    <script src="js/01-drops-config.js?v=v3.9.53"></script>
+    <script src="js/42-idle-logout.js?v=v3.9.53"></script>
+    <script src="js/02-stats-recompute.js?v=v3.9.53"></script>
+    <script src="js/39-talent-tree.js?v=v3.9.53"></script>
+    <script src="js/03-combat-core.js?v=v3.9.53"></script>
+    <script src="js/04-combat-attack.js?v=v3.9.53"></script>
+    <script src="js/05-kill-progression.js?v=v3.9.53"></script>
+    <script src="js/06-status-allies.js?v=v3.9.53"></script>
+    <script src="js/07-skills-cast.js?v=v3.9.53"></script>
+    <script src="js/08-items-equip.js?v=v3.9.53"></script>
+    <script src="js/45-q-anim.js?v=v3.9.53"></script>
+    <script src="js/09-vfx-render.js?v=v3.9.53"></script>
+    <script src="js/10-ui-tabs.js?v=v3.9.53"></script>
+    <script src="js/11-world-map.js?v=v3.9.53"></script>
+    <script src="js/12-npc-quests.js?v=v3.9.53"></script>
+    <script src="js/13-shop-save.js?v=v3.9.53"></script>
+    <script src="js/14-craft-pandora.js?v=v3.9.53"></script>
+    <script src="js/15-cards.js?v=v3.9.53"></script>
+    <script src="js/16-equip-book.js?v=v3.9.53"></script>
+    <script src="js/18-misc-book.js?v=v3.9.53"></script>
+    <script src="js/17-audio.js?v=v3.9.53"></script>
+    <script src="js/19-equipment-window.js?v=v3.9.53"></script>
+    <script src="js/20-warehouse-window.js?v=v3.9.53"></script>
+    <script src="js/21-relic-book.js?v=v3.9.53"></script>
+    <script src="js/23-summons.js?v=v3.9.53"></script>
+    <script src="js/22-pets.js?v=v3.9.53"></script>
+    <script src="js/24-pandora-relic-market.js?v=v3.9.53"></script>
+    <script src="js/25-clan-system.js?v=v3.9.53"></script>
+    <script src="js/26-world-channel.js?v=v3.9.53"></script>
+    <script src="js/36-realtime-party.js?v=v3.9.53"></script>
+    <script src="js/40-world-boss.js?v=v3.9.53"></script>
+    <script src="js/41-map-population.js?v=v3.9.53"></script>
+    <script src="js/48-realtime-world.js?v=v3.9.53"></script>
+    <script src="js/43-field-pvp.js?v=v3.9.53"></script>
+    <script src="js/47-mapdef.js?v=v3.9.53"></script>
+    <script src="js/44-map-explore.js?v=v3.9.53"></script>
+    <script src="js/46-combat-hud.js?v=v3.9.53"></script>
+    <script src="js/37-auction-house.js?v=v3.9.53"></script>
+    <script src="js/27-offline-rewards.js?v=v3.9.53"></script>
+    <script src="js/28-pvp-arena.js?v=v3.9.53"></script>
+    <script src="js/29-siege-v2-data.js?v=v3.9.53"></script>
+    <script src="js/30-siege-v2.js?v=v3.9.53"></script>
+    <script src="js/31-castle-guards.js?v=v3.9.53"></script>
+    <script src="js/32-threat.js?v=v3.9.53"></script>
+    <script src="js/33-desktop-player-files.js?v=v3.9.53"></script>
+    <script src="js/38-pandora-global-auction.js?v=v3.9.53"></script>
+    <script src="js/38-live-update.js?v=v3.9.53"></script>
+    <script src="js/50-gm-mail.js?v=v3.9.53"></script>
 </body>
 </html>

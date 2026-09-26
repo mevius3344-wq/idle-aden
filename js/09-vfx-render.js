@@ -1598,6 +1598,12 @@ function _applyVfxPref() {
             powerSave = (ps === '1');
         }
     } catch (ePs) {}
+    // 🔋 電量過低時強制建議低耗能（不覆寫使用者明確關掉的偏好；僅在尚未寫入或已開啟時加強）
+    try {
+        if (!powerSave && navigator.getBattery) {
+            /* 非同步；下方 _batteryWatch 會在低電時再套用 */
+        }
+    } catch (eBat) {}
     window.__powerSave = powerSave;
     let cbPs = document.getElementById('set-power-save');
     if (cbPs) cbPs.checked = powerSave;
@@ -1630,11 +1636,41 @@ function _applyVfxPref() {
             : 'bg-emerald-800 hover:bg-emerald-700 border-emerald-600');
     }
     try { document.body.classList.toggle('power-save', !!powerSave); } catch (eBody) {}
+    if (powerSave) {
+        try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (eClr) {}
+        try { _vfxPending = []; } catch (ePend) {}
+    }
 }
 function setPowerSaveOn(on) {
     try { localStorage.setItem(_POWER_SAVE_PREF_KEY, on ? '1' : '0'); } catch (e) {}
     _applyVfxPref();
 }
+/** 📱 動畫節流倍率：低耗能＝約 1/3 幀率（約 2.5～3fps 視覺更新） */
+function _powerAnimSkip() {
+    return window.__powerSave ? 3 : 1;
+}
+// 🔋 低電量自動開啟低耗能（僅當使用者尚未明確關掉＝pref 非 '0'）
+(function _batteryPowerSaveWatch() {
+    try {
+        if (!navigator.getBattery) return;
+        navigator.getBattery().then(function (bat) {
+            function maybe() {
+                try {
+                    let pref = localStorage.getItem(_POWER_SAVE_PREF_KEY);
+                    if (pref === '0') return;   // 使用者明確關閉
+                    let low = !!(bat && (bat.level <= 0.2 || (bat.charging === false && bat.level <= 0.35)));
+                    if (low && !window.__powerSave) {
+                        try { localStorage.setItem(_POWER_SAVE_PREF_KEY, '1'); } catch (e0) {}
+                        _applyVfxPref();
+                    }
+                } catch (e1) {}
+            }
+            maybe();
+            try { bat.addEventListener('levelchange', maybe); } catch (e2) {}
+            try { bat.addEventListener('chargingchange', maybe); } catch (e3) {}
+        }).catch(function () {});
+    } catch (e) {}
+})();
 function setVfxOn(on) {
     try { localStorage.setItem(_VFX_PREF_KEY, on ? '0' : '1'); } catch (e) {}
     _applyVfxPref();
@@ -5014,6 +5050,7 @@ try {
 
 // 🩹 v3.8.334／352／355：戰鬥視窗可見就換幀（勿只靠 game-screen；行動 HUD 偶發 class 不同步）
 let _perfHousekeepAt = 0;
+let _animTickN = 0;
 setInterval(() => {
     if (document.hidden) return;
     try {
@@ -5023,27 +5060,46 @@ setInterval(() => {
         let gsOk = !!(gs && !gs.classList.contains('hidden'));
         if (!bvOk && !gsOk) return;
     } catch (eGate) { return; }
+    _animTickN++;
+    let skip = _powerAnimSkip();
+    // 📱 低耗能：多數 tick 跳過換幀／隊員圖，大幅降低 GPU／解碼發熱
+    if (skip > 1 && (_animTickN % skip) !== 0) {
+        if ((_animTickN % (skip * 4)) === 0) {
+            try { _playerMorphApply(); } catch (eLite) {}
+        }
+        return;
+    }
     try { _mobAnimApply(); } catch (e) {}
     if (!(typeof _ffCatchupLong === 'function' && _ffCatchupLong())) {
-        try { _updateFreezeFx(); } catch (e) {}
-        try { _updateMobSkillFx(); } catch (e) {}
-        try { _allySpritesApply(); } catch (e) {}
-        try { _remotePartySpritesApply(); } catch (e) {}
+        if (!window.__powerSave) {
+            try { _updateFreezeFx(); } catch (e) {}
+            try { _updateMobSkillFx(); } catch (e) {}
+        }
+        // 隊員／遠端圖：低耗能改每 3 次才更新一次
+        if (!window.__powerSave || (_animTickN % 3) === 0) {
+            try { _allySpritesApply(); } catch (e) {}
+            try { _remotePartySpritesApply(); } catch (e) {}
+        }
     }
     try { _playerMorphApply(); } catch (e) {}
     let _nowHk = Date.now();
-    if (_nowHk - _perfHousekeepAt > 20000) {
+    if (_nowHk - _perfHousekeepAt > (window.__powerSave ? 45000 : 20000)) {
         _perfHousekeepAt = _nowHk;
         try { _perfHousekeeping(); } catch (eHk) {}
     }
 }, Math.floor(1000 / MOB_ANIM_FPS));
 // 🩹 v3.8.352：RAF 輔助換幀（interval 被背景節流時場戰仍要動）
+// 📱 v3.9.53：低耗能時停用 RAF 雙通道（與 setInterval 重疊＝手機發熱主因之一）
 (function _mobAnimRafLoop() {
     let last = 0;
     function tick(ts) {
         try {
-            // 📱 低耗能：約半幀率換幀，減輕解碼／合成發熱
-            let gap = (window.__powerSave ? 2 : 1) * (1000 / MOB_ANIM_FPS) - 2;
+            if (window.__powerSave) {
+                // 低耗能只靠 setInterval，避免每幀 RAF 喚醒
+                requestAnimationFrame(tick);
+                return;
+            }
+            let gap = (1000 / MOB_ANIM_FPS) - 2;
             if (!document.hidden && ts - last >= gap) {
                 let gs = document.getElementById('game-screen');
                 let bv = document.getElementById('battle-view');
