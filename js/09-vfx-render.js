@@ -4508,6 +4508,8 @@ function _playerMorphApplyBody() {
                 _pmState.el.style.removeProperty('overflow');
                 _pmState.el.style.removeProperty('transform');
             } catch (eClrImp) {}
+            // .pm-body 為 max-width:100%，容器寬塌成 0 會讓人物整隻縮不見
+            _pmState.el.style.width = Math.max(1, Math.round(_pw || 100)) + 'px';
             _pmState.el.style.left = 'calc(' + _pp.x + ' - ' + Math.round(_pw / 2) + 'px)';
             _pmState.el.style.bottom = (_pp.b - _playerMorphYOffset(form)) + 'px';
             _pmState.el.style.zIndex = String(30 - _pp.b);

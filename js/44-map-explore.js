@@ -134,6 +134,7 @@
     }
     function exploreSeamlessFloorUrl(biome) {
         var id = String(biome || 'wild').replace(/[^a-z]/gi, '') || 'wild';
+        if (id === 'mist') id = 'wild';
         return 'assets/area/seamless/' + id + '.png?v=' + exploreFloorVer();
     }
     /**
@@ -2101,9 +2102,11 @@
     function exploreBiomePropConfig(biome) {
         return BIOME_PROP_CONFIG[biome] || BIOME_PROP_CONFIG.wild;
     }
+    var PROP_BIOME_DIRS = { coast: 1, crystal: 1, desert: 1, dungeon: 1, forest: 1, lava: 1, snow: 1, swamp: 1, tower: 1, wild: 1 };
     function explorePropSrc(biome, kind) {
         var ver = (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'v3.8.381');
         var b = String(biome || 'wild').replace(/[^a-z]/gi, '') || 'wild';
+        if (!PROP_BIOME_DIRS[b]) b = 'wild';
         var k = String(kind || 'rock').replace(/[^a-z]/gi, '') || 'rock';
         // 專屬圖優先；執行期不探測 404，由建圖腳本保證存在（缺則與共用同內容）
         return 'assets/area/props/' + b + '/' + k + '.png?v=' + ver;
