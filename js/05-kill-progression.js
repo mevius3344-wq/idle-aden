@@ -437,8 +437,13 @@ function killMob(idx) {
     try { vfxKill(mob); } catch(e){}   // ✨ VFX：擊殺粒子爆裂（趁格子 DOM 仍在、重繪前）
     try { playMobKill(mob); } catch(e){}   // 🔊 音效：怪物死亡（依怪名對應專屬死亡音，查無→通用擊殺音）
     if (mob.curHp > 0) mob.curHp = 0;     // 待清算期間不可被當成活目標
-    // 🪵 新兵修練場木頭人：只清格重生，不發經驗／金幣／掉落（避免誤走一般擊殺管線）
+    // 🪵 新兵修練場木頭人：只給少量玩家經驗，不發金幣／掉落（避免誤走一般擊殺管線）
     if (mob.trainingDummy) {
+        try {
+            let _dExp = Math.floor((Number(mob.exp) || 0) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1)
+                * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));
+            if (_dExp > 0) { player.exp += _dExp; checkLvUp(); }
+        } catch (eTrX) {}
         try { renderMobs(); } catch (eTrR) {}
         try { updateUI(); } catch (eTrU) {}
         if (!state.inTick) settleDeadMobs();

@@ -1166,14 +1166,18 @@ function autoCastSpells() {
     }
     if(healSk && _teamLowPct <= healThr) castSkill(healSk);
 
-    // 轉換魔法（妖精／法師下拉，單選）：安全區暫停、MP 達 90% 以上不轉換；
+    // 轉換魔法（妖精／法師下拉，單選）：安全區暫停；HP 高於 set-hp-convert 且 MP 低於 set-mp-convert 才轉換。
     // 實際頻率由 convertSk 控制，與攻擊／治癒套用相同職業／變身 cast，不再固定每 3 秒。
     let convSel = document.getElementById('sel-convert-skill');
     let convId = convSel ? convSel.value : '';
     if((player.d.loadTier||0) < 2 && !mapState.current.startsWith('town_') && convId && player.skills.includes(convId) && DB.skills[convId] && DB.skills[convId].type === 'convert') {
         let thEl = document.getElementById('set-hp-convert');
         let th = thEl ? (parseFloat(thEl.value) || 0) : 0;
-        if(hpPct > th && player.mp < player.mmp * 0.9) castSkill(convId);
+        let mpThEl = document.getElementById('set-mp-convert');
+        let mpTh = mpThEl ? parseFloat(mpThEl.value) : NaN;
+        if (!(mpTh > 0)) mpTh = 90;
+        mpTh = Math.min(100, mpTh);
+        if(hpPct > th && (player.mmp || 0) > 0 && (player.mp / player.mmp * 100) < mpTh) castSkill(convId);
     }
 }
 

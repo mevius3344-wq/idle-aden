@@ -59,6 +59,9 @@ const SPELL_FX_REF_MSCALE_K = 1.095 / 112;   // proj: mScale = refH × 此（帶
 const SPELL_FX_REF_W_K = 105 / 112;          // w驅動: 基準寬 = refH × 此（帶高112→105）
 // 🩹 v3.9.4：技能特效整體縮尺（場戰／手機欄視覺過大）；尺寸公式仍吃帶高基準
 const SPELL_FX_SCALE = 0.72;
+// 目標法術最小顯示高度（× 帶高基準）：偏小的投射物（冰箭/光箭/火箭…）與 h≤1 範圍法術放大到此下限；大型法術（落雷/流星雨）不受影響
+const SPELL_FX_MIN_PROJ_H = 0.5;
+const SPELL_FX_MIN_AREA_H = 0.9;
 // 📏 v3.3.13 帶高基準正規化：v3.2.80 站立帶鎖 242 時「舊 242＝battle-view 含 p-4→內容 210」→新純帶 242 使 .mob-img-inner 由調校基準 112 默默長到 144(@舞台1:1)
 //    → 凡以「內框高 r.height」推導尺寸的特效(SPELL_FX 三模式/FREEZE_FX/怪技能非錨定)全被放大 1.286×。
 //    正規化＝由 #mob-list 帶高(area-fit 恆 242 css×舞台縮放)推回 112 基準＝真正「與怪無關、只隨舞台等比」(v3.0.21 拍板)·順帶消除靜態 boss-zoom rect(×1.78) 對特效的誤放大；帶不可量→退傳入 rect 高(非 area-fit 舊版面維持原行為)。
@@ -255,6 +258,8 @@ function playSpellFx(skn, mob, caster) {
             else if (cfg.w != null) { fxW = (_refH * SPELL_FX_REF_W_K) * cfg.w; fxH = fxW / ar; }  // 🌋 寬度驅動(地面型)v3.0.21 改帶高基準寬(固定·不隨怪寬)
             else { fxH = _refH * (cfg.h || 1.8); fxW = fxH * ar; }               // ⚡ 高度驅動(範圍型·如落雷)：基準帶高＝固定不隨怪
             fxW *= _sc; fxH *= _sc;
+            let _minH = _refH * (cfg.proj ? SPELL_FX_MIN_PROJ_H : SPELL_FX_MIN_AREA_H);
+            if (fxH > 0 && fxH < _minH) { fxW *= _minH / fxH; fxH = _minH; }
             // 🩹 v3.8.496：螢幕點→layer 內座標（combat-hud 欄偏移）
             let _loc = _vfxToLocal(ax - fxW * (cfg.ax != null ? cfg.ax : 0.5), ay - fxH * (cfg.ay != null ? cfg.ay : 0.9));
             left = _loc.x + 'px';

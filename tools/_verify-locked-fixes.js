@@ -227,6 +227,21 @@ section("13) 數值規格");
   ok("傳送卷軸效果存在", /d\.eff === 'teleport_scroll'/.test(F.items));
 }
 
+section("13b) 自動施放／木頭人經驗／法術特效尺寸");
+{
+  ok("轉換魔法有 MP 門檻輸入框 set-mp-convert", /id="set-mp-convert"/.test(F.html));
+  ok("轉換魔法條件＝HP > set-hp-convert 且 MP < set-mp-convert",
+    /getElementById\('set-mp-convert'\)[\s\S]{0,200}hpPct > th && \(player\.mmp \|\| 0\) > 0 && \(player\.mp \/ player\.mmp \* 100\) < mpTh/.test(F.cast));
+  ok("set-mp-convert 會存檔／讀檔", /setMpConvert:/.test(F.shop) && /c\.setMpConvert/.test(F.shop));
+  ok("消耗HP技能有說明文字", /血量低於此值就暫停施放/.test(F.html));
+  ok("木頭人 exp 5", /"wood_dummy":\s*\{[^\n]*\bexp:\s*5\b/.test(F.data));
+  ok("木頭人擊殺發玩家經驗",
+    /if \(mob\.trainingDummy\) \{\s*try \{\s*let _dExp[\s\S]{0,300}player\.exp \+= _dExp/.test(F.kill));
+  ok("法術特效最小尺寸（投射物 0.5／範圍 0.9）",
+    /const SPELL_FX_MIN_PROJ_H = 0\.5;/.test(F.vfx) && /const SPELL_FX_MIN_AREA_H = 0\.9;/.test(F.vfx)
+    && /if \(fxH > 0 && fxH < _minH\)/.test(F.vfx));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");
