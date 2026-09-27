@@ -57,6 +57,11 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     talking_island_port: 'assets/area/說話之島港口.jpg', oblivion_travel: 'assets/area/說話之島港口.jpg',
     oblivion_island: 'assets/area/遺忘之島.jpg',
     antaras_lair: 'assets/area/安塔瑞斯棲息地.jpg',
+    // 🐉 侵蝕的安塔瑞斯副本 4 區：1920x1080 無同名圖，勿把「侵蝕的…」名稱加進 AREA_1920（會 404 黑底）
+    antharas_nest_1: 'assets/area/1920x1080/安塔瑞斯.jpg',
+    antharas_nest_2: 'assets/area/1920x1080/安塔瑞斯.jpg',
+    antharas_nest_3: 'assets/area/1920x1080/安塔瑞斯.jpg',
+    antharas_lair: 'assets/area/1920x1080/安塔瑞斯棲息地.jpg',
     fafurion_lair: 'assets/area/法利昂洞穴.jpg',
     valakas_lair: 'assets/area/巴拉卡斯巢穴.jpg',
     silent_outer: 'assets/area/沉默洞穴周邊.jpg',
@@ -111,7 +116,6 @@ const AREA_1920 = new Set(['亞丁城鎮','伊娃王國','傲慢之塔','傲慢�
 AREA_1920.add('古魯丁村莊');
 AREA_1920.add('決鬥競技場');
 ['肯特外門區','肯特內城','風木外門區','風木內城','海音外門區','海音內城','時空裂痕戰場','日出之國城墎','日出之國東之地','日出之國西之地','日出之國北之地'].forEach(name => AREA_1920.add(name));
-['侵蝕的安塔瑞斯巢穴入口','侵蝕的安塔瑞斯巢穴通道','侵蝕的安塔瑞斯巢穴深處','侵蝕的安塔瑞斯棲息地'].forEach(name => AREA_1920.add(name));   // 🐉 v3.7.58 安塔瑞斯副本 4 區專屬背景（名稱對應 js/05 ANTHARAS_AREA_NAMES）
 function areaBg1920(name) { return (name && AREA_1920.has(name)) ? ('assets/area/1920x1080/' + name + '.jpg') : null; }   // 名稱→1920 路徑(存在才回傳)
 function upgradeAreaPath(path) { if (!path) return path; let m = /^assets\/area\/([^\/]+)\.jpg$/.exec(path); return (m && AREA_1920.has(m[1])) ? ('assets/area/1920x1080/' + m[1] + '.jpg') : path; }   // 舊 assets/area/<名>.jpg fallback 路徑就地升級到 1920×1080(若有新圖)；非此格式(如 castle.png)原樣
 /** CSS url()：中文檔名分段 encode，避免背景圖請求失敗 */

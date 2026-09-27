@@ -5,6 +5,8 @@
  * 用法：
  *   node tools/_bump-version.js 3.8.504
  *   node tools/_bump-version.js          # 自動 +1 末段
+ *
+ * 一律先跑 tools/_regression-gate.js --p5；失敗則不改任何檔案。
  */
 const fs = require("fs");
 const path = require("path");
@@ -47,7 +49,23 @@ function bump(ver) {
   return "v" + a + "." + b + "." + c;
 }
 
-const arg = process.argv[2];
+// 🔒 強制回歸閘門：先檢查、沒過就不准改版號（無跳過開關，見 .cursor/rules/no-regression.mdc）
+{
+  const { spawnSync } = require("child_process");
+  console.log("── 回歸閘門（_regression-gate --p5，含已鎖定修正）──");
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/_regression-gate.js"), "--p5"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (r.status !== 0) {
+    console.error("\n✖ 回歸閘門失敗：有已修好的問題被改回去，版號未變更。先修好再 bump。");
+    process.exit(r.status || 1);
+  }
+}
+
+const arg = process.argv.slice(2).find((a) => !a.startsWith("--"));
 const from = currentVer();
 const to = arg ? (String(arg).startsWith("v") ? arg : "v" + arg) : bump(from);
 
@@ -81,16 +99,3 @@ for (const rel of FILES) {
 }
 
 console.log("done");
-
-// 🌐 K：GATE=1 時 bump 後自動跑回歸閘門
-if (process.env.GATE === "1" || process.env.GATE === "true" || process.argv.includes("--gate")) {
-  const { spawnSync } = require("child_process");
-  console.log("\n── GATE=1 → _regression-gate --p5 ──");
-  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/_regression-gate.js"), "--p5"], {
-    cwd: ROOT,
-    encoding: "utf8",
-    env: process.env,
-    stdio: "inherit",
-  });
-  if (r.status !== 0) process.exit(r.status || 1);
-}

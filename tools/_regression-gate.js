@@ -38,6 +38,7 @@ function run(name, rel, extraEnv) {
 console.log("K｜回歸閘門");
 console.log("cwd=", ROOT);
 
+run("🔒 已鎖定修正（防舊 bug 回來）", "tools/_verify-locked-fixes.js");
 run("登入／關鍵字編碼", "tools/_verify-login-enc.js");
 run("UI 亂碼掃描", "tools/_scan-ui-mojibake.js");
 run("戰鬥 HUD／VFX 節點", "tools/_verify-combat-hud.js");

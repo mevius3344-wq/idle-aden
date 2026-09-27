@@ -129,7 +129,7 @@ console.log("=== 5d) C 抽抽樂 UX ===");
   const src = fs.readFileSync(path.join(ROOT, "js/14-craft-pandora.js"), "utf8");
   const css = fs.readFileSync(path.join(ROOT, "css/style.css"), "utf8");
   ok("recent + overlay helpers", /pandoraRenderRecentHTML/.test(src) && /pandoraShowDrawOverlay/.test(src));
-  ok("afford estimate copy", /約可單抽/.test(src));
+  ok("afford estimate copy", /約可抽 \$\{left1/.test(src));
   ok("status badge", /pandoraGachaStatusBadgeHTML/.test(src) && /pandora-gacha-badge/.test(css));
 }
 
