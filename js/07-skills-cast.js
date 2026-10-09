@@ -494,7 +494,7 @@ function castSkillInner(skId) {
     if (_autoCastNow && sk.dmgType === 'magic' && cost > 0) { let _mm = _equipWpnField('autoCastMpMult'); if (_mm) cost = Math.round(cost * _mm); }   // 🐍 枯竭魔杖：自動施放傷害魔法 MP×autoCastMpMult(2)
     if(player.mp < cost) return false;
     if(sk.hpCost && player.hp <= sk.hpCost + 5) return false;  // HP 不足，拒絕施放
-    if(sk.hpCost && sk.type !== 'convert') { let _hpSkEl = document.getElementById('set-hp-skill'); let _hpSkThr = _hpSkEl ? (parseFloat(_hpSkEl.value) || 0) : 0; if(_hpSkThr > 0 && (player.mhp || 0) > 0 && (player.hp / player.mhp * 100) < _hpSkThr) return false; }   // 🐉 消耗HP技能：HP 低於自訂門檻(%)時暫停自動施放（自動路徑專用；轉換魔法另有 set-hp-convert 門檻，故排除避免重複）
+    if(sk.hpCost) { let _hpSkEl = document.getElementById('set-hp-skill'); let _hpSkThr = _hpSkEl ? (parseFloat(_hpSkEl.value) || 0) : 0; if(_hpSkThr > 0 && (player.mhp || 0) > 0 && (player.hp / player.mhp * 100) < _hpSkThr) return false; }   // 🐉 消耗HP技能（含轉換魔法）：HP 低於自訂門檻(%)時暫停施放——HP 門檻只此一個，轉換魔法列只設 MP
     if(sk.hpCost && sk.mp && sk.type !== 'convert') { let _mpSkEl = document.getElementById('set-mp-atk'); let _mpSkThr = _mpSkEl ? (parseFloat(_mpSkEl.value) || 0) : 0; if(_mpSkThr > 0 && (player.mmp || 0) > 0 && (player.mp / player.mmp * 100) < _mpSkThr) return false; }   // 🔧 同時消耗HP與MP的技能：MP 低於「攻擊技能MP門檻(set-mp-atk)」時亦暫停自動施放→與HP門檻(set-hp-skill)取「任一不符即停」（攻擊型本就在 autoCastSpells 先擋過此門檻，這裡再涵蓋增益型如覺醒/冥想/隱身/堅固防護）
     if(sk.costItem) {   // 🌀 施法材料：背包＋倉庫合併計量（比照製作系統），不足則不施放（提示 60 秒節流）
         let _ciQ = sk.costItem.qty || 1;
@@ -1166,18 +1166,16 @@ function autoCastSpells() {
     }
     if(healSk && _teamLowPct <= healThr) castSkill(healSk);
 
-    // 轉換魔法（妖精／法師下拉，單選）：安全區暫停；HP 高於 set-hp-convert 且 MP 低於 set-mp-convert 才轉換。
+    // 轉換魔法（妖精／法師下拉，單選）：安全區暫停；MP 低於 set-mp-convert 才轉換（HP 門檻統一由 castSkill 的 set-hp-skill 把關）。
     // 實際頻率由 convertSk 控制，與攻擊／治癒套用相同職業／變身 cast，不再固定每 3 秒。
     let convSel = document.getElementById('sel-convert-skill');
     let convId = convSel ? convSel.value : '';
     if((player.d.loadTier||0) < 2 && !mapState.current.startsWith('town_') && convId && player.skills.includes(convId) && DB.skills[convId] && DB.skills[convId].type === 'convert') {
-        let thEl = document.getElementById('set-hp-convert');
-        let th = thEl ? (parseFloat(thEl.value) || 0) : 0;
         let mpThEl = document.getElementById('set-mp-convert');
         let mpTh = mpThEl ? parseFloat(mpThEl.value) : NaN;
-        if (!(mpTh > 0)) mpTh = 90;
+        if (!(mpTh > 0)) mpTh = 50;
         mpTh = Math.min(100, mpTh);
-        if(hpPct > th && (player.mmp || 0) > 0 && (player.mp / player.mmp * 100) < mpTh) castSkill(convId);
+        if((player.mmp || 0) > 0 && (player.mp / player.mmp * 100) < mpTh) castSkill(convId);
     }
 }
 

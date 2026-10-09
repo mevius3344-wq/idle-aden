@@ -93,22 +93,25 @@ async function main() {
         let sel=document.getElementById('sel-convert-skill');
         if(![...sel.options].some(o=>o.value===sid)){ let o=document.createElement('option'); o.value=sid; sel.appendChild(o); }
         sel.value=sid;
-        document.getElementById('set-hp-convert').value='50';
         document.getElementById('set-mp-convert').value='30';
+        document.getElementById('set-hp-skill').value='50';
+        let res={ hpInputs: document.querySelectorAll('#ui-convert-row input').length };
         let calls=[]; let orig=window.castSkill; window.castSkill=function(id){ calls.push(id); return false; };
-        let res={};
         try{
             player.hp=player.mhp; player.mp=Math.floor(player.mmp*0.6); calls.length=0; autoCastSpells(); res.mp60=calls.includes(sid);
             player.hp=player.mhp; player.mp=Math.floor(player.mmp*0.1); calls.length=0; autoCastSpells(); res.mp10=calls.includes(sid);
-            player.hp=Math.floor(player.mhp*0.3); player.mp=Math.floor(player.mmp*0.1); calls.length=0; autoCastSpells(); res.hp30=calls.includes(sid);
         } finally { window.castSkill=orig; }
-        res.sid=sid; res.hint=!!document.body.innerHTML.includes('以 HP 換 MP');
+        // HP 門檻由 castSkill 內 set-hp-skill 把關：HP 30% < 50% → 拒絕施放、不扣 HP
+        player.cds.convertSk=0; player.hp=Math.floor(player.mhp*0.3); player.mp=Math.floor(player.mmp*0.1);
+        let hp0=player.hp; let r=castSkill(sid); res.hp30=!!r || player.hp!==hp0;
+        res.sid=sid;
         return res;
     })()`);
     console.log('  ', JSON.stringify(conv));
     ok('MP 60% > 門檻 30% → 不轉換', conv && conv.mp60 === false);
     ok('MP 10% < 門檻 30% 且 HP 滿 → 轉換', conv && conv.mp10 === true);
-    ok('HP 30% < 門檻 50% → 不轉換', conv && conv.hp30 === false);
+    ok('HP 30% < 消耗HP技能門檻 50% → 不轉換、不扣血', conv && conv.hp30 === false);
+    ok('轉換魔法列只有 1 個輸入框（MP）', conv && conv.hpInputs === 1, 'inputs=' + (conv && conv.hpInputs));
 
     console.log('=== 法術特效尺寸（相對帶高基準） ===');
     const fx = await ev(`(async()=>{

@@ -229,11 +229,15 @@ section("13) 數值規格");
 
 section("13b) 自動施放／木頭人經驗／法術特效尺寸");
 {
-  ok("轉換魔法有 MP 門檻輸入框 set-mp-convert", /id="set-mp-convert"/.test(F.html));
-  ok("轉換魔法條件＝HP > set-hp-convert 且 MP < set-mp-convert",
-    /getElementById\('set-mp-convert'\)[\s\S]{0,200}hpPct > th && \(player\.mmp \|\| 0\) > 0 && \(player\.mp \/ player\.mmp \* 100\) < mpTh/.test(F.cast));
+  ok("轉換魔法只有 MP 門檻（set-mp-convert）", /id="set-mp-convert"/.test(F.html));
+  ok("轉換魔法不可再有第二個 HP 門檻（set-hp-convert 已移除）",
+    !/set-hp-convert|setHpConvert/.test(F.html + F.cast + F.shop));
+  ok("轉換魔法條件＝MP < set-mp-convert",
+    /getElementById\('set-mp-convert'\)[\s\S]{0,200}if\(\(player\.mmp \|\| 0\) > 0 && \(player\.mp \/ player\.mmp \* 100\) < mpTh\) castSkill\(convId\)/.test(F.cast));
+  ok("HP 門檻 set-hp-skill 同時管轉換魔法（不排除 convert）",
+    /if\(sk\.hpCost\) \{ let _hpSkEl = document\.getElementById\('set-hp-skill'\)/.test(F.cast));
   ok("set-mp-convert 會存檔／讀檔", /setMpConvert:/.test(F.shop) && /c\.setMpConvert/.test(F.shop));
-  ok("消耗HP技能有說明文字", /血量低於此值就暫停施放/.test(F.html));
+  ok("消耗HP技能說明含轉換魔法", /所有會扣 HP 的技能（含轉換魔法）/.test(F.html));
   ok("木頭人 exp 5", /"wood_dummy":\s*\{[^\n]*\bexp:\s*5\b/.test(F.data));
   ok("木頭人擊殺發玩家經驗",
     /if \(mob\.trainingDummy\) \{\s*try \{\s*let _dExp[\s\S]{0,300}player\.exp \+= _dExp/.test(F.kill));

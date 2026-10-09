@@ -2177,7 +2177,7 @@ function startGame() {
 //   （藥水種類/HP%、攻擊技與 MP%、治癒技與 HP%、消耗HP技能門檻、各卷軸勾選…）。
 //   於本檔求值當下擷取——index.html 的設定面板 markup 在 <script> 標籤之前，此時取到的就是 HTML 預設值。
 const CONFIG_DOM_IDS = ['set-pot', 'set-hp-pot', 'set-auto-buy-pot', 'set-mp-atk', 'sel-atk-skill', 'set-mp-heal', 'sel-heal-skill',
-    'set-hp-skill', 'set-hp-convert', 'set-mp-convert', 'sel-convert-skill', 'set-haste', 'set-brave', 'set-blue', 'set-cautious',
+    'set-hp-skill', 'set-mp-convert', 'sel-convert-skill', 'set-haste', 'set-brave', 'set-blue', 'set-cautious',
     'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow'];
 const CONFIG_DOM_DEFAULTS = (function () {
     let d = {};
@@ -2309,7 +2309,6 @@ function saveGame() {
         selHealSkill: document.getElementById('sel-heal-skill').value,
         setMpHeal: document.getElementById('set-mp-heal').value,
         selConvertSkill: document.getElementById('sel-convert-skill') ? document.getElementById('sel-convert-skill').value : '',
-        setHpConvert: document.getElementById('set-hp-convert') ? document.getElementById('set-hp-convert').value : '',
         setMpConvert: document.getElementById('set-mp-convert') ? document.getElementById('set-mp-convert').value : '',
         setHpSkill: document.getElementById('set-hp-skill') ? document.getElementById('set-hp-skill').value : '',
         setHaste: document.getElementById('set-haste').checked,
@@ -2723,7 +2722,6 @@ function loadGame() {
             if (c.selHealSkill) document.getElementById('sel-heal-skill').value = c.selHealSkill;
             if (c.setMpHeal) document.getElementById('set-mp-heal').value = c.setMpHeal;
             if (c.selConvertSkill && document.getElementById('sel-convert-skill')) document.getElementById('sel-convert-skill').value = c.selConvertSkill;
-            if (c.setHpConvert && document.getElementById('set-hp-convert')) document.getElementById('set-hp-convert').value = c.setHpConvert;
             if (document.getElementById('set-mp-convert')) document.getElementById('set-mp-convert').value = c.setMpConvert || '50';
             if (c.setHpSkill != null && c.setHpSkill !== '' && document.getElementById('set-hp-skill')) document.getElementById('set-hp-skill').value = c.setHpSkill;
             
