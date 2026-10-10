@@ -3014,8 +3014,11 @@ function _animSetImgFrame(img, fkey, url) {
         try { img.removeAttribute('onerror'); } catch (eOe) {}
         try { img.removeAttribute('data-fb'); } catch (eFb) {}
 
+        // 只擋「比畫面上更舊」的幀；若只套最新意圖，圖載入慢於換幀間隔時永遠換不上（走路變滑行）
+        let reqSeq = (img._animReqSeq = (img._animReqSeq || 0) + 1);
         let applySrc = function (src) {
-            if (img.dataset.animPending !== fkey) return;   // 已被更新的意圖蓋過
+            if (reqSeq <= (img._animShownSeq || 0)) return;
+            img._animShownSeq = reqSeq;
             img.dataset.animF = fkey;
             try { img.setAttribute('src', src); } catch (eA) {}
             img.src = src;
@@ -4167,6 +4170,29 @@ function _prefetchPlayerFaceDirs(actor) {
         setTimeout(pump, 160);
     } catch (e) {}
 }
+/** 八向職業動畫：一次預載 8 個朝向的 walk 幀（URL 與播放時完全相同才吃得到快取），避免剛起步／轉向時只滑不走 */
+function _preloadPlayerWalkFrames(form) {
+    try {
+        if (!form || !form.classAnim || form.faceD == null || !form.wpn || !form.domKey) return;
+        if (_pmState._walkPreTag === form.domKey) return;
+        let m = /^class:(.+):[^:]+$/.exec(form.domKey);
+        if (!m) return;
+        _pmState._walkPreTag = form.domKey;
+        let bust = '?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'c');
+        let keep = [];
+        for (let d = 0; d < 8; d++) {
+            let base = 'assets/classanim/' + encodeURIComponent(m[1] + _animDirSfx(d, true)) + '/';
+            let n = _classAnimFrameCount({ base: base, wpn: form.wpn }, 'walk');
+            for (let f = 0; f < n; f++) {
+                let im = new Image();
+                im.decoding = 'async';
+                im.src = base + form.wpn + '_walk_' + f + '.png' + bust;
+                keep.push(im);
+            }
+        }
+        _pmState._walkPre = keep;
+    } catch (e) {}
+}
 function _playerCastleCrownOn() {
     try {
         if (typeof siegeVictoryActive !== 'function' || !siegeVictoryActive()) return false;
@@ -4378,6 +4404,7 @@ function _playerMorphApplyBody() {
         }
     }
     try { _prefetchPlayerFaceDirs(player); } catch (ePf) {}
+    _preloadPlayerWalkFrames(form);
     if (_pmState.name !== form.domKey) { _playerMorphRemove(); _pmState.name = form.domKey; }   // 🧭 v3.2.12 只在武器/變身(domKey)變時重建·換朝向(form.key 變·domKey 不變)只換幀
     // 受擊：HP-delta 偵測（涵蓋物理/魔法/DoT 所有傷害落點）
     let hp = player.hp;

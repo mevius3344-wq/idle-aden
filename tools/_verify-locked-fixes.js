@@ -389,6 +389,13 @@ section("29) 持久存檔＋備份＋負載");
   const hc = rd("js/00-host-config.js");
   ok("#30 前端 /api/ 不轉發到已停用的 Vercel（Railway 同源）",
     !/idle-aden\.vercel\.app/.test(hc) && !/apiBase\s*=\s*VERCEL_API/.test(hc));
+  const lrcss = rd("css/lr-hud.css");
+  ok("#31 樂園風 HUD 不顯示右側普攻鈕／空技能格",
+    /\.lr-hud \.chud-hotbar \.chud-hot-slot\.is-atk,\s*\n#game-screen\.combat-hud\.lr-hud \.chud-hotbar \.chud-hot-slot\.is-empty \{\s*\n\s*display: none !important;/.test(lrcss));
+  const vfx = rd("js/09-vfx-render.js");
+  ok("#31 換幀只擋舊幀（載入慢不可卡在待機＝滑行）",
+    /if \(reqSeq <= \(img\._animShownSeq \|\| 0\)\) return;/.test(vfx) && !/if \(img\.dataset\.animPending !== fkey\) return;/.test(vfx));
+  ok("#31 八向 walk 幀預載", /function _preloadPlayerWalkFrames\(form\)/.test(vfx) && /_preloadPlayerWalkFrames\(form\);/.test(vfx));
   ok("音效快取一天（不可 no-store）", /ext === "\.mp3" \|\| ext === "\.ogg"[^\n]*\n\s*\? "public, max-age=86400"/.test(serve));
 }
 

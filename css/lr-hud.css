@@ -293,6 +293,11 @@
 #game-screen.combat-hud.lr-hud .chud-hotbar.is-ring {
   bottom: var(--lr-ring-b) !important;
 }
+/* 樂園風：點怪＝攻擊，右側不放普攻鈕 */
+#game-screen.combat-hud.lr-hud .chud-hotbar .chud-hot-slot.is-atk,
+#game-screen.combat-hud.lr-hud .chud-hotbar .chud-hot-slot.is-empty {
+  display: none !important;
+}
 #game-screen.combat-hud.lr-hud .chud-dps {
   left: calc(8px + var(--chud-safe-l)) !important;
   transform: none !important;

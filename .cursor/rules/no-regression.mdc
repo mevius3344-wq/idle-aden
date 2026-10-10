@@ -47,6 +47,7 @@ alwaysApply: true
 | 28 | GM API 檔案模式 | Railway 無 `DATABASE_URL` 時 `/api/gm/*` 走 `lib/rt-gm-file.js`（同 `rt-gm.js` 路徑／格式：總覽、搜尋、在線、背包、GM 信箱發放／取消／領取、封鎖、踢線、倍率、操作紀錄），不可回 503；心跳 `gmMail` 回真實待領數；GM 裝備欄／職業名用遊戲實際鍵（gloves/boots/ear1…、dark/dragon/illusion/warrior）。桌面 `天堂GM後台` 預設連 Railway，舊 Vercel 位址自動改掉（v3.9.65，實測 `tools/_audit-gm-file.js`、`tools/_audit-gm-desk.js`） |
 | 29 | 持久存檔／備份／負載 | 所有線上資料（帳號、存檔、隊伍、血盟、拍賣、交易日誌、GM 信箱／紀錄／倍率）寫在 `PERSIST_DIR`（＝`CLOUD_SAVE_DIR`，Railway 掛 Volume 於 `/data`），不可寫死 `ROOT/data`；`lib/rt-backup.js` 每日快照存 `.backups/`（保留 7）；GM API `/api/gm/backup`／`backups`／`backup/file`／`backup/snapshot`；GM 總覽帶伺服器負載＋存檔是否持久；音效快取一天；桌面後台每日自動下載備份到 `天堂GM後台\backups`（保留 30）（v3.9.66，實測 `tools/_audit-gm-file.js`、`tools/_audit-gm-desk.js`） |
 | 30 | 線上 API 同源 | `js/00-host-config.js` 在 Railway 上 `/api/` 一律同源打 `_serve.js`；不可再預設轉發到已停用的 `idle-aden.vercel.app`（會「伺服器喚醒逾時」、無法登入／註冊）（v3.9.67） |
+| 31 | 樂園風無普攻鈕／走路有步伐 | 樂園風 HUD 下右側技能環的普攻鈕（`.chud-hot-slot.is-atk`）與空技能格隱藏，學到的主動技能仍顯示；`_animSetImgFrame` 只擋比畫面更舊的幀（不可改回「只套最新意圖」，網路慢時人物會卡待機幀滑行）；`_preloadPlayerWalkFrames` 預載八向 walk 幀（v3.9.68，實測 `tools/_audit-player-walk.js`、`--slow`） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。
