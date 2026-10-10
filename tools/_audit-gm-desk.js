@@ -53,7 +53,8 @@ async function waitUp(url) {
   delete gameEnv.DATABASE_URL;
   delete gameEnv.POSTGRES_URL;
   const game = spawn(process.execPath, ["_serve.js"], { cwd: ROOT, env: gameEnv, stdio: "ignore" });
-  const gmEnv = Object.assign({}, process.env, { GM_PORT: String(GM_PORT), GM_TOKEN, GM_CLOUD_API: GAME, GM_PASSWORD });
+  const gmEnv = Object.assign({}, process.env, { GM_PORT: String(GM_PORT), GM_TOKEN, GM_CLOUD_API: GAME, GM_PASSWORD, GM_AUTO_BACKUP: "0" });
+  const createdBackups = [];
   const desk = spawn(process.execPath, ["gm-server.js"], { cwd: GM_DIR, env: gmEnv, stdio: "ignore" });
   let br = null;
   try {
@@ -117,6 +118,21 @@ async function waitUp(url) {
     check("unban via desk", (await post("/api/gm/unban", { target: "cloud", account: acc })).data.ok);
     await call(GAME, "POST", "/api/accounts/login", { account: acc, password: "pw123456", clientId: "c1" });
 
+    console.log("=== 備份 ===");
+    const ovS = (await get("/api/gm/overview")).data.cloud || {};
+    check("overview server load", ovS.server && ovS.server.memory && ovS.server.storage && ovS.server.storage.persistent === true);
+    const snap = await post("/api/gm/backup/snapshot", {});
+    check("desk -> server snapshot", snap.data.ok && !!snap.data.name, snap.data.name || snap.data.message);
+    const bn = await post("/api/gm/backup/now", {});
+    if (bn.data.name) createdBackups.push(bn.data.name);
+    check("desk backup now saved", bn.data.ok && fs.existsSync(path.join(GM_DIR, "backups", bn.data.name || "x")), bn.data.name || bn.data.message);
+    const bs = await post("/api/gm/backup/now", { name: snap.data.name });
+    if (bs.data.name) createdBackups.push(bs.data.name);
+    check("desk download server snapshot", bs.data.ok && bs.data.name === snap.data.name);
+    check("desk backup bad name", (await post("/api/gm/backup/now", { name: "../x.json.gz" })).status === 400);
+    const bl = await get("/api/gm/backup/list");
+    check("desk backup list", (bl.data.local || []).length >= 1 && (bl.data.cloud || []).some((x) => x.name === snap.data.name));
+
     const au = await get("/api/gm/audit?limit=100");
     const acts = (au.data.rows || []).map((r) => r.action);
     for (const a of ["grant_item", "grant_gold", "grant_online", "grant_cancel", "rates_set", "kick", "ban", "unban"]) check("audit " + a, acts.indexOf(a) >= 0);
@@ -159,6 +175,9 @@ async function waitUp(url) {
     check("UI overview KPIs", kp >= 6, "kpis=" + kp);
     check("UI overview online row", (await ev("document.querySelectorAll('#ov-online .gm-item').length")) === 1);
     check("UI overview audit rows", (await ev("document.querySelectorAll('#ov-audit tbody tr').length")) >= 5);
+    check("UI server load KPIs", (await ev("document.querySelectorAll('#ov-server .gm-kpi').length")) === 7);
+    check("UI storage warn hidden (persistent)", await ev("document.getElementById('ov-storage-warn').classList.contains('hidden')"));
+    check("UI backup rows", (await ev("document.querySelectorAll('#ov-backup tbody tr').length")) >= 2);
     await shot("gmdesk_overview.png");
     await ev("document.querySelector('#ov-online .gm-item').click();1");
     await sleep(2500);
@@ -184,8 +203,16 @@ async function waitUp(url) {
     try {
       const auditFile = path.join(ROOT, "data", "gm-desk-audit.json");
       const log = JSON.parse(fs.readFileSync(auditFile, "utf8"));
-      log.entries = (log.entries || []).filter((e) => !(e.action === "grant_online" && e.at >= START));
+      log.entries = (log.entries || []).filter((e) => !((e.action === "grant_online" || e.action === "backup_download") && e.at >= START));
       fs.writeFileSync(auditFile, JSON.stringify(log, null, 2), "utf8");
+    } catch (e) {}
+    for (const n of createdBackups) {
+      try {
+        fs.unlinkSync(path.join(GM_DIR, "backups", n));
+      } catch (e) {}
+    }
+    try {
+      fs.rmdirSync(path.join(GM_DIR, "backups"));
     } catch (e) {}
     try {
       fs.rmSync(DIR, { recursive: true, force: true });

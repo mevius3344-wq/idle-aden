@@ -374,6 +374,21 @@ section("28) GM API 檔案模式（Railway 無 Neon）");
     /dark: "黑暗妖精"/.test(gm) && /dragon: "龍騎士"/.test(gm) && /warrior: "戰士"/.test(gm));
 }
 
+section("29) 持久存檔＋備份＋負載");
+{
+  const serve = rd("_serve.js");
+  ok("PERSIST_DIR 跟 CLOUD_SAVE_DIR 走", /const PERSIST_DIR = process\.env\.CLOUD_SAVE_DIR/.test(serve));
+  ok("隊伍／血盟／拍賣／交易日誌存在持久目錄（不可寫死 ROOT/data）",
+    ["parties", "clans", "auction", "gm-trade-log"].every((n) => serve.indexOf('persistFile("' + n + '.json")') >= 0) &&
+      !/path\.join\(ROOT, "data", "(parties|clans|auction|gm-trade-log)\.json"\)/.test(serve));
+  ok("lib/rt-backup.js 存在且略過 .backups／sessions", exists("lib/rt-backup.js") && /SKIP_NAMES = new Set\(\[SNAP_DIR_NAME, "account-sessions\.json"\]\)/.test(rd("lib/rt-backup.js")));
+  ok("設 CLOUD_SAVE_DIR 時啟動每日快照", /backupStore\(\)\.startDaily\(\)/.test(serve));
+  const gmf = rd("lib/rt-gm-file.js");
+  ok("GM 備份 API（下載／快照／清單）", ['"/api/gm/backup"', '"/api/gm/backups"', '"/api/gm/backup/file"', '"/api/gm/backup/snapshot"'].every((s) => gmf.indexOf(s) >= 0));
+  ok("GM 總覽帶伺服器負載", /server: serverLoad \? serverLoad\(\) : null/.test(gmf) && /function serverLoadStats\(\)/.test(serve));
+  ok("音效快取一天（不可 no-store）", /ext === "\.mp3" \|\| ext === "\.ogg"[^\n]*\n\s*\? "public, max-age=86400"/.test(serve));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

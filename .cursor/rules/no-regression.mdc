@@ -45,6 +45,7 @@ alwaysApply: true
 | 26 | 原版可走村莊 | 15 張原版村莊（`assets/linmap/tw_*`，`LIN_TOWNS`／`mapdefTownLin`）：點地面走動、NPC 站原版位置（`js/52-lin-town.js`＋`js/52-lintown-data.js`）、點 NPC 開對話、不出怪、出村傳送門、同圖玩家互見；無原版圖的村莊仍用 #2 靜態背景（v3.9.63，實測 `tools/_audit-lintown.js`） |
 | 27 | 野外／地監原版拼塊 | 70 張野外＋地監（`tools/lin/fields-config.js`：原版 mapid＋取景範圍）用原版拼塊（`assets/linmap/fd_*`／`dg_*`）；`applyLinFields` 沿用舊傳送門目的地，門位置優先 l1j `dungeon` 表原版入口／樓梯，抵達點在對向門旁且直線可走；野外→原版村莊抵達村莊出口；海賊島／傲慢塔／時空裂痕等未轉換圖維持原地板（v3.9.64，實測 `tools/_audit-linfields.js --browser`） |
 | 28 | GM API 檔案模式 | Railway 無 `DATABASE_URL` 時 `/api/gm/*` 走 `lib/rt-gm-file.js`（同 `rt-gm.js` 路徑／格式：總覽、搜尋、在線、背包、GM 信箱發放／取消／領取、封鎖、踢線、倍率、操作紀錄），不可回 503；心跳 `gmMail` 回真實待領數；GM 裝備欄／職業名用遊戲實際鍵（gloves/boots/ear1…、dark/dragon/illusion/warrior）。桌面 `天堂GM後台` 預設連 Railway，舊 Vercel 位址自動改掉（v3.9.65，實測 `tools/_audit-gm-file.js`、`tools/_audit-gm-desk.js`） |
+| 29 | 持久存檔／備份／負載 | 所有線上資料（帳號、存檔、隊伍、血盟、拍賣、交易日誌、GM 信箱／紀錄／倍率）寫在 `PERSIST_DIR`（＝`CLOUD_SAVE_DIR`，Railway 掛 Volume 於 `/data`），不可寫死 `ROOT/data`；`lib/rt-backup.js` 每日快照存 `.backups/`（保留 7）；GM API `/api/gm/backup`／`backups`／`backup/file`／`backup/snapshot`；GM 總覽帶伺服器負載＋存檔是否持久；音效快取一天；桌面後台每日自動下載備份到 `天堂GM後台\backups`（保留 30）（v3.9.66，實測 `tools/_audit-gm-file.js`、`tools/_audit-gm-desk.js`） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。

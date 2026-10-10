@@ -47,6 +47,44 @@ const _serverStatus = require("./lib/rt-server-status");
 const _serverMetrics = require("./lib/rt-server-metrics");
 
 const ROOT = __dirname;
+/** 持久資料根目錄：Railway 掛 Volume 後設 CLOUD_SAVE_DIR，重部署不清檔 */
+const PERSIST_DIR = process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(ROOT, "data");
+
+/** 首次改到持久目錄時，把舊 data/ 的檔案搬過去（目標已存在就不動） */
+function persistFile(name) {
+  const target = path.join(PERSIST_DIR, name);
+  const legacy = path.join(ROOT, "data", name);
+  try {
+    if (path.resolve(legacy) !== path.resolve(target) && !fs.existsSync(target) && fs.existsSync(legacy)) {
+      fs.mkdirSync(PERSIST_DIR, { recursive: true });
+      fs.copyFileSync(legacy, target);
+    }
+  } catch (e) {}
+  return target;
+}
+
+const _reqStats = { total: 0, minute: [], cpuPct: 0, _cpu: process.cpuUsage(), _cpuAt: Date.now() };
+setInterval(() => {
+  const now = Date.now();
+  const cur = process.cpuUsage();
+  const usedUs = cur.user - _reqStats._cpu.user + (cur.system - _reqStats._cpu.system);
+  _reqStats.cpuPct = Math.round((usedUs / 1000 / Math.max(1, now - _reqStats._cpuAt)) * 1000) / 10;
+  _reqStats._cpu = cur;
+  _reqStats._cpuAt = now;
+}, 5000).unref();
+function countRequest() {
+  _reqStats.total++;
+  const sec = Math.floor(Date.now() / 1000);
+  const m = _reqStats.minute;
+  if (m.length && m[m.length - 1][0] === sec) m[m.length - 1][1]++;
+  else m.push([sec, 1]);
+  while (m.length && m[0][0] <= sec - 60) m.shift();
+}
+function requestsLastMinute() {
+  const cutoff = Math.floor(Date.now() / 1000) - 60;
+  return _reqStats.minute.reduce((s, x) => (x[0] > cutoff ? s + x[1] : s), 0);
+}
+
 const PORT = Number(process.env.PORT || 5173);
 const PUBLIC_GAME_ORIGIN = (() => {
   const fromEnv = String(process.env.PUBLIC_GAME_ORIGIN || "").trim().replace(/\/$/, "");
@@ -1034,7 +1072,7 @@ const PARTY_MOB_SYNC_TTL_MS = 12000;
 const MAP_MOB_SYNC_TTL_MS = 12000;
 const PARTY_WAIT_MAX_MS = 20000;
 const PARTY_EVENT_MAX = 120;
-const PARTIES_FILE = path.join(ROOT, "data", "parties.json");
+const PARTIES_FILE = persistFile("parties.json");
 /** @type {Map<string, object>} partyId -> party */
 const parties = new Map();
 /** @type {Map<string, object>} memberKey -> presence */
@@ -2345,7 +2383,7 @@ async function handlePartyApi(req, res, u) {
 // ===== 🩸 Realtime player clans (create / search / join). Persisted to data/clans.json. =====
 const CLAN_MAX = 9999;
 const CLAN_TTL_MS = 180000;
-const CLANS_FILE = path.join(ROOT, "data", "clans.json");
+const CLANS_FILE = persistFile("clans.json");
 /** @type {Map<string, object>} clanId -> clan */
 const rtClans = new Map();
 /** @type {Map<string, object>} memberKey -> presence (reuse party presence shape) */
@@ -2762,8 +2800,8 @@ async function handleClanApi(req, res, u) {
 }
 
 // ===== 🏛 Realtime auction house (player listings). Persisted to data/auction.json. =====
-const AUCTION_FILE = path.join(ROOT, "data", "auction.json");
-const GM_TRADE_LOG_FILE = path.join(ROOT, "data", "gm-trade-log.json");
+const AUCTION_FILE = persistFile("auction.json");
+const GM_TRADE_LOG_FILE = persistFile("gm-trade-log.json");
 const AUCTION_MAX_LISTINGS = 2000;
 const AUCTION_MAX_PER_ACCOUNT = 20;
 const AUCTION_TTL_MS = 72 * 60 * 60 * 1000; // 72h
@@ -3529,10 +3567,41 @@ function getLocalEffectiveRates() {
   return out;
 }
 
+let _backupStore = null;
+function backupStore() {
+  if (!_backupStore) _backupStore = require("./lib/rt-backup").createBackupStore(PERSIST_DIR);
+  return _backupStore;
+}
+
+/** GM 總覽用：伺服器負載＋儲存狀態 */
+function serverLoadStats() {
+  const st = backupStore().stats();
+  const volume = String(process.env.RAILWAY_VOLUME_MOUNT_PATH || "").trim();
+  return {
+    uptimeSec: Math.floor((Date.now() - SERVER_STARTED_AT) / 1000),
+    memory: _serverMetrics.processMemory(),
+    cpuPct: _reqStats.cpuPct,
+    requests: { total: _reqStats.total, lastMinute: requestsLastMinute() },
+    ipSessions: countIpSessionsOnline(),
+    gameVersion: GAME_VERSION,
+    storage: {
+      dir: PERSIST_DIR,
+      persistent: !!process.env.CLOUD_SAVE_DIR && (!process.env.RAILWAY_ENVIRONMENT || !!volume),
+      volume,
+      dataMb: Math.round((st.bytes / 1048576) * 100) / 100,
+      files: st.files,
+      accountDirs: st.accountDirs,
+    },
+    backups: backupStore().list(),
+  };
+}
+
 let _fileGm = null;
 function fileGm() {
   if (_fileGm) return _fileGm;
   _fileGm = require("./lib/rt-gm-file").createFileGmApi({
+    backup: backupStore(),
+    serverLoad: serverLoadStats,
     dataDir: path.dirname(ACCOUNTS_FILE),
     cloudRoot: CLOUD_ROOT,
     ratesFile: LOCAL_RATES_FILE,
@@ -4259,6 +4328,7 @@ async function handleLeaderboardApi(req, res, u) {
 }
 
 const server = http.createServer(async (req, res) => {
+  countRequest();
   let u = decodeURIComponent((req.url || "/").split("?")[0]);
   try {
     if (u === "/api/server/status") {
@@ -4410,7 +4480,9 @@ const server = http.createServer(async (req, res) => {
             ? "public, max-age=86400, immutable"
             : ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif" || ext === ".woff2"
               ? "public, max-age=86400, immutable"
-              : "no-store",
+              : ext === ".mp3" || ext === ".ogg" || ext === ".wav" || ext === ".svg" || ext === ".ico"
+                ? "public, max-age=86400"
+                : "no-store",
     };
     if (ext === ".html") headers.Pragma = "no-cache";
     res.writeHead(200, headers);
@@ -4458,6 +4530,12 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(
     "CLOUD_SAVE " + (ENABLE_CLOUD_SAVE ? CLOUD_ROOT : "off")
   );
+  if (process.env.CLOUD_SAVE_DIR || process.env.BACKUP_DAILY === "1") {
+    backupStore().startDaily();
+    console.log("BACKUP daily -> " + backupStore().snapDir);
+  } else if (process.env.RAILWAY_ENVIRONMENT) {
+    console.warn("WARN 未設定 CLOUD_SAVE_DIR：資料寫在容器暫存碟，每次部署都會清檔（請掛 Railway Volume）。");
+  }
   try {
     migrateJsonSidecar(ACCOUNTS_FILE_LEGACY, ACCOUNTS_FILE);
     migrateJsonSidecar(CHAR_NAMES_FILE_LEGACY, CHAR_NAMES_FILE);

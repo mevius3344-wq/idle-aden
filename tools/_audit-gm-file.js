@@ -51,7 +51,7 @@ async function waitUp() {
   });
   delete env.DATABASE_URL;
   delete env.POSTGRES_URL;
-  const srv = spawn(process.execPath, ["_serve.js"], { cwd: ROOT, env, stdio: "ignore" });
+  let srv = spawn(process.execPath, ["_serve.js"], { cwd: ROOT, env, stdio: "ignore" });
   try {
     check("server up", await waitUp());
     const db = require("../lib/rt-gm").loadItemDb() || {};
@@ -134,10 +134,62 @@ async function waitUp() {
     login = await call("POST", "/api/accounts/login", { account: acc, password: pw, clientId: "c1" });
     check("login after unban", login.data.ok);
 
+    console.log("=== 負載／備份 ===");
+    const sv = (await gmGet("/api/gm/overview")).data.server || {};
+    check("overview server load", sv.memory && sv.memory.rssMb > 0 && sv.requests.total > 0 && typeof sv.cpuPct === "number", JSON.stringify(sv.requests));
+    check("overview storage persistent", sv.storage && sv.storage.persistent === true && sv.storage.dataMb > 0 && sv.storage.accountDirs >= 1, JSON.stringify(sv.storage));
+    check("backup no token -> 401", (await call("GET", "/api/gm/backup")).status === 401);
+    const br = await fetch(BASE + "/api/gm/backup", { headers: { Authorization: "Bearer " + GM_TOKEN } });
+    const zlib = require("zlib");
+    let bundle = {};
+    try {
+      bundle = JSON.parse(zlib.gunzipSync(Buffer.from(await br.arrayBuffer())).toString("utf8"));
+    } catch (e) {}
+    const bf = Object.keys(bundle.files || {});
+    check("backup download gzip", br.status === 200 && /gzip/.test(br.headers.get("content-type") || ""), "files=" + bf.length);
+    check("backup has accounts+slot", bf.indexOf("accounts.json") >= 0 && bf.indexOf(acc + "/slot-1.json") >= 0, bf.slice(0, 8).join(","));
+    check("backup skips sessions", bf.indexOf("account-sessions.json") < 0);
+    const snap = await gmPost("/api/gm/backup/snapshot", {});
+    check("snapshot", snap.data.ok && /^backup-\d{8}-\d{4}\.json\.gz$/.test(snap.data.name || ""), snap.data.name);
+    check("snapshot in .backups", fs.existsSync(path.join(DIR, ".backups", snap.data.name || "x")));
+    const bl = await gmGet("/api/gm/backups");
+    check("backups list", (bl.data.list || []).some((x) => x.name === snap.data.name));
+    const sf = await fetch(BASE + "/api/gm/backup/file?name=" + encodeURIComponent(snap.data.name || ""), { headers: { Authorization: "Bearer " + GM_TOKEN } });
+    check("snapshot download", sf.status === 200 && (await sf.arrayBuffer()).byteLength > 100);
+    check("snapshot bad name -> 404", (await gmGet("/api/gm/backup/file?name=..%2Faccounts.json")).status === 404);
+    const bkSv = (await gmGet("/api/gm/overview")).data.server || {};
+    check("overview lists snapshot", (bkSv.backups || []).length >= 1);
+    const mp3 = (function find(d) {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const f = path.join(d, e.name);
+        if (e.isDirectory()) {
+          const r = find(f);
+          if (r) return r;
+        } else if (/\.(mp3|ogg)$/i.test(e.name)) return f;
+      }
+      return null;
+    })(path.join(ROOT, "assets", "bgm"));
+    check("audio file found", !!mp3);
+    if (mp3) {
+      const rel = "/" + path.relative(ROOT, mp3).split(path.sep).map(encodeURIComponent).join("/");
+      const ar = await fetch(BASE + rel);
+      check("audio cached", ar.status === 200 && /max-age=86400/.test(ar.headers.get("cache-control") || ""), rel + " " + ar.headers.get("cache-control"));
+    }
+
+    console.log("=== 重啟後資料保留（模擬 Volume 重部署） ===");
+    srv.kill();
+    await new Promise((r) => setTimeout(r, 800));
+    srv = spawn(process.execPath, ["_serve.js"], { cwd: ROOT, env, stdio: "ignore" });
+    check("server restarted", await waitUp());
+    login = await call("POST", "/api/accounts/login", { account: acc, password: pw, clientId: "c1" });
+    check("login after restart", login.data.ok);
+    const det3 = await gmGet("/api/gm/account?account=" + acc);
+    check("slot survives restart", det3.data.ok && det3.data.slots.length === 1 && det3.data.slots[0].gold === 600, JSON.stringify(det3.data.slots || []).slice(0, 120));
+
     console.log("=== 操作紀錄 ===");
     const au = await gmGet("/api/gm/audit?limit=50");
     const acts = (au.data.rows || []).map((r) => r.action);
-    for (const a of ["grant_item", "grant_gold", "grant_cancel", "rates_set", "rates_reset", "kick", "ban", "unban"]) {
+    for (const a of ["grant_item", "grant_gold", "grant_cancel", "rates_set", "rates_reset", "kick", "ban", "unban", "backup_download", "backup_snapshot"]) {
       check("audit has " + a, acts.indexOf(a) >= 0);
     }
   } catch (e) {
