@@ -648,7 +648,7 @@
         }
         /* 場戰俯視：名牌固定在精靈頂上方，勿跟身體高度漂 */
         #battle-view.is-world-scroll #player-morph-sprite .pm-name {
-            bottom: calc(100% + 2px) !important;
+            bottom: 72px;
             top: auto !important;
             font-size: 13px;
             max-width: 180px;

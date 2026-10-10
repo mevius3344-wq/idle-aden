@@ -1709,6 +1709,36 @@ function setShowPlayerId(on) {
     try { localStorage.setItem(_PLAYER_ID_PREF_KEY, on ? '1' : '0'); } catch (e) {}
     _applyPlayerIdPref();
 }
+/** 精靈圖頭頂高度：圖底到最上面不透明列的畫面 px（原版幀下方留白多，用圖高會把名字放到腳底）；依圖檔快取 */
+const _sprTopCache = new Map();
+let _sprTopCv = null;
+function _sprHeadPx(img) {
+    if (!img || !img.complete || !(img.naturalWidth > 0)) return null;
+    let key = String(img.getAttribute('src') || '').split('?')[0];
+    if (!key) return null;
+    let top = _sprTopCache.get(key);
+    if (top === undefined) {
+        top = null;
+        try {
+            let w = img.naturalWidth, h = img.naturalHeight;
+            if (!_sprTopCv) _sprTopCv = document.createElement('canvas');
+            _sprTopCv.width = w; _sprTopCv.height = h;
+            let cx = _sprTopCv.getContext('2d', { willReadFrequently: true });
+            cx.clearRect(0, 0, w, h);
+            cx.drawImage(img, 0, 0);
+            let px = cx.getImageData(0, 0, w, h).data;
+            outer: for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 60) { top = y; break outer; }
+            }
+        } catch (e) { top = null; }
+        if (_sprTopCache.size > 800) _sprTopCache.clear();
+        _sprTopCache.set(key, top);
+    }
+    if (top == null) return null;
+    let rh = img.offsetHeight || img.naturalHeight;
+    return (img.naturalHeight - top) * (rh / img.naturalHeight);
+}
+
 function _playerNameplateApply() {
     let el = (typeof _pmState !== 'undefined' && _pmState) ? _pmState.el : null;
     if (!el) return;
@@ -1734,9 +1764,14 @@ function _playerNameplateApply() {
         let bv = document.getElementById('battle-view');
         worldScroll = !!(bv && bv.classList.contains('is-world-scroll'));
     } catch (eWs) {}
-    // 🩹 v3.9.40：場戰用 CSS bottom:100%；側視才依身體高度貼頭頂
+    // 🩹 v3.9.40：場戰貼頭頂；v3.9.73 依當前幀實際頭頂（同一外形取最高值，走路不跳動）
     if (worldScroll) {
-        nm.style.bottom = '';
+        let bdW = (_pmState.imgs && _pmState.imgs.bd) ? _pmState.imgs.bd : null;
+        let head = _sprHeadPx(bdW);
+        let fk = bdW ? String(bdW.getAttribute('src') || '').split('?')[0].replace(/[^/]*$/, '') : '';
+        if (_pmState._nameHeadKey !== fk) { _pmState._nameHeadKey = fk; _pmState._nameHead = 0; }
+        if (head != null && head > (_pmState._nameHead || 0)) _pmState._nameHead = head;
+        nm.style.bottom = _pmState._nameHead > 0 ? Math.round(_pmState._nameHead + 3) + 'px' : '';
         nm.style.top = '';
     } else {
         let bd = (_pmState.imgs && _pmState.imgs.bd) ? _pmState.imgs.bd : null;
@@ -5076,6 +5111,13 @@ function _remotePartySpritesApply() {
         var seq = useWalk ? a.walk : a.idle;
         var f = seq ? (Math.floor(Date.now() / (1000 / MOB_ANIM_FPS)) + i * 3 + st.phase + (_remotePartyKeyHash(mem.key) % 5)) % seq.length : 0;
         if (seq && seq[f] && st.imgs.bd.src !== seq[f].src) st.imgs.bd.src = seq[f].src;
+        var rHead = _sprHeadPx(st.imgs.bd);
+        if (rHead != null && rHead > (st.head || 0)) st.head = rHead;
+        if (st.head > 0) {
+            var hb = Math.round(st.head - 12) + 'px', tb = Math.round(st.head + 6) + 'px';
+            if (st.imgs.bar && st.imgs.bar.parentElement && st.imgs.bar.parentElement.style.bottom !== hb) st.imgs.bar.parentElement.style.bottom = hb;
+            if (st.imgs.tag && st.imgs.tag.style.bottom !== tb) st.imgs.tag.style.bottom = tb;
+        }
         var ss = a.shadow && (useWalk && a.shadow.walk ? a.shadow.walk : a.shadow.idle);
         if (ss && ss.length) {
             var sf = f < ss.length ? f : (f % ss.length);

@@ -457,6 +457,15 @@ section("34) 原版格步走路");
   ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
 }
 
+section("35) 名字在頭上");
+{
+  const fx = rd("js/09-vfx-render.js");
+  const css = rd("css/style.css");
+  ok("場戰名牌依頭頂高度（_sprHeadPx）", /function _sprHeadPx\(img\)/.test(fx) && /nm\.style\.bottom = _pmState\._nameHead > 0 \?/.test(fx));
+  ok("同圖玩家名牌／血條依頭頂高度", /var rHead = _sprHeadPx\(st\.imgs\.bd\);/.test(fx));
+  ok("場戰名牌不可再用 bottom:100% !important", !/is-world-scroll #player-morph-sprite \.pm-name \{\s*bottom: calc\(100% \+ 2px\) !important;/.test(css));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");
