@@ -65,6 +65,9 @@ const FIELDS = require("./fields-config");
   }
 }
 
+// 遮擋物件圖集清單（tools/lin/export-linobj.js）
+const objOf = (meta) => (meta.objChunks && meta.objChunks.length ? { objChunks: meta.objChunks } : {});
+
 function load(name) {
   const dir = path.join(LIN_DIR, name);
   const meta = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8"));
@@ -228,7 +231,7 @@ function build(name, cfg) {
   // 練功點：主區、可站、非安全區、彼此距離 ≥ minD、遠離抵達點
   if (!cfg.spots) {
     return {
-      w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks,
+      w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks, ...objOf(meta),
       nx, ny, ox: meta.iso.ox, oy: meta.iso.oy, x0: X0, y0: Y0, town: !!cfg.town,
       keys: Object.fromEntries(Object.entries(keys).map(([k, v]) => [k, { x: v.world.x, y: v.world.y, ax: v.arrive.x, ay: v.arrive.y, lin: v.lin }])),
       spots: [],
@@ -252,7 +255,7 @@ function build(name, cfg) {
   }
 
   return {
-    w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks,
+    w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks, ...objOf(meta),
     nx, ny, ox: meta.iso.ox, oy: meta.iso.oy, x0: X0, y0: Y0,
     keys: Object.fromEntries(Object.entries(keys).map(([k, v]) => [k, { x: v.world.x, y: v.world.y, ax: v.arrive.x, ay: v.arrive.y, lin: v.lin }])),
     spots: spots.map((s, i) => ({ id: i, ...toWorld(s[0], s[1]), label: `${X0 + s[0]},${Y0 + s[1]}` })),
@@ -461,7 +464,7 @@ function buildWorld(name, wcfg) {
     console.log("  town", t.ids.join("/"), "safe tiles", tiles.length);
   }
   return {
-    w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks,
+    w: meta.w, h: meta.h, chunk: meta.chunk, chunks: meta.chunks, ...objOf(meta),
     nx, ny, ox: meta.iso.ox, oy: meta.iso.oy, x0: X0, y0: Y0,
     world: true, linMap: wcfg.map, towns, fields, areas, spots: [], keys: {},
   };

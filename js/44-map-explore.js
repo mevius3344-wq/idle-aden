@@ -1014,7 +1014,13 @@
     }
     function explorePlayerDepthZ() {
         // 🩹 v3.8.383：依人物世界 Y 景深（腳底越南越高）
-        return Math.max(30, Math.min(90, Math.round(50 - (_ty - exploreDepthOriginY()) * 0.06)));
+        return exploreDepthZ(_ty, 30, 90);
+    }
+    /** 腳底 Y 景深 z（人／怪／NPC／同圖玩家／原版遮擋物件共用）；原版地圖每 2px 一層，物件才插得進人物之間 */
+    function exploreDepthZ(worldY, lo, hi) {
+        var d = (Number(worldY) || 0) - exploreDepthOriginY();
+        if (exploreLinName()) return Math.max(100, Math.min(1900, Math.round(1000 - d / 2)));
+        return Math.max(lo, Math.min(hi, Math.round(50 - d * 0.06)));
     }
 
     function explorePlayerScreenX() {
@@ -1036,7 +1042,7 @@
     function exploreFieldDepthStyle(fy) {
         var worldY = Number(fy) || 0;
         // 與人物同一套腳底 Y 排序
-        var z = Math.max(16, Math.min(92, Math.round(50 - (worldY - exploreDepthOriginY()) * 0.06)));
+        var z = exploreDepthZ(worldY, 16, 92);
         return {
             transform: 'translateX(-50%)',
             zIndex: String(z),
@@ -2691,6 +2697,7 @@
             var linName = on ? exploreLinName() : '';
             if (linName && typeof linmapSync === 'function') {
                 linmapSync(bv, linName, _cx, _cy, exploreGroundYLive() - FOOT_CONTACT_SINK);
+                if (typeof linmapObjSync === 'function') linmapObjSync(bv, linName, _cx, _cy, exploreOccluders(), exploreDepthZ, exploreMobScreenBottom);
             } else if (typeof linmapHide === 'function') {
                 linmapHide(bv);
             }
@@ -2701,7 +2708,55 @@
             var pm = document.getElementById('player-morph-sprite');
             if (pm) pm.style.zIndex = String(explorePlayerDepthZ());
         } catch (eZ) {}
+        try { exploreApplyLinZoom(bv, !!(on && exploreLinName())); } catch (eLz) {}
         exploreSanitizeDisplay();
+    }
+
+    /**
+     * 原版地圖畫面放大（同新創：短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 2 倍）。
+     * 整個 #battle-view 以腳底錨點用 scale 屬性放大：各層不可各自 transform（會拆開人／怪／NPC 前後遮擋、武器 screen 混色變黑框）；
+     * 用 scale 不用 transform，免得蓋掉 vfx-shake 動畫；HUD 在 #game-screen 不受影響，#game-screen 負責裁切。
+     */
+    var LIN_VIEW_SPAN = 280;
+    var LIN_ZOOM_MAX = 2;
+    var _linZoom = 1;
+    function exploreLinZoom() { return _linZoom; }
+    function exploreLinZoomPivot(bv) {
+        return { x: (bv.clientWidth || 0) / 2, y: (bv.clientHeight || 0) - (exploreGroundYLive() - FOOT_CONTACT_SINK) };
+    }
+    function exploreApplyLinZoom(bv, on) {
+        var w = bv.clientWidth || 0, h = bv.clientHeight || 0;
+        var z = 1;
+        if (on && w > 40 && h > 40) z = Math.max(1, Math.min(LIN_ZOOM_MAX, Math.min(w, h) / LIN_VIEW_SPAN));
+        z = Math.round(z * 100) / 100;
+        if (z !== _linZoom) {
+            _linZoom = z;
+            bv.style.setProperty('--lin-zoom', String(z));
+            bv.classList.toggle('is-lin-zoom', z > 1);
+            if (z > 1) bv.style.setProperty('scale', String(z));
+            else { bv.style.removeProperty('scale'); bv.style.removeProperty('transform-origin'); }
+        }
+        if (z > 1) {
+            var p = exploreLinZoomPivot(bv);
+            var org = p.x.toFixed(1) + 'px ' + p.y.toFixed(1) + 'px';
+            if (bv.style.transformOrigin !== org) bv.style.transformOrigin = org;
+        }
+    }
+
+    /** 原版遮擋物件要檢查的角色腳底框（世界座標，h＝腳底往上高度）；hero＝玩家本人（被擋時物件半透明） */
+    function exploreOccluders() {
+        var out = [{ x: _tx, y: _ty, w: 36, h: 64, hero: true }];
+        try {
+            var mobs = (typeof mapState !== 'undefined' && mapState && mapState.mobs) || [];
+            for (var i = 0; i < mobs.length; i++) {
+                var m = mobs[i];
+                if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
+                out.push({ x: m._fx, y: m._fy || 0, w: 56, h: 72 });
+            }
+            if (typeof linTownActors === 'function') out = out.concat(linTownActors());
+            if (typeof remotePartyWorldActors === 'function') out = out.concat(remotePartyWorldActors());
+        } catch (eOc) {}
+        return out;
     }
 
     /** 造景依世界 Y 景深；真地圖改相機相對座標以便與人／怪互遮 */
@@ -3300,11 +3355,30 @@
         var syUp = (r.top + r.height * 0.5) - clientY;
         _tapMove.tx = _cx + sx;
         _tapMove.ty = _cy + syUp * 0.9;
+        if (exploreLinName()) {
+            var lz = _linZoom || 1;
+            var pv = exploreLinZoomPivot(bv);
+            _tapMove.tx = _cx + (clientX - (r.left + pv.x * lz)) / lz;
+            _tapMove.ty = _cy + ((r.top + pv.y * lz) - clientY) / lz;
+        }
         if (_tapMove.tx < -CAM_MAX_X) _tapMove.tx = -CAM_MAX_X;
         if (_tapMove.tx > CAM_MAX_X) _tapMove.tx = CAM_MAX_X;
         if (_tapMove.ty < -CAM_MAX_Y) _tapMove.ty = -CAM_MAX_Y;
         if (_tapMove.ty > CAM_MAX_Y) _tapMove.ty = CAM_MAX_Y;
         _tapMove.active = true;
+    }
+
+    /** 世界座標 → 螢幕座標（exploreSetTapMoveFromScreen 的反函數） */
+    function exploreWorldToClient(wx, wy) {
+        var bv = document.getElementById('battle-view');
+        if (!bv) return null;
+        var r = bv.getBoundingClientRect();
+        if (exploreLinName()) {
+            var lz = _linZoom || 1;
+            var pv = exploreLinZoomPivot(bv);
+            return { x: r.left + (pv.x + (wx - _cx)) * lz, y: r.top + (pv.y - (wy - _cy)) * lz };
+        }
+        return { x: r.left + r.width * 0.5 + (wx - _cx), y: r.top + r.height * 0.5 - (wy - _cy) / 0.9 };
     }
 
     function exploreReadInput() {
@@ -3721,6 +3795,10 @@
 
     window.exploreSetVirtualStick = exploreSetVirtualStick;
     window.exploreSetTapMoveFromScreen = exploreSetTapMoveFromScreen;
+    window.exploreLinZoom = exploreLinZoom;
+    window.exploreDepthZ = exploreDepthZ;
+    window.exploreLinName = exploreLinName;
+    window.exploreWorldToClient = exploreWorldToClient;
     window.exploreClearTapMove = exploreClearTapMove;
     window.exploreWorldActive = exploreWorldActive;
     window.exploreIsMoving = exploreIsMoving;

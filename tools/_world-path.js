@@ -34,8 +34,8 @@ const PATH_FN = `window.__worldPath=function(wantTown,maxR){
   return null;
 };
 window.__tapWorld=function(wx,wy){
-  const bv=document.getElementById('battle-view'), r=bv.getBoundingClientRect();
-  exploreSetTapMoveFromScreen(r.left+r.width/2+(wx-exploreCamX()), r.top+r.height/2-(wy-exploreCamY())/0.9);
+  const p=exploreWorldToClient(wx,wy);
+  exploreSetTapMoveFromScreen(p.x,p.y);
 };1`;
 
 async function walkRegion(ev, sleep, wantTown, maxR) {

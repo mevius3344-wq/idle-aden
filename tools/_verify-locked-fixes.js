@@ -467,6 +467,46 @@ section("35) 名字在頭上");
   ok("場戰名牌不可再用 bottom:100% !important", !/is-world-scroll #player-morph-sprite \.pm-name \{\s*bottom: calc\(100% \+ 2px\) !important;/.test(css));
 }
 
+section("36) 原版地圖畫面放大");
+{
+  const ex = rd("js/44-map-explore.js");
+  const css = rd("css/style.css");
+  ok("整個 #battle-view 以 scale 屬性放大（短邊 280 世界像素、上限 2 倍）", /var LIN_VIEW_SPAN = 280;/.test(ex) && /var LIN_ZOOM_MAX = 2;/.test(ex) && /bv\.style\.setProperty\('scale', String\(z\)\);/.test(ex));
+  ok("不可對各世界層各自 transform／scale（會拆散前後遮擋）", !/LIN_ZOOM_IDS/.test(ex));
+  ok("點地換算含放大（exploreLinZoomPivot）＋反函數 exploreWorldToClient", /_tapMove\.tx = _cx \+ \(clientX - \(r\.left \+ pv\.x \* lz\)\) \/ lz;/.test(ex) && /window\.exploreWorldToClient = exploreWorldToClient;/.test(ex));
+  ok("名牌字級反向縮回（--lin-zoom）", /#battle-view\.is-lin-zoom #player-morph-sprite \.pm-name \{\s*font-size: calc\(13px \/ var\(--lin-zoom, 1\)\);/.test(css));
+}
+
+section("37) 人物走到物件後面（原版遮擋）");
+{
+  const lin = rd("js/49-linmap.js");
+  const ex = rd("js/44-map-explore.js");
+  const css = rd("css/style.css");
+  ok("遮擋物件同步（linmapObjSync）由探索每 tick 呼叫", /function linmapObjSync\(bv, name, camX, camY, actors, depthZ, screenBottom\)/.test(lin) && /linmapObjSync\(bv, linName, _cx, _cy, exploreOccluders\(\), exploreDepthZ, exploreMobScreenBottom\);/.test(ex));
+  ok("原版地圖細刻度景深（exploreDepthZ 每 2px 一層）", /if \(exploreLinName\(\)\) return Math\.max\(100, Math\.min\(1900, Math\.round\(1000 - d \/ 2\)\)\);/.test(ex) && /return exploreDepthZ\(_ty, 30, 90\);/.test(ex));
+  ok("遮擋層不可設 z-index／transform（物件要插在人物之間）", /#explore-linobj \{\s*position: absolute;\s*inset: 0;\s*pointer-events: none;\s*overflow: visible;\s*\}/.test(css));
+  ok("擋住玩家＝半透明（is-veil）", /\.explore-linobj-spr\.is-veil \{ opacity: \.5; \}/.test(css));
+  const sandbox = { window: {} };
+  require("vm").runInNewContext(rd("js/49-linmap-data.js"), sandbox);
+  const LD = sandbox.window.LINMAP_DATA || {};
+  const names = Object.keys(LD);
+  const noObj = names.filter((n) => !(LD[n].objChunks && LD[n].objChunks.length));
+  ok("每張原版地圖都有遮擋物件圖集（objChunks）", names.length > 0 && noObj.length === 0, noObj.join(","));
+  const missObj = names.filter((n) => {
+    const k = (LD[n].objChunks || [])[0];
+    return !k || !exists("assets/linmap/" + n + "/o_" + k + ".webp") || !exists("assets/linmap/" + n + "/o_" + k + ".json");
+  });
+  ok("遮擋圖集檔案存在（o_*.webp＋o_*.json）", missObj.length === 0, missObj.join(","));
+}
+
+section("38) NPC 頭上兩行（職稱＋名字）");
+{
+  const town = rd("js/52-lin-town.js");
+  const css = rd("css/style.css");
+  ok("職稱在上一行（lin-npc-title display:block）", /#lin-town-npcs \.lin-npc-title \{\s*display: block;/.test(css) && /nm\.insertBefore\(t, nm\.firstChild\);/.test(town));
+  ok("NPC 名牌依頭頂高度（sprHeadAbove）", /function sprHeadAbove\(key, spr, url, cb\)/.test(town) && /nm\.style\.bottom = Math\.round\(head \+ 3\) \+ 'px';/.test(town));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

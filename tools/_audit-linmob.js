@@ -94,7 +94,7 @@ async function main() {
             const src=decodeURIComponent(img.getAttribute('src')||'');
             const mm=/\\/d(\\d)\\/(\\w+?)_(\\d+)\\.png/.exec(src);
             const cs=getComputedStyle(inner,'::after');
-            out.push({uid:m.uid,n:m.n,lin:inner.classList.contains('lin-spr'),dir:mm?+mm[1]:null,act:mm?mm[2]:null,f:mm?+mm[3]:null,
+            out.push({z:(typeof exploreLinZoom==='function'?exploreLinZoom():1),uid:m.uid,n:m.n,lin:inner.classList.contains('lin-spr'),dir:mm?+mm[1]:null,act:mm?mm[2]:null,f:mm?+mm[3]:null,
               nw:img.naturalWidth,nh:img.naturalHeight,rw:Math.round(ir.width),rh:Math.round(ir.height),
               imgBottom:Math.round(ir.bottom),innerBottom:Math.round(nr.bottom),cx:Math.round(ir.left+ir.width/2),icx:Math.round(nr.left+nr.width/2),
               ell:cs.display, pad:(()=>{const s=getComputedStyle(img);return [s.paddingTop,s.paddingLeft,s.borderTopWidth,s.boxSizing,s.maxWidth,s.maxHeight].join(' ');})(), rect:[Math.round(ir.left),Math.round(ir.top),Math.round(ir.width),Math.round(ir.height)]});
@@ -147,11 +147,12 @@ async function main() {
         if (!p.length) continue;
         ok(mapId + ' 原版怪掛 lin-spr', p.every((x) => x.lin), p.filter((x) => !x.lin).map((x) => x.n).join(','));
         ok(mapId + ' 原版怪讀 d0..d7 幀', p.every((x) => x.dir != null));
-        ok(mapId + ' 原尺寸顯示（不縮放）', p.every((x) => Math.abs(x.rw - x.nw) <= 1 && Math.abs(x.rh - x.nh) <= 1),
-            p.map((x) => x.n + ':' + x.rw + 'x' + x.rh + '/' + x.nw + 'x' + x.nh).slice(0, 5).join(' ') + ' css=' + p[0].pad);
-        ok(mapId + ' 站立點對齊腳底（圖底下移 32px）', p.every((x) => Math.abs(x.imgBottom - 32 - x.innerBottom) <= 2),
+        // 原版地圖整個戰場放大 exploreLinZoom() 倍：怪本身仍是原尺寸（量到的螢幕尺寸÷倍率）
+        ok(mapId + ' 原尺寸顯示（不縮放）', p.every((x) => Math.abs(x.rw / x.z - x.nw) <= 1.5 && Math.abs(x.rh / x.z - x.nh) <= 1.5),
+            p.map((x) => x.n + ':' + x.rw + 'x' + x.rh + '/' + x.nw + 'x' + x.nh + '@' + x.z).slice(0, 5).join(' ') + ' css=' + p[0].pad);
+        ok(mapId + ' 站立點對齊腳底（圖底下移 32px）', p.every((x) => Math.abs(x.imgBottom - 32 * x.z - x.innerBottom) <= 2 * x.z),
             p.map((x) => x.n + ':' + (x.imgBottom - x.innerBottom)).slice(0, 5).join(' '));
-        ok(mapId + ' 水平置中', p.every((x) => Math.abs(x.cx - x.icx) <= 2));
+        ok(mapId + ' 水平置中', p.every((x) => Math.abs(x.cx - x.icx) <= 2 * x.z));
         ok(mapId + ' 不畫 CSS 橢圓影（圖內自帶影子）', p.every((x) => x.ell === 'none'));
         const all = Object.values(seen);
         const dirs = new Set(); const acts = new Set();

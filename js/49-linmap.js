@@ -183,6 +183,7 @@
     function linmapHide(bv) {
         var el = document.getElementById('explore-linmap');
         if (el && !el.classList.contains('hidden')) el.classList.add('hidden');
+        linmapObjClear();
         if (bv) bv.classList.remove('is-linmap');
         linmapSetOldFloor(false);
     }
@@ -261,6 +262,154 @@
         }
     }
 
+    /* ---------- 遮擋物件（tools/lin/export-linobj.js）----------
+     * 底圖已烤進物件；只有「物件底座在角色南邊、且畫面上蓋到角色」時，才在角色上方再疊一次該物件：
+     * 顏色＝底圖圖塊（同一張圖、像素完全對齊），形狀＝遮罩圖集。各物件自己 transform，與人／怪／NPC 同一層排 z。
+     * 擋住玩家本人＝半透明（看得到被擋的人物）。 */
+    var OBJ_PAD = 640;
+    var _objName = '';
+    var _objIdx = Object.create(null);
+    var _objSet = Object.create(null);
+    var _objEls = [];
+
+    function linmapObjClear() {
+        var layer = document.getElementById('explore-linobj');
+        if (layer) layer.innerHTML = '';
+        _objEls = [];
+        _objIdx = Object.create(null);
+        _objName = '';
+    }
+
+    function linmapObjLoad(name, key) {
+        _objIdx[key] = 'loading';
+        if (typeof fetch !== 'function') return;
+        var base = 'assets/linmap/' + name + '/o_' + key;
+        fetch(base + '.json?v=' + linmapVer())
+            .then(function (r) { return r.ok ? r.json() : []; })
+            .then(function (rows) {
+                if (_objName !== name) return;
+                var d = linmapData(name);
+                var url = base + '.webp?v=' + linmapVer();
+                _objIdx[key] = (rows || []).map(function (s, i) {
+                    return {
+                        id: key + ':' + i, url: url, ax: s[0], ay: s[1], w: s[2], h: s[3], ix: s[4], iy: s[5],
+                        wl: s[4] - d.w / 2, wt: d.h / 2 - s[5], wb: d.h / 2 - s[5] - s[3], wbase: d.h / 2 - s[6]
+                    };
+                });
+            })
+            .catch(function () { if (_objName === name) _objIdx[key] = []; });
+    }
+
+    /** 物件矩形內用到的底圖圖塊（多張背景疊起來，位置對齊物件左上角） */
+    function linmapObjBg(name, d, s) {
+        var ch = d.chunk, set = linmapChunks(name);
+        var imgs = [], pos = [], size = [];
+        for (var r = Math.floor(s.iy / ch); r <= Math.floor((s.iy + s.h - 1) / ch); r++) {
+            for (var c = Math.floor(s.ix / ch); c <= Math.floor((s.ix + s.w - 1) / ch); c++) {
+                var id = c + '_' + r;
+                if (!set[id]) continue;
+                imgs.push('url("assets/linmap/' + name + '/c_' + id + '.webp?v=' + linmapVer() + '")');
+                pos.push((c * ch - s.ix) + 'px ' + (r * ch - s.iy) + 'px');
+                size.push(Math.min(ch, d.w - c * ch) + 'px ' + Math.min(ch, d.h - r * ch) + 'px');
+            }
+        }
+        return { img: imgs.join(','), pos: pos.join(','), size: size.join(',') };
+    }
+
+    /**
+     * actors：[{x,y,w,h,hero}] 角色腳底框（世界座標，y 向上，h＝腳底往上高度）
+     * depthZ(worldY)：與角色同一套 z；screenBottom(worldY)：世界 y → 戰場 bottom px
+     */
+    function linmapObjSync(bv, name, camX, camY, actors, depthZ, screenBottom) {
+        var d = linmapData(name);
+        var layer = document.getElementById('explore-linobj');
+        if (!d || !d.objChunks || !bv) { if (layer && layer.childElementCount) linmapObjClear(); return; }
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.id = 'explore-linobj';
+            layer.className = 'explore-linobj';
+            layer.setAttribute('aria-hidden', 'true');
+            var mapLayer = document.getElementById('explore-linmap');
+            if (mapLayer && mapLayer.parentNode === bv) bv.insertBefore(layer, mapLayer.nextSibling);
+            else bv.appendChild(layer);
+        }
+        if (_objName !== name) {
+            linmapObjClear();
+            _objName = name;
+            _objSet = Object.create(null);
+            for (var q = 0; q < d.objChunks.length; q++) _objSet[d.objChunks[q]] = true;
+        }
+        var cx = Number(camX) || 0, cy = Number(camY) || 0;
+        var vw = bv.clientWidth || 1280, vh = bv.clientHeight || 720;
+        var ch = d.chunk;
+        var c0 = Math.max(0, Math.floor((cx - vw / 2 - OBJ_PAD + d.w / 2) / ch));
+        var c1 = Math.floor((cx + vw / 2 + OBJ_PAD + d.w / 2) / ch);
+        var r0 = Math.max(0, Math.floor((d.h / 2 - (cy + vh + OBJ_PAD)) / ch));
+        var r1 = Math.floor((d.h / 2 - (cy - vh - OBJ_PAD)) / ch);
+        var xl = cx - vw / 2 - 64, xr = cx + vw / 2 + 64;
+        var want = [];
+        for (var r = r0; r <= r1; r++) {
+            for (var c = c0; c <= c1; c++) {
+                var key = c + '_' + r;
+                if (!_objSet[key]) continue;
+                var list = _objIdx[key];
+                if (!list) { linmapObjLoad(name, key); continue; }
+                if (list === 'loading') continue;
+                for (var i = 0; i < list.length; i++) {
+                    var s = list[i];
+                    if (s.wl > xr || s.wl + s.w < xl) continue;
+                    var hit = false, hero = false;
+                    for (var k = 0; k < actors.length; k++) {
+                        var a = actors[k];
+                        if (a.y <= s.wbase) continue;
+                        if (a.x + a.w / 2 <= s.wl || a.x - a.w / 2 >= s.wl + s.w) continue;
+                        if (a.y + a.h <= s.wb || a.y >= s.wt) continue;
+                        hit = true;
+                        if (a.hero) { hero = true; break; }
+                    }
+                    if (hit) want.push({ s: s, hero: hero });
+                }
+            }
+        }
+        while (_objEls.length < want.length) {
+            var el = document.createElement('div');
+            el.className = 'explore-linobj-spr';
+            layer.appendChild(el);
+            _objEls.push(el);
+        }
+        for (var j = 0; j < _objEls.length; j++) {
+            var e = _objEls[j];
+            if (j >= want.length) {
+                if (!e.hidden) e.hidden = true;
+                continue;
+            }
+            var w = want[j], sp = w.s;
+            if (e._sid !== sp.id) {
+                e._sid = sp.id;
+                var bg = linmapObjBg(name, d, sp);
+                e.style.width = sp.w + 'px';
+                e.style.height = sp.h + 'px';
+                e.style.backgroundImage = bg.img;
+                e.style.backgroundPosition = bg.pos;
+                e.style.backgroundSize = bg.size;
+                var mask = 'url("' + sp.url + '")';
+                var mpos = (-sp.ax) + 'px ' + (-sp.ay) + 'px';
+                e.style.webkitMaskImage = mask;
+                e.style.maskImage = mask;
+                e.style.webkitMaskPosition = mpos;
+                e.style.maskPosition = mpos;
+                e.setAttribute('data-base', String(Math.round(sp.wbase)));
+            }
+            var tr = 'translate3d(' + (sp.wl - cx).toFixed(1) + 'px,' + (-screenBottom(sp.wb)).toFixed(1) + 'px,0)';
+            if (e._tr !== tr) { e.style.transform = tr; e._tr = tr; }
+            var z = String(depthZ(sp.wbase));
+            if (e._z !== z) { e.style.zIndex = z; e._z = z; }
+            if (e.classList.contains('is-veil') !== w.hero) e.classList.toggle('is-veil', w.hero);
+            if (e.hidden) e.hidden = false;
+        }
+    }
+
+    global.linmapObjSync = linmapObjSync;
     global.linmapData = linmapData;
     global.linmapLoadWalk = linmapLoadWalk;
     global.linmapWalkReady = linmapWalkReady;

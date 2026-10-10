@@ -52,6 +52,9 @@ alwaysApply: true
 | 33 | 樂園風原版材質 | HUD 用 `assets/ui/lin/`（`tools/lin/build-ui-kit.js` 從客戶端 `.img` 匯出：`stone` 石紋底、`frame` 金框、`ring` 中空金環）；聊天輸入框深色（不可白底）；AUTO／信件／回村同一款金環圓鈕（不可回到亮紅球／藍色回村鈕）；HUD 字用襯線＋描邊；聊天區 104px、分頁全露出（v3.9.70，實測 `tools/_audit-lr-hud.js`）；底部選單 5 鈕用原版道具圖示 `assets/ui/lin/menu_*.png`（頭盔／鋼鐵盔甲／箱子／魔法書／卷軸，不可回到線條 SVG）；非可學觸發技能借原版技能圖（`SKILL_ICON_ALIAS`）（v3.9.71） |
 | 34 | 原版格步走路 | 原版拼塊地圖（`MapDef.lin`）上玩家一格一步、只走 8 個格線方向（橫 48、直 24、斜 24×12）、停在格子中心、每步固定時間 `LIN_STEP_MS` 480（對照新創天堂實測 ~0.48 秒／格；受加速倍率，不吃大地圖 1.12 加成）；位移跟走路幀一格格跳（每幀 1/4 格，`LIN_STEP_FRAMES`），不可改回平滑內插（v3.9.74）；點地／追怪照原版先斜後直（`exploreLinStepPick` goal）；一步＝一整輪走路幀（`exploreWalkCycle`→`_exploreWalkCycleNow`），走路中 RAF ~25fps 換人物幀、停步再刷一次回待機；不可改回任意角度滑行或距離換幀（v3.9.72，實測 `tools/_audit-player-walk.js`） |
 | 35 | 名字在頭上 | 場戰（`is-world-scroll`）玩家 `.pm-name`、同圖玩家 `.remote-party-tag`／血條放在頭頂：`_sprHeadPx` 掃當前幀最上面不透明列（依圖快取），同外形取最高值不跳動；不可用容器 `bottom:100%`（容器高 0／1px＝名字跑到腳底）（v3.9.73，實測 `tools/lin/_probe-name.js`） |
+| 36 | 原版地圖畫面放大 | 同新創：短邊約顯示 280 世界像素（`LIN_VIEW_SPAN`，上限 2 倍，手機約 1.47×）；**整個 `#battle-view` 用 `scale` 屬性**以腳底錨點放大（不可各層各自 transform／scale：會拆散人／怪／NPC 前後遮擋、武器 screen 混色變黑框；不用 `transform` 免得蓋掉 vfx-shake）；HUD 不動；點地換算 `exploreLinZoomPivot`、反函數 `exploreWorldToClient`（稽核用它點地）；名牌字級 `calc(13px / var(--lin-zoom))` 反向縮回（v3.9.75） |
+| 37 | 人物走到物件後面 | `tools/lin/export-linobj.js`（全部：`export-linobj-all.js`）把高於地面的物件群組匯成無損 alpha 遮罩圖集 `o_*.webp`＋`o_*.json`（底座＝最南不透明格；超寬切直條）；`linmapObjSync` 只在「物件底座在角色南邊且蓋到角色」時疊上該物件（顏色取底圖 `c_*.webp`、遮罩取形狀，像素完全對齊）；擋到玩家本人＝半透明 `.is-veil`；`#explore-linobj` 不可設 z-index／transform；原版地圖景深 `exploreDepthZ` 每 2px 一層（人／怪／NPC／同圖玩家／物件共用）（v3.9.75，實測 `tools/lin/_probe-eval.js`＋`_out/x_occl.js`） |
+| 38 | NPC 頭上兩行 | 原版村莊 NPC：上行職稱（淡金）、下行名字（白），名牌依精靈頭頂高度（`sprHeadAbove`）（v3.9.75） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。

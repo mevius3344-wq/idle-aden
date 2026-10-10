@@ -61,7 +61,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     const walkRoute = async (route, leaveTo) => {
         for (const wp of route || []) {
             for (let i = 0; i < 12; i++) {
-                await ev(`(()=>{const bv=document.getElementById('battle-view').getBoundingClientRect();const dx=${wp.x}-exploreCamX(),dy=${wp.y}-exploreCamY();exploreSetTapMoveFromScreen(bv.left+bv.width/2+dx,bv.top+bv.height/2-dy/0.9);})()`);
+                await ev(`(()=>{const p=exploreWorldToClient(${wp.x},${wp.y});exploreSetTapMoveFromScreen(p.x,p.y);})()`);
                 await sleep(250);
                 const cur = await ev(`[explorePlayerX(),explorePlayerY(),mapState.current]`);
                 if (leaveTo && cur[2] === leaveTo) return true;
@@ -124,7 +124,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
         if (!hit) {
             const tgt = await ev(`(()=>{const p=linTownPlan(${JSON.stringify(tid)}).filter(q=>q.npc);let b=null,bd=1e9;for(const q of p){const d=Math.hypot(q.o.x-explorePlayerX(),q.o.y-explorePlayerY());if(d<bd){bd=d;b=q.o;}}return b&&{x:b.x,y:b.y};})()`);
             if (tgt) {
-                const route = await findRoute(tid, tgt.x, tgt.y, 3);
+                const route = (await findRoute(tid, tgt.x, tgt.y, 2)) || (await findRoute(tid, tgt.x, tgt.y, 3));
                 await walkRoute(route, null);
                 await sleep(600);
                 hit = await findHit();

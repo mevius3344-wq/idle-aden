@@ -5009,6 +5009,15 @@ function _remoteSameMapMembersMerged() {
     });
     return list.slice(0, 12);
 }
+/** 原版遮擋物件用：同圖玩家腳底框（世界座標） */
+function remotePartyWorldActors() {
+    var out = [];
+    for (var k in _remotePartySpriteStates) {
+        var st = _remotePartySpriteStates[k];
+        if (st && st.el && st.el.isConnected && Number.isFinite(st.wx) && Number.isFinite(st.wy)) out.push({ x: st.wx, y: st.wy, w: 36, h: 64 });
+    }
+    return out;
+}
 function _remotePartySpritesApply() {
     var bv = document.getElementById('battle-view');
     // 🩹 v3.9.42：場戰／世界捲動皆顯示同圖玩家（勿只認 area-fit）
@@ -5090,11 +5099,15 @@ function _remotePartySpritesApply() {
         if (pp.mode === 'field') {
             st.el.style.left = 'calc(50% + ' + Math.round(pp.dx - w / 2) + 'px)';
             st.el.style.bottom = Math.round(pp.bottom) + 'px';
-            st.el.style.zIndex = String(Math.max(8, Math.min(40, Math.round(28 - (Number(mem.wy) || 0) * 0.04))));
+            st.el.style.zIndex = String((typeof exploreLinName === 'function' && exploreLinName() && typeof exploreDepthZ === 'function')
+                ? exploreDepthZ(Number(mem.wy) || 0, 8, 40)
+                : Math.max(8, Math.min(40, Math.round(28 - (Number(mem.wy) || 0) * 0.04))));
+            st.wx = Number(mem.wx); st.wy = Number(mem.wy);
         } else {
             st.el.style.left = 'calc(' + pp.x + ' - ' + Math.round(w / 2) + 'px)';
             st.el.style.bottom = pp.b + 'px';
             st.el.style.zIndex = String(24 - pp.b);
+            st.wx = NaN;
         }
         st.el.style.opacity = mem.online ? '0.92' : '0.55';
         if (st.imgs.tag) {

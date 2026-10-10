@@ -653,6 +653,14 @@
             font-size: 13px;
             max-width: 180px;
         }
+        /* 原版地圖整個戰場放大（--lin-zoom）：名牌字級反向縮回，字不跟著變大 */
+        #battle-view.is-lin-zoom #player-morph-sprite .pm-name {
+            font-size: calc(13px / var(--lin-zoom, 1));
+            max-width: calc(180px / var(--lin-zoom, 1));
+        }
+        #battle-view.is-lin-zoom .party-sprite.remote-party .remote-party-tag {
+            font-size: calc(10px / var(--lin-zoom, 1));
+        }
         .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
         .party-sprite.remote-party .remote-party-tag {
             position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
@@ -1775,6 +1783,25 @@
             overflow: visible;
         }
         #lin-town-npcs.hidden { display: none !important; }
+        /* 原版遮擋物件（js/49-linmap.js linmapObjSync）：層本身不可設 z-index／transform，各物件才能與人物交錯排序 */
+        #explore-linobj {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+        }
+        #battle-view:not(.is-linmap) > #explore-linobj { display: none; }
+        #explore-linobj > .explore-linobj-spr {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            pointer-events: none;
+            background-repeat: no-repeat;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            transition: opacity .18s linear;
+        }
+        #explore-linobj > .explore-linobj-spr.is-veil { opacity: .5; }
         #lin-town-npcs > .lin-npc {
             position: absolute;
             left: 50%;
@@ -1809,14 +1836,17 @@
             pointer-events: none;
             text-align: center;
         }
-        #lin-town-npcs > .lin-npc.is-game .lin-npc-name { color: #ffe9a8; font-weight: 700; }
+        #lin-town-npcs > .lin-npc.is-game .lin-npc-name { color: #ffffff; font-weight: 700; }
         #lin-town-npcs > .lin-npc.is-decor .lin-npc-name { color: #c9c4b8; font-size: 11px; opacity: .85; }
+        /* 頭上兩行：上行職稱（淡金）、下行名字（白），同新創 */
         #lin-town-npcs .lin-npc-title {
             display: block;
-            font-size: 10px;
-            font-weight: 400;
-            color: #9fd3ff;
+            font-size: 1em;
+            font-weight: 700;
+            color: #f3dc8c;
         }
+        #battle-view.is-lin-zoom #lin-town-npcs .lin-npc-name { font-size: calc(12px / var(--lin-zoom, 1)); }
+        #battle-view.is-lin-zoom #lin-town-npcs > .lin-npc.is-decor .lin-npc-name { font-size: calc(11px / var(--lin-zoom, 1)); }
         #lin-town-npcs > .lin-npc.is-game:hover .lin-npc-spr { filter: brightness(1.25) drop-shadow(0 0 3px #ffe9a8); }
         /* 雙 id 提高權重：舊規則（#battle-view.is-topdown-3d #explore-world-bg-blend.… !important）會強制顯示草地墊底 */
         #battle-view#battle-view.is-linmap > #explore-world-bg,

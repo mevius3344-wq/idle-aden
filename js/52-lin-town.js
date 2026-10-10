@@ -125,6 +125,42 @@
         }
     }
 
+    /** 精靈表第一格最上緣不透明列 → 頭頂離腳底多高（px）；載入後回呼，-1＝量不到 */
+    var _headCache = Object.create(null);
+    function sprHeadAbove(key, spr, url, cb) {
+        var c = _headCache[key];
+        if (typeof c === 'number') { cb(c); return; }
+        if (c) { c.push(cb); return; }
+        _headCache[key] = [cb];
+        var done = function (v) {
+            var q = _headCache[key];
+            _headCache[key] = v;
+            for (var i = 0; i < q.length; i++) q[i](v);
+        };
+        var img = new Image();
+        img.onload = function () {
+            var v = -1;
+            try {
+                var sy = img.naturalHeight / spr.h;
+                var fw = Math.max(1, Math.round(img.naturalWidth / Math.max(1, spr.n)));
+                var fh = img.naturalHeight;
+                var cv = document.createElement('canvas');
+                cv.width = fw; cv.height = fh;
+                var g = cv.getContext('2d');
+                g.drawImage(img, 0, 0, fw, fh, 0, 0, fw, fh);
+                var a = g.getImageData(0, 0, fw, fh).data;
+                var top = -1;
+                for (var y = 0; y < fh && top < 0; y++) {
+                    for (var x = 0; x < fw; x++) if (a[(y * fw + x) * 4 + 3] > 60) { top = y; break; }
+                }
+                if (top >= 0) v = Math.max(24, spr.h - FOOT - top / sy);
+            } catch (e) {}
+            done(v);
+        };
+        img.onerror = function () { done(-1); };
+        img.src = url;
+    }
+
     function buildEntity(p, townId, live) {
         var o = p.o, npc = p.npc;
         var spr = (typeof LINTOWN_SPR !== 'undefined' && LINTOWN_SPR[o.s]) || null;
@@ -135,7 +171,8 @@
         body.className = 'lin-npc-spr';
         body.style.width = spr.w + 'px';
         body.style.height = spr.h + 'px';
-        body.style.backgroundImage = 'url("assets/linnpc/' + o.s + '.png?v=' + ((typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : '1') + '")';
+        var sprUrl = 'assets/linnpc/' + o.s + '.png?v=' + ((typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : '1');
+        body.style.backgroundImage = 'url("' + sprUrl + '")';
         body.style.backgroundSize = (spr.w * spr.n) + 'px ' + spr.h + 'px';
         if (spr.n > 1) {
             body.style.setProperty('--sw', (spr.w * spr.n) + 'px');
@@ -156,6 +193,9 @@
                 nm.insertBefore(t, nm.firstChild);
             }
             el.appendChild(nm);
+            sprHeadAbove(o.s, spr, sprUrl, function (head) {
+                if (head > 0) nm.style.bottom = Math.round(head + 3) + 'px';
+            });
         }
         el.style.width = Math.min(spr.w, 72) + 'px';
         el.style.height = Math.max(24, Math.min(spr.h - FOOT, 110)) + 'px';
@@ -245,13 +285,21 @@
                 if (!vis) continue;
                 var tr = 'translate3d(' + dx.toFixed(1) + 'px,' + (-b).toFixed(1) + 'px,0)';
                 if (e._tr !== tr) { e.el.style.transform = tr; e._tr = tr; }
-                var z = String(Math.max(16, Math.min(92, Math.round(50 - (e.y - cy) * 0.06))));
+                var z = String(typeof exploreDepthZ === 'function' ? exploreDepthZ(e.y, 16, 92) : Math.max(16, Math.min(92, Math.round(50 - (e.y - cy) * 0.06))));
                 if (e._z !== z) { e.el.style.zIndex = z; e._z = z; }
             }
         }
         _raf = requestAnimationFrame(frame);
     }
 
+    /** 原版遮擋物件用：畫面上的 NPC 腳底框（世界座標） */
+    global.linTownActors = function () {
+        var out = [];
+        for (var i = 0; i < _ents.length; i++) {
+            if (!_ents[i].el.hidden) out.push({ x: _ents[i].x, y: _ents[i].y, w: 40, h: 72 });
+        }
+        return out;
+    };
     global.linTownEnter = linTownEnter;
     global.linTownLeave = linTownLeave;
     global.linTownPlan = linTownPlan;
