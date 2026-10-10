@@ -589,6 +589,12 @@
             if (typeof player !== 'undefined' && player) player._faceD = _faceD;
         } catch (e) {}
     }
+    function exploreSetFaceNow(dx, dy) {
+        if (Math.abs(dx) < 0.02 && Math.abs(dy) < 0.02) return;
+        _faceD = _facePending = exploreVec2Dir(dx, dy);
+        _faceHold = 0;
+        try { if (typeof player !== 'undefined' && player) player._faceD = _faceD; } catch (e) {}
+    }
     function exploreCamX() { return _cx; }
     function exploreCamY() { return _cy; }
     /** 🩹 v3.8.383：人物世界座標（真相）；相機 _cx/_cy 只跟隨 */
@@ -1534,7 +1540,7 @@
             return false;
         }
         exploreSetFaceFromVec(dirx, -diry);
-        return explorePlayerWalkStep(dirx, diry) > 0.08;
+        return explorePlayerWalkStep(dirx, diry, { x: t._fx, y: t._fy || 0 }) > 0.08;
     }
 
     /** 8 向量化（世界座標） */
@@ -1618,7 +1624,91 @@
         } catch (eLg) {}
         return Math.max(0.25, Math.min(2.8, m));
     }
-    function explorePlayerWalkStep(dirx, diry) {
+    /**
+     * 原版拼塊地圖：一格一步、只走 8 個格線方向（橫 48px、直 24px、斜 24×12），每步固定時間，停在格子中心；
+     * 一步＝一整輪走路幀（_walkCycle）。goal 有給時照原版走法：先斜走到對齊再直走。
+     */
+    var LIN_STEP_MS = 360;
+    var LIN_NB = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+    var _linStep = null;
+    var _walkCycle = 0;
+    function exploreLinStepReset() { _linStep = null; }
+    function exploreLinStepping() { return !!_linStep; }
+    function exploreLinStepAdvance(name) {
+        var s = _linStep;
+        if (!s) return 0;
+        if (Math.abs(_tx - s.lx) > 2 || Math.abs(_ty - s.ly) > 2) { _linStep = null; return 0; }
+        var k = Math.min(1, s.k + TICK_MS / s.dur);
+        var nx = s.fx + (s.tx - s.fx) * k;
+        var ny = s.fy + (s.ty - s.fy) * k;
+        var moved = Math.hypot(nx - _tx, ny - _ty);
+        _walkCycle += (k - s.k) * s.cyc;
+        s.k = k;
+        _tx = nx; _ty = ny;
+        s.lx = nx; s.ly = ny;
+        if (k >= 1) _linStep = null;
+        if (moved > 0.01) {
+            _walkPhase += moved * WALK_PHASE_DIST;
+            if (s.cyc >= 1) exploreSetFaceNow(s.tx - s.fx, -(s.ty - s.fy));
+        }
+        return Math.max(moved, 0.09);
+    }
+    function exploreLinStepPick(name, dirx, diry, goal) {
+        var t = linmapTileAt(name, _tx, _ty);
+        var c = t && linmapTileCenter(name, t.gx, t.gy);
+        if (!c) return null;
+        if (Math.hypot(c.x - _tx, c.y - _ty) > 1.5) return { gx: t.gx, gy: t.gy, c: c, cyc: 0.5 };
+        var pref = null;
+        if (goal) {
+            var gt = linmapTileAt(name, goal.x, goal.y);
+            var sx = Math.sign(gt.gx - t.gx), sy = Math.sign(gt.gy - t.gy);
+            if (!sx && !sy) return null;
+            pref = linmapTileCenter(name, t.gx + sx, t.gy + sy);
+            dirx = pref.x - c.x; diry = pref.y - c.y;
+        }
+        var len = Math.hypot(dirx, diry);
+        if (!(len > 0.001)) return null;
+        var opts = [];
+        for (var i = 0; i < LIN_NB.length; i++) {
+            var ngx = t.gx + LIN_NB[i][0], ngy = t.gy + LIN_NB[i][1];
+            var nc = linmapTileCenter(name, ngx, ngy);
+            var ox = nc.x - c.x, oy = nc.y - c.y;
+            var dot = (ox * dirx + oy * diry) / (Math.hypot(ox, oy) * len);
+            if (dot > 0.2) opts.push({ gx: ngx, gy: ngy, c: nc, dot: dot, diag: LIN_NB[i][0] && LIN_NB[i][1] });
+        }
+        opts.sort(function (a, b) { return b.dot - a.dot; });
+        for (var j = 0; j < opts.length; j++) {
+            var o = opts[j];
+            if (!linmapWalkable(name, o.c.x, o.c.y)) continue;
+            if (o.diag) {
+                var a1 = linmapTileCenter(name, o.gx, t.gy), a2 = linmapTileCenter(name, t.gx, o.gy);
+                if (!linmapWalkable(name, a1.x, a1.y) && !linmapWalkable(name, a2.x, a2.y)) continue;
+            }
+            o.cyc = 1;
+            return o;
+        }
+        return null;
+    }
+    /** 回傳本 tick 位移（>0.08 視為移動中）；不想走時把走到一半的那步走完 */
+    function exploreLinWalkStep(name, dirx, diry, goal) {
+        if (_linStep) return exploreLinStepAdvance(name);
+        var want = goal || Math.abs(dirx) > 0.001 || Math.abs(diry) > 0.001;
+        if (!want) return 0;
+        var o = exploreLinStepPick(name, dirx, diry, goal);
+        if (!o) return 0;
+        var dur = (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult();
+        _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: Math.max(60, dur), cyc: o.cyc, lx: _tx, ly: _ty };
+        return exploreLinStepAdvance(name);
+    }
+    function exploreWalkCycle() { return exploreLinName() ? _walkCycle : null; }
+
+    function explorePlayerWalkStep(dirx, diry, goal) {
+        var linW = exploreLinName();
+        if (linW && typeof linmapTileCenter === 'function') {
+            var mvL = exploreLinWalkStep(linW, dirx, diry, goal || null);
+            if (mvL > 0.08) _moving = true;
+            return mvL;
+        }
         // 🩹 v3.9.41：類比速度＝搖桿位移量（輕推慢走、外推全速）
         var mag = Math.hypot(Number(dirx) || 0, Number(diry) || 0);
         if (!(mag > 0.001)) return 0;
@@ -3334,11 +3424,13 @@
             var wdy = -inp.dy;
             if (Math.abs(wdx) > 0.001 || Math.abs(wdy) > 0.001) {
                 exploreSetFaceFromVec(inp.dx, inp.dy);
-                movedDist = explorePlayerWalkStep(wdx, wdy);
+                movedDist = explorePlayerWalkStep(wdx, wdy, inp.fromTap ? { x: _tapMove.tx, y: _tapMove.ty } : null);
                 _moving = movedDist > 0.08;
+                if (inp.fromTap && !_moving && !exploreLinStepping() && exploreLinName()) _tapMove.active = false;
             }
         } else {
             autoDrive = exploreCombatCamChaseTick(false);
+            if (!autoDrive && exploreLinStepping()) autoDrive = explorePlayerWalkStep(0, 0) > 0.08;
             _moving = !!autoDrive || !!_moving;
         }
         if (_tx < -CAM_MAX_X) _tx = -CAM_MAX_X;
@@ -3630,6 +3722,7 @@
     window.exploreIsMoving = exploreIsMoving;
     window.exploreFaceDir = exploreFaceDir;
     window.exploreWalkPhase = exploreWalkPhase;
+    window.exploreWalkCycle = exploreWalkCycle;
     window.exploreCamX = exploreCamX;
     window.exploreCamY = exploreCamY;
     window.explorePlayerX = explorePlayerX;

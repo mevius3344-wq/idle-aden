@@ -55,6 +55,13 @@
         return { gx: Math.round((u - v) / 2), gy: Math.round((u + v) / 2) };
     }
 
+    /** 格子中心的世界座標（linmapTileAt 的反函數） */
+    function linmapTileCenter(name, gx, gy) {
+        var d = linmapData(name);
+        if (!d) return null;
+        return { x: (gx + gy) * 24 + d.ox - d.w / 2, y: d.h / 2 - d.oy - (gy - gx) * 12 };
+    }
+
     function linmapCell(name, wx, wy) {
         var d = linmapData(name);
         var w = _walk[name];
@@ -258,6 +265,7 @@
     global.linmapLoadWalk = linmapLoadWalk;
     global.linmapWalkReady = linmapWalkReady;
     global.linmapTileAt = linmapTileAt;
+    global.linmapTileCenter = linmapTileCenter;
     global.linmapWalkable = linmapWalkable;
     global.linmapSafeZone = linmapSafeZone;
     global.linmapRegionAt = linmapRegionAt;

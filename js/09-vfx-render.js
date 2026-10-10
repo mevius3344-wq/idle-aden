@@ -4171,6 +4171,12 @@ function _prefetchPlayerFaceDirs(actor) {
     } catch (e) {}
 }
 /** 八向職業動畫：一次預載 8 個朝向的 walk 幀（URL 與播放時完全相同才吃得到快取），避免剛起步／轉向時只滑不走 */
+/** 原版拼塊地圖：已走格數（一格＝一整輪走路幀）；其他地圖回 null 走舊的距離換幀 */
+function _exploreWalkCycleNow(mv) {
+    if (!mv || typeof exploreWalkCycle !== 'function') return null;
+    try { return exploreWalkCycle(); } catch (e) { return null; }
+}
+
 function _preloadPlayerWalkFrames(form) {
     try {
         if (!form || !form.classAnim || form.faceD == null || !form.wpn || !form.domKey) return;
@@ -4632,12 +4638,13 @@ function _playerMorphApplyBody() {
             try {
                 if (mv && typeof exploreWalkPhase === 'function') _wp = Number(exploreWalkPhase()) || 0;
             } catch (eWp) {}
-            if (mv && _wp > 0) {
-                let wantF = Math.floor(_wp) % base.length;
-                // 🩹 v3.8.447：走路幀至少停留 95ms，避免換幀快過解碼＝閃圖
+            let _wc = _exploreWalkCycleNow(mv);
+            if (mv && (_wp > 0 || _wc != null)) {
+                let wantF = (_wc != null ? Math.floor(_wc * base.length) : Math.floor(_wp)) % base.length;
+                // 🩹 v3.8.447：走路幀至少停留 95ms，避免換幀快過解碼＝閃圖（原版格步已預載，放寬到 40ms）
                 if (!_pmState._walkHold || _pmState._walkHold.n !== base.length) {
                     _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
-                } else if (wantF !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= 95) {
+                } else if (wantF !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= (_wc != null ? 40 : 95)) {
                     _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
                 }
                 f = _pmState._walkHold.f;
@@ -4653,12 +4660,13 @@ function _playerMorphApplyBody() {
             try {
                 if (mv && typeof exploreWalkPhase === 'function') _wp2 = Number(exploreWalkPhase()) || 0;
             } catch (eWp2) {}
-            if (mv && _wp2 > 0) {
+            let _wc2 = _exploreWalkCycleNow(mv);
+            if (mv && (_wp2 > 0 || _wc2 != null)) {
                 let _dnSafe = Math.max(1, _dn);
-                let wantF2 = Math.floor(_wp2) % _dnSafe;
+                let wantF2 = (_wc2 != null ? Math.floor(_wc2 * _dnSafe) : Math.floor(_wp2)) % _dnSafe;
                 if (!_pmState._walkHold || _pmState._walkHold.n !== _dnSafe) {
                     _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
-                } else if (wantF2 !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= 95) {
+                } else if (wantF2 !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= (_wc2 != null ? 40 : 95)) {
                     _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
                 }
                 f = _pmState._walkHold.f;
@@ -5132,6 +5140,8 @@ setInterval(() => {
 }, Math.floor(1000 / MOB_ANIM_FPS));
 // 🩹 v3.8.352：RAF 輔助換幀（interval 被背景節流時場戰仍要動）
 // 📱 v3.9.53：低耗能時停用 RAF 雙通道（與 setInterval 重疊＝手機發熱主因之一）
+let _pmWalkRafAt = 0;
+let _pmWalkRafWas = false;
 (function _mobAnimRafLoop() {
     let last = 0;
     function tick(ts) {
@@ -5150,6 +5160,15 @@ setInterval(() => {
                 if (gsOk || bvOk) {
                     last = ts;
                     try { _mobAnimApply(); } catch (e0) {}
+                }
+            }
+            // 原版格步一步只有 0.25～0.4 秒，8fps 會跳幀：走路中人物另以 ~25fps 換幀
+            if (!document.hidden && ts - _pmWalkRafAt >= 38) {
+                let _wOn = _exploreWalkCycleNow(typeof exploreIsMoving === 'function' && exploreIsMoving()) != null;
+                if (_wOn || _pmWalkRafWas) {
+                    _pmWalkRafAt = ts;
+                    _pmWalkRafWas = _wOn;
+                    try { _playerMorphApply(); } catch (eW) {}
                 }
             }
         } catch (e1) {}

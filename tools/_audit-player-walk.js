@@ -126,6 +126,8 @@ const ok = (cond, msg) => {
     ok(moving.length && walkShown.length / moving.length >= 0.7, "移動中顯示 walk 幀 (" + walkShown.length + "/" + moving.length + ")");
     ok(walkFrames.size >= 3, "走路會換幀（" + Array.from(walkFrames).join(",") + "）");
     const idleAfter = S.filter((s) => !s.mv).slice(-5);
+    report.idleTail = idleAfter;
+    report.lastTail = S.slice(-12);
     ok(idleAfter.length && idleAfter.every((s) => !/_walk_/.test(s.f)), "停下後回待機幀");
     const r = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(path.join(OUT, "player_walk_field.png"), Buffer.from(r.result.data, "base64"));

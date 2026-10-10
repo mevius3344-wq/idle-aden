@@ -447,6 +447,16 @@ section("33) 樂園風原版材質");
   ok("觸發技能借用原版技能圖示（SKILL_ICON_ALIAS）", /SKILL_ICON_ALIAS\[d\.n\] \|\| d\.n/.test(rd("js/01-drops-config.js")));
 }
 
+section("34) 原版格步走路");
+{
+  const ex = rd("js/44-map-explore.js");
+  const fx = rd("js/09-vfx-render.js");
+  ok("原版地圖玩家走格步（explorePlayerWalkStep → exploreLinWalkStep）", /function explorePlayerWalkStep\(dirx, diry, goal\) \{\s*var linW = exploreLinName\(\);\s*if \(linW && typeof linmapTileCenter === 'function'\)/.test(ex) && /var LIN_STEP_MS = \d+;/.test(ex));
+  ok("只走 8 個格線方向（LIN_NB）＋格心（linmapTileCenter）", /var LIN_NB = \[\[1, 0\], \[1, 1\], \[0, 1\], \[-1, 1\], \[-1, 0\], \[-1, -1\], \[0, -1\], \[1, -1\]\];/.test(ex) && /global\.linmapTileCenter = linmapTileCenter;/.test(rd("js/49-linmap.js")));
+  ok("點地／追怪帶 goal（先斜後直）", /explorePlayerWalkStep\(wdx, wdy, inp\.fromTap \? \{ x: _tapMove\.tx, y: _tapMove\.ty \} : null\)/.test(ex) && /explorePlayerWalkStep\(dirx, diry, \{ x: t\._fx, y: t\._fy \|\| 0 \}\)/.test(ex));
+  ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");
