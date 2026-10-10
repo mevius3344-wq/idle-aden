@@ -4,7 +4,7 @@
 #game-screen.combat-hud.lr-hud {
   --lr-exp-h: 14px;
   --lr-menu-h: 54px;
-  --lr-chat-h: 118px;
+  --lr-chat-h: 104px;
   --lr-quick-h: 48px;
   --lr-sheet-h: min(58dvh, 500px);
   --lr-base: calc(var(--lr-exp-h) + var(--lr-menu-h) + var(--chud-safe-b));
@@ -12,6 +12,12 @@
   --lr-ring-b: calc(var(--lr-quick-b) + var(--lr-quick-h) + 6px);
   --lr-gold: #e8c675;
   --lr-rim: linear-gradient(145deg, #f3e0a8 0%, #c9a24a 28%, #6b4a1e 62%, #e6c878 100%);
+  /* 原版介面材質（tools/lin/build-ui-kit.js 從客戶端匯出） */
+  --lr-stone: url('../assets/ui/lin/stone.webp');
+  --lr-frame: url('../assets/ui/lin/frame.png');
+  --lr-ring: url('../assets/ui/lin/ring.png');
+  --lr-font: 'Noto Serif TC', 'Source Han Serif TC', 'PMingLiU', 'MingLiU', serif;
+  --lr-outline: 0 0 2px #000, 0 1px 2px #000, 1px 0 1px #000, -1px 0 1px #000;
 }
 #game-screen.combat-hud.lr-hud.lr-chat-big {
   --lr-chat-h: min(44dvh, 360px);
@@ -208,22 +214,27 @@
   right: calc(6px + var(--chud-safe-r));
   width: 132px;
   z-index: 47;
-  padding: 3px 8px 4px;
-  border: 1px solid rgba(232, 198, 117, 0.75);
-  border-radius: 4px;
-  background: linear-gradient(180deg, rgba(40, 30, 16, 0.92), rgba(16, 12, 8, 0.92));
-  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.18), 0 3px 10px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+  padding: 0 2px 1px;
+  border: 10px solid transparent;
+  border-image: var(--lr-frame) 34 / 10px stretch;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(20, 16, 10, 0.35), rgba(0, 0, 0, 0.55)), var(--lr-stone) center / cover;
+  background-clip: padding-box;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
   text-align: center;
   pointer-events: none;
 }
 .lr-map-name {
-  font-size: 12px;
-  font-weight: 800;
+  font-family: var(--lr-font);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   color: #f8e7b5;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: var(--lr-outline), 0 0 6px rgba(232, 198, 117, 0.45);
 }
 .lr-map-coord {
   font-size: 10px;
@@ -242,9 +253,9 @@
   z-index: 46;
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid rgba(232, 198, 117, 0.8);
-  background: rgba(10, 12, 14, 0.7);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55);
+  border: 3px solid transparent;
+  background: linear-gradient(rgba(10, 12, 14, 0.75), rgba(10, 12, 14, 0.75)) padding-box, var(--lr-rim) border-box;
+  box-shadow: 0 0 0 1px #000, 0 3px 12px rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
 .lr-minimap canvas { display: block; width: 100%; height: 100%; }
@@ -263,9 +274,24 @@
   height: 48px !important;
   z-index: 47;
 }
+/* 圓鈕統一：原版金色圓環＋暗心，金字 */
+#game-screen.combat-hud.lr-hud .chud-auto,
+#game-screen.combat-hud.lr-hud .chud-auto.is-off,
+.lr-mail,
+.lr-home {
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: var(--lr-ring) center / 100% 100% no-repeat, radial-gradient(circle, #1a1712 0%, #070605 70%) !important;
+  color: #f3dfa2 !important;
+  font-family: var(--lr-font);
+  text-shadow: var(--lr-outline);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55) !important;
+}
+#game-screen.combat-hud.lr-hud .chud-auto.is-off { color: #9ca3af !important; }
 #game-screen.combat-hud.lr-hud .chud-auto.is-on {
-  border-color: rgba(254, 202, 202, 0.85);
-  background: radial-gradient(circle at 35% 28%, #f87171 0%, #b91c1c 48%, #5b0b0b 100%);
+  background: var(--lr-ring) center / 100% 100% no-repeat, radial-gradient(circle, #d43a2a 0%, #6e0f08 52%, #1a0402 74%) !important;
+  color: #fff4d6 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.55), 0 4px 12px rgba(0, 0, 0, 0.55) !important;
 }
 .lr-mail {
   position: absolute;
@@ -274,10 +300,6 @@
   width: 48px;
   height: 48px;
   z-index: 47;
-  border-radius: 50%;
-  border: 2px solid rgba(254, 240, 138, 0.8);
-  background: radial-gradient(circle at 35% 28%, #fde68a 0%, #d4a017 48%, #6b4a10 100%);
-  color: #3b2a06;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,7 +307,7 @@
   pointer-events: auto;
   touch-action: manipulation;
 }
-.lr-mail svg { width: 26px; height: 26px; }
+.lr-mail svg { width: 22px; height: 22px; }
 #game-screen.combat-hud.lr-hud.chud-in-town .lr-mail { top: calc(52px + var(--chud-safe-t)); }
 
 /* ---------- 技能環／擊殺統計：快捷列上方 ---------- */
@@ -329,9 +351,10 @@
   border-radius: 6px;
   border: 2px solid transparent;
   background:
-    linear-gradient(180deg, #2a2420 0%, #0e1014 100%) padding-box,
+    linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.6)) padding-box,
+    var(--lr-stone) center / cover padding-box,
     var(--lr-rim) border-box;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 -3px 6px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 0 8px rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -355,12 +378,9 @@
 }
 .lr-home {
   margin-left: auto;
-  color: #e0f2fe;
-  background:
-    radial-gradient(circle at 40% 30%, #3b82f6 0%, #1e3a8a 60%, #0b1430 100%) padding-box,
-    var(--lr-rim) border-box;
 }
-.lr-home svg { width: 28px; height: 28px; }
+.lr-home svg { width: 24px; height: 24px; filter: drop-shadow(0 1px 1px #000); }
+.lr-mail svg { filter: drop-shadow(0 1px 1px #000); }
 #game-screen.combat-hud.lr-hud.chud-in-town .lr-home,
 #game-screen.combat-hud.lr-hud.lin-town-walk .lr-home { display: none; }
 
@@ -415,8 +435,8 @@
   grid-template-rows: minmax(0, 1fr) auto !important;
   border-radius: 0 !important;
   border: 0 !important;
-  border-top: 1px solid rgba(232, 198, 117, 0.35) !important;
-  background: rgba(6, 8, 10, 0.82) !important;
+  border-top: 1px solid rgba(232, 198, 117, 0.55) !important;
+  background: linear-gradient(180deg, rgba(4, 5, 7, 0.72), rgba(4, 5, 7, 0.86)), var(--lr-stone) center / cover !important;
   backdrop-filter: none !important;
 }
 #game-screen.combat-hud.lr-hud #combat-log-panel > .panel-header {
@@ -435,18 +455,18 @@
   flex-direction: column !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
-  gap: 2px !important;
+  gap: 1px !important;
 }
 #game-screen.combat-hud.lr-hud #combat-log-panel .lr-chat-tabs .logtab-btn {
   position: relative;
   width: 28px !important;
-  height: 18px !important;
+  height: 15px !important;
   min-height: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   border-radius: 3px !important;
   font-size: 0 !important;
-  line-height: 18px !important;
+  line-height: 15px !important;
   border: 1px solid rgba(232, 198, 117, 0.35) !important;
   background: rgba(40, 30, 16, 0.85) !important;
   color: #e2d3a8 !important;
@@ -468,7 +488,7 @@
 }
 .lr-chat-expand {
   width: 28px;
-  height: 16px;
+  height: 14px;
   padding: 0;
   border-radius: 3px;
   border: 1px solid rgba(232, 198, 117, 0.5);
@@ -526,19 +546,25 @@
   padding: 0 8px !important;
   font-size: 12px !important;
   border-radius: 3px !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  background: rgba(240, 240, 240, 0.92) !important;
-  color: #111 !important;
+  border: 1px solid rgba(232, 198, 117, 0.4) !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  color: #f1e2b8 !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8) !important;
 }
+#game-screen.combat-hud.lr-hud #world-input::placeholder { color: rgba(232, 214, 170, 0.45); }
 #game-screen.combat-hud.lr-hud #world-send {
   height: 26px !important;
   padding: 0 12px !important;
+  font-family: var(--lr-font);
   font-size: 12px !important;
-  font-weight: 800 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.1em;
   border-radius: 3px !important;
-  border: 1px solid rgba(253, 230, 138, 0.8) !important;
-  background: linear-gradient(180deg, #f4c94a, #b7791f) !important;
-  color: #2a1a03 !important;
+  border: 1px solid rgba(232, 198, 117, 0.75) !important;
+  background: linear-gradient(180deg, #6b4f22 0%, #3a2a10 55%, #24190a 100%) !important;
+  color: #fde68a !important;
+  text-shadow: var(--lr-outline);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.25) !important;
 }
 
 /* ---------- 底部選單列＋經驗條 ---------- */
@@ -551,8 +577,9 @@
   z-index: 55;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  background: linear-gradient(180deg, #4a3a22 0%, #2a2014 45%, #17110a 100%);
-  border-top: 1px solid rgba(232, 198, 117, 0.65);
+  background: linear-gradient(180deg, rgba(60, 46, 24, 0.55) 0%, rgba(10, 8, 6, 0.8) 100%), var(--lr-stone) center / cover;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, transparent, #e8c675 15%, #fff2c4 50%, #e8c675 85%, transparent) 1;
   box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.5);
 }
 .lr-menu-btn {
@@ -563,15 +590,16 @@
   gap: 1px;
   padding: 0;
   border: 0;
-  border-right: 1px solid rgba(0, 0, 0, 0.35);
+  border-right: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 1px 0 0 rgba(232, 198, 117, 0.12);
   background: transparent;
   color: var(--lr-gold);
   touch-action: manipulation;
 }
-.lr-menu-btn:last-child { border-right: 0; }
-.lr-menu-btn svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 1px #000); }
-.lr-menu-btn span { font-size: 10px; font-weight: 800; color: #f1e2b8; text-shadow: 0 1px 2px #000; }
-.lr-menu-btn:active { background: rgba(232, 198, 117, 0.12); }
+.lr-menu-btn:last-child { border-right: 0; box-shadow: none; }
+.lr-menu-btn svg { width: 24px; height: 24px; stroke-width: 2; filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 4px rgba(232, 198, 117, 0.35)); }
+.lr-menu-btn span { font-family: var(--lr-font); font-size: 11px; font-weight: 900; letter-spacing: 0.12em; color: #f3dfa2; text-shadow: var(--lr-outline); }
+.lr-menu-btn:active { background: radial-gradient(ellipse at center, rgba(232, 198, 117, 0.25), transparent 70%); }
 .lr-expbar {
   position: absolute;
   left: 0;
@@ -639,4 +667,27 @@
   top: auto !important;
   bottom: calc(var(--lr-base) + var(--lr-sheet-h) + 4px) !important;
   right: 8px !important;
+}
+
+/* ---------- 字體：襯線＋描邊（遊戲感） ---------- */
+#game-screen.combat-hud.lr-hud #status-panel .status-defense-row,
+#game-screen.combat-hud.lr-hud #status-panel .status-level-row,
+#game-screen.combat-hud.lr-hud #status-panel .status-gold-row,
+#game-screen.combat-hud.lr-hud #status-panel .bar-text,
+#game-screen.combat-hud.lr-hud .lr-map-coord,
+#game-screen.combat-hud.lr-hud #combat-log-panel .lr-chat-tabs .logtab-btn::before,
+#game-screen.combat-hud.lr-hud .chud-auto,
+.lr-mate-n,
+.lr-slot-n {
+  font-family: var(--lr-font);
+}
+#game-screen.combat-hud.lr-hud #status-panel .status-defense-row,
+#game-screen.combat-hud.lr-hud #status-panel .status-gold-row,
+#game-screen.combat-hud.lr-hud .lr-map-coord {
+  text-shadow: var(--lr-outline);
+}
+#game-screen.combat-hud.lr-hud img#status-avatar.status-avatar {
+  border: 2px solid transparent !important;
+  background: var(--lr-rim) border-box !important;
+  box-shadow: 0 0 0 1px #000, 0 3px 8px rgba(0, 0, 0, 0.6) !important;
 }

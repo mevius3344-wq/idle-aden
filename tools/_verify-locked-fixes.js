@@ -434,6 +434,16 @@ section("32) 整張原版大地圖（出村不用傳送門）");
   ok("怪物出生點不落在村莊安全區", /\|\| \(def\.lin && typeof linmapSafeZone === 'function' && linmapSafeZone\(def\.lin, hx, hy\)\)\) \{/.test(F.explore));
 }
 
+section("33) 樂園風原版材質");
+{
+  const css = rd("css/lr-hud.css");
+  const kit = ["stone.webp", "frame.png", "ring.png"].filter((f) => !exists("assets/ui/lin/" + f));
+  ok("原版介面素材在 assets/ui/lin/", kit.length === 0, kit.join(","));
+  ok("HUD 變數引用原版材質", /--lr-stone: url\('\.\.\/assets\/ui\/lin\/stone\.webp'\)/.test(css) && /--lr-ring: url\('\.\.\/assets\/ui\/lin\/ring\.png'\)/.test(css));
+  ok("聊天輸入框深色（不可白底）", !/rgba\(240, 240, 240/.test(css) && /#world-input \{[^}]*background: rgba\(0, 0, 0, 0\.6\)/.test(css));
+  ok("AUTO／信件／回村 同一款金環圓鈕", /\.chud-auto,\s*#game-screen\.combat-hud\.lr-hud \.chud-auto\.is-off,\s*\.lr-mail,\s*\.lr-home \{[^}]*var\(--lr-ring\)/.test(css) && !/#3b82f6 0%, #1e3a8a/.test(css));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");
