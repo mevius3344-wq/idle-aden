@@ -3529,6 +3529,31 @@ function getLocalEffectiveRates() {
   return out;
 }
 
+let _fileGm = null;
+function fileGm() {
+  if (_fileGm) return _fileGm;
+  _fileGm = require("./lib/rt-gm-file").createFileGmApi({
+    dataDir: path.dirname(ACCOUNTS_FILE),
+    cloudRoot: CLOUD_ROOT,
+    ratesFile: LOCAL_RATES_FILE,
+    loadAccounts,
+    saveAccounts,
+    loadCharNames,
+    sessions: _accountSessions,
+    presenceRows: () => partyPresence.values(),
+    presenceTtlMs: PARTY_TTL_MS,
+    walletMutate: auctionFileWalletMutate,
+    authFromBody: (data) => (_antiCheat ? _antiCheat.authFromBody(data, ROOT) : { ok: false, error: "auth_required" }),
+    getServerRates: () => _serverStatus.getServerRates(),
+    normalizeAccountId,
+    accountKey,
+    clientIp,
+    json,
+    readBody,
+  });
+  return _fileGm;
+}
+
 function localBanPayload(row) {
   const until = Number(row && (row.bannedUntil || row.banned_until)) || 0;
   if (!(until > Date.now())) return null;
@@ -3787,7 +3812,7 @@ async function handleAccountsApi(req, res, u) {
         rateEndsAt: rates.rateEndsAt,
         rateLabel: rates.rateLabel,
       },
-      gmMail: 0,
+      gmMail: fileGm().pendingMailCount(accountKey(auth.account), data.slot),
     });
   }
 
@@ -4289,7 +4314,8 @@ const server = http.createServer(async (req, res) => {
         await _neonLeaderboardHandler(req, res, u);
         return;
       }
-      return json(res, 503, { ok: false, error: "no_database", message: "GM 後台需要 DATABASE_URL（Neon）。" });
+      await fileGm().handle(req, res, u);
+      return;
     }
     if (u.startsWith("/api/worldboss") && _worldBossApiHandler) {
       await _worldBossApiHandler(req, res, u, json);

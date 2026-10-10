@@ -360,6 +360,20 @@ section("27) 野外／地監原版拼塊");
   ok("野外＋地監原版圖塊／資料齊全（" + ids.length + " 張）", ids.length >= 70 && miss.length === 0, miss.slice(0, 8).join(","));
 }
 
+section("28) GM API 檔案模式（Railway 無 Neon）");
+{
+  const serve = rd("_serve.js");
+  const gm = rd("lib/rt-gm.js");
+  ok("無 Neon 時 /api/gm/ 走檔案模式（不可回 503 no_database）",
+    /await fileGm\(\)\.handle\(req, res, u\);/.test(serve) && !/GM 後台需要 DATABASE_URL/.test(serve));
+  ok("心跳回報待領 GM 信件數（不可寫死 0）", /gmMail: fileGm\(\)\.pendingMailCount\(/.test(serve));
+  ok("lib/rt-gm-file.js 存在", exists("lib/rt-gm-file.js"));
+  ok("GM 裝備欄鍵＝遊戲 player.eq（gloves／boots／ear1／ring3）",
+    /\["gloves", "手套"\]/.test(gm) && /\["boots", "長靴"\]/.test(gm) && /\["ear1", "耳環1"\]/.test(gm) && /\["ring3", "戒指3"\]/.test(gm) && !/\["glove", /.test(gm));
+  ok("GM 職業名＝遊戲 cls（dark／dragon／illusion／warrior）",
+    /dark: "黑暗妖精"/.test(gm) && /dragon: "龍騎士"/.test(gm) && /warrior: "戰士"/.test(gm));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");
