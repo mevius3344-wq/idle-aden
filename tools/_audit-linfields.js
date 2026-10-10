@@ -10,6 +10,10 @@ const { spawn } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const FIELDS = require('./lin/fields-config');
+const WORLDS = require('./lin/worlds-config');
+// 整張大地圖（worlds-config）上的野外沒有自己的取景圖，改用大地圖
+const worldOf = (id) => (FIELDS[id][2] != null ? Object.keys(WORLDS).find((n) => WORLDS[n].map === FIELDS[id][0]) : null) || null;
+const linOf = (id) => worldOf(id) || FIELDS[id][1];
 let fails = 0;
 const ok = (name, cond, detail) => {
     console.log((cond ? '  ok   ' : '  FAIL ') + name + (detail ? '  ' + detail : ''));
@@ -58,15 +62,18 @@ function offline() {
     const walks = {};
     const wk = (n) => walks[n] || (walks[n] = walkGrid(n));
     let n = 0;
-    for (const [id, [, out]] of Object.entries(FIELDS)) {
+    for (const id of Object.keys(FIELDS)) {
+        const out = linOf(id), wn = worldOf(id);
         const L = D[out], def = M[id];
         const bad = [];
         if (!L) { ok(id + ' 有原版資料 ' + out, false); continue; }
         if (!def || def.lin !== out) bad.push('lin=' + (def && def.lin));
         if (!(cell(L, wk(out), def.start.x, def.start.y) & 1)) bad.push('start 不可走');
-        const oldDest = ((before[id] && before[id].portals) || []).filter(Boolean).map((p) => p.dest).join(',');
+        const sameWorld = (dest) => wn && M[dest] && M[dest].world === wn;
+        const oldDest = ((before[id] && before[id].portals) || []).filter(Boolean).map((p) => p.dest).filter((d) => !sameWorld(d)).join(',');
         const newDest = (def.portals || []).map((p) => p.dest).join(',');
         if (oldDest !== newDest) bad.push('傳送門目的地變了 ' + oldDest + ' → ' + newDest);
+        if (wn && (def.portals || []).some((p) => sameWorld(p.dest))) bad.push('同一張大地圖內仍有傳送門');
         for (const p of def.portals || []) {
             if (!(cell(L, wk(out), p.x + p.w / 2, p.y + p.h / 2) & 1)) bad.push('門 ' + p.dest + ' 不在可走格');
             const dd = M[p.dest];
@@ -74,10 +81,11 @@ function offline() {
                 if (p.destX == null || !(cell(D[dd.lin], wk(dd.lin), p.destX, p.destY) & 1)) bad.push('抵達 ' + p.dest + ' 不可走');
             }
         }
-        const spotsBad = L.spots.filter((s) => (cell(L, wk(out), s.x, s.y) & 3) !== 1).length;
-        if (!L.spots.length) bad.push('無練功點');
+        const spots = wn ? def.spawns : L.spots;
+        const spotsBad = spots.filter((s) => (cell(L, wk(out), s.x, s.y) & 3) !== 1).length;
+        if (!spots.length) bad.push('無練功點');
         if (spotsBad) bad.push('練功點不可走／在安全區 ' + spotsBad);
-        ok(id + ' → ' + out, bad.length === 0, bad.join('；') || `門 ${def.portals.length}、點 ${L.spots.length}`);
+        ok(id + ' → ' + out, bad.length === 0, bad.join('；') || `門 ${def.portals.length}、點 ${spots.length}`);
         n++;
     }
     // 其他地圖（村莊、特殊圖、說話之島）走進這些圖的抵達點
@@ -184,7 +192,7 @@ async function browser(BASE) {
         }
         const bad = [];
         if (s.map !== mid) bad.push('map=' + s.map);
-        if (s.lin !== FIELDS[mid][1] || !s.linmapOn) bad.push('lin=' + s.lin);
+        if (s.lin !== linOf(mid) || !s.linmapOn) bad.push('lin=' + s.lin);
         if (!s.ready) bad.push('walk 未載');
         if (!(s.imgs > 0 && s.loaded === s.imgs)) bad.push('圖塊 ' + s.loaded + '/' + s.imgs);
         if (s.walk !== true) bad.push('出生不可走');
@@ -208,14 +216,14 @@ async function browser(BASE) {
         exploreSetVirtualStick(0,0,false);
         return mapState.current;
     })()`);
-    const arriveKey = (lin, dest) => ev(`(()=>{const L=LINMAP_DATA[${JSON.stringify(lin)}]; const k=L.keys['p'+L.pd.indexOf(${JSON.stringify(dest)})]; return {x:k.ax,y:k.ay};})()`);
+    const arriveKey = (lin, dest, area) => ev(`(()=>{let L=LINMAP_DATA[${JSON.stringify(lin)}]; if(L.world) L=L.areas[${JSON.stringify(area || '')}]; const k=L.keys['p'+L.pd.indexOf(${JSON.stringify(dest)})]; return {x:k.ax,y:k.ay};})()`);
     await go('zone_06');
     await sleep(3000);
     let r = await walkInto('zone_06', 'gludio');
     ok('地監 1 樓走進出口 → 古魯丁', r === 'gludio', 'map=' + r);
     await sleep(2500);
     let s = await state();
-    let k = await arriveKey('fd_gludio', 'zone_06');
+    let k = await arriveKey(linOf('gludio'), 'zone_06', 'gludio');
     ok('抵達古魯丁地監入口旁（原版位置 32728,32929）', s.walk === true && Math.hypot(s.px - k.x, s.py - k.y) < 40, `(${Math.round(s.px)},${Math.round(s.py)}) vs (${k.x},${k.y})`);
     await shot('linfield_gludio_arrive.png');
     r = await walkInto('gludio', 'zone_06');

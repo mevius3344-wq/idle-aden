@@ -112,13 +112,22 @@ function nameMatch(a, b) {
   return a === b || (a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a)));
 }
 const starts = {};
+// 整張大地圖（tools/lin/worlds-config.js）：該 map 的村莊座標改用大地圖
+const WORLDS = require("./worlds-config");
+function worldFolder(map) {
+  for (const [n, w] of Object.entries(WORLDS)) {
+    if (w.map === map && fs.existsSync(path.join(ROOT, "assets", "linmap", n, "meta.json"))) return n;
+  }
+  return null;
+}
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   for (const f of fs.readdirSync(OUT)) if (/^\d+_\d\.png$/.test(f)) fs.unlinkSync(path.join(OUT, f));
   const towns = {};
   for (const [name, c] of Object.entries(CFG)) {
-    const meta = JSON.parse(fs.readFileSync(path.join(ROOT, "assets", "linmap", name, "meta.json"), "utf8"));
+    const folder = worldFolder(c.map) || name;
+    const meta = JSON.parse(fs.readFileSync(path.join(ROOT, "assets", "linmap", folder, "meta.json"), "utf8"));
     const nx = meta.tiles.nx, ny = meta.tiles.ny;
     const X0 = (meta.tiles.bx0 - 0x7fff) * 64 + 0x7fff - 64;
     const Y0 = (meta.tiles.by0 - 0x7fff) * 64 + 0x7fff - 64;
@@ -146,7 +155,7 @@ const starts = {};
     out.sort((a, b) => b.y - a.y);
     towns[name] = out;
     // 村莊出生點：本遊戲 NPC 對到的原版站位重心 → 最近的可站格（安全區優先）
-    const walk = fs.readFileSync(path.join(ROOT, "assets", "linmap", name, "walk.bin"));
+    const walk = fs.readFileSync(path.join(ROOT, "assets", "linmap", folder, "walk.bin"));
     const W = (gx, gy) => (gx >= 0 && gy >= 0 && gx < nx && gy < ny) ? walk[gy * nx + gx] : 0;
     const roomy = (gx, gy) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].every(([dx, dy]) => W(gx + dx, gy + dy) & 1);
     for (const tid of c.towns) {
@@ -162,7 +171,8 @@ const starts = {};
         hy = hits.reduce((a, o) => a + o.ly, 0) / hits.length;
       }
       let best = null, bd = Infinity;
-      for (let gy = 0; gy < ny; gy++) for (let gx = 0; gx < nx; gx++) {
+      const gx0 = Math.round(hx) - X0, gy0 = Math.round(hy) - Y0, R = c.r + 8;
+      for (let gy = Math.max(0, gy0 - R); gy < Math.min(ny, gy0 + R); gy++) for (let gx = Math.max(0, gx0 - R); gx < Math.min(nx, gx0 + R); gx++) {
         if (!roomy(gx, gy)) continue;
         const d = (X0 + gx - hx) ** 2 + (Y0 + gy - hy) ** 2 + ((W(gx, gy) & 2) ? 0 : 400);
         if (d < bd) { bd = d; best = [gx, gy]; }

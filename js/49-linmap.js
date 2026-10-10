@@ -76,6 +76,76 @@
         return c > 0 && (c & 2) === 2;
     }
 
+    /**
+     * 村莊範圍（村中心 ±r 方框內）：安全區＋「不經安全區就走不到方框外」的非安全格（村內角落）。
+     * 與 tools/lin/build-linmap-data.js townMask 相同。
+     */
+    var _townMasks = Object.create(null);
+    function linmapTownMasks(name) {
+        if (_townMasks[name]) return _townMasks[name];
+        var d = linmapData(name), w = _walk[name];
+        var out = [];
+        for (var i = 0; i < d.towns.length; i++) {
+            var tw = d.towns[i], R = tw.r, N = 2 * R + 1;
+            var gx0 = tw.c[0] - R - d.x0, gy0 = tw.c[1] - R - d.y0;
+            var cell = function (x, y) {
+                var gx = gx0 + x, gy = gy0 + y;
+                return (gx >= 0 && gy >= 0 && gx < d.nx && gy < d.ny) ? w[gy * d.nx + gx] : 0;
+            };
+            var open = function (x, y) { var c = cell(x, y); return (c & 1) === 1 && (c & 2) === 0; };
+            var reach = new Uint8Array(N * N), q = [], x, y, k;
+            for (k = 0; k < N; k++) {
+                [[k, 0], [k, N - 1], [0, k], [N - 1, k]].forEach(function (p) {
+                    var j = p[1] * N + p[0];
+                    if (!reach[j] && open(p[0], p[1])) { reach[j] = 1; q.push(j); }
+                });
+            }
+            for (var h = 0; h < q.length; h++) {
+                x = q[h] % N; y = (q[h] / N) | 0;
+                for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+                    var nx2 = x + dx, ny2 = y + dy;
+                    if (nx2 < 0 || ny2 < 0 || nx2 >= N || ny2 >= N) continue;
+                    var j2 = ny2 * N + nx2;
+                    if (!reach[j2] && open(nx2, ny2)) { reach[j2] = 1; q.push(j2); }
+                }
+            }
+            var m = new Uint8Array(N * N);
+            for (k = 0; k < N * N; k++) {
+                var c0 = cell(k % N, (k / N) | 0);
+                m[k] = ((c0 & 2) || ((c0 & 1) && !reach[k])) ? 1 : 0;
+            }
+            out.push({ gx0: gx0, gy0: gy0, N: N, m: m });
+        }
+        _townMasks[name] = out;
+        return out;
+    }
+
+    /**
+     * 整張大地圖（world）：該點屬於哪一區（地圖 id 陣列；村莊可能多個 id 共用）。
+     * 規則同 tools/lin/build-linmap-data.js buildWorld：村莊範圍優先，其餘歸最近野外中心。
+     * 可走資料未載入／非大地圖 → null
+     */
+    function linmapRegionAt(name, wx, wy) {
+        var d = linmapData(name);
+        if (!d || !d.world || !_walk[name]) return null;
+        var t = linmapTileAt(name, wx, wy);
+        if (t.gx < 0 || t.gy < 0 || t.gx >= d.nx || t.gy >= d.ny) return null;
+        var lx = d.x0 + t.gx, ly = d.y0 + t.gy;
+        var i;
+        var masks = linmapTownMasks(name);
+        for (i = 0; i < masks.length; i++) {
+            var M = masks[i], mx = t.gx - M.gx0, my = t.gy - M.gy0;
+            if (mx >= 0 && my >= 0 && mx < M.N && my < M.N && M.m[my * M.N + mx]) return d.towns[i].ids;
+        }
+        var best = null, bd = Infinity;
+        for (i = 0; i < d.fields.length; i++) {
+            var f = d.fields[i];
+            var dd = (lx - f.c[0]) * (lx - f.c[0]) + (ly - f.c[1]) * (ly - f.c[1]);
+            if (dd < bd) { bd = dd; best = f.id; }
+        }
+        return best ? [best] : null;
+    }
+
     function linmapEnsureLayer(bv) {
         var el = document.getElementById('explore-linmap');
         if (el) return el;
@@ -190,6 +260,7 @@
     global.linmapTileAt = linmapTileAt;
     global.linmapWalkable = linmapWalkable;
     global.linmapSafeZone = linmapSafeZone;
+    global.linmapRegionAt = linmapRegionAt;
     global.linmapSync = linmapSync;
     global.linmapHide = linmapHide;
 })(typeof window !== 'undefined' ? window : this);

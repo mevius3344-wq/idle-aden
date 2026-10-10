@@ -10,6 +10,7 @@
     var FOOT = (typeof LINTOWN_FOOT_PAD !== 'undefined') ? LINTOWN_FOOT_PAD : 32;
     var SPOT_KINDS = { Merchant: 1, Dwarf: 1, Teleporter: 1, Npc: 1, Housekeeper: 1, Auctioneer: 1 };
     var _town = '';
+    var _layerKey = '';
     var _ents = [];
     var _raf = 0;
     var _dlgHome = null;
@@ -20,6 +21,20 @@
     function townDef(id) {
         var d = (typeof mapdefOf === 'function') ? mapdefOf(id) : null;
         return (d && d.townLin && d.lin) ? d : null;
+    }
+    /** 整張大地圖：同圖各村（同原版村莊只取一個 id；目前所在村優先） */
+    function worldTowns(world, cur) {
+        var defs = global.MAP_DEFS || {};
+        var byKey = {};
+        var order = [];
+        Object.keys(defs).forEach(function (id) {
+            var d = defs[id];
+            if (!d || !d.townLin || d.world !== world) return;
+            var k = d.townKey || d.lin;
+            if (!(k in byKey)) order.push(k);
+            if (!(k in byKey) || id === cur) byKey[k] = id;
+        });
+        return order.map(function (k) { return byKey[k]; });
     }
     function nameKey(s) {
         return String(s || '').replace(/^.*\^/, '').replace(/\s+/g, '');
@@ -35,7 +50,7 @@
     function linTownPlan(townId) {
         var def = townDef(townId);
         if (!def) return [];
-        var orig = ((typeof LINTOWN_NPCS !== 'undefined') && LINTOWN_NPCS[def.lin]) || [];
+        var orig = ((typeof LINTOWN_NPCS !== 'undefined') && LINTOWN_NPCS[def.townKey || def.lin]) || [];
         var L = (typeof linmapData === 'function') ? linmapData(def.lin) : null;
         var hub = (typeof LINTOWN_START !== 'undefined' && LINTOWN_START) ? LINTOWN_START[townId] : null;
         var cx = hub ? hub.x : (L && L.keys && L.keys.center ? L.keys.center.x : 0);
@@ -110,12 +125,12 @@
         }
     }
 
-    function buildEntity(p, townId) {
+    function buildEntity(p, townId, live) {
         var o = p.o, npc = p.npc;
         var spr = (typeof LINTOWN_SPR !== 'undefined' && LINTOWN_SPR[o.s]) || null;
         if (!spr) return null;
         var el = document.createElement('div');
-        el.className = 'lin-npc' + (npc ? ' is-game' : ' is-decor');
+        el.className = 'lin-npc' + (npc && live ? ' is-game' : ' is-decor');
         var body = document.createElement('div');
         body.className = 'lin-npc-spr';
         body.style.width = spr.w + 'px';
@@ -144,7 +159,7 @@
         }
         el.style.width = Math.min(spr.w, 72) + 'px';
         el.style.height = Math.max(24, Math.min(spr.h - FOOT, 110)) + 'px';
-        if (npc) {
+        if (npc && live) {
             el.setAttribute('data-npc', npc.id);
             el.addEventListener('click', function (e) {
                 e.stopPropagation();
@@ -165,26 +180,37 @@
         var layer = document.getElementById(LAYER_ID);
         if (layer) layer.innerHTML = '';
         _town = '';
+        _layerKey = '';
     }
 
-    function linTownEnter(townId) {
-        if (!townDef(townId)) { linTownLeave(); return; }
-        mountDialog(true);
+    /** mapId＝目前地圖：原版村莊，或整張大地圖上的野外（同圖各村 NPC 照樣站著，只有所在村可點） */
+    function linTownEnter(mapId) {
+        var def = (typeof mapdefOf === 'function') ? mapdefOf(mapId) : null;
+        var inTown = !!townDef(mapId);
+        var towns = (def && def.world && def.lin) ? worldTowns(def.world, mapId) : (inTown ? [mapId] : []);
+        if (!towns.length) { linTownLeave(); return; }
+        mountDialog(inTown);
+        setWalkClass(inTown);
         var layer = ensureLayer();
         if (!layer) return;
-        linTownClear();
-        _town = townId;
-        setWalkClass(true);
+        var key = towns.join(',') + '|' + (inTown ? mapId : '');
+        _town = mapId;
         layer.classList.remove('hidden');
-        var plan = linTownPlan(townId);
-        var frag = document.createDocumentFragment();
-        plan.forEach(function (p) {
-            var ent = buildEntity(p, townId);
-            if (!ent) return;
-            frag.appendChild(ent.el);
-            _ents.push(ent);
-        });
-        layer.appendChild(frag);
+        if (key !== _layerKey) {
+            _ents = [];
+            layer.innerHTML = '';
+            _layerKey = key;
+            var frag = document.createDocumentFragment();
+            towns.forEach(function (tid) {
+                linTownPlan(tid).forEach(function (p) {
+                    var ent = buildEntity(p, tid, tid === mapId);
+                    if (!ent) return;
+                    frag.appendChild(ent.el);
+                    _ents.push(ent);
+                });
+            });
+            layer.appendChild(frag);
+        }
         if (!_raf) _raf = requestAnimationFrame(frame);
     }
 
@@ -201,7 +227,8 @@
         var cur = curMap();
         if (!_town) return;
         if (cur !== _town) {
-            if (townDef(cur)) linTownEnter(cur); else { linTownLeave(); return; }
+            linTownEnter(cur);
+            if (!_town) return;
         }
         var bv = document.getElementById('battle-view');
         var on = bv && !bv.classList.contains('hidden') && typeof exploreCamX === 'function' && typeof exploreMobScreenBottom === 'function';
@@ -228,5 +255,5 @@
     global.linTownEnter = linTownEnter;
     global.linTownLeave = linTownLeave;
     global.linTownPlan = linTownPlan;
-    global.linTownActive = function () { return !!_town; };
+    global.linTownActive = function () { return !!(_town && townDef(_town)); };
 })(typeof window !== 'undefined' ? window : this);

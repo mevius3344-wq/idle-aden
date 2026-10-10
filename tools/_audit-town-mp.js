@@ -127,16 +127,19 @@ async function page(wsUrl) {
     await A.send('Page.bringToFront');
     const exp0 = await A.ev('JSON.stringify({exp:player.exp,lv:player.lv,mobs:(mapState.mobs||[]).filter(Boolean).length,map:mapState.current})');
     let maxMobs = 0;
+    const dbg = [];
     for (let i = 0; i < 25; i++) {
         await sleep(1000);
         const n = await A.ev('player.hp=player.mhp;(mapState.mobs||[]).filter(m=>m&&m.curHp>0).length');
         maxMobs = Math.max(maxMobs, n || 0);
         await B.ev('player.hp=player.mhp');
+        if (i % 5 === 4) dbg.push(await A.ev(`(()=>{const x=explorePlayerX(),y=explorePlayerY();const ms=(mapState.mobs||[]).filter(m=>m&&m.curHp>0&&m._fx!=null);
+            return [Math.round(x),Math.round(y),mapState.targetIdx,ms.map(m=>Math.round(Math.hypot(m._fx-x,(m._fy||0)-y))).sort((a,b)=>a-b).slice(0,3).join('/'),state.autoHunt,document.hidden].join(',')})()`));
     }
     const exp1 = await A.ev('JSON.stringify({exp:player.exp,lv:player.lv,ch:window.__rtWorldChannel,ws:rtWorldIsConnected()})');
     const e0 = JSON.parse(exp0), e1 = JSON.parse(exp1);
     ok(maxMobs > 0, '野外有怪 (最多 ' + maxMobs + ' 隻) ' + exp0);
-    ok(e1.exp !== e0.exp || e1.lv !== e0.lv, '野外打怪有拿到經驗 ' + exp0 + ' → ' + exp1);
+    ok(e1.exp !== e0.exp || e1.lv !== e0.lv, '野外打怪有拿到經驗 ' + exp0 + ' → ' + exp1 + ' dbg=' + dbg.join(' | '));
     await A.shot('townmp_field_A.png');
     ok(A.errors.length + B.errors.length === 0, 'JS 例外：' + (A.errors.concat(B.errors).slice(0, 4).join(' | ') || '無'));
     A.ws.close(); B.ws.close(); br.kill();

@@ -134,9 +134,9 @@ const ENABLE_DESKTOP_SAVES =
 const IP_SESSION_MAX = Math.max(1, Number(process.env.IP_SESSION_MAX || 1));
 const IP_SESSION_TTL_MS = Math.max(15000, Number(process.env.IP_SESSION_TTL_MS || 45000));
 const IP_SESSION_ENABLED = process.env.IP_SESSION_LIMIT !== "0";
-// Original-tile maps (linmap) span up to ~25000 x 12500 world px.
-const PRESENCE_WX_MAX = 13000;
-const PRESENCE_WY_MAX = 7000;
+// Original-tile maps (linmap) span up to ~81600 x 40900 world px (whole mainland wd_main).
+const PRESENCE_WX_MAX = 42000;
+const PRESENCE_WY_MAX = 21000;
 const CLOSED_BETA = String(process.env.CLOSED_BETA || "1") !== "0";
 const DEFAULT_SERVER_NOTICE =
   "【封測／測試服】本服僅供測試，會不定期清檔，經濟與進度不保證保留。";

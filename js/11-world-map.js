@@ -1487,6 +1487,7 @@ function changeMap(force) {
         // 🎯 核心修復：離開村莊回到戰鬥時，恢復原本的面板設定
         mapPanel.classList.remove('flex-1', 'overflow-hidden');
         try { applyAreaBackground(); } catch(e){}   // ⚡ v2.6.49 立即套用狩獵區 area-fit(1920/580 條狀)＋背景，避免等到下一次 updateUI(下一 tick·最多~100ms)才變換→切村↔狩獵時戰鬥區解析度延遲跳動（村莊分支已於下方 updateUI() 即時處理·此分支原本漏呼故有延遲）
+        try { if (typeof linTownEnter === 'function') linTownEnter(mapState.current); } catch (eLt) {}   // 🗺️ 整張大地圖野外：同圖村莊 NPC 照樣站著；其他地圖＝收掉
 
         // 進入新區域：依邏輯 tick 排程出怪（中央 50t=5秒、左側 70t=7秒、右側 90t=9秒）
         // 🗺️ 場戰：改依練功點展開槽位＋錯開出生，勿再用 3 格排程（否則其餘格會同一時間狂刷）

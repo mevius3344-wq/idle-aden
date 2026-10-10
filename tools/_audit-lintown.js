@@ -159,24 +159,17 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
             if (moved > 10) break;
         }
         ok(moved > 10, '村莊內點地面會走 (位移 ' + Math.round(moved) + ')');
-        // 出村傳送門 → 說話之島周邊
-        await ev(`(()=>{const p=mapdefPortals('town_talking')[0];window.__ptl=p;})()`);
-        const ptl = await ev('window.__ptl');
-        ok(ptl && ptl.dest === 'talking_island', '說話之島村莊有出村傳送門 → ' + (ptl && ptl.dest));
-        if (ptl) {
-            await ev(`(()=>{const p=window.__ptl;const s=document.getElementById('map-select');})()`);
-            const tx = ptl.x + ptl.w / 2, ty = ptl.y + ptl.h / 2;
-            const p0 = await ev('[explorePlayerX(),explorePlayerY()]');
-            const route = await findRoute('town_talking', tx, ty, 0);
-            ok(Array.isArray(route), '出村傳送門走得到（原版可走格 ' + (route ? route.length : 0) + ' 步）');
-            let left = await walkRoute(route, 'talking_island');
-            for (let i = 0; i < 12 && !left; i++) { await sleep(500); left = (await ev('mapState.current')) === 'talking_island'; }
-            const p1 = await ev('[explorePlayerX(),explorePlayerY(),mapState.current]');
-            ok(left, '走進出村傳送門到說話之島周邊 (' + JSON.stringify(p0) + '→' + JSON.stringify(p1) + ')');
-            await sleep(2500);
-            const back = await ev(`(()=>{const ents=document.querySelectorAll('#lin-town-npcs .lin-npc').length;return {ents,walk:document.getElementById('game-screen').classList.contains('lin-town-walk'),dlgHome:document.getElementById('town-interaction-container').parentElement.id};})()`);
-            ok(back && back.ents === 0 && !back.walk && back.dlgHome === 'town-view', '出村後清掉村莊 NPC、對話框歸位 ' + JSON.stringify(back));
-        }
+        // 出村不用傳送門：走出安全區就是說話之島周邊（同一張原版圖）
+        const ptl = await ev(`mapdefPortals('town_talking').length`);
+        ok(ptl === 0, '說話之島村莊沒有出村傳送門 (' + ptl + ')');
+        const p0 = await ev('[explorePlayerX(),explorePlayerY()]');
+        const wr = await require('./_world-path').walkRegion(ev, sleep, false, 300);
+        const p1 = await ev('[explorePlayerX(),explorePlayerY(),mapState.current]');
+        ok(wr.reached && p1[2] === 'talking_island', '走出安全區到說話之島周邊 (' + JSON.stringify(p0) + '→' + JSON.stringify(p1) + ')' + (wr.reached ? '' : ' plan=' + (wr.plan ? wr.plan.dest + '/' + wr.plan.n : 'null') + ' last=' + JSON.stringify(wr.trace.slice(-3))));
+        await sleep(2500);
+        const back = await ev(`(()=>{const e=document.querySelectorAll('#lin-town-npcs .lin-npc');return {ents:e.length,live:document.querySelectorAll('#lin-town-npcs .lin-npc.is-game').length,lin:exploreActiveMapDef().lin,walk:document.getElementById('game-screen').classList.contains('lin-town-walk'),dlgHome:document.getElementById('town-interaction-container').parentElement.id};})()`);
+        ok(back && back.ents > 0 && back.live === 0 && back.lin === 'ti_island' && !back.walk && back.dlgHome === 'town-view',
+            '出村後同圖村莊 NPC 仍站著但不可點、對話框歸位 ' + JSON.stringify(back));
     }
 
     // 非原版村莊仍是舊村莊畫面（鎖定 #2 背景）

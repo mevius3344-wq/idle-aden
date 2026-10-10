@@ -3937,17 +3937,22 @@
         var D = global.LINMAP_DATA || {};
         var ti = D.ti_island, d1 = D.ti_dungeon1, d2 = D.ti_dungeon2;
         if (!ti || !d1 || !d2) return;
-        var island = linMapDef('talking_island', 'ti_island', '說話之島 · 村莊回城／東岸港口／西北地監入口');
-        island.start = { x: ti.keys.village.ax, y: ti.keys.village.ay };
-        island.portals = [
-            linPortal(ti, 'village', { id: 'to_town', dest: 'town_talking', label: '← 說話之島村莊', side: 'west' }),
-            linPortal(ti, 'eastCoast', { id: 'to_port', dest: 'talking_island_port', label: '說話之島港口 →', side: 'east', destX: -280, destY: 20 }),
-            linPortal(ti, 'dungeonDoor', { id: 'to_dungeon', dest: 'zone_13', label: '說話之島地監 ↑', side: 'north', destX: d1.keys.entry.ax, destY: d1.keys.entry.ay })
-        ];
+        // 整張大地圖（ti.world）：說話之島野外／村莊／港口由 applyLinWorlds 建立，地監回程落點也由它補
+        var tiWorld = !!ti.world;
+        var island = null;
+        if (!tiWorld) {
+            island = linMapDef('talking_island', 'ti_island', '說話之島 · 村莊回城／東岸港口／西北地監入口');
+            island.start = { x: ti.keys.village.ax, y: ti.keys.village.ay };
+            island.portals = [
+                linPortal(ti, 'village', { id: 'to_town', dest: 'town_talking', label: '← 說話之島村莊', side: 'west' }),
+                linPortal(ti, 'eastCoast', { id: 'to_port', dest: 'talking_island_port', label: '說話之島港口 →', side: 'east', destX: -280, destY: 20 }),
+                linPortal(ti, 'dungeonDoor', { id: 'to_dungeon', dest: 'zone_13', label: '說話之島地監 ↑', side: 'north', destX: d1.keys.entry.ax, destY: d1.keys.entry.ay })
+            ];
+        }
         var b1 = linMapDef('zone_13', 'ti_dungeon1', '說話之島地監 1 樓 · 入口回地面／深處下 2 樓');
         b1.start = { x: d1.keys.entry.ax, y: d1.keys.entry.ay };
         b1.portals = [
-            linPortal(d1, 'entry', { id: 'to_island', dest: 'talking_island', label: '← 說話之島周邊', side: 'south', destX: ti.keys.dungeonDoor.ax, destY: ti.keys.dungeonDoor.ay }),
+            linPortal(d1, 'entry', { id: 'to_island', dest: 'talking_island', label: '← 說話之島周邊', side: 'south', destX: tiWorld ? undefined : ti.keys.dungeonDoor.ax, destY: tiWorld ? undefined : ti.keys.dungeonDoor.ay }),
             linPortal(d1, 'down', { id: 'to_b2', dest: 'zone_14', label: '地監 2 樓 →', side: 'east', destX: d2.keys.entry.ax, destY: d2.keys.entry.ay })
         ];
         var b2 = linMapDef('zone_14', 'ti_dungeon2', '說話之島地監 2 樓 · 入口回 1 樓');
@@ -3955,9 +3960,10 @@
         b2.portals = [
             linPortal(d2, 'entry', { id: 'to_b1', dest: 'zone_13', label: '← 地監 1 樓', side: 'west', destX: d1.keys.down.ax, destY: d1.keys.down.ay })
         ];
-        MAP_DEFS.talking_island = island;
         MAP_DEFS.zone_13 = b1;
         MAP_DEFS.zone_14 = b2;
+        if (tiWorld) return;
+        MAP_DEFS.talking_island = island;
         if (MAP_DEFS.talking_island && D.tw_talking) {
             MAP_DEFS.talking_island.portals[0].destX = D.tw_talking.keys.exit.ax;
             MAP_DEFS.talking_island.portals[0].destY = D.tw_talking.keys.exit.ay;
@@ -4083,6 +4089,77 @@
                 if (!ex) return;
                 p.destX = ex.ax;
                 p.destY = ex.ay;
+            });
+        });
+    })();
+
+    /* ─── 整張大地圖（tools/lin/worlds-config.js）：村莊＋野外共用一張原版圖，走過邊界即換區，同圖之間不設傳送門 ─── */
+    function linToWorld(L, lx, ly) {
+        var gx = lx - L.x0, gy = ly - L.y0;
+        return { x: Math.round((gx + gy) * 24 + L.ox - L.w / 2), y: Math.round(L.h / 2 - ((gy - gx) * 12 + L.oy)) };
+    }
+    (function applyLinWorlds() {
+        var D = global.LINMAP_DATA || {};
+        var areaWorld = {};
+        Object.keys(D).forEach(function (wn) {
+            var L = D[wn];
+            if (!L || !L.world) return;
+            (L.fields || []).forEach(function (f) {
+                var A = L.areas && L.areas[f.id], old = MAP_DEFS[f.id];
+                if (!A || !old) return;
+                var def = linMapDef(f.id, wn, old.hint);
+                var olds = (old.portals || []).filter(Boolean);
+                def.world = wn;
+                def.spawns = A.spots;
+                def.start = { x: A.start.x, y: A.start.y };
+                def.portals = (A.keep || []).map(function (i) {
+                    var p = olds[i];
+                    var q = p ? linPortal({ keys: A.keys }, 'p' + i, {}) : null;
+                    if (!q || A.pd[i] !== p.dest) return null;
+                    for (var k in p) {
+                        if (Object.prototype.hasOwnProperty.call(p, k) && !/^(x|y|w|h)$/.test(k)) q[k] = p[k];
+                    }
+                    return q;
+                }).filter(Boolean);
+                MAP_DEFS[f.id] = def;
+                areaWorld[f.id] = wn;
+            });
+            (L.towns || []).forEach(function (t) {
+                t.ids.forEach(function (tid) {
+                    var def = linMapDef(tid, wn, '原版村莊 · 點地面走動、點 NPC 對話、走出安全區就是野外');
+                    var hub = (typeof LINTOWN_START !== 'undefined' && LINTOWN_START) ? LINTOWN_START[tid] : null;
+                    def.townLin = true;
+                    def.world = wn;
+                    def.townKey = t.key;
+                    def.spawns = [];
+                    def.start = hub ? { x: hub.x, y: hub.y } : linToWorld(L, t.c[0], t.c[1]);
+                    MAP_DEFS[tid] = def;
+                    areaWorld[tid] = wn;
+                });
+            });
+        });
+        Object.keys(areaWorld).forEach(function (src) {
+            (MAP_DEFS[src].portals || []).forEach(function (p) {
+                var td = MAP_DEFS[p.dest];
+                if (!td || !td.lin || td.world) return;
+                var L2 = D[td.lin];
+                var i = L2 && L2.pd ? L2.pd.indexOf(src) : -1;
+                var k = i >= 0 ? L2.keys['p' + i] : null;
+                p.destX = k ? k.ax : td.start.x;
+                p.destY = k ? k.ay : td.start.y;
+            });
+        });
+        Object.keys(MAP_DEFS).forEach(function (src) {
+            var sd = MAP_DEFS[src];
+            (sd && sd.portals || []).forEach(function (p) {
+                var wn = p && areaWorld[p.dest];
+                if (!wn) return;
+                var A = D[wn].areas[p.dest];
+                var i = A && A.pd ? A.pd.indexOf(src) : -1;
+                var k = i >= 0 ? A.keys['p' + i] : null;
+                var st = MAP_DEFS[p.dest].start;
+                p.destX = k ? k.ax : st.x;
+                p.destY = k ? k.ay : st.y;
             });
         });
     })();

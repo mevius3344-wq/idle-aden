@@ -36,6 +36,10 @@
     // 🪄 v3.9.48：場戰範圍技半徑（約 5 格）——target:'all' 不可掃全圖，只打錨點附近集群
     var AOE_RADIUS_PX = GRID_PX * 5;
     var APPROACH_WORLD = 420;
+    // 自動追怪被地形擋住（直線走不過去）時，超過 STUCK_MS 沒拉近就暫時略過那隻怪
+    var CHASE_STUCK_MS = 1500;
+    var CHASE_UNREACH_MS = 10000;
+    var _chaseIdx = -1, _chaseBest = Infinity, _chaseSince = 0;
     var PICKUP_PX = 88;
     var CHASE_PULL = 4.0;
     var MOB_SIGHT = 78;       // 🩹 v3.8.426：主動仇恨視野縮小
@@ -89,6 +93,11 @@
     var _portalBusy = false;
     var _portalHoldL = 0;
     var _portalHoldR = 0;
+    /** 整張大地圖：越過區域邊界需連續停留幾 tick 才換區（避免貼邊來回跳） */
+    var REGION_HOLD_TICKS = 4;
+    var _regionHold = 0;
+    var _regionWant = '';
+    var _walkoverKeepTap = false;
 
     // 🩹 v3.8.478：3×3＝9 點×2 隻＝18（原 80），走路有空檔
     var GRIND_SPOTS = [
@@ -788,7 +797,8 @@
             var fixed = mapdefResolveMove(def, 0, 0, hx, hy);
             hx = fixed.x;
             hy = fixed.y;
-            if (!mapdefWalkable(def, hx, hy)) {
+            if (!mapdefWalkable(def, hx, hy)
+                || (def.lin && typeof linmapSafeZone === 'function' && linmapSafeZone(def.lin, hx, hy))) {
                 hx = spot.x;
                 hy = spot.y || 0;
             }
@@ -1459,9 +1469,11 @@
         if (!exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return -1;
         var lim = maxDist == null ? APPROACH_WORLD : maxDist;
         var best = -1, bestD = Infinity;
+        var now = Date.now();
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
+            if (m._unreachUntil && m._unreachUntil > now) continue;
             var d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
             if (d <= lim && d < bestD) { bestD = d; best = i; }
         }
@@ -1505,6 +1517,22 @@
             return false;
         }
         if (!engaged && dist > APPROACH_WORLD) return false;
+        var nowC = Date.now();
+        var ti = mapState.mobs.indexOf(t);
+        if (engaged || ti !== _chaseIdx || dist < _chaseBest - 6) {
+            _chaseSince = nowC;
+            _chaseIdx = ti;
+            _chaseBest = dist;
+        } else if (nowC - _chaseSince > CHASE_STUCK_MS) {
+            t._unreachUntil = nowC + CHASE_UNREACH_MS;
+            _chaseIdx = -1;
+            _chaseBest = Infinity;
+            try {
+                if (typeof setTarget === 'function') setTarget(-1);
+                else mapState.targetIdx = -1;
+            } catch (eUn) { mapState.targetIdx = -1; }
+            return false;
+        }
         exploreSetFaceFromVec(dirx, -diry);
         return explorePlayerWalkStep(dirx, diry) > 0.08;
     }
@@ -2668,6 +2696,10 @@
                     fixed = exploreResolveSolids(hx, hy, ox, oy);
                     hx = fixed.x; hy = fixed.y;
                 }
+                if (def && def.world && typeof linmapRegionAt === 'function') {
+                    var rg = linmapRegionAt(def.lin, hx, hy);
+                    if (!rg || rg.indexOf(mapState.current) < 0) return;
+                }
                 d = Math.hypot(hx - ox, hy - oy);
                 if (minD != null && d < minD) return;
                 if (maxD != null && d > maxD) return;
@@ -2767,7 +2799,8 @@
         _walkPhase = 0;
         _camMoved = false;
         _faceHold = 0;
-        _tapMove.active = false;
+        if (_walkoverKeepTap) _walkoverKeepTap = false;
+        else _tapMove.active = false;
         exploreApplyWorld();
         exploreRenderHint();
         if (reason === 'map' || reason === 'portal') {
@@ -2913,14 +2946,18 @@
     }
 
 
-    function exploreDoPortal(dest, portalMeta) {
+    function exploreDoPortal(dest, portalMeta, walkover) {
         if (!dest || _portalBusy) return false;
         _portalBusy = true;
         _portalHoldL = 0;
         _portalHoldR = 0;
         try {
             var meta = portalMeta || null;
-            if (meta && (meta.destX != null || meta.destY != null)) {
+            _walkoverKeepTap = false;
+            if (walkover) {
+                _pendingSpawn = { x: _tx, y: _ty };
+                _walkoverKeepTap = !!_tapMove.active;
+            } else if (meta && (meta.destX != null || meta.destY != null)) {
                 _pendingSpawn = {
                     x: Number(meta.destX) || 0,
                     y: Number(meta.destY) || 0
@@ -2946,11 +2983,17 @@
             if (typeof changeMap === 'function') changeMap(true);
             else if (typeof mapState !== 'undefined') mapState.current = dest;
             try {
-                if (typeof logSys === 'function') logSys('<span class="text-sky-300">你進入了傳送門。</span>');
+                if (typeof logSys === 'function') {
+                    if (walkover) {
+                        var nm = (typeof mapDisplayName === 'function' && mapDisplayName(dest)) || (DB.towns && DB.towns[dest] && DB.towns[dest].n) || dest;
+                        logSys('<span class="text-sky-300">你走進了 ' + nm + '。</span>');
+                    } else logSys('<span class="text-sky-300">你進入了傳送門。</span>');
+                }
             } catch (eL) {}
         } catch (eP) {
             _portalBusy = false;
             _pendingSpawn = null;
+            _walkoverKeepTap = false;
             return false;
         }
         setTimeout(function () { _portalBusy = false; }, 900);
@@ -3114,6 +3157,28 @@
         return true;
     }
 
+    /** 整張大地圖（MapDef.world）：走過村莊安全區／野外邊界就地換區，不經傳送門 */
+    function exploreTryWalkRegion() {
+        if (!exploreAllowed() || explorePlayerDead() || _portalBusy) return false;
+        var def = exploreActiveMapDef();
+        if (!def || !def.world || typeof linmapRegionAt !== 'function') return false;
+        var ids = linmapRegionAt(def.lin, _tx, _ty);
+        if (!ids || !ids.length || ids.indexOf(mapState.current) >= 0) {
+            _regionHold = 0;
+            return false;
+        }
+        var dest = ids[0];
+        if (_regionWant !== dest) {
+            _regionWant = dest;
+            _regionHold = 0;
+        }
+        if (++_regionHold < REGION_HOLD_TICKS) return false;
+        _regionHold = 0;
+        var dd = (typeof mapdefOf === 'function') ? mapdefOf(dest) : null;
+        if (!dd || dd.lin !== def.lin) return false;
+        return exploreDoPortal(dest, null, true);
+    }
+
     function exploreSetVirtualStick(dx, dy, active) {
         _vStick.dx = Number(dx) || 0;
         _vStick.dy = Number(dy) || 0;
@@ -3230,8 +3295,11 @@
             exploreConsumePendingSpawn();
             _vx = 0;
             _vy = 0;
-            _walkPhase = 0;
-            _tapMove.active = false;
+            if (_walkoverKeepTap) _walkoverKeepTap = false;
+            else {
+                _walkPhase = 0;
+                _tapMove.active = false;
+            }
         }
         // 💀 死亡不可移動（清鍵＋停步）
         if (explorePlayerDead()) {
@@ -3324,6 +3392,7 @@
             if ((wantMove || autoDrive || _camMoved || _moving) && typeof rtWorldPushMove === 'function') rtWorldPushMove(false);
         } catch (eWsMove) {}
         try { exploreTryPortal(); } catch (ePortal) {}
+        try { exploreTryWalkRegion(); } catch (eRegion) {}
         // 🩹 v3.8.481：動畫改由 js/09 interval＋RAF 專責（此處再呼叫＝每幀×3 重繪＝延遲主因）
     }
 

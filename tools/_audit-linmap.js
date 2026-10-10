@@ -123,15 +123,16 @@ async function main() {
         return {kids, img0: ics?{d:ics.display,v:ics.visibility,op:ics.opacity,f:ics.filter,nw:img0.naturalWidth}:null, bvBg:getComputedStyle(bv).backgroundImage.slice(0,80), bv:[Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)], layer:[Math.round(lr.left),Math.round(lr.top)], tf:layer.style.transform, bottom:layer.style.bottom, imgs, stack};
     })()`);
     fs.writeFileSync(path.join(SHOT_DIR, 'audit_cover.json'), JSON.stringify(cover, null, 1));
-    const D = await ev('LINMAP_DATA.ti_island.keys');
-    ok('出生點＝村莊外（資料 start）', Math.hypot(s.px - D.village.ax, s.py - D.village.ay) < 2, `(${s.px},${s.py})`);
+    const st0 = await ev('(()=>{const d=exploreActiveMapDef();return {start:d.start,spots:(d.spawns||[]).length,world:d.world}})()');
+    ok('說話之島＝整張島圖（村莊／野外／港口同一張）', st0.world === 'ti_island');
+    ok('出生點＝野外區 start', Math.hypot(s.px - st0.start.x, s.py - st0.start.y) < 2, `(${s.px},${s.py})`);
     ok('出生點可走', s.walk === true);
-    s = await waitMobs(70);
-    ok('怪物格位＝40 練功點×2', s.slots === 80, 'slots=' + s.slots);
-    ok('怪物陸續出生', s.mobs >= 60, 'mobs=' + s.mobs);
+    s = await waitMobs(st0.spots * 2 - 10);
+    ok('怪物格位＝練功點×2', s.slots === st0.spots * 2 && st0.spots >= 30, 'slots=' + s.slots);
+    ok('怪物陸續出生', s.mobs >= st0.spots * 1.5, 'mobs=' + s.mobs);
     ok('怪物全在可走格子上', s.mobs > 0 && s.mobsWalk === s.mobs, s.mobsWalk + '/' + s.mobs);
     ok('怪物不在村莊安全區', s.mobsSafe === 0, 'safe=' + s.mobsSafe);
-    ok('怪物散佈全島（非擠在原點）', s.spread > 3000, 'maxDist=' + s.spread);
+    ok('怪物散佈本區（非擠在原點）', s.spread > 1500, 'maxDist=' + s.spread);
     await shot('audit_ti_island_start.png');
 
     // 走路：往東南走 2 秒，位置改變且仍在可走格
@@ -182,22 +183,14 @@ async function main() {
     ok('地監2樓怪物在走道上', s.mobs > 20 && s.mobsWalk === s.mobs, s.mobsWalk + '/' + s.mobs);
     await shot('audit_ti_dungeon2.png');
 
-    console.log('=== 傳送門：本島 → 村莊 ===');
+    console.log('=== 走進村莊（不經傳送門） ===');
     await go('talking_island');
     await sleep(3000);
-    const walkTo = await ev(`(async()=>{
-        const k=LINMAP_DATA.ti_island.keys.village;
-        for(let i=0;i<120&&mapState.current==='talking_island';i++){
-            const dx=k.x-explorePlayerX(), dy=k.y-explorePlayerY(); const L=Math.hypot(dx,dy)||1;
-            exploreSetVirtualStick(dx/L, -dy/L, true);
-            await new Promise(r=>setTimeout(r,100));
-        }
-        exploreSetVirtualStick(0,0,false);
-        return mapState.current;
-    })()`);
-    ok('走進村莊傳送門 → 說話之島村莊', walkTo === 'town_talking', 'map=' + walkTo);
+    ok('說話之島野外沒有回村傳送門', (await ev(`mapdefPortals('talking_island').filter(p=>p.dest.indexOf('town_')===0).length`)) === 0);
+    const wr = await require('./_world-path').walkRegion(ev, sleep, true, 400);
+    ok('走進村莊 → 說話之島村莊', wr.reached && wr.map === 'town_talking', 'map=' + wr.map + ' plan=' + (wr.plan ? wr.plan.dest + '/' + wr.plan.n : 'null') + ' last=' + JSON.stringify(wr.trace.slice(-2)));
     s = await state();
-    ok('村莊改用原版村莊拼塊 tw_talking（v3.9.63 可走動村莊）', s.linmapOn && s.lin === 'tw_talking' && s.layerHidden === false, JSON.stringify({ lin: s.lin, on: s.linmapOn }));
+    ok('村莊與野外同一張原版圖 ti_island（不重載）', s.linmapOn && s.lin === 'ti_island' && s.layerHidden === false, JSON.stringify({ lin: s.lin, on: s.linmapOn }));
 
     console.log('=== 未轉換地圖不受影響（野外／地監已由 _audit-linfields.js 驗證） ===');
     await go('pirate_wild');

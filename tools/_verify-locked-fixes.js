@@ -325,7 +325,7 @@ section("18/26) 同圖玩家＋原版可走村莊");
   ok("頻道依序填滿（不把玩家分散到空頻）",
     /for \(let c = 1; c <= MAX_CHANNELS; c\+\+\) \{\s*if \(\(byCh\[c\] \|\| 0\) < CAP_PER_CHANNEL\) return \{ channel: c, full: false \};/.test(ch));
   ok("伺服器同圖玩家清單不排除村莊", /function partyMapPlayersHere[\s\S]{0,200}if \(!cur\) return \[\];/.test(serve));
-  ok("伺服器座標夾限涵蓋原版大地圖", /const PRESENCE_WX_MAX = 13000;/.test(serve) && /const PRESENCE_WY_MAX = 7000;/.test(serve));
+  ok("伺服器座標夾限涵蓋原版大地圖（本土整張 wd_main ±40800×±20448）", /const PRESENCE_WX_MAX = 42000;/.test(serve) && /const PRESENCE_WY_MAX = 21000;/.test(serve));
   ok("可走村莊顯示同圖玩家（mapPopSameMapPlayers 放行 mapdefTownLin）",
     /indexOf\('town_'\) === 0 && !\(typeof mapdefTownLin === 'function' && mapdefTownLin\(mapId\)\)\) return \[\];/.test(pop));
   ok("index 載入 52-lintown-data（在 47-mapdef 前）＋52-lin-town",
@@ -335,8 +335,14 @@ section("18/26) 同圖玩家＋原版可走村莊");
   ok("可走村莊 NPC 點擊開對話", /interactNPC\(/.test(town) && /exploreClearTapMove/.test(town));
   const tw = ["tw_talking", "tw_silver", "tw_gludin", "tw_woodbec", "tw_windawood", "tw_kentcastle", "tw_heine", "tw_giran",
     "tw_oren", "tw_aden", "tw_witon", "tw_elf", "tw_ivory", "tw_pirate", "tw_silent"];
-  const missTw = tw.filter((n) => !(exists("assets/linmap/" + n + "/walk.bin") && exists("assets/linmap/" + n + "/meta.json")));
-  ok("原版村莊圖塊齊全（15 張）", missTw.length === 0, missTw.join(","));
+  const TOWNS_CFG = require("./lin/towns-config");
+  const WORLDS_CFG = require("./lin/worlds-config");
+  const worldOf = (map) => Object.keys(WORLDS_CFG).find((n) => WORLDS_CFG[n].map === map);
+  const missTw = tw.filter((n) => {
+    const dir = "assets/linmap/" + (worldOf(TOWNS_CFG[n].map) || n);
+    return !(exists(dir + "/walk.bin") && exists(dir + "/meta.json"));
+  });
+  ok("原版村莊圖塊齊全（15 張；本土／說話之島村莊在整張大地圖內）", missTw.length === 0, missTw.join(","));
   ok("hyperia 等無原版圖的村莊仍用靜態背景（ensureTownMapBackground）",
     /_townWalk/.test(F.shop) && /ensureTownMapBackground/.test(F.shop + F.world));
 }
@@ -349,11 +355,13 @@ section("27) 野外／地監原版拼塊");
     /function applyLinFields\(\)/.test(F.mapdef) && /L\.pd && L\.pd\[i\] !== p\.dest/.test(F.mapdef) && /backArrive\(p\.dest, src\)/.test(F.mapdef));
   ok("野外 → 原版村莊抵達村莊出口", /var ex = td && td\.townLin && D\[td\.lin\] && D\[td\.lin\]\.keys\.exit;/.test(F.mapdef));
   const ids = Object.keys(FIELDS);
+  const WORLDS_CFG = require("./lin/worlds-config");
   const miss = ids.filter((id) => {
-    const out = FIELDS[id][1];
+    const wn = FIELDS[id][2] != null ? Object.keys(WORLDS_CFG).find((n) => WORLDS_CFG[n].map === FIELDS[id][0]) : null;
+    const out = wn || FIELDS[id][1];
     const dir = "assets/linmap/" + out;
     if (!exists(dir + "/walk.bin") || !exists(dir + "/meta.json")) return true;
-    if (!data.includes('"mapId":"' + id + '"')) return true;
+    if (!data.includes(wn ? '"' + id + '":{"start"' : '"mapId":"' + id + '"')) return true;
     const meta = JSON.parse(rd(dir + "/meta.json"));
     return !meta.chunks.every((k) => exists(dir + "/c_" + k + ".webp"));
   });
@@ -397,6 +405,33 @@ section("29) 持久存檔＋備份＋負載");
     /if \(reqSeq <= \(img\._animShownSeq \|\| 0\)\) return;/.test(vfx) && !/if \(img\.dataset\.animPending !== fkey\) return;/.test(vfx));
   ok("#31 八向 walk 幀預載", /function _preloadPlayerWalkFrames\(form\)/.test(vfx) && /_preloadPlayerWalkFrames\(form\);/.test(vfx));
   ok("音效快取一天（不可 no-store）", /ext === "\.mp3" \|\| ext === "\.ogg"[^\n]*\n\s*\? "public, max-age=86400"/.test(serve));
+}
+
+section("32) 整張原版大地圖（出村不用傳送門）");
+{
+  const WORLDS_CFG = require("./lin/worlds-config");
+  const data = rd("js/49-linmap-data.js");
+  const lin = rd("js/49-linmap.js");
+  const town = rd("js/52-lin-town.js");
+  ok("worlds-config：本土 wd_main（map 4）＋說話之島 ti_island（map 0）",
+    WORLDS_CFG.wd_main && WORLDS_CFG.wd_main.map === 4 && WORLDS_CFG.ti_island && WORLDS_CFG.ti_island.map === 0);
+  const missW = Object.keys(WORLDS_CFG).filter((n) => {
+    const dir = "assets/linmap/" + n;
+    if (!exists(dir + "/walk.bin") || !exists(dir + "/meta.json")) return true;
+    if (!new RegExp('"' + n + '":\\{[^]*?"world":true').test(data)) return true;
+    const meta = JSON.parse(rd(dir + "/meta.json"));
+    return !meta.chunks.every((k) => exists(dir + "/c_" + k + ".webp"));
+  });
+  ok("大地圖圖塊／資料齊全（world:true）", missW.length === 0, missW.join(","));
+  ok("applyLinWorlds：同圖村莊／野外不設傳送門、區域練功點", /function applyLinWorlds\(\)/.test(F.mapdef) && /def\.spawns = A\.spots;/.test(F.mapdef) && /if \(inWorld\.has\(p\.dest\)\) return;/.test(rd("tools/lin/build-linmap-data.js")));
+  ok("linmapRegionAt：村莊範圍（安全區＋村內角落）優先、其餘最近野外", /global\.linmapRegionAt = linmapRegionAt;/.test(lin) && /function linmapTownMasks\(name\)/.test(lin));
+  ok("走過邊界就地換區（exploreTryWalkRegion 每 tick、保留原地座標）",
+    /try \{ exploreTryWalkRegion\(\); \} catch/.test(F.explore) && /if \(walkover\) \{\s*_pendingSpawn = \{ x: _tx, y: _ty \};/.test(F.explore));
+  ok("#11 大地圖傳送術只落在本區", /if \(def && def\.world && typeof linmapRegionAt === 'function'\) \{\s*var rg = linmapRegionAt\(def\.lin, hx, hy\);/.test(F.explore));
+  ok("大地圖野外仍看得到村莊 NPC（只有所在村可點）", /function worldTowns\(world, cur\)/.test(town) && /buildEntity\(p, tid, tid === mapId\)/.test(town));
+  ok("自動打怪被地形擋住會換目標（CHASE_STUCK_MS／_unreachUntil）",
+    /var CHASE_STUCK_MS = \d+;/.test(F.explore) && /t\._unreachUntil = nowC \+ CHASE_UNREACH_MS;/.test(F.explore) && /if \(m\._unreachUntil && m\._unreachUntil > now\) continue;/.test(F.explore));
+  ok("怪物出生點不落在村莊安全區", /\|\| \(def\.lin && typeof linmapSafeZone === 'function' && linmapSafeZone\(def\.lin, hx, hy\)\)\) \{/.test(F.explore));
 }
 
 section("14) 公告文字");
