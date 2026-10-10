@@ -1,5 +1,6 @@
-// 部署連線：Railway 跑遊戲＋素材，Vercel 跑 Neon API（帳號／雲端／即時組隊同圖／聊天等）。
-// 本機開發（localhost）維持同源 _serve.js，不轉發。
+// 部署連線：Railway 同源跑遊戲＋素材＋全部 API（帳號／雲端／組隊同圖／聊天…，檔案存檔在 Volume）。
+// 舊 Vercel（Neon API）已停用（402），不可再把 /api/ 轉發過去，否則喚醒逾時、無法登入。
+// 本機開發（localhost）同樣同源 _serve.js。
 (function () {
   'use strict';
 
@@ -11,7 +12,6 @@
     }
   } catch (e0) {}
 
-  var VERCEL_API = 'https://idle-aden.vercel.app';
   // 預設 Railway 公開網址（部署後若不同，設 PUBLIC_GAME_ORIGIN 或 window.__GAME_ORIGIN）
   var DEFAULT_GAME_ORIGIN = 'https://game-production-b224.up.railway.app';
 
@@ -66,13 +66,12 @@
     if (window.__ASSET_BASE != null) assetBase = String(window.__ASSET_BASE);
   } catch (e) {}
 
-  if (!apiBase && isGameHost()) apiBase = VERCEL_API;
   if (!assetBase && isVercel()) assetBase = GAME_ORIGIN;
 
   apiBase = apiBase.replace(/\/$/, '');
   assetBase = assetBase.replace(/\/$/, '');
 
-  /** 需 Neon 持久化的 API 走 Vercel（帳號／雲端／聊天／組隊／同圖／拍賣／潘朵拉） */
+  /** 只有手動設 window.__API_BASE 時才轉發 /api/ */
   function useVercelApi(path) {
     if (!apiBase) return false;
     var p = String(path || '');

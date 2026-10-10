@@ -386,6 +386,9 @@ section("29) 持久存檔＋備份＋負載");
   const gmf = rd("lib/rt-gm-file.js");
   ok("GM 備份 API（下載／快照／清單）", ['"/api/gm/backup"', '"/api/gm/backups"', '"/api/gm/backup/file"', '"/api/gm/backup/snapshot"'].every((s) => gmf.indexOf(s) >= 0));
   ok("GM 總覽帶伺服器負載", /server: serverLoad \? serverLoad\(\) : null/.test(gmf) && /function serverLoadStats\(\)/.test(serve));
+  const hc = rd("js/00-host-config.js");
+  ok("#30 前端 /api/ 不轉發到已停用的 Vercel（Railway 同源）",
+    !/idle-aden\.vercel\.app/.test(hc) && !/apiBase\s*=\s*VERCEL_API/.test(hc));
   ok("音效快取一天（不可 no-store）", /ext === "\.mp3" \|\| ext === "\.ogg"[^\n]*\n\s*\? "public, max-age=86400"/.test(serve));
 }
 
