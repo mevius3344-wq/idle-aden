@@ -404,12 +404,15 @@
             '#chud-auto, #chud-pvp, #chud-hotbar, #chud-fab-log, #chud-fab-town, #chud-target, #col-left, #col-right, #log-row, ' +
             '#map-view-panel > .panel-header, #status-panel, .chud-dps, ' +
             '#tab-content-panel, #mobile-tab-sub, ' +
-            '.mob-target, .town-npc, #status-icon-bar, #boss-marquee, #wb-schedule-panel, ' +
+            '.mob-target, .town-npc, .lin-npc.is-game, #status-icon-bar, #boss-marquee, #wb-schedule-panel, ' +
+            '.lr-hud-block, #lr-party, #lr-picker, ' +
             'button, select, a, input, textarea, label'
         );
     }
 
     function pointerOnDock(clientX, clientY) {
+        // 樂園介面：無搖桿，整個戰場＝點地面／按住拖曳移動
+        if (typeof window.lrHudActive === 'function' && window.lrHudActive()) return false;
         var joy = document.getElementById('chud-joystick');
         if (!joy) return false;
         var r = joy.getBoundingClientRect();

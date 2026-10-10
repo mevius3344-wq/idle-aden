@@ -695,7 +695,8 @@
         var body = rtWorldIdentityBody();
         if (!body.account) return;
         var mapId = String(body.mapId || '');
-        if (!mapId || mapId.indexOf('town_') === 0) return;
+        if (!mapId) return;
+        if (mapId.indexOf('town_') === 0 && !(typeof mapdefTownLin === 'function' && mapdefTownLin(mapId))) return;
         var now = Date.now();
         if (!force && now - _lastMoveSent < MOVE_SEND_MS) return;
         var wx = Math.round(Number(body.wx) || 0);

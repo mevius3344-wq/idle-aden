@@ -1109,6 +1109,8 @@
     window.rtPartyNotifyKill = rtPartyNotifyKill;
     window.rtPartyId = rtPartyId;
     window.rtPartySameMapAllies = rtPartySameMapAllies;
+    window.rtPartyIsHttp = rtPartyIsHttp;
+    window.rtPartyIdentity = rtPartyIdentity;
     window.rtPartySameMapMembers = rtPartySameMapMembers;
     window.rtPartyShouldFollowMobs = rtPartyShouldFollowMobs;
     window.rtPartyShouldHostMobs = rtPartyShouldHostMobs;

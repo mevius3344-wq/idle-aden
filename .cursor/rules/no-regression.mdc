@@ -19,7 +19,7 @@ alwaysApply: true
 | # | 項目 | 正確行為 |
 |---|------|---------|
 | 1 | 新兵修練場 | 背景 `assets/area/1920x1080/新兵修練場.jpg`（`SPECIAL_AREA_BG.training`＋`ensureTrainingYardBackground`）；`training-yard` class；不開探索；木頭人置中、玩家在旁、兩者抬高；木頭人 HP 40 |
-| 2 | 村莊背景 | `TOWN_BG_1920` → `_townMapBg`／`ensureTownMapBackground`，不受 `AREA_1920` 白名單影響，不可消失 |
+| 2 | 村莊背景 | 無原版圖的村莊（如 hyperia）：`TOWN_BG_1920` → `_townMapBg`／`ensureTownMapBackground`，不受 `AREA_1920` 白名單影響，不可消失；有原版圖的村莊改走 #26 |
 | 3 | 玩家人物 | 螢幕置中（不偏左右）、移動不半身、不下沉；固定站位分支必設容器 `width`（`.pm-body` 為 max-width:100%，寬 0＝人物消失，v3.9.55） |
 | 4 | 怪物目標 | 名稱＋血條只在鎖定的怪頭上；頂部 `#chud-target` 永久隱藏；怪物 ID 不重複、不過高 |
 | 5 | 能力／收藏面板 | 開關不可卡住 |
@@ -33,12 +33,17 @@ alwaysApply: true
 | 13 | 世界王 | 重生 1 小時（前端＋`lib/rt-world-boss.js`） |
 | 14 | 公測公告 | 不得出現「同 IP 單開」 |
 | 15 | 編碼 | 無亂碼（U+FFFD）、登入畫面正常 |
-| 16 | 地圖背景 | 每張地圖用自己的 floor／背景，不共用、不 404、不白底；`AREA_1920` 只能列 `assets/area/1920x1080/` 真實存在的檔名；props 無資料夾的 biome（如 mist）退回 wild |
+| 16 | 地圖背景 | 每張地圖用自己的 floor／背景，不共用、不 404、不白底；`AREA_1920` 只能列 `assets/area/1920x1080/` 真實存在的檔名；props 無資料夾的 biome（如 mist）退回 wild（野外／地監已改原版拼塊見 #27，舊 floor 定義保留不刪） |
 | 17 | 拍賣／省電 | 全服拍賣走雲端錢包（v3.9.54）；省電模式（v3.9.53） |
-| 18 | 同圖玩家 | 同地圖其他玩家可見（v3.9.42/45/46） |
-| 19 | 搖桿 | 拖曳行為（v3.9.41） |
+| 18 | 同圖玩家 | 同地圖其他玩家可見（v3.9.42/45/46）；`rtPartyIsHttp`／`rtPartyIdentity` 必須掛 window（沒掛＝同圖玩家與即時連線全失效）；頻道依序填滿不分散；野外＋可走村莊皆可見（v3.9.63，實測 `tools/_audit-town-mp.js`） |
+| 19 | 移動 | 樂園風 HUD 下**無搖桿**：點地面／按住拖曳移動（`pointerOnDock` 遇 `lrHudActive()` 回 false）；舊搖桿碼保留但隱藏（使用者要求，v3.9.61） |
 | 20 | 轉換魔法 | 只設 MP < `set-mp-convert`；**HP 門檻只有一個**＝「消耗HP技能」`set-hp-skill`，同時管轉換魔法；不得再加第二個 HP 欄位（v3.9.58） |
 | 21 | 木頭人經驗 | exp 5，擊殺給玩家經驗（仍無金幣／掉落）（v3.9.57） |
+| 23 | 說話之島原版地圖 | `talking_island`／`zone_13`／`zone_14` 用原版拼塊（`assets/linmap/*`＋`js/49-linmap*.js`，`MapDef.lin`）；舊地板／草地墊底／假造景隱藏；可走格子＝原版屬性；怪物不進村莊安全區；其他地圖不受影響（v3.9.59，實測 `tools/_audit-linmap.js`） |
+| 24 | 原版八向怪物 | `LIN_SPR_MOBS`（`js/49-linmob-data.js`，由 `tools/lin/export-mob-spr.js` 從客戶端 .spr 匯出）的怪用原版 d0..d7 走路／攻擊／受擊／待機／死亡幀；站立點在圖底上方 32px，`.lin-spr` 下移 32px、不縮放、不畫 CSS 橢圓影（圖內自帶影子）；已有八向的舊怪不覆蓋（v3.9.60，實測 `tools/_audit-linmob.js`）；v3.9.62 擴充到全部對照怪 229 種（`--all`，另 38 種保留原有八向），無普攻用施法動作 18/19/30、無死亡用受擊 |
+| 25 | 樂園風介面 | `js/51-lr-hud.js`＋`css/lr-hud.css`：左上頭像＋長血魔條＋Lv/AC/MR/金幣、上中 PVP、右上地名＋原版座標＋圓形小地圖、右側 AUTO＋信件、左側夥伴血條、5 格快捷（長按換道具）＋回村、小聊天框（左直排分頁、▲放大、輸入框＋發送）、底部 5 鈕選單列＋整條經驗條；靜態村莊 NPC 場景收在快捷欄上方、修練場木頭人／玩家抬到快捷欄上方（v3.9.61，實測 `tools/_audit-lr-hud.js`） |
+| 26 | 原版可走村莊 | 15 張原版村莊（`assets/linmap/tw_*`，`LIN_TOWNS`／`mapdefTownLin`）：點地面走動、NPC 站原版位置（`js/52-lin-town.js`＋`js/52-lintown-data.js`）、點 NPC 開對話、不出怪、出村傳送門、同圖玩家互見；無原版圖的村莊仍用 #2 靜態背景（v3.9.63，實測 `tools/_audit-lintown.js`） |
+| 27 | 野外／地監原版拼塊 | 70 張野外＋地監（`tools/lin/fields-config.js`：原版 mapid＋取景範圍）用原版拼塊（`assets/linmap/fd_*`／`dg_*`）；`applyLinFields` 沿用舊傳送門目的地，門位置優先 l1j `dungeon` 表原版入口／樓梯，抵達點在對向門旁且直線可走；野外→原版村莊抵達村莊出口；海賊島／傲慢塔／時空裂痕等未轉換圖維持原地板（v3.9.64，實測 `tools/_audit-linfields.js --browser`） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。

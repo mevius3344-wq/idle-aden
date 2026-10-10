@@ -3900,6 +3900,200 @@
         }
     };
 
+    /* ─── 天堂原版拼塊地圖（js/49-linmap-data.js；世界 1:1 原版像素）─── */
+    function linMapDef(id, linName, hint) {
+        var L = (global.LINMAP_DATA || {})[linName];
+        if (!L) return null;
+        return {
+            id: id,
+            real: true,
+            lin: linName,
+            tile: TILE,
+            maxX: Math.floor(L.w / 2),
+            maxY: Math.floor(L.h / 2),
+            walkScale: 1,
+            noSea: true,
+            seaY: null,
+            border: 0,
+            footprint: 8,
+            layout: 'lin_' + linName,
+            spawns: L.spots,
+            rocks: [],
+            boxes: [],
+            portals: [],
+            hint: hint
+        };
+    }
+    function linPortal(L, key, p) {
+        var k = L && L.keys && L.keys[key];
+        if (!k) return null;
+        var out = { x: k.x - 40, y: k.y - 30, w: 80, h: 60 };
+        for (var f in p) {
+            if (Object.prototype.hasOwnProperty.call(p, f)) out[f] = p[f];
+        }
+        return out;
+    }
+    (function applyLinMaps() {
+        var D = global.LINMAP_DATA || {};
+        var ti = D.ti_island, d1 = D.ti_dungeon1, d2 = D.ti_dungeon2;
+        if (!ti || !d1 || !d2) return;
+        var island = linMapDef('talking_island', 'ti_island', '說話之島 · 村莊回城／東岸港口／西北地監入口');
+        island.start = { x: ti.keys.village.ax, y: ti.keys.village.ay };
+        island.portals = [
+            linPortal(ti, 'village', { id: 'to_town', dest: 'town_talking', label: '← 說話之島村莊', side: 'west' }),
+            linPortal(ti, 'eastCoast', { id: 'to_port', dest: 'talking_island_port', label: '說話之島港口 →', side: 'east', destX: -280, destY: 20 }),
+            linPortal(ti, 'dungeonDoor', { id: 'to_dungeon', dest: 'zone_13', label: '說話之島地監 ↑', side: 'north', destX: d1.keys.entry.ax, destY: d1.keys.entry.ay })
+        ];
+        var b1 = linMapDef('zone_13', 'ti_dungeon1', '說話之島地監 1 樓 · 入口回地面／深處下 2 樓');
+        b1.start = { x: d1.keys.entry.ax, y: d1.keys.entry.ay };
+        b1.portals = [
+            linPortal(d1, 'entry', { id: 'to_island', dest: 'talking_island', label: '← 說話之島周邊', side: 'south', destX: ti.keys.dungeonDoor.ax, destY: ti.keys.dungeonDoor.ay }),
+            linPortal(d1, 'down', { id: 'to_b2', dest: 'zone_14', label: '地監 2 樓 →', side: 'east', destX: d2.keys.entry.ax, destY: d2.keys.entry.ay })
+        ];
+        var b2 = linMapDef('zone_14', 'ti_dungeon2', '說話之島地監 2 樓 · 入口回 1 樓');
+        b2.start = { x: d2.keys.entry.ax, y: d2.keys.entry.ay };
+        b2.portals = [
+            linPortal(d2, 'entry', { id: 'to_b1', dest: 'zone_13', label: '← 地監 1 樓', side: 'west', destX: d1.keys.down.ax, destY: d1.keys.down.ay })
+        ];
+        MAP_DEFS.talking_island = island;
+        MAP_DEFS.zone_13 = b1;
+        MAP_DEFS.zone_14 = b2;
+        if (MAP_DEFS.talking_island && D.tw_talking) {
+            MAP_DEFS.talking_island.portals[0].destX = D.tw_talking.keys.exit.ax;
+            MAP_DEFS.talking_island.portals[0].destY = D.tw_talking.keys.exit.ay;
+        }
+        var port = MAP_DEFS.talking_island_port;
+        if (port && port.portals) {
+            port.portals = port.portals.map(function (p) {
+                if (!p || p.dest !== 'talking_island') return p;
+                var q = {};
+                for (var f in p) {
+                    if (Object.prototype.hasOwnProperty.call(p, f)) q[f] = p[f];
+                }
+                q.destX = ti.keys.eastCoast.ax;
+                q.destY = ti.keys.eastCoast.ay;
+                return q;
+            });
+        }
+    })();
+
+    /* ─── 野外／地監原版拼塊（tools/lin/fields-config.js）：沿用既有傳送門目的地，位置改原版連結點 ─── */
+    (function applyLinFields() {
+        var D = global.LINMAP_DATA || {};
+        var byId = {};
+        Object.keys(D).forEach(function (n) {
+            if (D[n] && D[n].mapId && MAP_DEFS[D[n].mapId]) byId[D[n].mapId] = n;
+        });
+        function backArrive(destId, fromId) {
+            var L = D[byId[destId]];
+            if (!L || !L.pd) return null;
+            var i = L.pd.indexOf(fromId);
+            var k = i >= 0 ? L.keys['p' + i] : null;
+            return k ? { x: k.ax, y: k.ay } : null;
+        }
+        var olds = {};
+        Object.keys(byId).forEach(function (id) {
+            var L = D[byId[id]], old = MAP_DEFS[id];
+            var def = linMapDef(id, byId[id], old.hint);
+            var pd = L.pd || [];
+            var si = 0;
+            for (var i = 0; i < pd.length; i++) {
+                if (String(pd[i]).indexOf('town_') === 0) { si = i; break; }
+            }
+            var sk = L.keys['p' + si];
+            def.start = sk ? { x: sk.ax, y: sk.ay } : { x: L.spots[0] ? L.spots[0].x : 0, y: L.spots[0] ? L.spots[0].y : 0 };
+            olds[id] = (old.portals || []).filter(Boolean);
+            MAP_DEFS[id] = def;
+        });
+        Object.keys(byId).forEach(function (id) {
+            var L = D[byId[id]];
+            MAP_DEFS[id].portals = olds[id].map(function (p, i) {
+                var q = linPortal(L, 'p' + i, {});
+                if (!q || (L.pd && L.pd[i] !== p.dest)) return null;
+                for (var f in p) {
+                    if (Object.prototype.hasOwnProperty.call(p, f) && !/^(x|y|w|h)$/.test(f)) q[f] = p[f];
+                }
+                return q;
+            }).filter(Boolean);
+        });
+        Object.keys(MAP_DEFS).forEach(function (src) {
+            var def = MAP_DEFS[src];
+            (def && def.portals || []).forEach(function (p) {
+                if (!p || !byId[p.dest]) return;
+                var a = backArrive(p.dest, src) || MAP_DEFS[p.dest].start;
+                p.destX = a.x;
+                p.destY = a.y;
+            });
+        });
+    })();
+
+    /* ─── 原版村莊（可走動；tools/lin/towns-config.js）：town id → 原版區域＋出村傳送門 ─── */
+    var LIN_TOWNS = {
+        town_talking: ['tw_talking', 'talking_island'],
+        town_silver_knight: ['tw_silver', 'silver_knight'],
+        town_gludin: ['tw_gludin', 'gludio'],
+        town_gludio: ['tw_woodbec', 'elf_forest'],
+        town_windwood_castle: ['tw_windawood', 'windwood'],
+        town_kent_castle: ['tw_kentcastle', 'kent'],
+        town_heine: ['tw_heine', 'heine'],
+        town_heine_castle: ['tw_heine', 'heine'],
+        town_giran: ['tw_giran', 'giran'],
+        town_oren: ['tw_oren', 'zone_02'],
+        town_aden: ['tw_aden', null],
+        town_witon: ['tw_witon', null],
+        town_elf: ['tw_elf', 'zone_01'],
+        town_ivory_tower: ['tw_ivory', 'zone_37'],
+        town_pirate_village: ['tw_pirate', 'pirate_wild'],
+        town_silent: ['tw_silent', 'silent_outer']
+    };
+    (function applyLinTowns() {
+        var D = global.LINMAP_DATA || {};
+        Object.keys(LIN_TOWNS).forEach(function (tid) {
+            var linName = LIN_TOWNS[tid][0], dest = LIN_TOWNS[tid][1];
+            var L = D[linName];
+            if (!L) return;
+            var def = linMapDef(tid, linName, '原版村莊 · 點地面走動、點 NPC 對話');
+            def.townLin = true;
+            def.spawns = [];
+            var hub = (typeof LINTOWN_START !== 'undefined' && LINTOWN_START) ? LINTOWN_START[tid] : null;
+            def.start = hub ? { x: hub.x, y: hub.y } : { x: L.keys.center.ax, y: L.keys.center.ay };
+            if (dest) {
+                var dd = MAP_DEFS[dest];
+                var title = dest;
+                try {
+                    for (var cat in MAP_CATEGORIES) {
+                        var hit = (MAP_CATEGORIES[cat] || []).filter(function (m) { return m && m.v === dest; })[0];
+                        if (hit) { title = hit.t; break; }
+                    }
+                } catch (eT) {}
+                def.portals = [linPortal(L, 'exit', {
+                    id: 'to_field', dest: dest, label: '出村 → ' + title, side: 'east',
+                    destX: dd && dd.start ? dd.start.x : undefined,
+                    destY: dd && dd.start ? dd.start.y : undefined
+                })];
+            }
+            MAP_DEFS[tid] = def;
+        });
+        Object.keys(MAP_DEFS).forEach(function (src) {
+            var sd = MAP_DEFS[src];
+            if (!sd || !sd.lin || !D[sd.lin] || !D[sd.lin].mapId) return;
+            (sd.portals || []).forEach(function (p) {
+                var td = p && MAP_DEFS[p.dest];
+                var ex = td && td.townLin && D[td.lin] && D[td.lin].keys.exit;
+                if (!ex) return;
+                p.destX = ex.ax;
+                p.destY = ex.ay;
+            });
+        });
+    })();
+
+    /** 該村莊是否改用原版可走動地圖 */
+    function mapdefTownLin(mapId) {
+        var d = MAP_DEFS[String(mapId || '')];
+        return !!(d && d.townLin && d.lin);
+    }
+    global.mapdefTownLin = mapdefTownLin;
+
     function mapdefOf(mapId) {
         var id = String(mapId || '');
         return MAP_DEFS[id] || null;
@@ -3977,6 +4171,7 @@
         if (!def) return true;
         var x = Number(wx) || 0;
         var y = Number(wy) || 0;
+        if (def.lin) return typeof global.linmapWalkable === 'function' ? global.linmapWalkable(def.lin, x, y) : true;
         var b = mapdefBounds(def);
         var border = Number(def.border) || 28;
         if (Math.abs(x) > b.maxX - border) return false;
@@ -4099,6 +4294,7 @@
     function mapdefSpawns(mapId) {
         var d = mapdefOf(mapId);
         if (!d || !d.spawns) return null;
+        if (d.lin) return d.spawns.slice();
         var b = mapdefBounds(d);
         var ah = Math.max(1, Number(d.maxX) || REAL_ART_HALF);
         var sx = Math.min(b.maxX / ah, 2.15);
@@ -4117,6 +4313,7 @@
     function mapdefPortals(mapId) {
         var d = mapdefOf(mapId);
         if (!d || !d.portals) return [];
+        if (d.lin) return d.portals.filter(function (p) { return !!p; });
         var b = mapdefBounds(d);
         return d.portals.map(function (p) {
             return mapdefRemapPortal(p, b);

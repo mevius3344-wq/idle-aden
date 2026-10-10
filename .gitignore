@@ -14,3 +14,4 @@ data/char-names.json
 
 data/account-sessions.json
 tools/node_modules/
+tools/lin/_out/

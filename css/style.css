@@ -1743,6 +1743,94 @@
         #battle-view.is-world-scroll > #explore-world-bg-blend {
             z-index: 0 !important;
         }
+        /* 🗺️ 天堂原版拼塊地圖：圖塊層取代手繪地板／假造景／外牆／海帶 */
+        #explore-linmap {
+            position: absolute;
+            left: 50%;
+            width: 0;
+            height: 0;
+            z-index: 0;
+            pointer-events: none;
+            will-change: transform;
+        }
+        #explore-linmap.hidden { display: none !important; }
+        #explore-linmap > .explore-linmap-chunk {
+            position: absolute;
+            display: block;
+            max-width: none;
+            max-height: none;
+            user-select: none;
+            pointer-events: none;
+            filter: none;
+        }
+        #battle-view.is-linmap {
+            background-color: #0b1418 !important;
+            background-image: none !important;
+        }
+        /* 🏘️ 原版村莊 NPC（js/52-lin-town.js）：腳底＝元素底，translate 由 JS 每幀設定 */
+        #lin-town-npcs {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: visible;
+        }
+        #lin-town-npcs.hidden { display: none !important; }
+        #lin-town-npcs > .lin-npc {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            translate: -50% 0;
+            pointer-events: none;
+        }
+        #lin-town-npcs > .lin-npc.is-game {
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        #lin-town-npcs > .lin-npc[hidden] { display: none !important; }
+        #lin-town-npcs .lin-npc-spr {
+            position: absolute;
+            left: 50%;
+            translate: -50% 0;
+            background-repeat: no-repeat;
+            background-position: 0 0;
+            pointer-events: none;
+            image-rendering: auto;
+        }
+        @keyframes lin-npc-play { to { background-position: calc(-1 * var(--sw)) 0; } }
+        #lin-town-npcs .lin-npc-name {
+            position: absolute;
+            left: 50%;
+            translate: -50% 0;
+            white-space: nowrap;
+            font-size: 12px;
+            line-height: 1.2;
+            color: #e8e2d4;
+            text-shadow: 0 0 2px #000, 1px 1px 1px #000;
+            pointer-events: none;
+            text-align: center;
+        }
+        #lin-town-npcs > .lin-npc.is-game .lin-npc-name { color: #ffe9a8; font-weight: 700; }
+        #lin-town-npcs > .lin-npc.is-decor .lin-npc-name { color: #c9c4b8; font-size: 11px; opacity: .85; }
+        #lin-town-npcs .lin-npc-title {
+            display: block;
+            font-size: 10px;
+            font-weight: 400;
+            color: #9fd3ff;
+        }
+        #lin-town-npcs > .lin-npc.is-game:hover .lin-npc-spr { filter: brightness(1.25) drop-shadow(0 0 3px #ffe9a8); }
+        /* 雙 id 提高權重：舊規則（#battle-view.is-topdown-3d #explore-world-bg-blend.… !important）會強制顯示草地墊底 */
+        #battle-view#battle-view.is-linmap > #explore-world-bg,
+        #battle-view#battle-view.is-linmap > #explore-world-bg-far,
+        #battle-view#battle-view.is-linmap > #explore-world-bg-blend.explore-world-bg-blend,
+        #battle-view#battle-view.is-linmap > #explore-prop-layer,
+        #battle-view#battle-view.is-linmap > #explore-bound-layer,
+        #battle-view#battle-view.is-linmap > #explore-sea-mask,
+        #battle-view#battle-view.is-linmap > #explore-ground,
+        #battle-view#battle-view.is-linmap > #explore-mist,
+        #battle-view#battle-view.is-linmap > #explore-light,
+        #battle-view#battle-view.is-linmap > #explore-dust {
+            display: none !important;
+        }
         #battle-view.is-world-scroll > #explore-prop-layer {
             z-index: 1 !important;
         }
@@ -2154,6 +2242,20 @@
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.is-mob-plant .mob-img-inner::after {
             width: 58%;
             height: 22px;
+        }
+        /* 原版 .spr 怪：站立點在畫布底上方 32px（LIN_SPR_FOOT_PAD），影子畫在圖內；走路不另加晃動 */
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.lin-spr.lin-spr img {
+            translate: 0 32px;
+            padding: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.lin-spr::after {
+            display: none !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.is-mob-walking .mob-img-inner.lin-spr.lin-spr {
+            transform: none !important;
+            animation: none !important;
         }
         /* 有精靈影子圖時隱藏橢圓影，避免雙重黑影跳 */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.mob-anim-shadowed::after {

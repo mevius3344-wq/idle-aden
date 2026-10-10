@@ -180,7 +180,14 @@ function applyAreaBackground() {
         if (!el) return;
         el.classList.remove('has-ground-plane', 'ground-wild', 'ground-dungeon', 'ground-desert', 'ground-snow', 'ground-default');
     };
-    if (bv && cur.startsWith('town_')) {   // 🏙️ 安全區：戰鬥框強制隱藏＋清 area-fit（防蓋住村莊地圖）
+    let _townWalk = cur.startsWith('town_') && typeof mapdefTownLin === 'function' && mapdefTownLin(cur);
+    if (bv && _townWalk) {   // 🏘️ v3.9.63 原版可走動村莊：戰鬥框＝原版拼塊地圖（is-linmap 蓋掉背景圖）
+        bv.classList.remove('hidden', 'training-yard');
+        bv.style.removeProperty('background-image');
+        bv.style.removeProperty('--chud-battle-bg');
+        bv.classList.add('area-fit', 'has-bg');
+        _clearGround(bv);
+    } else if (bv && cur.startsWith('town_')) {   // 🏙️ 安全區：戰鬥框強制隱藏＋清 area-fit（防蓋住村莊地圖）
         bv.classList.add('hidden');
         bv.style.backgroundImage = ''; bv.style.backgroundSize = ''; bv.style.removeProperty('--chud-battle-bg');
         bv.classList.remove('area-fit'); bv.classList.remove('has-bg');
@@ -242,7 +249,10 @@ function applyAreaBackground() {
     let tv = document.getElementById('town-view');
     if (tv) {
         // 🩹 v3.8.480：安全區背景必須重套（勿清空後不管 → 村莊變黑底）
-        if (cur.startsWith('town_')) {
+        if (_townWalk) {
+            tv.classList.add('hidden');
+            tv.classList.remove('flex');
+        } else if (cur.startsWith('town_')) {
             tv.classList.remove('has-bg');
             try {
                 if (typeof ensureTownMapBackground === 'function') ensureTownMapBackground(cur);

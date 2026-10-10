@@ -96,6 +96,9 @@ const ENABLE_DESKTOP_SAVES =
 const IP_SESSION_MAX = Math.max(1, Number(process.env.IP_SESSION_MAX || 1));
 const IP_SESSION_TTL_MS = Math.max(15000, Number(process.env.IP_SESSION_TTL_MS || 45000));
 const IP_SESSION_ENABLED = process.env.IP_SESSION_LIMIT !== "0";
+// Original-tile maps (linmap) span up to ~25000 x 12500 world px.
+const PRESENCE_WX_MAX = 13000;
+const PRESENCE_WY_MAX = 7000;
 const CLOSED_BETA = String(process.env.CLOSED_BETA || "1") !== "0";
 const DEFAULT_SERVER_NOTICE =
   "【封測／測試服】本服僅供測試，會不定期清檔，經濟與進度不保證保留。";
@@ -1524,8 +1527,8 @@ function partyUpsertPresence(body) {
     channel: Math.max(1, Math.min(8, Math.floor(pickNum(body.channel, base.channel) || 1))),
     hp: Math.max(0, pickNum(body.hp, base.hp) || 0),
     mhp: Math.max(0, pickNum(body.mhp, base.mhp) || 0),
-    wx: Math.max(-3000, Math.min(3000, Math.round(pickNum(body.wx, base.wx) || 0))),
-    wy: Math.max(-1500, Math.min(1500, Math.round(pickNum(body.wy, base.wy) || 0))),
+    wx: Math.max(-PRESENCE_WX_MAX, Math.min(PRESENCE_WX_MAX, Math.round(pickNum(body.wx, base.wx) || 0))),
+    wy: Math.max(-PRESENCE_WY_MAX, Math.min(PRESENCE_WY_MAX, Math.round(pickNum(body.wy, base.wy) || 0))),
     pvpOn: !!(body.pvpOn != null ? body.pvpOn : base.pvpOn),
     classic: body.classic !== false && base.classic !== false,
     lastSeen: now,
@@ -1571,7 +1574,7 @@ function partyMapPopulation(now) {
 function partyMapPlayersHere(mapId, excludeKey, now, channel) {
   const t = now || Date.now();
   const cur = String(mapId || "").slice(0, 64);
-  if (!cur || cur.startsWith("town_")) return [];
+  if (!cur) return [];
   const chFilter = channel != null ? Math.max(1, Math.min(8, Math.floor(Number(channel) || 1))) : 0;
   const out = [];
   for (const pre of partyPresence.values()) {
@@ -1590,8 +1593,8 @@ function partyMapPlayersHere(mapId, excludeKey, now, channel) {
       cls: String(pre.cls || "").slice(0, 24),
       hp: Math.max(0, Math.floor(Number(pre.hp) || 0)),
       mhp: Math.max(1, Math.floor(Number(pre.mhp) || 1)),
-      wx: Math.max(-3000, Math.min(3000, Math.round(Number(pre.wx) || 0))),
-      wy: Math.max(-1500, Math.min(1500, Math.round(Number(pre.wy) || 0))),
+      wx: Math.max(-PRESENCE_WX_MAX, Math.min(PRESENCE_WX_MAX, Math.round(Number(pre.wx) || 0))),
+      wy: Math.max(-PRESENCE_WY_MAX, Math.min(PRESENCE_WY_MAX, Math.round(Number(pre.wy) || 0))),
       pvpOn: !!pre.pvpOn,
       channel: Math.max(1, Math.floor(Number(pre.channel) || 1)),
       online: true,

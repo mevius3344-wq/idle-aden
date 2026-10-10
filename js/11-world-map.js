@@ -1429,10 +1429,13 @@ function changeMap(force) {
     let mapPanel = document.getElementById('town-view').parentElement;
     
     if (mapState.current.startsWith('town_')) {
-        document.getElementById('battle-view').classList.add('hidden');
+        // 🏘️ v3.9.63 原版村莊（mapdefTownLin）：走戰鬥框＋原版拼塊地圖，NPC 站原版位置（js/52-lin-town.js）
+        let _townWalk = typeof mapdefTownLin === 'function' && mapdefTownLin(mapState.current);
+        document.getElementById('battle-view').classList.toggle('hidden', !_townWalk);
         document.getElementById('combat-log-panel').classList.remove('hidden');   // 🏘️ v3.2.86 城鎮版面比照狩獵區：戰鬥/系統日誌一樣顯示於下方，填滿地圖下方空間
-        document.getElementById('town-view').classList.remove('hidden');
-        document.getElementById('town-view').classList.add('flex');
+        document.getElementById('town-view').classList.toggle('hidden', _townWalk);
+        document.getElementById('town-view').classList.toggle('flex', !_townWalk);
+        if (_townWalk) mapState.spawnAt = [null, null, null, null, null];
 
         // 🏘️ v3.2.86 城鎮框改與狩獵區「完全一致」：地圖面板依內容(800×450)自適高度、不再 flex-1 撐滿→背景不被撐大（與狩獵分支同樣 remove flex-1）
         mapPanel.classList.remove('flex-1', 'overflow-hidden');
@@ -1468,6 +1471,11 @@ function changeMap(force) {
         // 關閉可能開啟著的互動面板，渲染 NPC 列表
         closeNpcInteraction();
         renderTownNPCs(mapState.current);
+        if (_townWalk) {
+            try { applyAreaBackground(); } catch (eTw) {}
+            try { if (typeof linTownEnter === 'function') linTownEnter(mapState.current); } catch (eLt) {}
+            renderMobs();
+        }
     } else {
         try { closeNpcInteraction(); } catch (e) {}   // 🗼 v3.2.89 離開安全區→關閉可能開著的 NPC 浮動視窗(position:fixed 不會隨 town-view 隱藏·如傲慢之塔入口)
         try { if (typeof closeWarehouseWindow === 'function') closeWarehouseWindow(); } catch (e) {}   // 🏦 浮動倉庫視窗掛 #app-stage、不隨 town-view 隱藏→離開安全區必須一併關閉，否則可帶進狩獵區/頭目戰使用
@@ -2678,19 +2686,11 @@ function _townCastleCrownAlign(crown, bodyImg) {
     crown.style.left = box.x + 'px';
     crown.style.bottom = box.bottom + 'px';
 }
-function renderTownNPCMap(townId) {
-    ensureTownTeleporters();
-    let map = document.getElementById('town-npc-map');
-    if (!map) return;
-    map.classList.remove('hidden');
-    map.innerHTML = '';
-    _townNpcSprites = [];
-    try { ensureTownMapBackground(townId); } catch (e) {}
-    try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會(協力)」改成創立血盟
+/** 村莊目前可見／可互動的 NPC（renderTownNPCMap 與原版村莊 js/52-lin-town.js 共用） */
+function townVisibleNpcs(townId) {
     let td = DB.towns[townId];
-    if (!td) return;
-    // 與舊卡片清單相同的可見性過濾
-    let vis = (td.npcs || []).filter(npc => {
+    if (!td) return [];
+    return (td.npcs || []).filter(npc => {
         if (npc.id === 'npc_esti' || npc.id === 'npc_tros') {
             return typeof clanNpcVisible === 'function' && clanNpcVisible(npc.id, townId);
         }
@@ -2705,6 +2705,19 @@ function renderTownNPCMap(townId) {
         }
         return npc;
     });
+}
+function renderTownNPCMap(townId) {
+    ensureTownTeleporters();
+    let map = document.getElementById('town-npc-map');
+    if (!map) return;
+    map.classList.remove('hidden');
+    map.innerHTML = '';
+    _townNpcSprites = [];
+    try { ensureTownMapBackground(townId); } catch (e) {}
+    try { ensureTownAllyGuilds(); } catch (e) {}   // 🏰 進村再校正一次：把殘留「傭兵公會(協力)」改成創立血盟
+    let td = DB.towns[townId];
+    if (!td) return;
+    let vis = townVisibleNpcs(townId);
     // 🗼🌀 v3.2.89 傲慢之塔／時空裂痕：入口告示改成地圖上的可點 NPC（_spr 專屬圖·_float 專屬點擊→浮動視窗）
     if (townId === 'town_pride') vis.push({ id: '_pride_entrance', n: '傲慢之塔', title: '入口', _spr: '1148', _float: 'pride' });
     if (townId === 'town_rift') vis.push({ id: '_rift_entrance', n: '時空裂痕', title: '入口', _spr: '1149', _float: 'rift' });

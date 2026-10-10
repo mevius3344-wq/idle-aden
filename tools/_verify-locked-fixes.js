@@ -246,6 +246,120 @@ section("13b) 自動施放／木頭人經驗／法術特效尺寸");
     && /if \(fxH > 0 && fxH < _minH\)/.test(F.vfx));
 }
 
+section("23) 說話之島原版拼塊地圖");
+{
+  const css = rd("css/style.css");
+  const mapdef = rd("js/47-mapdef.js");
+  const lin = rd("js/49-linmap.js");
+  ok("index 載入 49-linmap-data／49-linmap（在 47-mapdef 前）",
+    /js\/49-linmap-data\.js[\s\S]*js\/49-linmap\.js[\s\S]*js\/47-mapdef\.js/.test(F.html));
+  ok("說話之島／地監1F／2F 套用原版地圖",
+    /linMapDef\('talking_island', 'ti_island'/.test(mapdef) && /linMapDef\('zone_13', 'ti_dungeon1'/.test(mapdef)
+    && /linMapDef\('zone_14', 'ti_dungeon2'/.test(mapdef));
+  for (const n of ["ti_island", "ti_dungeon1", "ti_dungeon2"]) {
+    const dir = "assets/linmap/" + n;
+    let good = exists(dir + "/walk.bin") && exists(dir + "/meta.json");
+    if (good) {
+      const meta = JSON.parse(rd(dir + "/meta.json"));
+      good = meta.chunks.every((k) => exists(dir + "/c_" + k + ".webp"));
+    }
+    ok("原版圖塊＋可走格子齊全：" + n, good);
+  }
+  ok("舊地板被 inline 強制顯示時仍會被隱藏（linmapSetOldFloor）",
+    /function linmapSetOldFloor/.test(lin) && /linmapSetOldFloor\(true\)/.test(lin) && /linmapSetOldFloor\(false\)/.test(lin));
+  ok("原版地圖隱藏手繪地板／造景（CSS）", /#battle-view#battle-view\.is-linmap > #explore-world-bg-blend/.test(css));
+  ok("怪物不進村莊安全區", /linmapSafeZone\(linSafe, r\.x, r\.y\)/.test(F.explore));
+}
+
+section("24) 原版 .spr 八向怪物");
+{
+  const css = rd("css/style.css");
+  const reg = rd("js/49-linmob-data.js");
+  ok("index 載入 49-linmob-data（在 09-vfx-render 前）",
+    /js\/49-linmob-data\.js[\s\S]*js\/09-vfx-render\.js/.test(F.html));
+  const m = /var LIN_SPR_MOBS = (\[.*\]);/.exec(reg);
+  const mobs = m ? JSON.parse(m[1]) : [];
+  ok("LIN_SPR_FOOT_PAD = 32", /var LIN_SPR_FOOT_PAD = 32;/.test(reg));
+  ok("原版怪清單完整（全部對照怪 229 種）", mobs.length >= 229, "n=" + mobs.length);
+  const miss = mobs.filter((n) => {
+    for (let d = 0; d < 8; d++) {
+      for (const a of ["idle", "walk", "attack", "death"]) if (!exists("assets/anim/" + n + "/d" + d + "/" + a + "_0.png")) return true;
+    }
+    return false;
+  });
+  ok("原版怪 d0..d7 idle／walk／attack／death 幀齊全", miss.length === 0, miss.slice(0, 5).join(","));
+  ok("_mob8Apply 掛 lin-spr", /_linSprMobSet\(\)\.has\(m\.n\)/.test(F.vfx) && /toggle\('lin-spr', _lin\)/.test(F.vfx));
+  ok("lin-spr 圖下移 32px、不縮放、無 CSS 橢圓影",
+    /\.mob-img-inner\.lin-spr\.lin-spr img \{\s*translate: 0 32px;\s*padding: 0 !important;\s*max-width: none !important;\s*max-height: none !important;/.test(css)
+    && /\.mob-img-inner\.lin-spr::after \{\s*display: none !important;/.test(css));
+}
+
+section("19/25) 樂園風 HUD（點地面移動、無搖桿）");
+{
+  const css = rd("css/lr-hud.css");
+  const js = rd("js/51-lr-hud.js");
+  const hud = rd("js/46-combat-hud.js");
+  ok("index 載入 lr-hud.css（在 combat-hud.css 後）",
+    /css\/combat-hud\.css[\s\S]*css\/lr-hud\.css/.test(F.html));
+  ok("index 載入 51-lr-hud.js", /js\/51-lr-hud\.js/.test(F.html));
+  ok("lr-hud 下搖桿不吃觸控（pointerOnDock 回 false）",
+    /function pointerOnDock[\s\S]{0,200}lrHudActive\(\)\) return false;/.test(hud));
+  ok("lr-hud 下隱藏搖桿", /\.lr-hud[^{]*\.chud-joystick[^{]*\{[^}]*display:\s*none/.test(css));
+  ok("5 格快捷＋回村、選單列、經驗條、地圖座標、小地圖、信件、夥伴",
+    ["lr-quick-slots", "lr-home", "lr-menubar", "lr-expbar", "lr-map-coord", "lr-minimap-cv", "lr-mail", "lr-party"].every((k) => js.includes("'" + k + "'") || js.includes('"' + k + '"')));
+  ok("聊天提示文字＝點擊輸入聊天內容", /CHAT_PH = '點擊輸入聊天內容'/.test(js));
+  ok("村莊 NPC 場景收在快捷欄上方", /chud-in-town #town-view:not\(\.hidden\) \{\s*bottom: auto !important;\s*height: calc\(100% - var\(--lr-quick-b\)/.test(css));
+  ok("修練場木頭人／玩家抬到快捷欄上方", /training-yard \.mob-target\.training-fixed,\s*#game-screen\.combat-hud\.lr-hud #battle-view\.training-yard #player-morph-sprite \{\s*translate:/.test(css));
+  ok("小地圖用 exploreWorldActive（exploreAllowed 不是全域）", /window\.exploreWorldActive\(\)/.test(js) && !/typeof exploreAllowed/.test(js));
+}
+
+section("18/26) 同圖玩家＋原版可走村莊");
+{
+  const party = rd("js/36-realtime-party.js");
+  const pop = rd("js/41-map-population.js");
+  const serve = rd("_serve.js");
+  const ch = rd("lib/rt-map-channels.js");
+  const town = rd("js/52-lin-town.js");
+  ok("rtPartyIsHttp／rtPartyIdentity 掛 window（否則同圖玩家／即時連線全失效）",
+    /window\.rtPartyIsHttp = rtPartyIsHttp;/.test(party) && /window\.rtPartyIdentity = rtPartyIdentity;/.test(party));
+  ok("頻道依序填滿（不把玩家分散到空頻）",
+    /for \(let c = 1; c <= MAX_CHANNELS; c\+\+\) \{\s*if \(\(byCh\[c\] \|\| 0\) < CAP_PER_CHANNEL\) return \{ channel: c, full: false \};/.test(ch));
+  ok("伺服器同圖玩家清單不排除村莊", /function partyMapPlayersHere[\s\S]{0,200}if \(!cur\) return \[\];/.test(serve));
+  ok("伺服器座標夾限涵蓋原版大地圖", /const PRESENCE_WX_MAX = 13000;/.test(serve) && /const PRESENCE_WY_MAX = 7000;/.test(serve));
+  ok("可走村莊顯示同圖玩家（mapPopSameMapPlayers 放行 mapdefTownLin）",
+    /indexOf\('town_'\) === 0 && !\(typeof mapdefTownLin === 'function' && mapdefTownLin\(mapId\)\)\) return \[\];/.test(pop));
+  ok("index 載入 52-lintown-data（在 47-mapdef 前）＋52-lin-town",
+    /js\/52-lintown-data\.js[\s\S]*js\/47-mapdef\.js/.test(F.html) && /js\/52-lin-town\.js/.test(F.html));
+  ok("原版村莊：mapdefTownLin＋LIN_TOWNS 表", /global\.mapdefTownLin = /.test(F.mapdef) && /LIN_TOWNS/.test(F.mapdef));
+  ok("可走村莊不出怪", /exploreInTown\(\)\) return 0;/.test(F.explore) && /exploreInTown\(\)\) return false;/.test(F.explore));
+  ok("可走村莊 NPC 點擊開對話", /interactNPC\(/.test(town) && /exploreClearTapMove/.test(town));
+  const tw = ["tw_talking", "tw_silver", "tw_gludin", "tw_woodbec", "tw_windawood", "tw_kentcastle", "tw_heine", "tw_giran",
+    "tw_oren", "tw_aden", "tw_witon", "tw_elf", "tw_ivory", "tw_pirate", "tw_silent"];
+  const missTw = tw.filter((n) => !(exists("assets/linmap/" + n + "/walk.bin") && exists("assets/linmap/" + n + "/meta.json")));
+  ok("原版村莊圖塊齊全（15 張）", missTw.length === 0, missTw.join(","));
+  ok("hyperia 等無原版圖的村莊仍用靜態背景（ensureTownMapBackground）",
+    /_townWalk/.test(F.shop) && /ensureTownMapBackground/.test(F.shop + F.world));
+}
+
+section("27) 野外／地監原版拼塊");
+{
+  const FIELDS = require("./lin/fields-config");
+  const data = rd("js/49-linmap-data.js");
+  ok("applyLinFields 沿用舊傳送門目的地、位置改原版連結點",
+    /function applyLinFields\(\)/.test(F.mapdef) && /L\.pd && L\.pd\[i\] !== p\.dest/.test(F.mapdef) && /backArrive\(p\.dest, src\)/.test(F.mapdef));
+  ok("野外 → 原版村莊抵達村莊出口", /var ex = td && td\.townLin && D\[td\.lin\] && D\[td\.lin\]\.keys\.exit;/.test(F.mapdef));
+  const ids = Object.keys(FIELDS);
+  const miss = ids.filter((id) => {
+    const out = FIELDS[id][1];
+    const dir = "assets/linmap/" + out;
+    if (!exists(dir + "/walk.bin") || !exists(dir + "/meta.json")) return true;
+    if (!data.includes('"mapId":"' + id + '"')) return true;
+    const meta = JSON.parse(rd(dir + "/meta.json"));
+    return !meta.chunks.every((k) => exists(dir + "/c_" + k + ".webp"));
+  });
+  ok("野外＋地監原版圖塊／資料齊全（" + ids.length + " 張）", ids.length >= 70 && miss.length === 0, miss.slice(0, 8).join(","));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

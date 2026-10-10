@@ -3305,6 +3305,11 @@ function _expandMob8DirFromLegacyManifest() {
 try { _expandMob8DirFromLegacyManifest(); } catch (eBoot8) {}
 try { window._expandMob8DirFromLegacyManifest = _expandMob8DirFromLegacyManifest; } catch (eW8) {}
 try { window.MOB_ANIM_8DIR_DENY = MOB_ANIM_8DIR_DENY; } catch (eWd) {}
+var _linSprMobs = null;
+function _linSprMobSet() {
+    if (!_linSprMobs) _linSprMobs = new Set(typeof LIN_SPR_MOBS !== 'undefined' ? LIN_SPR_MOBS : []);
+    return _linSprMobs;
+}
 let _mob8Cache = {};   // '<名>#<dir>' → {idle,attack,hurt,death, shadow:{...}} | 'probing' | null
 function _vec2dir(dx, dy) {   // 螢幕向量(x右·y下)→ dir 0-7（NW 順時針）
     let oct = Math.round(Math.atan2(dy, dx) * 4 / Math.PI);   // -4..4：0=E 1=SE 2=S 3=SW ±4=W -3=NW -2=N -1=NE
@@ -3509,6 +3514,9 @@ function _mob8Apply(c, m, uid, now) {
         if (_inner8) {
             _inner8.classList.remove('q-mob-art', 'q-classic-chibi', 'mob-face-flip');
             if (!_inner8.classList.contains('mob-anim')) _inner8.classList.add('mob-anim');
+            // 原版 .spr 八向：站立點在畫布底上方 LIN_SPR_FOOT_PAD（css .lin-spr 下移補回）
+            let _lin = (typeof _linSprMobSet === 'function') && _linSprMobSet().has(m.n);
+            if (_inner8.classList.contains('lin-spr') !== _lin) _inner8.classList.toggle('lin-spr', _lin);
         }
     } catch (e8) {}
     if (!a || a === 'probing') {   // 該方向未載好→退上次成功方向／預設 d6

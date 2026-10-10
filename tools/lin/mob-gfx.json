@@ -1,0 +1,1871 @@
+{
+ "妖魔": {
+  "gfx": 56,
+  "en": "Orc",
+  "key": "orc",
+  "sprName": "orc",
+  "src": "l1j"
+ },
+ "哥布林": {
+  "gfx": 1022,
+  "en": "Goblin",
+  "key": "goblin",
+  "sprName": "goblin",
+  "src": "l1j"
+ },
+ "賽尼斯": {
+  "gfx": 2468,
+  "en": "Cerenis",
+  "key": "senis_enemy",
+  "sprName": "kelenis",
+  "src": "l1j"
+ },
+ "巴列斯": {
+  "gfx": 1011,
+  "en": "Beleth",
+  "key": "baless",
+  "sprName": "beleth",
+  "src": "l1j"
+ },
+ "妖魔弓箭手": {
+  "gfx": 3860,
+  "en": "Orc Archer",
+  "key": "orc_archer",
+  "sprName": "orc bow morph",
+  "src": "l1j"
+ },
+ "地靈": {
+  "gfx": 1059,
+  "en": "Kobold",
+  "key": "gremlin",
+  "sprName": "Kobolds",
+  "src": "l1j"
+ },
+ "蘑菇": {
+  "gfx": 852,
+  "en": "Fungus",
+  "key": "nm_002",
+  "sprName": "fungus",
+  "src": "l1j"
+ },
+ "狼": {
+  "gfx": 96,
+  "en": "Wolf",
+  "key": "nm_003",
+  "sprName": "wolf",
+  "src": "l1j"
+ },
+ "哈士奇": {
+  "gfx": 2145,
+  "en": "Husky",
+  "key": "nm_004",
+  "sprName": "huskey",
+  "src": "l1j"
+ },
+ "侏儒": {
+  "gfx": 54,
+  "en": "Dwarf",
+  "key": "侏儒",
+  "sprName": "dwarf",
+  "src": "l1j"
+ },
+ "熊": {
+  "gfx": 1642,
+  "en": "Bear",
+  "key": "nm_005",
+  "sprName": "bear",
+  "src": "l1j"
+ },
+ "人形殭屍": {
+  "gfx": 52,
+  "en": "Zombie",
+  "key": "zombie",
+  "sprName": "zombie",
+  "src": "l1j"
+ },
+ "杜賓狗": {
+  "gfx": 931,
+  "en": "Doberman",
+  "key": "doberman",
+  "sprName": "Dog dobermann",
+  "src": "l1j"
+ },
+ "老虎": {
+  "gfx": 4542,
+  "en": "Tiger",
+  "key": "wild_tiger",
+  "sprName": "pet tiger",
+  "src": "l1j"
+ },
+ "貓": {
+  "gfx": 3134,
+  "en": "Cat",
+  "key": "wild_cat",
+  "sprName": "cat",
+  "src": "l1j"
+ },
+ "高麗幼犬": {
+  "gfx": 5065,
+  "en": "Jindo Puppy",
+  "key": "wild_koreapup",
+  "sprName": "mini white dog",
+  "src": "l1j"
+ },
+ "浣熊": {
+  "gfx": 4038,
+  "en": "Raccoon",
+  "key": "wild_raccoon",
+  "sprName": "raccoon",
+  "src": "l1j"
+ },
+ "聖伯納犬": {
+  "gfx": 929,
+  "en": "Saint Bernard",
+  "key": "wild_stbernard",
+  "sprName": "Dog S Burnard",
+  "src": "l1j"
+ },
+ "狐狸": {
+  "gfx": 1540,
+  "en": "Fox",
+  "key": "wild_fox",
+  "sprName": "fox",
+  "src": "l1j"
+ },
+ "暴走兔": {
+  "gfx": 3783,
+  "en": "Killer Rabbit",
+  "key": "wild_rabbit",
+  "sprName": "crazy rabbit morph",
+  "src": "l1j"
+ },
+ "小獵犬": {
+  "gfx": 938,
+  "en": "Beagle",
+  "key": "wild_beagle",
+  "sprName": "Dog beagle",
+  "src": "l1j"
+ },
+ "柯利": {
+  "gfx": 934,
+  "en": "Collie",
+  "key": "wild_collie",
+  "sprName": "Dog collie",
+  "src": "l1j"
+ },
+ "安普長老": {
+  "gfx": 1158,
+  "en": "Imp Elder",
+  "key": "nm_006",
+  "sprName": "imp elder",
+  "src": "l1j"
+ },
+ "漂浮之眼": {
+  "gfx": 29,
+  "en": "Floating Eye",
+  "key": "floating_eye",
+  "sprName": "floating eye",
+  "src": "l1j"
+ },
+ "妖魔鬥士": {
+  "gfx": 3864,
+  "en": "Orc Fighter",
+  "key": "fighter",
+  "sprName": "orc fighter morph",
+  "src": "l1j"
+ },
+ "冰原狼人": {
+  "gfx": 1477,
+  "en": "Gnoll",
+  "key": "ice_wolf",
+  "sprName": "gnoll",
+  "src": "l1j"
+ },
+ "怪手": {
+  "gfx": 246,
+  "en": "Crawling Claw",
+  "key": "nm_008",
+  "sprName": "Crawling Claw",
+  "src": "l1j"
+ },
+ "狼人": {
+  "gfx": 1110,
+  "en": "warewolf two",
+  "key": "wolf",
+  "sprName": "warewolf two",
+  "src": "alias"
+ },
+ "侏儒戰士": {
+  "gfx": 1184,
+  "en": "Dwarf Warrior",
+  "key": "gnome_warrior",
+  "sprName": "dwarf worrior",
+  "src": "l1j"
+ },
+ "骷髏": {
+  "gfx": 30,
+  "en": "Skeleton",
+  "key": "skeleton",
+  "sprName": "skeleton",
+  "src": "l1j"
+ },
+ "妖魔殭屍": {
+  "gfx": 1121,
+  "en": "Orc Zombie",
+  "key": "orc_zombie",
+  "sprName": "orc zombie",
+  "src": "l1j"
+ },
+ "甘地妖魔": {
+  "gfx": 784,
+  "en": "Gandi orc",
+  "key": "gandi_orc",
+  "sprName": "ofd",
+  "src": "l1j"
+ },
+ "鱷魚": {
+  "gfx": 1574,
+  "en": "Alligator",
+  "key": "croc",
+  "sprName": "alligator",
+  "src": "l1j"
+ },
+ "巨蟻": {
+  "gfx": 1037,
+  "en": "Giant Ant",
+  "key": "ant",
+  "sprName": "giant ant",
+  "src": "l1j"
+ },
+ "妖魔法師": {
+  "gfx": 1211,
+  "en": "Orc Wizard",
+  "key": "orc_mage",
+  "sprName": "orc mage",
+  "src": "l1j"
+ },
+ "骷髏弓箭手": {
+  "gfx": 1096,
+  "en": "Skeleton Archer",
+  "key": "skel_archer",
+  "sprName": "skeleton archer",
+  "src": "l1j"
+ },
+ "蟑螂人": {
+  "gfx": 1595,
+  "en": "Vakuuk",
+  "key": "roach",
+  "sprName": "vakuuk",
+  "src": "l1j"
+ },
+ "石頭高崙": {
+  "gfx": 49,
+  "en": "Stone Golem",
+  "key": "stone_golem",
+  "sprName": "golem",
+  "src": "l1j"
+ },
+ "羅孚妖魔": {
+  "gfx": 784,
+  "en": "Rova orc",
+  "key": "rova_orc",
+  "sprName": "ofd",
+  "src": "l1j"
+ },
+ "骷髏斧手": {
+  "gfx": 1104,
+  "en": "Skeleton Axeman",
+  "key": "skel_axe",
+  "sprName": "skeleton axe",
+  "src": "l1j"
+ },
+ "骷髏槍兵": {
+  "gfx": 1106,
+  "en": "Skeleton Soldier",
+  "key": "skel_spear",
+  "sprName": "skeleton spear",
+  "src": "l1j"
+ },
+ "夏洛伯": {
+  "gfx": 95,
+  "en": "Arachnevil",
+  "key": "spider",
+  "sprName": "shelob",
+  "src": "l1j"
+ },
+ "妖魔巡守": {
+  "gfx": 790,
+  "en": "Orc Scout",
+  "key": "orc_scout",
+  "sprName": "ofb",
+  "src": "l1j"
+ },
+ "哈柏哥布林": {
+  "gfx": 1206,
+  "en": "Hobgoblin",
+  "key": "hobgoblin",
+  "sprName": "hobgoblin",
+  "src": "l1j"
+ },
+ "阿吐巴妖魔": {
+  "gfx": 786,
+  "en": "Atuba orc",
+  "key": "atuba_orc",
+  "sprName": "ofs",
+  "src": "l1j"
+ },
+ "都達瑪拉妖魔": {
+  "gfx": 788,
+  "en": "Duda-Mara orc",
+  "key": "duda_orc",
+  "sprName": "ofsp",
+  "src": "l1j"
+ },
+ "歐熊": {
+  "gfx": 1162,
+  "en": "Owlbear",
+  "key": "bear",
+  "sprName": "owlbear",
+  "src": "l1j"
+ },
+ "蜥蜴人": {
+  "gfx": 1173,
+  "en": "Lizardman",
+  "key": "lizardman",
+  "sprName": "lizardman",
+  "src": "l1j"
+ },
+ "穴居人": {
+  "gfx": 1614,
+  "en": "Troglodyte",
+  "key": "troglodyte",
+  "sprName": "Troglodyte",
+  "src": "l1j"
+ },
+ "史巴托": {
+  "gfx": 145,
+  "en": "Spartoi",
+  "key": "sparto",
+  "sprName": "spartoi",
+  "src": "l1j"
+ },
+ "食屍鬼": {
+  "gfx": 144,
+  "en": "Ghoul",
+  "key": "ghoul",
+  "sprName": "ghoul",
+  "src": "l1j"
+ },
+ "鯊魚": {
+  "gfx": 1644,
+  "en": "Shark",
+  "key": "nm_010",
+  "sprName": "shark",
+  "src": "l1j"
+ },
+ "黑騎士": {
+  "gfx": 4003,
+  "en": "Black Knight",
+  "key": "b_knight",
+  "sprName": "black knight morph",
+  "src": "l1j"
+ },
+ "人魚": {
+  "gfx": 1626,
+  "en": "Merman",
+  "key": "mermaid",
+  "sprName": "merman",
+  "src": "l1j"
+ },
+ "那魯加妖魔": {
+  "gfx": 788,
+  "en": "Neruga orc",
+  "key": "neruga_orc",
+  "sprName": "ofsp",
+  "src": "l1j"
+ },
+ "萊肯": {
+  "gfx": 1108,
+  "en": "Lycanthrope",
+  "key": "lycan",
+  "sprName": "lycanthrope",
+  "src": "l1j"
+ },
+ "楊果里恩": {
+  "gfx": 146,
+  "en": "Arachnevil Elder",
+  "key": "ungoliant",
+  "sprName": "ungoliant",
+  "src": "l1j"
+ },
+ "蟹人": {
+  "gfx": 1610,
+  "en": "Crabman",
+  "key": "crabman",
+  "sprName": "crabman",
+  "src": "l1j"
+ },
+ "巨人長老": {
+  "gfx": 2711,
+  "en": "Giant Elder",
+  "key": "giant_elder",
+  "sprName": "giant type c",
+  "src": "l1j"
+ },
+ "古代巨人": {
+  "gfx": 2421,
+  "en": "Ancient Giant",
+  "key": "giant_ancient",
+  "sprName": "giant boss",
+  "src": "l1j"
+ },
+ "巨大兵蟻": {
+  "gfx": 1039,
+  "en": "Giant Soldier Ant",
+  "key": "giant_ant",
+  "sprName": "giant ant soldier",
+  "src": "l1j"
+ },
+ "鼠人": {
+  "gfx": 1612,
+  "en": "Ratman",
+  "key": "ratman",
+  "sprName": "ratman",
+  "src": "l1j"
+ },
+ "海星": {
+  "gfx": 1646,
+  "en": "Aste",
+  "key": "starfish",
+  "sprName": "aste",
+  "src": "l1j"
+ },
+ "長老": {
+  "gfx": 32,
+  "en": "elder",
+  "key": "elder",
+  "sprName": "elder",
+  "src": "alias"
+ },
+ "卡司特": {
+  "gfx": 255,
+  "en": "Ghast",
+  "key": "gaster",
+  "sprName": "ghast olive",
+  "src": "l1j"
+ },
+ "食人妖精": {
+  "gfx": 152,
+  "en": "Bugbear",
+  "key": "ogre",
+  "sprName": "bug",
+  "src": "l1j"
+ },
+ "蛇女": {
+  "gfx": 1600,
+  "en": "Ramia",
+  "key": "lamia",
+  "sprName": "ramia B",
+  "src": "l1j"
+ },
+ "地獄犬": {
+  "gfx": 951,
+  "en": "Cerberus",
+  "key": "cerberus",
+  "sprName": "cerberus",
+  "src": "l1j"
+ },
+ "希爾黛斯": {
+  "gfx": 4017,
+  "en": "Sea Dancer",
+  "key": "sildeis",
+  "sprName": "blizzard",
+  "src": "l1j"
+ },
+ "龍龜": {
+  "gfx": 1649,
+  "en": "Turtle Dragon",
+  "key": "dragon_turtle",
+  "sprName": "turtle Dragon",
+  "src": "l1j"
+ },
+ "毒蠍": {
+  "gfx": 1047,
+  "en": "Scorpion",
+  "key": "scorpion",
+  "sprName": "scorpion",
+  "src": "l1j"
+ },
+ "哈維": {
+  "gfx": 1024,
+  "en": "Harpy",
+  "key": "harpy",
+  "sprName": "harphy",
+  "src": "l1j"
+ },
+ "骷髏神射手": {
+  "gfx": 1130,
+  "en": "Skeleton Marksman",
+  "key": "skel_sniper",
+  "sprName": "skeleton marksman",
+  "src": "l1j"
+ },
+ "骷髏警衛": {
+  "gfx": 1134,
+  "en": "Skeleton Guard",
+  "key": "skel_guard",
+  "sprName": "skeleton guard",
+  "src": "l1j"
+ },
+ "黑暗精靈": {
+  "gfx": 1125,
+  "en": "Dark Elf",
+  "key": "dark_elf",
+  "sprName": "darkelf",
+  "src": "l1j"
+ },
+ "歐吉": {
+  "gfx": 1020,
+  "en": "Ogre",
+  "key": "ogre_warrior",
+  "sprName": "ogre",
+  "src": "l1j"
+ },
+ "多羅": {
+  "gfx": 1098,
+  "en": "Troll",
+  "key": "troll",
+  "sprName": "troll",
+  "src": "l1j"
+ },
+ "伊萊克頓": {
+  "gfx": 1616,
+  "en": "Elekkadom",
+  "key": "electon",
+  "sprName": "Elekkadom",
+  "src": "l1j"
+ },
+ "強盜": {
+  "gfx": 2443,
+  "en": "Bandit",
+  "key": "bandit",
+  "sprName": "bandit one",
+  "src": "l1j"
+ },
+ "雪人": {
+  "gfx": 2064,
+  "en": "Snowman",
+  "key": "nm_012",
+  "sprName": "snow man",
+  "src": "l1j"
+ },
+ "紙人": {
+  "gfx": 1538,
+  "en": "Paper Man",
+  "key": "nm_013",
+  "sprName": "paperman",
+  "src": "l1j"
+ },
+ "骷髏鬥士": {
+  "gfx": 1132,
+  "en": "Skeleton Fighter",
+  "key": "skel_fighter",
+  "sprName": "skeleton fighter",
+  "src": "l1j"
+ },
+ "奎斯坦修": {
+  "gfx": 1632,
+  "en": "Crustacean",
+  "key": "crustacean",
+  "sprName": "crustancean",
+  "src": "l1j"
+ },
+ "食人妖精王": {
+  "gfx": 894,
+  "en": "King Bugbear",
+  "key": "ogre_king",
+  "sprName": "king bugbear",
+  "src": "l1j"
+ },
+ "莫妮亞": {
+  "gfx": 1082,
+  "en": "Muryan",
+  "key": "monia",
+  "sprName": "muryans",
+  "src": "l1j"
+ },
+ "艾爾摩士兵": {
+  "gfx": 2150,
+  "en": "Undead Elmore Soldier",
+  "key": "nm_014",
+  "sprName": "elmorsoldier",
+  "src": "l1j"
+ },
+ "格利芬": {
+  "gfx": 1204,
+  "en": "Griffon",
+  "key": "griffon",
+  "sprName": "griffon",
+  "src": "l1j"
+ },
+ "艾爾摩法師": {
+  "gfx": 2112,
+  "en": "Undead Elmore Wizard",
+  "key": "nm_015",
+  "sprName": "undead magician",
+  "src": "l1j"
+ },
+ "密密": {
+  "gfx": 1479,
+  "en": "Mimic",
+  "key": "nm_016",
+  "sprName": "mimic",
+  "src": "l1j"
+ },
+ "巨大鱷魚": {
+  "gfx": 1572,
+  "en": "Crocodile",
+  "key": "giant_croc",
+  "sprName": "crocodile",
+  "src": "l1j"
+ },
+ "冰石高崙": {
+  "gfx": 1525,
+  "en": "Ice Golem",
+  "key": "nm_017",
+  "sprName": "ice golem",
+  "src": "l1j"
+ },
+ "卡司特王": {
+  "gfx": 257,
+  "en": "Ghast Lord",
+  "key": "gaster_king",
+  "sprName": "ghast D red",
+  "src": "l1j"
+ },
+ "活鎧甲": {
+  "gfx": 1578,
+  "en": "Living Armor",
+  "key": "nm_018",
+  "sprName": "living armor",
+  "src": "l1j"
+ },
+ "多眼怪": {
+  "gfx": 1123,
+  "en": "Beholder",
+  "key": "beholder",
+  "sprName": "beholder",
+  "src": "l1j"
+ },
+ "龍蠅": {
+  "gfx": 1844,
+  "en": "Dragonfly",
+  "key": "dragon_fly",
+  "sprName": "dragon fly",
+  "src": "l1j"
+ },
+ "冰原老虎": {
+  "gfx": 2086,
+  "en": "Snow Tiger",
+  "key": "nm_019",
+  "sprName": "sabre tiger",
+  "src": "l1j"
+ },
+ "雪怪": {
+  "gfx": 2134,
+  "en": "Yeti",
+  "key": "nm_020",
+  "sprName": "yeti",
+  "src": "l1j"
+ },
+ "變形怪": {
+  "gfx": 31,
+  "en": "Doppelganger",
+  "key": "doppelganger",
+  "sprName": "slime",
+  "src": "l1j"
+ },
+ "亞力安": {
+  "gfx": 1052,
+  "en": "Cockatrice",
+  "key": "arian",
+  "sprName": "cockatrice",
+  "src": "l1j"
+ },
+ "阿魯巴": {
+  "gfx": 1128,
+  "en": "Ettin",
+  "key": "aruba",
+  "sprName": "ettin",
+  "src": "l1j"
+ },
+ "火焰戰士": {
+  "gfx": 1770,
+  "en": "Fire Warrior",
+  "key": "fire_warrior",
+  "sprName": "fire warrior",
+  "src": "l1j"
+ },
+ "艾爾摩將軍": {
+  "gfx": 2137,
+  "en": "Undead Elmore General",
+  "key": "nm_021",
+  "sprName": "elmorgeneral",
+  "src": "l1j"
+ },
+ "鋼鐵高崙": {
+  "gfx": 2147,
+  "en": "Iron Golem",
+  "key": "nm_022",
+  "sprName": "iron golem",
+  "src": "l1j"
+ },
+ "強盜頭目": {
+  "gfx": 2417,
+  "en": "Bandit Leader",
+  "key": "bandit_boss",
+  "sprName": "bandit boss",
+  "src": "l1j"
+ },
+ "邪惡蜥蜴": {
+  "gfx": 1041,
+  "en": "Basilisk",
+  "key": "evil_lizard",
+  "sprName": "basilisk",
+  "src": "l1j"
+ },
+ "火焰弓箭手": {
+  "gfx": 1832,
+  "en": "Fire Archer",
+  "key": "fire_archer",
+  "sprName": "fire bowman",
+  "src": "l1j"
+ },
+ "思克巴": {
+  "gfx": 1112,
+  "en": "Succubus",
+  "key": "succubus",
+  "sprName": "succubus violet",
+  "src": "l1j"
+ },
+ "火蜥蜴": {
+  "gfx": 1666,
+  "en": "Salamander",
+  "key": "salamander",
+  "sprName": "salamender",
+  "src": "l1j"
+ },
+ "火炎蛋": {
+  "gfx": 1820,
+  "en": "Fire Egg",
+  "key": "fire_egg",
+  "sprName": "fire egg",
+  "src": "l1j"
+ },
+ "獨眼巨人": {
+  "gfx": 1202,
+  "en": "Cyclops",
+  "key": "cyclops",
+  "sprName": "cyclops",
+  "src": "l1j"
+ },
+ "思克巴女皇": {
+  "gfx": 1116,
+  "en": "Succubus Queen",
+  "key": "succubus_queen",
+  "sprName": "succubus green",
+  "src": "l1j"
+ },
+ "影魔": {
+  "gfx": 1571,
+  "en": "Silhouette",
+  "key": "nm_025",
+  "sprName": "silhouette",
+  "src": "l1j"
+ },
+ "熔岩高崙": {
+  "gfx": 1762,
+  "en": "Lava Golem",
+  "key": "lava_golem",
+  "sprName": "lava golem",
+  "src": "l1j"
+ },
+ "獨角獸": {
+  "gfx": 2755,
+  "en": "Unicorn",
+  "key": "nm_032",
+  "sprName": "unicorn",
+  "src": "l1j"
+ },
+ "夢魘": {
+  "gfx": 4088,
+  "en": "Nightmare",
+  "key": "nm_037",
+  "sprName": "kent nightmare",
+  "src": "l1j"
+ },
+ "冰人": {
+  "gfx": 2158,
+  "en": "Ice Man",
+  "key": "nm_046",
+  "sprName": "iceman",
+  "src": "l1j"
+ },
+ "冰之女王侍女": {
+  "gfx": 2118,
+  "en": "Maid of the Ice Queen",
+  "key": "ice_maid",
+  "sprName": "queen of ice",
+  "src": "l1j"
+ },
+ "冰之女王": {
+  "gfx": 2118,
+  "en": "Ice Queen",
+  "key": "ice_queen",
+  "sprName": "queen of ice",
+  "src": "l1j"
+ },
+ "巴土瑟": {
+  "gfx": 185,
+  "en": "Baltuzar",
+  "key": "batus",
+  "sprName": "necromancer e",
+  "src": "l1j"
+ },
+ "卡士柏": {
+  "gfx": 173,
+  "en": "Caspa",
+  "key": "casper",
+  "sprName": "necromancer f",
+  "src": "l1j"
+ },
+ "馬庫爾": {
+  "gfx": 187,
+  "en": "Merkyor",
+  "key": "marcus",
+  "sprName": "necromancer w",
+  "src": "l1j"
+ },
+ "阿西塔基奧": {
+  "gfx": 1841,
+  "en": "Astagio",
+  "key": "ashitakio",
+  "sprName": "astagio",
+  "src": "l1j"
+ },
+ "死神": {
+  "gfx": 1576,
+  "en": "Death",
+  "key": "nm_033",
+  "sprName": "death",
+  "src": "l1j"
+ },
+ "伊弗利特": {
+  "gfx": 1773,
+  "en": "Ifrit",
+  "key": "ifrit",
+  "sprName": "ifrit",
+  "src": "l1j"
+ },
+ "烈炎獸": {
+  "gfx": 1780,
+  "en": "Taurverus",
+  "key": "fire_beast",
+  "sprName": "horn cerverus",
+  "src": "l1j"
+ },
+ "飛龍": {
+  "gfx": 1062,
+  "en": "Drake",
+  "key": "wyvern",
+  "sprName": "drake",
+  "src": "l1j"
+ },
+ "黑長者": {
+  "gfx": 183,
+  "en": "Dark Elder",
+  "key": "blackelder",
+  "sprName": "necromancer a",
+  "src": "l1j"
+ },
+ "變形怪首領": {
+  "gfx": 31,
+  "en": "Doppelganger",
+  "key": "doppel_boss",
+  "sprName": "slime",
+  "src": "l1j"
+ },
+ "巴風特": {
+  "gfx": 53,
+  "en": "Baphomet",
+  "key": "baphomet",
+  "sprName": "baphomet",
+  "src": "l1j"
+ },
+ "克特": {
+  "gfx": 3101,
+  "en": "Kurtz",
+  "key": "kurt",
+  "sprName": "dark night chief",
+  "src": "l1j"
+ },
+ "死亡騎士": {
+  "gfx": 240,
+  "en": "Death Knight",
+  "key": "dk",
+  "sprName": "Death Knight",
+  "src": "l1j"
+ },
+ "巨蟻女皇": {
+  "gfx": 1390,
+  "en": "Giant Ant Queen",
+  "key": "ant_queen",
+  "sprName": "ant queen",
+  "src": "l1j"
+ },
+ "不死鳥": {
+  "gfx": 1791,
+  "en": "Phoenix",
+  "key": "phoenix",
+  "sprName": "phoenix",
+  "src": "l1j"
+ },
+ "惡魔": {
+  "gfx": 1180,
+  "en": "Demon",
+  "key": "nm_034",
+  "sprName": "demon",
+  "src": "l1j"
+ },
+ "安塔瑞斯": {
+  "gfx": 1245,
+  "en": "Antharas",
+  "key": "antaras",
+  "sprName": "antharas",
+  "src": "l1j"
+ },
+ "法利昂": {
+  "gfx": 1590,
+  "en": "Fafurion",
+  "key": "fafurion",
+  "sprName": "fafurion",
+  "src": "l1j"
+ },
+ "巴拉卡斯": {
+  "gfx": 2001,
+  "en": "Valakas",
+  "key": "valakas",
+  "sprName": "valakas",
+  "src": "l1j"
+ },
+ "林德拜爾": {
+  "gfx": 2544,
+  "en": "Lindvior",
+  "key": "lindvior",
+  "sprName": "lindvior",
+  "src": "l1j"
+ },
+ "牧羊犬": {
+  "gfx": 936,
+  "en": "Shepherd",
+  "key": "nm_035",
+  "sprName": "Dog shepherd",
+  "src": "l1j"
+ },
+ "西瑪": {
+  "gfx": 8168,
+  "en": "Sema",
+  "key": "sema",
+  "sprName": "sema",
+  "src": "list"
+ },
+ "歐姆": {
+  "gfx": 3644,
+  "en": "Oum",
+  "key": "ohm",
+  "sprName": "middle oum",
+  "src": "l1j"
+ },
+ "歐姆裝甲兵": {
+  "gfx": 3596,
+  "en": "Heavy Oum",
+  "key": "ohm_armor",
+  "sprName": "heavy oum",
+  "src": "l1j"
+ },
+ "黑暗精靈使": {
+  "gfx": 3360,
+  "en": "Dark Elementalist",
+  "key": "dark_spirit_caller",
+  "sprName": "dark elementalist",
+  "src": "l1j"
+ },
+ "黑暗妖精魔法學徒": {
+  "gfx": 3376,
+  "en": "Dark Elf Apprentice",
+  "key": "de_gate_apprentice",
+  "sprName": "darkelf wizard",
+  "src": "l1j"
+ },
+ "黑暗妖精巡守": {
+  "gfx": 2976,
+  "en": "Dark Elf Ranger",
+  "key": "de_gate_patrol",
+  "sprName": "darkelf ranger",
+  "src": "l1j"
+ },
+ "黑暗妖精士兵": {
+  "gfx": 3044,
+  "en": "Dark Elf Soldier",
+  "key": "de_gate_soldier",
+  "sprName": "darkelf enemy soldier",
+  "src": "l1j"
+ },
+ "黑暗妖精將軍": {
+  "gfx": 3366,
+  "en": "Dark Elf General",
+  "key": "de_gate_general",
+  "sprName": "darkelf general",
+  "src": "l1j"
+ },
+ "黑虎": {
+  "gfx": 3547,
+  "en": "Black Tiger",
+  "key": "de_train_blacktiger",
+  "sprName": "black tigger",
+  "src": "l1j"
+ },
+ "拉斯塔巴德馴獸師": {
+  "gfx": 3409,
+  "en": "Wolf Rider",
+  "key": "de_train_tamer",
+  "sprName": "beast tamer rider",
+  "src": "l1j"
+ },
+ "受詛咒的馴獸師": {
+  "gfx": 3409,
+  "en": "Wolf Beast Tamer",
+  "key": "de_train_cursetamer",
+  "sprName": "beast tamer rider",
+  "src": "l1j"
+ },
+ "地獄束縛犬": {
+  "gfx": 4643,
+  "en": "Hell Bound",
+  "key": "de_train_hellhound",
+  "sprName": "hellbound",
+  "src": "l1j"
+ },
+ "魂騎士": {
+  "gfx": 4664,
+  "en": "Phantom Knight",
+  "key": "de_train_soulknight",
+  "sprName": "phatom knight",
+  "src": "l1j"
+ },
+ "喚獸師": {
+  "gfx": 3694,
+  "en": "Beast Summoner",
+  "key": "de_train_summoner",
+  "sprName": "beast summoner",
+  "src": "l1j"
+ },
+ "地元素守護者": {
+  "gfx": 4634,
+  "en": "Guardian of Earth Spirit",
+  "key": "de_lab_earth",
+  "sprName": "seeds guardian y",
+  "src": "l1j"
+ },
+ "水元素守護者": {
+  "gfx": 4632,
+  "en": "Guardian of Water Spirit",
+  "key": "de_lab_water",
+  "sprName": "seeds guardian blue",
+  "src": "l1j"
+ },
+ "風元素守護者": {
+  "gfx": 4786,
+  "en": "Guardian of Wind Spirit",
+  "key": "de_lab_wind",
+  "sprName": "seeds guardian w",
+  "src": "l1j"
+ },
+ "火元素守護者": {
+  "gfx": 4633,
+  "en": "Guardian of Fire Spirit",
+  "key": "de_lab_fire",
+  "sprName": "seeds guardian red",
+  "src": "l1j"
+ },
+ "黑暗妖精法師": {
+  "gfx": 3376,
+  "en": "Dark Elf Wizard",
+  "key": "de_lab_mage",
+  "sprName": "darkelf wizard",
+  "src": "l1j"
+ },
+ "黑法師": {
+  "gfx": 3698,
+  "en": "Black Wizard",
+  "key": "de_lab_blackmage",
+  "sprName": "black wizard",
+  "src": "l1j"
+ },
+ "黑暗復仇者": {
+  "gfx": 4603,
+  "en": "Darkness Avenger",
+  "key": "de_necro_avenger",
+  "sprName": "dark avenger",
+  "src": "l1j"
+ },
+ "歐姆戰士": {
+  "gfx": 4689,
+  "en": "Oum Warrior",
+  "key": "de_necro_omwarrior",
+  "sprName": "middle oum fighter",
+  "src": "l1j"
+ },
+ "闇黑君王": {
+  "gfx": 4657,
+  "en": "Lord of Darkness",
+  "key": "de_necro_darklord",
+  "sprName": "dark_overlord",
+  "src": "l1j"
+ },
+ "血騎士": {
+  "gfx": 4615,
+  "en": "Blood Rain Knight",
+  "key": "de_necro_bloodknight",
+  "sprName": "blood knight",
+  "src": "l1j"
+ },
+ "重裝歐姆戰士": {
+  "gfx": 4744,
+  "en": "Heavy Oum Warrior",
+  "key": "de_necro_omheavy",
+  "sprName": "heavyoum swordshild",
+  "src": "l1j"
+ },
+ "拉斯塔巴德近衛隊": {
+  "gfx": 4609,
+  "en": "Lastabad Royal Guard",
+  "key": "de_elder_guard",
+  "sprName": "guard assassin",
+  "src": "l1j"
+ },
+ "拉斯塔巴德近衛隊隊長": {
+  "gfx": 4618,
+  "en": "Royal Guard Head Shaibbulit",
+  "key": "de_elder_captain",
+  "sprName": "blaze",
+  "src": "l1j"
+ },
+ "長老隨從": {
+  "gfx": 5567,
+  "en": "Elder Attendant",
+  "key": "de_elder_follower",
+  "sprName": "attendant",
+  "src": "l1j"
+ },
+ "地獄奴隸": {
+  "gfx": 4622,
+  "en": "Hell Creature",
+  "key": "sanct_hellslave",
+  "sprName": "hell creature",
+  "src": "l1j"
+ },
+ "受詛咒的黑暗妖精鬥士": {
+  "gfx": 5751,
+  "en": "Cursed Dark Elf Warrior",
+  "key": "sanct_cursed_fighter",
+  "sprName": "darkelf forester change to cursed fighter",
+  "src": "l1j"
+ },
+ "受詛咒的黑暗妖精法師": {
+  "gfx": 5739,
+  "en": "Cursed Dark Elf Wizard",
+  "key": "sanct_cursed_mage",
+  "sprName": "elementalist change to cursed wizard",
+  "src": "l1j"
+ },
+ "受詛咒的黑暗妖精騎士": {
+  "gfx": 5695,
+  "en": "Cursed Dark Elf Knight",
+  "key": "sanct_cursed_knight",
+  "sprName": "change cursed knight",
+  "src": "l1j"
+ },
+ "食腐獸": {
+  "gfx": 5442,
+  "en": "Otyu",
+  "key": "sanct_scavenger",
+  "sprName": "otu",
+  "src": "l1j"
+ },
+ "特提斯": {
+  "gfx": 5259,
+  "en": "Tyupon",
+  "key": "sanct_tethys",
+  "sprName": "thupon",
+  "src": "l1j"
+ },
+ "翼龍": {
+  "gfx": 5282,
+  "en": "Wyvern",
+  "key": "sanct_wyvern",
+  "sprName": "wyvern",
+  "src": "l1j"
+ },
+ "變種蛇女": {
+  "gfx": 1597,
+  "en": "Mutant Ramia",
+  "key": "pride_lamia",
+  "sprName": "ramia A",
+  "src": "l1j"
+ },
+ "變種楊果里恩": {
+  "gfx": 146,
+  "en": "Mutant Arachnevil Elder",
+  "key": "pride_ungoliant",
+  "sprName": "ungoliant",
+  "src": "l1j"
+ },
+ "梅杜莎": {
+  "gfx": 2535,
+  "en": "Medusa",
+  "key": "pride_medusa",
+  "sprName": "medusa",
+  "src": "l1j"
+ },
+ "奇美拉": {
+  "gfx": 2407,
+  "en": "Cimaera",
+  "key": "pride_chimera",
+  "sprName": "kimera",
+  "src": "l1j"
+ },
+ "魔狼": {
+  "gfx": 2392,
+  "en": "Dire Wolf",
+  "key": "pride_wolf",
+  "sprName": "diawolf",
+  "src": "l1j"
+ },
+ "邪惡密密": {
+  "gfx": 1479,
+  "en": "Wicked Mimic",
+  "key": "pride_mimic",
+  "sprName": "mimic",
+  "src": "l1j"
+ },
+ "邪惡多眼怪": {
+  "gfx": 1123,
+  "en": "Wicked Beholder",
+  "key": "pride_beholder",
+  "sprName": "beholder",
+  "src": "l1j"
+ },
+ "死亡之劍": {
+  "gfx": 2513,
+  "en": "Dancing Sword",
+  "key": "pride_deathsword",
+  "sprName": "dancing sword",
+  "src": "l1j"
+ },
+ "恐怖的火炎蛋": {
+  "gfx": 1820,
+  "en": "Horrific Fire Egg",
+  "key": "pride_fireegg",
+  "sprName": "fire egg",
+  "src": "l1j"
+ },
+ "恐怖的地獄犬": {
+  "gfx": 951,
+  "en": "Horrific Cerberus",
+  "key": "pride_hellhound",
+  "sprName": "cerberus",
+  "src": "l1j"
+ },
+ "小惡魔": {
+  "gfx": 2524,
+  "en": "Lesser Demon",
+  "key": "pride_imp",
+  "sprName": "lesser demon",
+  "src": "l1j"
+ },
+ "殘暴的骷髏斧兵": {
+  "gfx": 1104,
+  "en": "Raging Skeleton Axeman",
+  "key": "pride_skel_axe",
+  "sprName": "skeleton axe",
+  "src": "l1j"
+ },
+ "殘暴的食屍鬼": {
+  "gfx": 144,
+  "en": "Raging Ghoul",
+  "key": "pride_ghoul2",
+  "sprName": "ghoul",
+  "src": "l1j"
+ },
+ "殘暴的骷髏槍兵": {
+  "gfx": 1106,
+  "en": "Raging Skeleton Pike",
+  "key": "pride_skel_spear",
+  "sprName": "skeleton spear",
+  "src": "l1j"
+ },
+ "殘暴的史巴托": {
+  "gfx": 145,
+  "en": "Raging Spartoi",
+  "key": "pride_sparto",
+  "sprName": "spartoi",
+  "src": "l1j"
+ },
+ "殘暴的骷髏神射手": {
+  "gfx": 1130,
+  "en": "Raging Skeleton Marksman",
+  "key": "pride_skel_archer",
+  "sprName": "skeleton marksman",
+  "src": "l1j"
+ },
+ "殘暴的骷髏鬥士": {
+  "gfx": 1132,
+  "en": "Raging Skeleton Fighter",
+  "key": "pride_skel_fighter",
+  "sprName": "skeleton fighter",
+  "src": "l1j"
+ },
+ "幼龍": {
+  "gfx": 2379,
+  "en": "Lesser Dragon",
+  "key": "pride_drake",
+  "sprName": "lesser dragon",
+  "src": "l1j"
+ },
+ "恐怖的鋼鐵高崙": {
+  "gfx": 2147,
+  "en": "Horrific Iron Golem",
+  "key": "pride_irongolem",
+  "sprName": "iron golem",
+  "src": "l1j"
+ },
+ "骨龍": {
+  "gfx": 2409,
+  "en": "Bone Dragon",
+  "key": "pride_bonedragon",
+  "sprName": "bone dragon",
+  "src": "l1j"
+ },
+ "受詛咒的妖魔殭屍": {
+  "gfx": 1121,
+  "en": "Cursed Orc Zombie",
+  "key": "pride_curse_zombie",
+  "sprName": "orc zombie",
+  "src": "l1j"
+ },
+ "受詛咒的艾爾摩士兵": {
+  "gfx": 2150,
+  "en": "Cursed Elmore Soldier",
+  "key": "pride_curse_soldier",
+  "sprName": "elmorsoldier",
+  "src": "l1j"
+ },
+ "受詛咒的艾爾摩法師": {
+  "gfx": 2112,
+  "en": "Cursed Elmore Wizard",
+  "key": "pride_curse_mage",
+  "sprName": "undead magician",
+  "src": "l1j"
+ },
+ "受詛咒的艾爾摩將軍": {
+  "gfx": 2137,
+  "en": "Cursed Elmore General",
+  "key": "pride_curse_general",
+  "sprName": "elmorgeneral",
+  "src": "l1j"
+ },
+ "暗黑萊肯": {
+  "gfx": 1108,
+  "en": "Dark Lycanthrope",
+  "key": "pride_dark_lycan",
+  "sprName": "lycanthrope",
+  "src": "l1j"
+ },
+ "冷酷冰原老虎": {
+  "gfx": 2086,
+  "en": "Cruel Snow Tiger",
+  "key": "pride_ice_tiger",
+  "sprName": "sabre tiger",
+  "src": "l1j"
+ },
+ "火焰烈炎獸": {
+  "gfx": 1780,
+  "en": "Spirit Taurverus of Fire",
+  "key": "pride_flame_beast",
+  "sprName": "horn cerverus",
+  "src": "l1j"
+ },
+ "火焰阿西塔基奧": {
+  "gfx": 1841,
+  "en": "Astagio of Fire",
+  "key": "pride_flame_atki",
+  "sprName": "astagio",
+  "src": "l1j"
+ },
+ "暗黑黑騎士": {
+  "gfx": 4003,
+  "en": "Black Knight of Darkness",
+  "key": "pride_dark_blackknight",
+  "sprName": "black knight morph",
+  "src": "l1j"
+ },
+ "暗黑思克巴女皇": {
+  "gfx": 1116,
+  "en": "Succubus Queen of Darkness",
+  "key": "pride_dark_succubus_queen",
+  "sprName": "succubus green",
+  "src": "l1j"
+ },
+ "傲慢的潔尼斯女王": {
+  "gfx": 2807,
+  "en": "Insolent Zenith Queen",
+  "key": "pride_proud_jenis",
+  "sprName": "zenith queen",
+  "src": "l1j"
+ },
+ "小幻象眼魔": {
+  "gfx": 2773,
+  "en": "Lesser Seer",
+  "key": "pride_small_phantom",
+  "sprName": "seer",
+  "src": "l1j"
+ },
+ "馬昆斯吸血鬼": {
+  "gfx": 2757,
+  "en": "Marquise Vampire",
+  "key": "pride_marcus_vampire",
+  "sprName": "vampire",
+  "src": "l1j"
+ },
+ "恐怖的殭屍王": {
+  "gfx": 2803,
+  "en": "Zombie Lord of Fear",
+  "key": "pride_terror_zombie_king",
+  "sprName": "zombie king",
+  "src": "l1j"
+ },
+ "土精靈王": {
+  "gfx": 2749,
+  "en": "Great Spirit of Earth",
+  "key": "pride_earth_king",
+  "sprName": "spirit of earth boss",
+  "src": "l1j"
+ },
+ "水精靈王": {
+  "gfx": 2738,
+  "en": "Great Spirit of Water",
+  "key": "pride_water_king",
+  "sprName": "spirit of water boss",
+  "src": "l1j"
+ },
+ "風精靈王": {
+  "gfx": 2741,
+  "en": "Great Spirit of Wind",
+  "key": "pride_wind_king",
+  "sprName": "spirit of wind boss",
+  "src": "l1j"
+ },
+ "火精靈王": {
+  "gfx": 2747,
+  "en": "Great Spirit of Fire",
+  "key": "pride_fire_king",
+  "sprName": "spirit of fire boss",
+  "src": "l1j"
+ },
+ "艾莉絲": {
+  "gfx": 3180,
+  "en": "Iris",
+  "key": "pride_iris_mob",
+  "sprName": "iris",
+  "src": "l1j"
+ },
+ "木乃伊王": {
+  "gfx": 3086,
+  "en": "Mummy Lord",
+  "key": "pride_mummy_king_mob",
+  "sprName": "mummy lord",
+  "src": "l1j"
+ },
+ "騎士范德": {
+  "gfx": 3066,
+  "en": "Knight Vald",
+  "key": "pride_vander_mob",
+  "sprName": "knight vald",
+  "src": "l1j"
+ },
+ "邪惡的鐮刀死神": {
+  "gfx": 3092,
+  "en": "Grim Reaper",
+  "key": "pride_reaper_boss",
+  "sprName": "grim reaper",
+  "src": "list"
+ },
+ "地之牙": {
+  "gfx": 4012,
+  "en": "Fang of Earth",
+  "key": "elf_earthfang",
+  "sprName": "rock fang",
+  "src": "l1j"
+ },
+ "風之牙": {
+  "gfx": 4011,
+  "en": "Fang of Wind",
+  "key": "elf_windfang",
+  "sprName": "wind fang",
+  "src": "l1j"
+ },
+ "水之牙": {
+  "gfx": 4010,
+  "en": "Fang of Glacier",
+  "key": "elf_waterfang",
+  "sprName": "ice fang",
+  "src": "l1j"
+ },
+ "火之牙": {
+  "gfx": 4009,
+  "en": "Fang of Flame",
+  "key": "elf_firefang",
+  "sprName": "flame fang",
+  "src": "l1j"
+ },
+ "水靈之主": {
+  "gfx": 4017,
+  "en": "Water Spirit Master",
+  "key": "elf_waterlord",
+  "sprName": "blizzard",
+  "src": "l1j"
+ },
+ "深淵食屍鬼": {
+  "gfx": 4005,
+  "en": "Abyss Ghoul",
+  "key": "abyss_ghoul",
+  "sprName": "abyss ghoul",
+  "src": "l1j"
+ },
+ "深淵弓箭手": {
+  "gfx": 4125,
+  "en": "Abyss Archer",
+  "key": "abyss_archer",
+  "sprName": "abyss archer",
+  "src": "l1j"
+ },
+ "地靈之主": {
+  "gfx": 4041,
+  "en": "Earth Spirit Master",
+  "key": "elf_earthlord",
+  "sprName": "mud golem",
+  "src": "l1j"
+ },
+ "風靈之主": {
+  "gfx": 4024,
+  "en": "Wind Spirit Master",
+  "key": "elf_windlord",
+  "sprName": "vacuum",
+  "src": "l1j"
+ },
+ "火靈之主": {
+  "gfx": 4013,
+  "en": "Fire Spirit Master",
+  "key": "elf_firelord",
+  "sprName": "flame",
+  "src": "l1j"
+ },
+ "西斯": {
+  "gfx": 4007,
+  "en": "Thing",
+  "key": "abyss_sith",
+  "sprName": "thing",
+  "src": "l1j"
+ },
+ "深淵水靈": {
+  "gfx": 4028,
+  "en": "Abyss Water Spirit",
+  "key": "abyss_water",
+  "sprName": "abyss blizzard",
+  "src": "l1j"
+ },
+ "深淵地靈": {
+  "gfx": 4030,
+  "en": "Abyss Earth Spirit",
+  "key": "abyss_earth",
+  "sprName": "abyss ground",
+  "src": "l1j"
+ },
+ "深淵風靈": {
+  "gfx": 4029,
+  "en": "Abyss Wind Spirit",
+  "key": "abyss_wind",
+  "sprName": "abyss vacuum",
+  "src": "l1j"
+ },
+ "深淵火靈": {
+  "gfx": 4025,
+  "en": "Abyss Fire Spirit",
+  "key": "abyss_fire",
+  "sprName": "abyss flame",
+  "src": "l1j"
+ },
+ "深淵之主": {
+  "gfx": 4034,
+  "en": "Abyss Master",
+  "key": "abyss_lord",
+  "sprName": "abyss lord",
+  "src": "l1j"
+ },
+ "魔蝙蝠": {
+  "gfx": 3415,
+  "en": "Dire Bat",
+  "key": "demon_bat",
+  "sprName": "dire bat",
+  "src": "l1j"
+ },
+ "黑暗妖精盜賊": {
+  "gfx": 3412,
+  "en": "Dark Elf Thief",
+  "key": "de_thief",
+  "sprName": "darkelf thief",
+  "src": "l1j"
+ },
+ "闇之精靈": {
+  "gfx": 3364,
+  "en": "Dark Elemental",
+  "key": "dark_spirit_mob",
+  "sprName": "dark elemental",
+  "src": "l1j"
+ },
+ "犰狳": {
+  "gfx": 3652,
+  "en": "Dillo",
+  "key": "armadillo",
+  "sprName": "dillo",
+  "src": "l1j"
+ },
+ "魔熊": {
+  "gfx": 3357,
+  "en": "Dire Bear",
+  "key": "demon_bear",
+  "sprName": "dire bear",
+  "src": "l1j"
+ },
+ "歐姆民兵": {
+  "gfx": 3644,
+  "en": "Middle Oum",
+  "key": "ohm_militia",
+  "sprName": "middle oum",
+  "src": "l1j"
+ },
+ "闇精靈王": {
+  "gfx": 3365,
+  "en": "Greater Dark Elemental",
+  "key": "dark_spirit_king",
+  "sprName": "greater dark elemental",
+  "src": "l1j"
+ },
+ "金屬蜈蚣": {
+  "gfx": 3654,
+  "en": "Plate Worm",
+  "key": "metal_centipede",
+  "sprName": "plate worm",
+  "src": "l1j"
+ },
+ "馴獸師": {
+  "gfx": 3409,
+  "en": "Dark Elf Beast Tamer",
+  "key": "beast_tamer",
+  "sprName": "beast tamer rider",
+  "src": "l1j"
+ },
+ "墳墓守護者": {
+  "gfx": 4209,
+  "en": "Grave Guardian",
+  "key": "tomb_guardian",
+  "sprName": "tomb guardian",
+  "src": "l1j"
+ },
+ "墳墓守護者法師": {
+  "gfx": 4051,
+  "en": "Grave Guardian Mage",
+  "key": "tomb_guardian_mage",
+  "sprName": "tomb guardian mage",
+  "src": "l1j"
+ },
+ "墳墓守護者騎士": {
+  "gfx": 4212,
+  "en": "Grave Guardian Knight",
+  "key": "tomb_guardian_knight",
+  "sprName": "great tomb guardian",
+  "src": "l1j"
+ },
+ "黑暗棲林者": {
+  "gfx": 3747,
+  "en": "Dark Forester",
+  "key": "darkdweller",
+  "sprName": "dark forester ii",
+  "src": "l1j"
+ },
+ "炎魔的思克巴": {
+  "gfx": 1112,
+  "en": "Succubus of Varlok",
+  "key": "flame_skba",
+  "sprName": "succubus violet",
+  "src": "l1j"
+ },
+ "炎魔的思克巴女皇": {
+  "gfx": 1116,
+  "en": "Succubus Queen of Varlok",
+  "key": "flame_skba_queen",
+  "sprName": "succubus green",
+  "src": "l1j"
+ },
+ "炎魔的小惡魔": {
+  "gfx": 2524,
+  "en": "Lesser Demon of Varlok",
+  "key": "flame_imp",
+  "sprName": "lesser demon",
+  "src": "l1j"
+ },
+ "炎魔的巴風特": {
+  "gfx": 53,
+  "en": "Baphomet of Varlok",
+  "key": "flame_baphomet",
+  "sprName": "baphomet",
+  "src": "l1j"
+ },
+ "炎魔的巴列斯": {
+  "gfx": 1011,
+  "en": "Beleth of Varlok",
+  "key": "flame_baless",
+  "sprName": "beleth",
+  "src": "l1j"
+ },
+ "炎魔的惡魔": {
+  "gfx": 1180,
+  "en": "Demon of Varlok",
+  "key": "flame_demon",
+  "sprName": "demon",
+  "src": "l1j"
+ },
+ "墮落": {
+  "gfx": 4068,
+  "en": "Tarak",
+  "key": "fallen_boss",
+  "sprName": "corruption",
+  "src": "l1j"
+ },
+ "混沌": {
+  "gfx": 4595,
+  "en": "Chaos",
+  "key": "chaos_boss",
+  "sprName": "chaos",
+  "src": "l1j"
+ },
+ "死亡": {
+  "gfx": 1576,
+  "en": "Death",
+  "key": "death_boss",
+  "sprName": "death",
+  "src": "l1j"
+ },
+ "狂野之毒": {
+  "gfx": 4205,
+  "en": "Wild Venom",
+  "key": "pirate_wildpoison",
+  "sprName": "wild venom",
+  "src": "l1j"
+ },
+ "狂暴蜥蜴人": {
+  "gfx": 4149,
+  "en": "Mad Lizardman",
+  "key": "pirate_lizardrage",
+  "sprName": "mad lizardman",
+  "src": "l1j"
+ },
+ "狂野毒牙": {
+  "gfx": 4207,
+  "en": "Wild Fang",
+  "key": "pirate_wildfang",
+  "sprName": "wild fang",
+  "src": "l1j"
+ },
+ "狂野之魔": {
+  "gfx": 4203,
+  "en": "Wild Magic",
+  "key": "pirate_wilddemon",
+  "sprName": "wild magic",
+  "src": "l1j"
+ },
+ "高等蜥蜴人": {
+  "gfx": 4192,
+  "en": "High Lizardman",
+  "key": "pirate_lizardhigh",
+  "sprName": "high lizardman",
+  "src": "l1j"
+ },
+ "藍尾蜥蜴": {
+  "gfx": 4078,
+  "en": "Blue Tail",
+  "key": "pirate_bluetail",
+  "sprName": "blue tale",
+  "src": "l1j"
+ },
+ "奇異鸚鵡": {
+  "gfx": 4147,
+  "en": "Kiwi Parrot",
+  "key": "pirate_parrot",
+  "sprName": "kiwi parrot",
+  "src": "l1j"
+ },
+ "藏寶箱": {
+  "gfx": 1093,
+  "en": "Treasure Chest",
+  "key": "pirate_chest",
+  "sprName": "treasure chest",
+  "src": "l1j"
+ },
+ "海賊骷髏": {
+  "gfx": 4186,
+  "en": "Skeletal Pirate",
+  "key": "pirate_skeleton",
+  "sprName": "robber bone",
+  "src": "l1j"
+ },
+ "重裝蜥蜴人": {
+  "gfx": 4151,
+  "en": "Heavy Lizardman",
+  "key": "pirate_lizardheavy",
+  "sprName": "heavy lizardman",
+  "src": "l1j"
+ },
+ "海賊骷髏士兵": {
+  "gfx": 4190,
+  "en": "Skeletal Pirate Soldier",
+  "key": "pirate_skelsoldier",
+  "sprName": "robber bone soldier",
+  "src": "l1j"
+ },
+ "海賊骷髏首領": {
+  "gfx": 4188,
+  "en": "Skeletal Pirate Head",
+  "key": "pirate_skelchief",
+  "sprName": "robber bone head",
+  "src": "l1j"
+ },
+ "德雷克": {
+  "gfx": 1062,
+  "en": "Drake",
+  "key": "pirate_drake",
+  "sprName": "drake",
+  "src": "l1j"
+ }
+}

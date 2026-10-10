@@ -40,7 +40,8 @@
     function mapPopSameMapPlayers() {
         if (!mapPopOnline()) return [];
         var mapId = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
-        if (!mapId || String(mapId).indexOf('town_') === 0) return [];
+        if (!mapId) return [];
+        if (String(mapId).indexOf('town_') === 0 && !(typeof mapdefTownLin === 'function' && mapdefTownLin(mapId))) return [];
         // 🪵 修練場個人區：不顯示其他人
         if (String(mapId) === 'training') return [];
         return (_mapPopPlayers || []).filter(function (m) {

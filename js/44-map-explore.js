@@ -528,7 +528,7 @@
             if (!gs || gs.classList.contains('hidden')) return false;
             if (typeof mapState === 'undefined' || !mapState || !mapState.current) return false;
             var id = String(mapState.current);
-            if (id.indexOf('town_') === 0) return false;
+            if (id.indexOf('town_') === 0 && !(typeof mapdefTownLin === 'function' && mapdefTownLin(id))) return false;
             if (id === 'training' || id === 'arena_pvp' || id === 'rift_battle') return false;
             if (typeof isWorldBossMap === 'function' && isWorldBossMap(id)) return false;
             if (typeof KING_ROOMS !== 'undefined' && KING_ROOMS && KING_ROOMS[id]) return false;
@@ -591,6 +591,14 @@
             return (typeof mapdefOf === 'function') ? mapdefOf(id) : null;
         } catch (eD) { return null; }
     }
+    /** 原版拼塊地圖名稱（MapDef.lin），非原版回空字串 */
+    function exploreLinName(mapId) {
+        try {
+            var id = mapId != null ? mapId : ((typeof mapState !== 'undefined' && mapState) ? mapState.current : '');
+            var d = (typeof mapdefOf === 'function') ? mapdefOf(id) : null;
+            return (d && d.lin) ? String(d.lin) : '';
+        } catch (eL) { return ''; }
+    }
     function exploreIsRealMap(mapId) {
         if (typeof mapdefIsReal === 'function') {
             try { return !!mapdefIsReal(mapId != null ? mapId : ((mapState && mapState.current) || '')); } catch (eR) {}
@@ -624,8 +632,12 @@
         return Math.abs(h);
     }
 
+    function exploreInTown() {
+        try { return String((mapState && mapState.current) || '').indexOf('town_') === 0; } catch (eT) { return false; }
+    }
+
     function exploreFieldSlotCount() {
-        if (!exploreFieldCombatActive()) return 0;
+        if (!exploreFieldCombatActive() || exploreInTown()) return 0;
         try {
             var spots = exploreActiveGrindSpots();
             if (spots && spots.length) return spots.length * PACK_PER_SPOT;
@@ -639,7 +651,7 @@
      * @returns {boolean} 是否已套用場戰排程
      */
     function exploreInitFieldSpawns(t0) {
-        if (!exploreFieldCombatActive()) return false;
+        if (!exploreFieldCombatActive() || exploreInTown()) return false;
         var n = exploreFieldSlotCount();
         if (!(n > 0)) n = FIELD_SLOT_COUNT;
         var mobs = new Array(n);
@@ -782,7 +794,8 @@
             }
         }
         mob._homeFx = hx;
-        mob._homeFy = Math.max(-DEPTH_MAX, Math.min(DEPTH_MAX, hy));
+        var depthLim = Math.max(DEPTH_MAX, CAM_MAX_Y);
+        mob._homeFy = Math.max(-depthLim, Math.min(depthLim, hy));
         mob._fx = mob._homeFx;
         mob._fy = mob._homeFy;
         mob._gridFx = mob._fx;
@@ -948,6 +961,7 @@
                 if (push > 14) push = 14;
                 var ax = nx * push * 0.5;
                 var ay = ny * push * 0.5;
+                var a0x = a._fx, a0y = a._fy || 0, b0x = b._fx, b0y = b._fy || 0;
                 a._fx += ax;
                 a._fy = (a._fy || 0) + ay;
                 b._fx -= ax;
@@ -960,8 +974,8 @@
                 try {
                     var defSep = exploreActiveMapDef();
                     if (defSep && typeof mapdefResolveMove === 'function') {
-                        var ra = mapdefResolveMove(defSep, a._fx, a._fy, a._fx, a._fy);
-                        var rb = mapdefResolveMove(defSep, b._fx, b._fy, b._fx, b._fy);
+                        var ra = mapdefResolveMove(defSep, a0x, a0y, a._fx, a._fy);
+                        var rb = mapdefResolveMove(defSep, b0x, b0y, b._fx, b._fy);
                         var pa = explorePushSolidList(ra.x, ra.y);
                         var pb = explorePushSolidList(rb.x, rb.y);
                         a._fx = a._gridFx = pa.x; a._fy = a._gridFy = pa.y;
@@ -984,7 +998,7 @@
     }
     function explorePlayerDepthZ() {
         // 🩹 v3.8.383：依人物世界 Y 景深（腳底越南越高）
-        return Math.max(30, Math.min(90, Math.round(50 - _ty * 0.06)));
+        return Math.max(30, Math.min(90, Math.round(50 - (_ty - exploreDepthOriginY()) * 0.06)));
     }
 
     function explorePlayerScreenX() {
@@ -999,10 +1013,14 @@
         return exploreMobScreenBottom(_ty);
     }
 
+    /** 景深原點：原版大地圖 y 達數千，改相機相對才不會全部卡在 z 上下限 */
+    function exploreDepthOriginY() {
+        return exploreLinName() ? _cy : 0;
+    }
     function exploreFieldDepthStyle(fy) {
         var worldY = Number(fy) || 0;
         // 與人物同一套腳底 Y 排序
-        var z = Math.max(16, Math.min(92, Math.round(50 - worldY * 0.06)));
+        var z = Math.max(16, Math.min(92, Math.round(50 - (worldY - exploreDepthOriginY()) * 0.06)));
         return {
             transform: 'translateX(-50%)',
             zIndex: String(z),
@@ -1597,6 +1615,10 @@
         var ox = Number(m._fx) || 0;
         var oy = Number(m._fy) || 0;
         var r = exploreTryMoveFrom(ox, oy, dirx, diry, step);
+        var linSafe = exploreLinName();
+        if (linSafe && typeof linmapSafeZone === 'function' && linmapSafeZone(linSafe, r.x, r.y) && !linmapSafeZone(linSafe, ox, oy)) {
+            r = { x: ox, y: oy, moved: 0, hit: true };
+        }
         m._fx = r.x;
         m._fy = r.y;
         m._gridFx = r.x;
@@ -2215,7 +2237,7 @@
     function exploreSyncProps(on, biome, mapId) {
         var layer = document.getElementById('explore-prop-layer');
         if (!layer) return;
-        var show = !!(on && exploreAllowed());
+        var show = !!(on && exploreAllowed() && !exploreLinName(mapId));
         layer.classList.toggle('hidden', !show);
         if (!show) {
             if (layer.childNodes.length) layer.innerHTML = '';
@@ -2405,7 +2427,7 @@
     function exploreSyncBoundWalls(on) {
         var layer = document.getElementById('explore-bound-layer');
         if (!layer) return;
-        var show = !!on;
+        var show = !!on && !exploreLinName();
         layer.classList.toggle('hidden', !show);
         if (!show) return;
         var w = CAM_MAX_X * 2 + WALL_THICK * 2;
@@ -2496,7 +2518,7 @@
                 }
             } catch (e4) {}
             try {
-                ['explore-world-bg', 'explore-world-bg-far', 'explore-world-bg-blend', 'explore-prop-layer', 'explore-sea-mask'].forEach(function (id) {
+                ['explore-world-bg', 'explore-world-bg-far', 'explore-world-bg-blend', 'explore-prop-layer', 'explore-sea-mask', 'explore-linmap'].forEach(function (id) {
                     var n = document.getElementById(id);
                     if (n) n.classList.add('hidden');
                 });
@@ -2543,6 +2565,14 @@
         } catch (eTy) {}
         bv.classList.remove('portal-ready-left', 'portal-ready-right');
         exploreSyncWorldBg(bv, on);
+        try {
+            var linName = on ? exploreLinName() : '';
+            if (linName && typeof linmapSync === 'function') {
+                linmapSync(bv, linName, _cx, _cy, exploreGroundYLive() - FOOT_CONTACT_SINK);
+            } else if (typeof linmapHide === 'function') {
+                linmapHide(bv);
+            }
+        } catch (eLin) {}
         exploreRenderGrindMarks(fieldOn);
         exploreSyncPropYSort();
         try {
@@ -2583,6 +2613,12 @@
             sx = Number(_pendingSpawn.x) || 0;
             sy = Number(_pendingSpawn.y) || 0;
             _pendingSpawn = null;
+        } else {
+            var defSt = exploreActiveMapDef();
+            if (defSt && defSt.start) {
+                sx = Number(defSt.start.x) || 0;
+                sy = Number(defSt.start.y) || 0;
+            }
         }
         _tx = sx;
         _ty = sy;
