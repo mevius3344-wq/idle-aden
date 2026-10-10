@@ -347,7 +347,9 @@
         bindQuick(quick.querySelector('#lr-quick-slots'));
 
         var bar = el('div', 'lr-menubar', 'lr-menubar lr-hud-block', MENU.map(function (m) {
-            return '<button type="button" class="lr-menu-btn" data-menu="' + m.key + '" title="' + m.label + '">' + svgIcon(m.svg) + '<span>' + m.label + '</span></button>';
+            return '<button type="button" class="lr-menu-btn" data-menu="' + m.key + '" title="' + m.label + '">' +
+                '<img class="lr-menu-ico" src="assets/ui/lin/menu_' + m.key + '.png" alt="" draggable="false">' +
+                '<span>' + m.label + '</span></button>';
         }).join(''));
         bar.addEventListener('click', function (e) {
             var b = e.target.closest('[data-menu]');

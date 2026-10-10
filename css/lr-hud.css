@@ -598,6 +598,8 @@
 }
 .lr-menu-btn:last-child { border-right: 0; box-shadow: none; }
 .lr-menu-btn svg { width: 24px; height: 24px; stroke-width: 2; filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 4px rgba(232, 198, 117, 0.35)); }
+.lr-menu-ico { width: 30px; height: 30px; object-fit: contain; pointer-events: none; filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 3px rgba(232, 198, 117, 0.3)); }
+.lr-menu-btn:active .lr-menu-ico { transform: translateY(1px); filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 6px rgba(255, 230, 150, 0.7)); }
 .lr-menu-btn span { font-family: var(--lr-font); font-size: 11px; font-weight: 900; letter-spacing: 0.12em; color: #f3dfa2; text-shadow: var(--lr-outline); }
 .lr-menu-btn:active { background: radial-gradient(ellipse at center, rgba(232, 198, 117, 0.25), transparent 70%); }
 .lr-expbar {

@@ -14,6 +14,15 @@ const KIT = [
   { src: "1200", out: "frame.png", note: "金色雕花框（中空）" },
   { src: "1116", out: "ring.png", cornerKey: true, hole: 10.5, note: "金色圓環（圓鈕外框，中心挖空）" },
 ];
+// 底部選單圖示：用原版道具圖示（客戶端系統選單本身是文字鈕，沒有對應圖示）
+const ICONS = path.join(__dirname, "..", "..", "assets", "icons");
+const MENU_ICONS = [
+  { src: "armors/頭盔.png", out: "menu_stats.png", note: "角色" },
+  { src: "armors/鋼鐵金屬盔甲.png", out: "menu_equip.png", note: "裝備" },
+  { src: "armors/潛行者的祕密箱子.png", out: "menu_items.png", note: "背包" },
+  { src: "armors/魔法能量之書.png", out: "menu_skill.png", note: "技能" },
+  { src: "items/古代的卷軸.png", out: "menu_menu.png", note: "選單" },
+];
 
 const names = ["Sprite"].concat(Array.from({ length: 16 }, (_, i) => "Sprite" + String(i).padStart(2, "0")));
 const paks = names.map((n) => { try { return openPak(n); } catch (e) { return null; } }).filter(Boolean);
@@ -61,6 +70,13 @@ function decode(b, cornerKey) {
     if (k.out.endsWith(".webp")) await img.webp({ quality: 90 }).toFile(file);
     else await img.png({ compressionLevel: 9 }).toFile(file);
     report.push(`${k.out} ← ${k.src}.img ${d.w}x${d.h} ${k.note}`);
+  }
+  for (const m of MENU_ICONS) {
+    const src = path.join(ICONS, m.src);
+    if (!fs.existsSync(src)) { report.push("MISSING " + m.src); continue; }
+    await sharp(src).trim().resize(48, 48, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png({ compressionLevel: 9 }).toFile(path.join(OUT, m.out));
+    report.push(`${m.out} ← ${m.src} ${m.note}`);
   }
   console.log(report.join("\n"));
 })();

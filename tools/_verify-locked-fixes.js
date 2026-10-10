@@ -442,6 +442,9 @@ section("33) 樂園風原版材質");
   ok("HUD 變數引用原版材質", /--lr-stone: url\('\.\.\/assets\/ui\/lin\/stone\.webp'\)/.test(css) && /--lr-ring: url\('\.\.\/assets\/ui\/lin\/ring\.png'\)/.test(css));
   ok("聊天輸入框深色（不可白底）", !/rgba\(240, 240, 240/.test(css) && /#world-input \{[^}]*background: rgba\(0, 0, 0, 0\.6\)/.test(css));
   ok("AUTO／信件／回村 同一款金環圓鈕", /\.chud-auto,\s*#game-screen\.combat-hud\.lr-hud \.chud-auto\.is-off,\s*\.lr-mail,\s*\.lr-home \{[^}]*var\(--lr-ring\)/.test(css) && !/#3b82f6 0%, #1e3a8a/.test(css));
+  const menuMiss = ["stats", "equip", "items", "skill", "menu"].filter((k) => !exists("assets/ui/lin/menu_" + k + ".png"));
+  ok("底部選單用原版道具圖示（menu_*.png）", menuMiss.length === 0 && /assets\/ui\/lin\/menu_' \+ m\.key \+ '\.png/.test(rd("js/51-lr-hud.js")), menuMiss.join(","));
+  ok("觸發技能借用原版技能圖示（SKILL_ICON_ALIAS）", /SKILL_ICON_ALIAS\[d\.n\] \|\| d\.n/.test(rd("js/01-drops-config.js")));
 }
 
 section("14) 公告文字");

@@ -1874,11 +1874,17 @@ function _relicWeakHitBonus(entity) {
 function uid() { return Math.random().toString(36).substr(2, 9); }
 function roll(n, s) { let res = 0; for(let i=0; i<n; i++) res += Math.floor(Math.random() * s) + 1; return res; }
 
+// 非可學的武器／遺物觸發技能沒有自己的原版圖示，借用效果相近的原版技能圖
+const SKILL_ICON_ALIAS = {
+    '爆裂的火球': '燃燒的火球', '致命落雷': '極道落雷', '復仇尖石': '地裂術', '大地崩裂': '震裂術',
+    '暈眩': '衝擊之暈', '緩速': '緩速術', '沉默': '魔法封印', '麻痺': '木乃伊的詛咒', '損壞': '壞物術', '冰凍': '冰矛圍籬'
+};
+
 // 👇 新增這段：自動對照並產生對應素材路徑的函數
 function getIconUrl(d, isSkill = false) {
     if (d.img) return d.img; // 如果資料庫有手動寫 img 網址，以它優先
     
-    if (isSkill) return `assets/icons/skills/${d.n}.png`;
+    if (isSkill) return `assets/icons/skills/${SKILL_ICON_ALIAS[d.n] || d.n}.png`;
     
     if (d.type === 'wpn') return `assets/icons/weapons/${d.n}.png`;       // 武器
     if (d.type === 'arm') return `assets/icons/armors/${d.n}.png`;        // 防具

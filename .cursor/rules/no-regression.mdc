@@ -49,7 +49,7 @@ alwaysApply: true
 | 30 | 線上 API 同源 | `js/00-host-config.js` 在 Railway 上 `/api/` 一律同源打 `_serve.js`；不可再預設轉發到已停用的 `idle-aden.vercel.app`（會「伺服器喚醒逾時」、無法登入／註冊）（v3.9.67） |
 | 31 | 樂園風無普攻鈕／走路有步伐 | 樂園風 HUD 下右側技能環的普攻鈕（`.chud-hot-slot.is-atk`）與空技能格隱藏，學到的主動技能仍顯示；`_animSetImgFrame` 只擋比畫面更舊的幀（不可改回「只套最新意圖」，網路慢時人物會卡待機幀滑行）；`_preloadPlayerWalkFrames` 預載八向 walk 幀（v3.9.68，實測 `tools/_audit-player-walk.js`、`--slow`） |
 | 32 | 整張原版大地圖 | `tools/lin/worlds-config.js`：本土 `wd_main`（原版 map 4）＋說話之島 `ti_island`（map 0）各是一整張圖，村莊＋野外都是它的區域（`linmapRegionAt`：村莊＝安全區＋村內角落，其餘歸最近野外）；**出村不用傳送門**，走過區域邊界 `exploreTryWalkRegion` 就地換區（同座標、不重載圖層、保留點地目標）；#11 傳送術只落在本區；野外看得到村莊 NPC（只有所在村可點）；自動打怪被地形擋住 1.5 秒換目標（`CHASE_STUCK_MS`／`_unreachUntil`）（v3.9.69，實測 `tools/_audit-world.js`） |
-| 33 | 樂園風原版材質 | HUD 用 `assets/ui/lin/`（`tools/lin/build-ui-kit.js` 從客戶端 `.img` 匯出：`stone` 石紋底、`frame` 金框、`ring` 中空金環）；聊天輸入框深色（不可白底）；AUTO／信件／回村同一款金環圓鈕（不可回到亮紅球／藍色回村鈕）；HUD 字用襯線＋描邊；聊天區 104px、分頁全露出（v3.9.70，實測 `tools/_audit-lr-hud.js`） |
+| 33 | 樂園風原版材質 | HUD 用 `assets/ui/lin/`（`tools/lin/build-ui-kit.js` 從客戶端 `.img` 匯出：`stone` 石紋底、`frame` 金框、`ring` 中空金環）；聊天輸入框深色（不可白底）；AUTO／信件／回村同一款金環圓鈕（不可回到亮紅球／藍色回村鈕）；HUD 字用襯線＋描邊；聊天區 104px、分頁全露出（v3.9.70，實測 `tools/_audit-lr-hud.js`）；底部選單 5 鈕用原版道具圖示 `assets/ui/lin/menu_*.png`（頭盔／鋼鐵盔甲／箱子／魔法書／卷軸，不可回到線條 SVG）；非可學觸發技能借原版技能圖（`SKILL_ICON_ALIAS`）（v3.9.71） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。
