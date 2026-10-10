@@ -1603,7 +1603,7 @@
     }
 
     /** 人物本 tick 等速走一步（加速／疾走生效；變身 wlk 不拖慢場走） */
-    function explorePlayerSpeedMult() {
+    function explorePlayerSpeedMult(noMapBoost) {
         var m = 1;
         try {
             var p = (typeof player !== 'undefined') ? player : null;
@@ -1620,15 +1620,17 @@
         } catch (eM) {}
         // 大地圖略加快，避免橫跨太久
         try {
-            if (exploreIsRealMap() && CAM_MAX_X > 700) m *= 1.12;
+            if (!noMapBoost && exploreIsRealMap() && CAM_MAX_X > 700) m *= 1.12;
         } catch (eLg) {}
         return Math.max(0.25, Math.min(2.8, m));
     }
     /**
      * 原版拼塊地圖：一格一步、只走 8 個格線方向（橫 48px、直 24px、斜 24×12），每步固定時間，停在格子中心；
      * 一步＝一整輪走路幀（_walkCycle）。goal 有給時照原版走法：先斜走到對齊再直走。
+     * 位移跟著走路幀一格一格跳（每幀 1/4 格），不是平滑滑行——原版客戶端就是這樣，腳才會踩在地上。
      */
-    var LIN_STEP_MS = 360;
+    var LIN_STEP_MS = 480;
+    var LIN_STEP_FRAMES = 4;
     var LIN_NB = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
     var _linStep = null;
     var _walkCycle = 0;
@@ -1639,8 +1641,9 @@
         if (!s) return 0;
         if (Math.abs(_tx - s.lx) > 2 || Math.abs(_ty - s.ly) > 2) { _linStep = null; return 0; }
         var k = Math.min(1, s.k + TICK_MS / s.dur);
-        var nx = s.fx + (s.tx - s.fx) * k;
-        var ny = s.fy + (s.ty - s.fy) * k;
+        var kd = s.cyc >= 1 ? Math.floor(k * LIN_STEP_FRAMES) / LIN_STEP_FRAMES : k;
+        var nx = s.fx + (s.tx - s.fx) * kd;
+        var ny = s.fy + (s.ty - s.fy) * kd;
         var moved = Math.hypot(nx - _tx, ny - _ty);
         _walkCycle += (k - s.k) * s.cyc;
         s.k = k;
@@ -1696,8 +1699,9 @@
         if (!want) return 0;
         var o = exploreLinStepPick(name, dirx, diry, goal);
         if (!o) return 0;
-        var dur = (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult();
+        var dur = (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult(true);
         _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: Math.max(60, dur), cyc: o.cyc, lx: _tx, ly: _ty };
+        if (o.cyc >= 1) exploreSetFaceNow(o.c.x - _tx, -(o.c.y - _ty));
         return exploreLinStepAdvance(name);
     }
     function exploreWalkCycle() { return exploreLinName() ? _walkCycle : null; }
