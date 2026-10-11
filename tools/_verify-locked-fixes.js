@@ -560,6 +560,8 @@ section("42) 原版寵物馴服（帶道具、1/3 血以下當場變寵物）");
   ok("觸發＝背包帶對應道具（不需使用、不靠誘捕狀態）", /function petTameOnKill\(mob\)/.test(pets) && /PET_TAME_ITEM = \{ lure_general: 'item_eye_meat'/.test(pets) && /return false;\s*\}\s*function petUseDragonEgg/.test(pets));
   ok("老虎 1/16（失敗照扣）、保管滿不消耗", /PET_TAME_ODDS = \{ lure_tiger: 16 \}/.test(pets) && /petRoster\(\)\.length >= PET_STORAGE_MAX\) \{\s*if \(Date\.now\(\) - _petTameFullMsgAt/.test(pets));
   ok("自動販賣預設不賣誘捕道具", /if \(d\.eff === 'petlure'\) return \{ sell:false \};/.test(F.tabs));
+  ok("出戰魅力含職業加成（妖精 +12、王族等 +6）", /PET_CHA_CLASS_BONUS = \{ royal: 6, mage: 6, dark: 6, dragon: 6, illusion: 6, elf: 12 \}/.test(pets) && /petChaUsed\(\) \+ need > petChaCap\(\)/.test(pets) && /let cha = petChaCap\(\), used = 0/.test(pets));
+  ok("寵物叫聲 Lv12/24/36/48＋捕捉指南推薦地點", /const PET_VOICE_LV = \[12, 24, 36, 48\]/.test(pets) && /petVoiceSay\(p\)/.test(pets) && /data-pet-tame-guide/.test(pets) && /推薦捕捉地點/.test(rd("js/26-world-channel.js")));
 }
 
 section("14) 公告文字");

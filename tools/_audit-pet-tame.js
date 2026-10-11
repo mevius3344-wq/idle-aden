@@ -128,6 +128,38 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
     const a6b = JSON.parse(r6b || '{}');
     ok(a6b.auto === false && a6b.override === true, '自動販賣預設不賣誘捕道具（玩家設「永遠賣掉」才賣）' + r6b);
 
+    // 6c) 出戰魅力職業加成（原版：王族／法師／黑妖／龍騎／幻術 +6、妖精 +12、騎士／戰士 +0）
+    const r6c = await ev(`(()=>{const c0=player.cls,cha=player.d.cha;const o={};for(const c of ['knight','warrior','royal','mage','dark','dragon','illusion','elf']){player.cls=c;o[c]=petChaCap()-cha;}player.cls=c0;return JSON.stringify(o)})()`);
+    const a6c = JSON.parse(r6c || '{}');
+    ok(a6c.knight === 0 && a6c.warrior === 0 && a6c.royal === 6 && a6c.mage === 6 && a6c.dark === 6 && a6c.dragon === 6 && a6c.illusion === 6 && a6c.elf === 12, '出戰魅力職業加成 ' + r6c);
+    const r6d = await ev(`(()=>{const c0=player.cls;player.cls='elf';const cha0=player.d.cha;player.d.cha=0;petsOutList().forEach(p=>petDeployToggle(p.uid));
+        const p=petRoster().find(x=>x.form==='狼');petDeployToggle(p.uid);const out1=petsOutList().length;
+        player.cls='knight';_petEnforceCarry();const out2=petsOutList().length;player.cls=c0;player.d.cha=cha0;return JSON.stringify({out1,out2})})()`);
+    const a6d = JSON.parse(r6d || '{}');
+    ok(a6d.out1 === 1 && a6d.out2 === 0, '魅力 0 的妖精靠 +12 可帶 1 隻、換成騎士就被收回 ' + r6d);
+
+    // 6e) 寵物叫聲：Lv12／24／36／48，一般與高等台詞不同；出戰與升級跨門檻時說話
+    const r6e = await ev(`JSON.stringify([petVoiceLine({form:'狼',lv:11}),petVoiceLine({form:'狼',lv:12}),petVoiceLine({form:'高等狼',lv:48}),petVoiceLine({form:'真‧虎男',lv:30}),petVoiceLine({form:'袋鼠',lv:50})])`);
+    const a6e = JSON.parse(r6e || '[]');
+    ok(a6e[0] === '' && a6e[1] === '汪！汪！' && a6e[2] === '喀勒勒...叱，沒辦法！' && a6e[3] === '吼！啥米代誌？' && a6e[4] === '', '寵物叫聲對應等級與型態 ' + r6e);
+    const r6f = await ev(`(()=>{player.d.cha=30;const p0=petRoster().find(x=>x.form==='狼');if(!petsOutList().some(x=>x.uid===p0.uid))petDeployToggle(p0.uid);const p=petsOutList().find(x=>x.uid===p0.uid);p.lv=11;p.exp=0;const cap=player.lv;player.lv=60;
+        const msgs=[];const lc=window.logCombat;window.logCombat=function(m){msgs.push(String(m).replace(/<[^>]+>/g,''));return lc.apply(this,arguments)};
+        const outs=petsOutList().map(x=>x.uid+':'+x.lv+':'+!!x._downed);
+        petsGainExp(petExpReq(11)+1);window.logCombat=lc;player.lv=cap;return JSON.stringify({lv:p.lv,outs,said:msgs.filter(m=>m.indexOf('「')>=0)})})()`);
+    const a6f = JSON.parse(r6f || '{}');
+    ok(a6f.lv === 12 && (a6f.said || []).some((m) => m.indexOf('汪！汪！') >= 0), '寵物升到 Lv12 會叫 ' + r6f);
+
+    // 6g) 推薦捕捉地點：保管視窗捕捉指南＋問答
+    const r6g = await ev(`(()=>{const g=petTameGuideRows();const w=g.find(x=>x.mob==='狼');const t=g.find(x=>x.mob==='老虎');
+        const qa=_wcPetSourceAnswers('狼').join('|');return JSON.stringify({n:g.length,wolf:w&&w.maps,tiger:t&&t.odds,qa:qa.indexOf('推薦捕捉地點')>=0})})()`);
+    const a6g = JSON.parse(r6g || '{}');
+    ok(a6g.n >= 17 && (a6g.wolf || []).length > 0 && a6g.tiger === 16 && a6g.qa, '捕捉指南有推薦地點、問答也有 ' + r6g);
+    await ev(`(()=>{const o=document.createElement('div');o.id='__tameGuide';o.style.cssText='position:fixed;inset:0;z-index:99999;background:#0f172a;overflow:auto;padding:8px';document.body.appendChild(o);
+        renderPetStorageNPC(o);const d=o.querySelector('[data-pet-tame-guide]');if(d)d.open=true;return !!d})()`);
+    await sleep(400);
+    await shot('tame_guide.png');
+    await ev(`(()=>{const o=document.getElementById('__tameGuide');if(o)o.remove();return 1})()`);
+
     // 7) 實戰：連線同圖（伺服器權威擊殺）自動打狼／杜賓狗，帶肉會自動馴服
     const rt = await ev('typeof rtWorldIsConnected==="function"&&rtWorldIsConnected()');
     console.log('realtime connected=' + rt + ' auth=' + await ev('typeof rtWorldAuthCombatActive==="function"&&rtWorldAuthCombatActive()'));

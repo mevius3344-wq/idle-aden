@@ -469,7 +469,10 @@ function _wcBuildPetSources() {
         for (let key in PET_LURES) {
             let lure = PET_LURES[key];
             let _tameItem = (typeof PET_TAME_ITEM !== 'undefined' && DB.items[PET_TAME_ITEM[key]]) ? DB.items[PET_TAME_ITEM[key]].n : lure.n;
-            for (let mobName in (lure.mobs || {})) push(lure.mobs[mobName], `身上帶「${_tameItem}」，把 ${mobName} 打到剩 1/3 血以下自動馴服${key === 'lure_tiger' ? '（每次 1/16 機會）' : ''}`);
+            for (let mobName in (lure.mobs || {})) {
+                let _where = (k.mobMaps[mobName] || []).map(r => r.name).filter((v, i, a) => v && a.indexOf(v) === i).slice(0, 3);
+                push(lure.mobs[mobName], `身上帶「${_tameItem}」，把 ${mobName} 打到剩 1/3 血以下自動馴服${key === 'lure_tiger' ? '（每次 1/16 機會）' : ''}${_where.length ? `，推薦捕捉地點：${_where.join('、')}` : ''}`);
+            }
         }
     } catch (e) {}
     // ③ 進化：PET_BOOK[基礎型態].evo = 進化後型態名（Lv30＋對應進化果實）

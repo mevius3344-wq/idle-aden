@@ -77,6 +77,38 @@ const PET_LURES = {
     lure_koreadog: { n: '高麗幼犬誘捕', mobs: { '高麗幼犬':'高麗幼犬' } }
 };
 
+// 寵物叫聲（原版 L1PetType 訊息：Lv12／24／36／48 各一句；n＝一般型態、h＝其進化後高等型態）
+const _PET_VOICE_DOG = ['汪！汪！', '吭！吭！', '咳！咳！', '是的，主人。'];
+const PET_VOICE = {
+    '暴走兔':   { n: ['蹦~蹦~', '馬上來了~', '你在叫我嗎？~', '主人，馬上來了~'], h: ['蹦蹦～胡蘿蔔～胡蘿蔔～', '蹦蹦～主人在哪裡呢？', '蹦蹦～蹦蹦～我要到主人身邊～', '蹦蹦～有胡蘿蔔嗎？'] },
+    '貓':       { n: ['喵~', '喵喵~', '唉~好煩喔~', '馬上來了~'], h: ['喵～好煩又再叫我！', '喵嗚～玩捉迷藏嗎？', '喵～現在過去了啦！', '喵～過去的話會抱我嗎？'] },
+    '狐狸':     { n: ['卡嗚~', '卡嗚~ 卡嗚~', '卡嗚~ 馬上來了~', '卡嗚~ 主人在叫我了~'], h: ['卡啊～你有叫我嗎？', '卡啊～毛都沒有光澤了！', '卡啊～主人，給我食物吧！', '卡啊～我要待在主人身邊！'] },
+    '狼':       { n: _PET_VOICE_DOG, h: ['喀勒勒...', '喀勒勒...為何叫我呢？', '喀勒勒...喂，我也很忙的！', '喀勒勒...叱，沒辦法！'] },
+    '小獵犬':   { n: _PET_VOICE_DOG, h: ['汪！請等一下～', '汪！啊～衣服髒了～', '汪！汪！我要優雅地過去', '汪汪！我要在主人身邊～'] },
+    '牧羊犬':   { n: _PET_VOICE_DOG, h: ['吭！吭！是的！主人！', '吭吭！主人您叫我嗎？', '吭吭！現在過去了！', '吭吭！主人，請您吩咐！'] },
+    '聖伯納犬': { n: _PET_VOICE_DOG, h: ['嗚....好睏～', '嗚....怎麼了？', '嗚....是要給我食物嗎？', '嗚...我最喜歡待在主人身旁...'] },
+    '熊':       { n: ['喔嗚~', '喔嗚~砰砰~', '砰砰~ 這是主人的味道', '砰~ 主人在找我了'], h: ['嗚嗚...我待會再過去喔！', '嗚～ 是要給我蜂蜜嗎？', '喀喀～這個人的味道很香呢！', '喀喀～主人，我會在身邊陪您的！'] },
+    '柯利':     { n: _PET_VOICE_DOG, h: ['嗚唉！嘿嘿～現在過去了～', '嗚唉嗚唉！嘿嘿～主人您叫我嗎？', '嘿嘿～ 主人要給我食物了嗎？', '嘿嘿～我要在主人身邊～'] },
+    '哈士奇':   { n: _PET_VOICE_DOG, h: ['嗚唉！主人，請陪我玩～', '嗚唉嗚唉！主人要陪我玩了～', '嗚唉！嗚唉！親愛的主人，現在過去了～', '嗚唉！嗚唉！嗚唉！這一生我都要在主人身邊～'] },
+    '杜賓狗':   { n: _PET_VOICE_DOG, h: ['吭吭！馬上過去了！主人！', '吭！主人在叫我了！', '吭吭！請吩咐！', '吭吭！我一直在主人身邊！'] },
+    '浣熊':     { n: ['吭哼吭哼~', '喀啊~ 哼哼~', '咕嚶~ 咕嚶~', '咕嚶~ 現在過去了~'], h: ['喀哼~ 去不去呢~', '喀哼~ 為什麼~？', '咕嚶~ 做什麼好呢？', '咕嚶~ 主人太好了~'] },
+    '虎男':     { n: ['吼！', '吼！吼！', '吼吼！吼！', '吼～叫我嗎？'], h: ['吼～叫什麼叫！', '吼！啥米代誌？', '吼！你有受過專業飼主的馴練嗎？', '吼吼！閃開！讓專業的來！'] },
+    '高麗幼犬': { n: ['汪！', '汪！汪！', '汪！汪汪！汪！', '汪汪！叫我嗎？'], h: ['汪！要出去透氣嗎？', '汪汪汪！要去哪裡啊？', '汪汪！要給我好吃的嗎？', '汪！任何事情請儘管吩咐！'] }
+};
+const PET_VOICE_LV = [12, 24, 36, 48];
+function petVoiceLine(p) {
+    if (!p || !PET_BOOK[p.form]) return '';
+    let tier = PET_VOICE_LV.filter(l => (p.lv || 1) >= l).length;
+    if (!tier) return '';
+    let v = PET_VOICE[p.form], key = 'n';
+    if (!v) { let base = Object.keys(PET_VOICE).find(b => PET_BOOK[b] && PET_BOOK[b].evo === p.form); v = base && PET_VOICE[base]; key = 'h'; }
+    return v && v[key] ? v[key][tier - 1] : '';
+}
+function petVoiceSay(p) {
+    let line = petVoiceLine(p);
+    if (line) logCombat(`<span class="text-sky-200">${petDisplayName(p)}：「${line}」</span>`, 'player-special');
+}
+
 // ---------- 二、能力成長模型（依攻速/類型/階級平衡·各等級推導）----------
 // 設計：三型 DPS 對齊（攻速快→單發低），物理重普攻與防禦、魔法重技能與 MR、特殊居中。
 //   一般攻擊傷害 = 1D(dice)+flat；dice/flat 依 (類型基準+等級成長)×攻速正規化×階級乘數
@@ -476,10 +508,14 @@ window.addEventListener('storage', ev => {
 
 function petsOutList() { let owner = _petCurrentOwnerKey(); return owner ? petRoster().filter(p => String(p.outOwner || '') === owner) : []; }
 function petChaUsed() { return petsOutList().reduce((s, p) => s + ((PET_BOOK[p.form] || {}).cha || 6), 0); }
+// 原版（l1j tamePet）出戰魅力依職業加額外點數：王族／法師／黑妖／龍騎／幻術 +6、妖精 +12、騎士／戰士 +0
+const PET_CHA_CLASS_BONUS = { royal: 6, mage: 6, dark: 6, dragon: 6, illusion: 6, elf: 12 };
+function petChaBonus() { return PET_CHA_CLASS_BONUS[player && player.cls] || 0; }
+function petChaCap() { return Math.max(0, Number(player && player.d && player.d.cha) || 0) + petChaBonus(); }
 function _petEnforceCarry() {   // 換角色載入：魅力不足/超過4隻→自動收回超出的
     let out = petsOutList();
     if (!player || !player.cls || !player.d || !Number.isFinite(Number(player.d.cha))) return;   // 載入/重算未完成時不可誤用魅力0收回寵物
-    let cha = Number(player.d.cha), used = 0, n = 0;
+    let cha = petChaCap(), used = 0, n = 0;
     out.forEach(p => {
         let need = (PET_BOOK[p.form] || {}).cha || 6;
         if (n >= PET_CARRY_MAX || used + need > cha) {
@@ -600,6 +636,20 @@ function petUseCursedEgg(item, petName, crackMsg) {   // 🏺 v3.6.44 充滿詛�
 //   致命一擊必定低於 1/3，故掛在 killMob 結算獎勵之前；回 true＝已馴服，呼叫端略過擊殺獎勵。
 const PET_TAME_ITEM = { lure_general: 'item_eye_meat', lure_rabbit: 'item_carrot', lure_tiger: 'item_tiger_feed', lure_kangaroo: 'item_kangaroo_feed', lure_panda: 'item_panda_feed', lure_monkey: 'item_monkey_feed', lure_koreadog: 'item_koreadog_feed' };
 const PET_TAME_ODDS = { lure_tiger: 16 };   // 原版老虎每丟一次 1/16 成功，失敗道具照扣
+function petTameMaps(mobName, max) {   // 推薦捕捉地點：該動物實際出沒的地圖（js/26 怪物出沒索引）
+    try {
+        let rows = (typeof _wcBuildKnowledge === 'function' && _wcBuildKnowledge().mobMaps[mobName]) || [];
+        return rows.map(r => r.name).filter((v, i, a) => v && a.indexOf(v) === i).slice(0, max || 3);
+    } catch (e) { return []; }
+}
+function petTameGuideRows() {
+    let rows = [];
+    for (let key in PET_LURES) {
+        let item = (DB.items[PET_TAME_ITEM[key]] || {}).n || PET_LURES[key].n;
+        for (let mob in PET_LURES[key].mobs) rows.push({ mob, form: PET_LURES[key].mobs[mob], item, odds: PET_TAME_ODDS[key] || 0, maps: petTameMaps(mob, 3), cha: (PET_BOOK[PET_LURES[key].mobs[mob]] || {}).cha || 6 });
+    }
+    return rows;
+}
 let _petTameFullMsgAt = 0;
 function petTameOnKill(mob) {   // 專屬誘捕優先於一般誘捕（高麗幼犬僅高麗幼犬誘食可捕）
     if (!mob || mob.boss || mob._fieldBoss || !player || !Array.isArray(player.inv)) return false;
@@ -652,9 +702,10 @@ function petDeployToggle(uidv) {
         let outs = petsOutList();
         if (outs.length >= PET_CARRY_MAX) { logSys(`<span class="text-red-400">最多同時攜帶 ${PET_CARRY_MAX} 隻寵物。</span>`); return; }
         let need = (PET_BOOK[p.form] || {}).cha || 6;
-        if (petChaUsed() + need > (player.d.cha || 0)) { logSys(`<span class="text-red-400">魅力不足：攜帶 ${p.form} 需要魅力 ${need}（目前已用 ${petChaUsed()}/${player.d.cha || 0}）。</span>`); return; }
+        if (petChaUsed() + need > petChaCap()) { logSys(`<span class="text-red-400">魅力不足：攜帶 ${p.form} 需要魅力 ${need}（目前已用 ${petChaUsed()}/${petChaCap()}${petChaBonus() ? `，含職業加成 +${petChaBonus()}` : ''}）。</span>`); return; }
         p.outOwner = owner; p.outSlot = slot; p.outV = _petNowStamp(); p.hp = Math.max(1, p.hp);
         logSys(`<span class="text-green-300 font-bold">${petDisplayName(p)} 加入了隊伍！</span>`);
+        try { petVoiceSay(p); } catch (eV) {}
     }
     petMarkDirty(); if (!_petCommitRosterOnly(before)) return;
     try { renderSquadPanel(); } catch (e) {}
@@ -857,7 +908,7 @@ function petsGainExp(playerGain) {
     if (each <= 0) return;
     elig.forEach(p => {
         p.exp = (p.exp || 0) + each;
-        let up = 0;
+        let up = 0, lv0 = p.lv || 1;
         while (p.lv < _cap && p.exp >= petExpReq(p.lv)) {
             p.exp -= petExpReq(p.lv);
             p.lv++; up++;
@@ -867,7 +918,10 @@ function petsGainExp(playerGain) {
             p.mhp += hg; p.mmp += mg; p.hp += hg; p.mp += mg;
         }
         if (p.lv >= _cap) p.exp = 0;
-        if (up > 0) { logCombat(`<span class="text-yellow-300 font-bold">寵物 ${petDisplayName(p)} 升級了！目前 Lv.${p.lv}</span>`, 'player-special'); petMarkDirty(); try { renderSquadPanel(); } catch (e) {} }
+        if (up > 0) {
+            logCombat(`<span class="text-yellow-300 font-bold">寵物 ${petDisplayName(p)} 升級了！目前 Lv.${p.lv}</span>`, 'player-special'); petMarkDirty(); try { renderSquadPanel(); } catch (e) {}
+            if (PET_VOICE_LV.some(l => lv0 < l && p.lv >= l)) try { petVoiceSay(p); } catch (eV) {}
+        }
     });
     petMarkDirty();
 }
@@ -1324,7 +1378,7 @@ function renderPetStorageNPC(div, confirmUid) {
     let hostName = ((document.getElementById('interaction-npc-name') || {}).innerText || '').trim() || '包武';
     let scrollState = _petStorageScrollState(div);
     let list = petRoster();
-    let cha = (player.d && player.d.cha) || 0;
+    let cha = petChaCap();
     let rows = list.map(p => {
         let def = PET_BOOK[p.form] || {};
         let d = petDerive(p) || {};
@@ -1372,9 +1426,13 @@ function renderPetStorageNPC(div, confirmUid) {
         <div class="flex items-center gap-4 bg-slate-800/60 border border-slate-600 rounded p-3 text-sm flex-wrap">
             <span>保管：<span class="text-amber-300 font-bold">${list.length}/${PET_STORAGE_MAX}</span></span>
             <span>出戰：<span class="text-emerald-300 font-bold">${petsOutList().length}/${PET_CARRY_MAX}</span></span>
-            <span>魅力：<span class="${petChaUsed() > cha ? 'text-red-400' : 'text-green-400'} font-bold">${petChaUsed()}/${cha}</span></span>
+            <span>魅力：<span class="${petChaUsed() > cha ? 'text-red-400' : 'text-green-400'} font-bold">${petChaUsed()}/${cha}</span>${petChaBonus() ? `<span class="text-slate-400 text-xs">（含職業 +${petChaBonus()}）</span>` : ''}</span>
             <span>進化果實×<span class="text-amber-300 font-bold">${evoCnt}</span>　勝利果實×<span class="text-amber-300 font-bold">${vicCnt}</span></span>
         </div>
+        <details class="bg-slate-800/60 border border-slate-600 rounded p-2 text-sm" data-pet-tame-guide="1">
+            <summary class="cursor-pointer text-amber-300 font-bold">捕捉指南（捕捉食物／推薦地點／需求魅力）</summary>
+            <div class="flex flex-col gap-1 mt-2">${petTameGuideRows().map(g => `<div class="text-xs text-slate-300 border-b border-slate-700 pb-1"><b class="text-white">${g.mob}</b>${g.form !== g.mob ? `→${g.form}` : ''}　捕捉食物：<span class="text-pink-300">${g.item}</span>${g.odds ? `（每次 1/${g.odds}）` : ''}　魅力 ${g.cha}<br><span class="text-slate-400">推薦地點：${g.maps.length ? g.maps.join('、') : '目前沒有固定出沒地圖'}</span></div>`).join('')}</div>
+        </details>
         <div class="flex flex-col gap-1 overflow-y-auto pr-1" data-pet-storage-list="1" style="max-height:380px">${rows || '<div class="text-slate-500 text-sm text-center py-6">保管箱空空如也——帶著誘捕道具去馴服寵物吧！</div>'}</div>
     </div>`;
     _petStorageRestoreScroll(div, scrollState);
