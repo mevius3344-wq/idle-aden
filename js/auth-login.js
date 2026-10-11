@@ -305,6 +305,10 @@
     document.querySelectorAll(".account-gated").forEach((el) => {
       el.classList.add("hidden");
     });
+    ["load-select-panel", "creation-panel"].forEach(function (id) {
+      const el = $(id);
+      if (el) el.classList.add("hidden");
+    });
     const welcome = $("auth-welcome");
     if (welcome) welcome.textContent = "";
     if (!applyRememberedCreds()) clearCredFields();
@@ -442,6 +446,7 @@
         account: account,
         password: password,
         clientId: getClientId(),
+        takeover: true,
       })
         .then(function (lr) {
           if (lr && lr.data && lr.data.ok) {
@@ -735,6 +740,7 @@
       account: account,
       password: password,
       clientId: getClientId(),
+      takeover: true,
     })
       .then(function (r) {
         if (r && r.data && r.data.ok) {
@@ -756,6 +762,7 @@
                   account: account,
                   password: password,
                   clientId: getClientId(),
+                  takeover: true,
                 }).then(function (lr) {
                   if (lr && lr.data && lr.data.ok && lr.data.authToken && typeof window.anticheatSetAuthToken === "function") {
                     window.anticheatSetAuthToken(lr.data.authToken);
@@ -843,6 +850,22 @@
 
   function onAccountSessionLost(payload) {
     if (_sessionRecovering) return;
+    if (payload && payload.error === "taken_over") {
+      try {
+        if (typeof window.returnToCharacterSelect === "function") window.returnToCharacterSelect();
+      } catch (eT) {}
+      try {
+        if (window.IpSessionLimit && typeof window.IpSessionLimit.release === "function") window.IpSessionLimit.release();
+      } catch (eR) {}
+      setSession("");
+      if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
+      showLoggedOut();
+      setStatus(payload.message || "此帳號已在另一個裝置登入，本裝置已下線。", "err");
+      try {
+        alert(payload.message || "此帳號已在另一個裝置登入，本裝置已下線。");
+      } catch (eA) {}
+      return;
+    }
     var account = "";
     try {
       account = currentSession() || String(window.__fb5AuthAccount || "").trim();

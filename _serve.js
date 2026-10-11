@@ -3879,7 +3879,7 @@ async function handleAccountsApi(req, res, u) {
     let clientId = String(data.clientId || "").trim().slice(0, 80);
     let sessionId = "";
     if (_accountSessions) {
-      const sess = await _accountSessions.claim(accountKey(account), clientId);
+      const sess = await _accountSessions.claim(accountKey(account), clientId, data.takeover === true);
       if (!sess.ok) return json(res, 409, sess);
       sessionId = sess.sessionId;
     } else {

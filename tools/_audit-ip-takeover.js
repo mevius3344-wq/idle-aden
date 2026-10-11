@@ -88,6 +88,37 @@ const view = (b) => b.ev(`(()=>{const v=(s)=>{const e=document.querySelector(s);
     v = await view(ph);
     ok(v.auth && !v.held, '手機這次被擠下線');
 
+    // 同一帳號：電腦在遊戲中，手機登入同帳號 → 開始遊戲 → 進入角色；電腦被擠下線且不自動搶回
+    await pc.ev(`document.getElementById('btn-start-menu').click()`);
+    await sleep(3000);
+    await pc.ev(`loadEnterSelected()`);
+    await sleep(8000);
+    await pc.ev(`(async()=>{try{saveGame()}catch(e){} try{ if(window.cloudFlushLocalToCloud) await window.cloudFlushLocalToCloud(); }catch(e){}})()`);
+    await sleep(12000);
+    v = await view(pc);
+    ok(v.game, '[同帳號] 電腦用 A 帳號在遊戲中');
+    await login(ph, A, PW);
+    await sleep(5000);
+    v = await view(ph);
+    ok(v.menu && !v.auth, '[同帳號] 手機登入同一帳號不會被拒（不卡在登入）' + JSON.stringify({ menu: v.menu, auth: v.auth, status: v.status }));
+    await ph.ev(`document.getElementById('btn-start-menu').click()`);
+    await sleep(4000);
+    const hasChar = await ph.ev(`!!slotSummary(1)`);
+    ok(hasChar, '[同帳號] 手機選角看得到角色');
+    await ph.ev(`loadEnterSelected()`);
+    await sleep(8000);
+    v = await view(ph);
+    ok(v.game, '[同帳號] 手機按開始遊戲 → 進入角色（不卡住）');
+    await sleep(12000);
+    v = await view(pc);
+    const pcLoad = await pc.ev(`(()=>{const e=document.getElementById('load-select-panel');return !!e&&!e.classList.contains('hidden')&&getComputedStyle(e).display!=='none';})()`);
+    ok(v.auth && !v.game && !pcLoad, '[同帳號] 電腦被擠下線：只剩登入畫面（不停在選角）' + JSON.stringify({ auth: v.auth, game: v.game, load: pcLoad }));
+    ok(pc.alerts.some((a) => /此帳號已在另一個裝置登入/.test(a)), '[同帳號] 電腦顯示原因（此帳號已在另一個裝置登入）');
+    await sleep(15000);
+    v = await view(ph);
+    const pv = await view(pc);
+    ok(v.game && pv.auth, '[同帳號] 不互踢：手機仍在遊戲、電腦沒有自動重登搶回');
+
     ok(pc.errors.length === 0 && ph.errors.length === 0, 'JS 例外：' + [...pc.errors, ...ph.errors].slice(0, 3).join(' | '));
     console.log(fails.length ? '\nFAIL ' + fails.length : '\nALL PASS');
     for (const b of [pc, ph]) { try { b.ws.close(); b.br.kill(); } catch (e) {} }

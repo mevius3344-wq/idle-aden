@@ -492,6 +492,11 @@ section("46) 同 IP 新登入擠掉舊視窗");
   ok("被擠掉的視窗心跳回 taken_over、不重新佔位", /if \(!result\.ok && ipTakenOver\.has\(clientId\)\)/.test(sv) && /error: "taken_over"/.test(sv));
   ok("主動登入才帶 takeover；背景 claim 不帶", /window\.IpSessionLimit\.claim\(\{ takeover: true \}\)/.test(au) && /if \(opts && opts\.takeover\) body\.takeover = true;/.test(ip) && !/claim\(\{ takeover: true \}\)/.test(rd("js/27-offline-rewards.js")));
   ok("被擠掉時停止遊戲並提示原因", /function onIpSessionLost\(payload\)/.test(au) && /window\.returnToCharacterSelect\(\)/.test(au) && /同一網路的另一個裝置已登入/.test(sv));
+  const as = rd("lib/rt-account-session.js"), acs = rd("js/36-account-session.js");
+  ok("同帳號：主動登入擠掉舊裝置（claim takeover＋kicked）", /async function claim\(accountKey, clientId, takeover\)/.test(as) && /kicked\.set\(String\(existing\.session_id\), now\)/.test(as) && /_accountSessions\.claim\(accountKey\(account\), clientId, data\.takeover === true\)/.test(sv));
+  ok("同帳號：使用者登入帶 takeover（3 處），背景 silentRelogin／恢復登入不帶", (au.match(/takeover: true,/g) || []).length === 3 && !/function silentRelogin[\s\S]{0,400}takeover/.test(au));
+  ok("同帳號：taken_over 不自動重登、立即處理", /if \(payload && payload\.error === "taken_over"\) \{/.test(au) && /r\.data\.error === "banned" \|\| r\.data\.error === "taken_over"/.test(acs) && /error: "taken_over"/.test(as));
+  ok("登出狀態收起選角／創角面板", /\["load-select-panel", "creation-panel"\]\.forEach/.test(au));
 }
 
 section("35) 名字在頭上");

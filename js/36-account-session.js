@@ -145,7 +145,7 @@
       }
       return;
     }
-    if (r && r.data && r.data.error === "banned") {
+    if (r && r.data && (r.data.error === "banned" || r.data.error === "taken_over")) {
       onSessionLost(r.data);
       return;
     }
