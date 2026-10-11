@@ -1140,6 +1140,30 @@ function playerTeleport() {
     }
     logSys('<span class="text-slate-400">你尚未學會傳送術，也沒有瞬間移動卷軸。</span>');
 }
+// 🌀 掛機「附近沒怪自動瞬移」：限制同瞬間移動卷軸；卷軸 0 張才自動買 1 張；遠距隨機（同地圖／同區域）
+function autoNoMobTeleport() {
+    if (!player || !player.inv || !DB.items.scroll_teleport) return false;
+    if (state._manualTpUntil != null && (state.ticks || 0) < state._manualTpUntil) return false;
+    let st = player.statuses || {};
+    if (st.stone > 0 || st.paralyze > 0 || st.freeze > 0 || st.stun > 0 || st.sleep > 0) return false;
+    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return false;
+    if (typeof PURE_BOSS_MAPS !== 'undefined' && PURE_BOSS_MAPS.includes(mapState.current)) return false;
+    if (typeof KING_ROOMS !== 'undefined' && KING_ROOMS[mapState.current]) return false;
+    if (typeof prideTeleportBlocked === 'function' && prideTeleportBlocked()) return false;
+    if (state.prideClimb || state.oblivion || state.riftRun || state.antharas) return false;
+    let item = player.inv.find(i => i.id === 'scroll_teleport' && (i.cnt || 1) >= 1);
+    if (!item) {
+        let cost = shopPrice(DB.items.scroll_teleport.p);
+        if (!(player.gold >= cost)) return false;
+        player.gold -= cost;
+        gainItem('scroll_teleport', 1, true, true);
+        item = player.inv.find(i => i.id === 'scroll_teleport');
+        if (!item) return false;
+    }
+    doTeleport(false, {});
+    consume(item);
+    return true;
+}
 
 // 隨機變身（套裝強制變身沿用同一函式：isDKSet→死亡騎士、isKurtSet→克特）
 function getPolyState(isDKSet=false, isKurtSet=false) {

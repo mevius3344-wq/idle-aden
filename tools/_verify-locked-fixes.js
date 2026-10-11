@@ -521,6 +521,20 @@ section("39) 玩家交易（點同圖玩家 → 交易，伺服器托管）");
   ok("雲端存檔 _seedOf 有定義（否則同步上傳必拋錯、交易／拍賣鎖不了）", /function _seedOf\(data\)/.test(rd("js/35-cloud-save.js")));
 }
 
+section("40) 掛機巡邏範圍／沒怪瞬移／書籤／掛機報告");
+{
+  const ex = rd("js/44-map-explore.js");
+  const save = rd("js/13-shop-save.js");
+  const tabs = rd("js/10-ui-tabs.js");
+  const ab = fs.existsSync(path.join(ROOT, "js/54-afk-bookmark.js")) ? rd("js/54-afk-bookmark.js") : "";
+  ok("設定有巡邏範圍＋沒怪瞬移，且寫進存檔", /id="set-patrol"/.test(F.html) && /id="set-nomob-tp"/.test(F.html) && /'set-patrol', 'set-nomob-tp'/.test(save) && /setPatrol:/.test(save) && /setNoMobTp:/.test(save));
+  ok("巡邏範圍以錨點原版格距篩怪（exploreTileDist）", /exploreTileDist\(anchor\.x, anchor\.y, m\._fx/.test(ex) && /function explorePatrolIdleTick\(\)/.test(ex));
+  ok("沒怪瞬移走 autoNoMobTeleport（同卷軸限制、0 張才買）", /function autoNoMobTeleport\(\)/.test(rd("js/02-stats-recompute.js")) && /autoNoMobTeleport\(\)/.test(ex));
+  ok("書籤傳送消耗瞬移卷軸、檢查進入條件", /consume\(item\)/.test(ab) && /mapOptDisabled\(def\)/.test(ab) && /window\.exploreTeleportTo = function/.test(ex));
+  ok("掛機報告只算打怪掉落（killMob／commitWorldLootDrop 期間）", /\['killMob', 'commitWorldLootDrop'\]/.test(ab) && /if \(!_lootDepth\) return;/.test(ab));
+  ok("選單有 掛機報告／書籤", /action: 'afkreport'/.test(tabs) && /action: 'bookmark'/.test(tabs) && /js\/54-afk-bookmark\.js/.test(F.html));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

@@ -3035,7 +3035,8 @@ const MOBILE_TAB_GROUPS = {
         { key: 'talent', label: '天賦', tab: 'talent' },
         { key: 'collection', label: '收藏', action: 'collection' },
         { key: 'pvp', label: '排行榜', tab: 'pvp' },
-        { key: 'audit', label: '統計', tab: 'audit' }
+        { key: 'audit', label: '統計', tab: 'audit' },
+        { key: 'afkreport', label: '掛機報告', action: 'afkreport' }
     ],
     gear: [
         { key: 'equip', label: '裝備', tab: 'equip' },
@@ -3045,7 +3046,8 @@ const MOBILE_TAB_GROUPS = {
     ],
     settings: [
         { key: 'automation', label: '設定', tab: 'automation' },
-        { key: 'autosell', label: '自動賣出', action: 'autosell' }
+        { key: 'autosell', label: '自動賣出', action: 'autosell' },
+        { key: 'bookmark', label: '書籤', action: 'bookmark' }
     ],
     social: [
         { key: 'clan', label: '血盟', tab: 'clan' },
@@ -3147,6 +3149,16 @@ function activateMobileTabSub(key) {
     if (it.action === 'autosell') {
         setMobileTabPanelOpen(false);
         if (typeof openAutoSellRules === 'function') openAutoSellRules();
+        return;
+    }
+    if (it.action === 'afkreport') {
+        setMobileTabPanelOpen(false);
+        if (typeof afkReportOpen === 'function') afkReportOpen();
+        return;
+    }
+    if (it.action === 'bookmark') {
+        setMobileTabPanelOpen(false);
+        if (typeof bookmarkOpen === 'function') bookmarkOpen();
         return;
     }
     let btn = document.querySelector(`#col-right .tab-bar-buttons [data-tab="${it.tab}"]`);

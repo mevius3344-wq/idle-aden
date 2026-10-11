@@ -40,6 +40,10 @@
     var CHASE_STUCK_MS = 1500;
     var CHASE_UNREACH_MS = 10000;
     var _chaseIdx = -1, _chaseBest = Infinity, _chaseSince = 0;
+    // 掛機巡邏範圍（設定 set-patrol 格數，原版格距）＋附近沒怪自動瞬移（set-nomob-tp）
+    var NOMOB_TP_MS = 4000;
+    var PATROL_HOME_STUCK_MS = 4000;
+    var _patrolAnchor = null, _noMobSince = 0, _homeSince = 0, _homeBest = Infinity;
     var PICKUP_PX = 88;
     var CHASE_PULL = 4.0;
     var MOB_SIGHT = 78;       // 🩹 v3.8.426：主動仇恨視野縮小
@@ -1476,20 +1480,64 @@
         try { exploreMobSeparateTick(); } catch (eSep) {}
     }
 
-    /** 最近可接近之怪（世界座標）；供靠近練功點自動追怪 */
+    function explorePatrolCells() {
+        var el = document.getElementById('set-patrol');
+        var n = el ? parseInt(el.value, 10) : 0;
+        return n > 0 ? Math.min(60, n) : 0;
+    }
+    /** 原版格距（Chebyshev）；非原版地圖以 24×12 菱格估算 */
+    function exploreTileDist(ax, ay, bx, by) {
+        var def = exploreActiveMapDef();
+        if (def && def.lin && typeof linmapTileAt === 'function') {
+            var a = linmapTileAt(def.lin, ax, ay), b = linmapTileAt(def.lin, bx, by);
+            if (a && b) return Math.max(Math.abs(a.gx - b.gx), Math.abs(a.gy - b.gy));
+        }
+        return Math.max(Math.abs(bx - ax) / GRID_PX, Math.abs(by - ay) / (GRID_PX / 2));
+    }
+
+    /** 最近可接近之怪（世界座標）；供靠近練功點自動追怪。有巡邏範圍時只挑錨點 N 格內的怪 */
     function exploreNearestApproachIdx(maxDist) {
         if (!exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return -1;
-        var lim = maxDist == null ? APPROACH_WORLD : maxDist;
+        var cells = explorePatrolCells();
+        var anchor = cells > 0 ? _patrolAnchor : null;
+        var lim = anchor ? Infinity : (maxDist == null ? APPROACH_WORLD : maxDist);
         var best = -1, bestD = Infinity;
         var now = Date.now();
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
             if (m._unreachUntil && m._unreachUntil > now) continue;
+            if (anchor && exploreTileDist(anchor.x, anchor.y, m._fx, m._fy || 0) > cells) continue;
             var d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
             if (d <= lim && d < bestD) { bestD = d; best = i; }
         }
         return best;
+    }
+
+    /** 沒有可打的怪：巡邏範圍外先走回原點；在原點附近待滿 NOMOB_TP_MS 且有勾「沒怪瞬移」就瞬移 */
+    function explorePatrolIdleTick() {
+        var now = Date.now();
+        var a = explorePatrolCells() > 0 ? _patrolAnchor : null;
+        if (a && exploreTileDist(_tx, _ty, a.x, a.y) > 1) {
+            var hd = Math.hypot(a.x - _tx, a.y - _ty);
+            if (!_homeSince || hd < _homeBest - 6) { _homeSince = now; _homeBest = hd; }
+            if (now - _homeSince > PATROL_HOME_STUCK_MS) {
+                _patrolAnchor = { x: _tx, y: _ty };
+                _homeSince = 0; _homeBest = Infinity;
+                return false;
+            }
+            _noMobSince = 0;
+            exploreSetFaceFromVec((a.x - _tx) / hd, -(a.y - _ty) / hd);
+            return explorePlayerWalkStep((a.x - _tx) / hd, (a.y - _ty) / hd, { x: a.x, y: a.y }) > 0.08;
+        }
+        _homeSince = 0; _homeBest = Infinity;
+        var tp = document.getElementById('set-nomob-tp');
+        if (!tp || !tp.checked) { _noMobSince = 0; return false; }
+        if (!_noMobSince) { _noMobSince = now; return false; }
+        if (now - _noMobSince < NOMOB_TP_MS) return false;
+        _noMobSince = 0;
+        try { if (typeof autoNoMobTeleport === 'function') autoNoMobTeleport(); } catch (eTp) {}
+        return false;
     }
 
     /**
@@ -1498,15 +1546,17 @@
     function exploreCombatCamChaseTick(manualControl) {
         if (!exploreFieldCombatActive() || manualControl || explorePlayerDead()) return false;
         try {
-            if (typeof state !== 'undefined' && state && state.autoHunt === false) return false;
+            if (typeof state !== 'undefined' && state && state.autoHunt === false) { _patrolAnchor = null; _noMobSince = 0; return false; }
         } catch (eA) {}
         if (typeof mapState === 'undefined' || !mapState.mobs) return false;
+        if (!_patrolAnchor) _patrolAnchor = { x: _tx, y: _ty };
         var t = mapState.mobs[mapState.targetIdx];
         if (!t || t._dead || !(t.curHp > 0) || t._fx == null) t = null;
         var engaged = !!(t && exploreMobInEngageRange(t));
         if (!engaged) {
             var ai = exploreNearestApproachIdx(APPROACH_WORLD);
-            if (ai < 0) return false;
+            if (ai < 0) return explorePatrolIdleTick();
+            _noMobSince = 0;
             t = mapState.mobs[ai];
             if (!t || t._fx == null) return false;
             try {
@@ -1528,7 +1578,7 @@
             exploreSetFaceFromVec(dirx, -diry);
             return false;
         }
-        if (!engaged && dist > APPROACH_WORLD) return false;
+        if (!engaged && dist > APPROACH_WORLD && !(explorePatrolCells() > 0)) return false;
         var nowC = Date.now();
         var ti = mapState.mobs.indexOf(t);
         if (engaged || ti !== _chaseIdx || dist < _chaseBest - 6) {
@@ -2801,6 +2851,8 @@
         _ty = sy;
         _cx = sx;
         _cy = sy;
+        _patrolAnchor = null;
+        _noMobSince = 0;
     }
 
     /**
@@ -2933,6 +2985,8 @@
             _moving = false;
             _walkPhase = 0;
             _tapMove.active = false;
+            _patrolAnchor = null;
+            _noMobSince = 0;
             try { exploreApplyWorld(); } catch (eAw) {}
             try { exploreRenderHint(); } catch (eRh) {}
             return true;
@@ -3498,6 +3552,8 @@
         _vy = 0;
         _moving = false;
         if (wantMove && inp.manual) {
+            _patrolAnchor = null;
+            _noMobSince = 0;
             var wdx = inp.dx;
             var wdy = -inp.dy;
             if (Math.abs(wdx) > 0.001 || Math.abs(wdy) > 0.001) {
@@ -3833,6 +3889,36 @@
     window.exploreSanitizeDisplay = exploreSanitizeDisplay;
     window.exploreReset = exploreReset;
     window.exploreRandomTeleportOnMap = exploreRandomTeleportOnMap;
+    /** 書籤傳送：指定地圖＋世界座標（同圖直接落點；異圖經 changeMap(true)，進入條件由呼叫端先檢查） */
+    window.exploreTeleportTo = function (dest, x, y) {
+        if (!dest) return false;
+        x = Number(x) || 0;
+        y = Number(y) || 0;
+        if (typeof mapState !== 'undefined' && mapState.current === dest && exploreWorldActive()) {
+            _tx = x; _ty = y; _cx = x; _cy = y;
+            _vx = 0; _vy = 0; _moving = false; _walkPhase = 0;
+            _tapMove.active = false;
+            _patrolAnchor = null; _noMobSince = 0;
+            try { exploreApplyWorld(); } catch (eAw) {}
+            try { exploreRenderHint(); } catch (eRh) {}
+            return true;
+        }
+        _pendingSpawn = { x: x, y: y };
+        var sel = document.getElementById('map-select');
+        if (sel) {
+            if (![].some.call(sel.options, function (o) { return o.value === dest; })) {
+                var opt = document.createElement('option');
+                opt.value = dest;
+                opt.textContent = dest;
+                sel.appendChild(opt);
+            }
+            sel.value = dest;
+        }
+        if (typeof changeMap === 'function') changeMap(true);
+        return true;
+    };
+    window.explorePatrolAnchor = function () { return _patrolAnchor ? { x: _patrolAnchor.x, y: _patrolAnchor.y } : null; };
+    window.exploreTileDist = exploreTileDist;
     window.exploreVacuumLoot = exploreVacuumLoot;
     window.claimExploreLootEl = claimExploreLootEl;
     window.exploreEnsureUi = exploreEnsureUi;

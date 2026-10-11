@@ -56,6 +56,7 @@ alwaysApply: true
 | 37 | 人物走到物件後面 | `tools/lin/export-linobj.js`（全部：`export-linobj-all.js`）把高於地面的物件群組匯成無損 alpha 遮罩圖集 `o_*.webp`＋`o_*.json`（底座＝最南不透明格；超寬切直條）；`linmapObjSync` 只在「物件底座在角色南邊且蓋到角色」時疊上該物件（顏色取底圖 `c_*.webp`、遮罩取形狀，像素完全對齊）；擋到玩家本人＝半透明 `.is-veil`；`#explore-linobj` 不可設 z-index／transform；原版地圖景深 `exploreDepthZ` 每 2px 一層（人／怪／NPC／同圖玩家／物件共用）（v3.9.75，實測 `tools/lin/_probe-eval.js`＋`_out/x_occl.js`） |
 | 38 | NPC 頭上兩行 | 原版村莊 NPC：上行職稱（淡金）、下行名字（白），名牌依精靈頭頂高度（`sprHeadAbove`）（v3.9.75） |
 | 39 | 玩家交易 | 點同圖玩家（`.remote-party-hit` 可點、`isUiBlockTarget` 擋點地）→ 選單「交易／邀請組隊」；原版流程：邀請 15 秒 → 雙方各放 5 格＋金幣 → 雙方鎖定成交；`lib/rt-trade.js` 鎖定時從**自己**雲端存檔托管扣出、成交／取消轉成領取單由收方自己領（伺服器不寫別人存檔）；狀態存 `persistFile("trades.json")`；`js/35-cloud-save.js` 的 `_seedOf` 必須有定義（缺了同步上傳必拋錯、交易／拍賣鎖不了）（v3.9.76，實測 `tools/_audit-trade.js`） |
+| 40 | 掛機巡邏／沒怪瞬移／書籤／掛機報告 | 設定「巡邏範圍 N 格」（`set-patrol`，0＝不限）：只打開始掛機位置（錨點）N 個原版格內的怪，沒怪走回錨點；手動走路／瞬移／換圖重設錨點；「附近沒怪自動瞬移」（`set-nomob-tp`）沒怪 4 秒後 `autoNoMobTeleport`（限制同瞬移卷軸、0 張才自動買 1 張）；書籤（`js/54-afk-bookmark.js`，`player.bookmarks` 最多 20）傳送消耗 1 張瞬移卷軸（沒有就自動買）、檢查 `mapOptDisabled`，攻城／隱藏區／傲慢之塔／軍王之室／頭目巢穴／需鑰匙地圖不可用；掛機報告只算打怪掉落、換圖不歸零；兩者在選單（能力→掛機報告、設定→書籤）；武器損傷系統使用者決定不做（v3.9.77，實測 `tools/_audit-afk-bookmark.js`） |
 | 22 | 法術特效尺寸 | 目標法術最小高度：投射物 0.5×、範圍 0.9× 帶高基準（`SPELL_FX_MIN_*`）；全域 `SPELL_FX_SCALE` 不動（v3.9.57） |
 
 新增修正時：把它加進上表，並在 `tools/_verify-locked-fixes.js` 加一條對應檢查。

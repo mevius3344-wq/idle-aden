@@ -2680,6 +2680,25 @@
             font-family: 'Noto Serif TC', 'PMingLiU', serif;
         }
         .trade-ask-text b { color: #e8c675; }
+        /* 📋 掛機報告／🔖 書籤 js/54-afk-bookmark.js（沿用交易視窗外框） */
+        .lin-list { display: flex; flex-direction: column; gap: 4px; max-height: 44dvh; overflow-y: auto; }
+        .lin-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px;
+            border: 1px solid rgba(232, 198, 117, 0.25); border-radius: 4px; background: rgba(0, 0, 0, 0.35); font-size: 13px;
+        }
+        .lin-row b { color: #fde68a; }
+        .lin-row-main {
+            flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+            padding: 2px 0; background: none; border: 0; color: #f5e6c0; text-align: left; cursor: pointer; font-family: inherit;
+        }
+        .lin-row-main small { font-size: 11px; color: #a89a7c; }
+        .lin-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .lin-stat-grid > div {
+            display: flex; flex-direction: column; padding: 5px 7px; border-radius: 4px;
+            border: 1px solid rgba(232, 198, 117, 0.25); background: rgba(0, 0, 0, 0.35);
+        }
+        .lin-stat-grid span { font-size: 11px; color: #a89a7c; }
+        .lin-stat-grid b { font-size: 15px; color: #fde68a; }
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
         /* ⚔️ v2.7.22 武器揮動特效層：與影子同定位(絕對·底部置中·native)但疊在本體「前」(DOM 順序在本體 img 之後)＋screen 加亮(金色刀光弧發光) */

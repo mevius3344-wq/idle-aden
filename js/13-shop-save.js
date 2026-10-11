@@ -2188,7 +2188,7 @@ function startGame() {
 //   於本檔求值當下擷取——index.html 的設定面板 markup 在 <script> 標籤之前，此時取到的就是 HTML 預設值。
 const CONFIG_DOM_IDS = ['set-pot', 'set-hp-pot', 'set-auto-buy-pot', 'set-mp-atk', 'sel-atk-skill', 'set-mp-heal', 'sel-heal-skill',
     'set-hp-skill', 'set-mp-convert', 'sel-convert-skill', 'set-haste', 'set-brave', 'set-blue', 'set-cautious',
-    'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow'];
+    'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow', 'set-patrol', 'set-nomob-tp'];
 const CONFIG_DOM_DEFAULTS = (function () {
     let d = {};
     try { CONFIG_DOM_IDS.forEach(id => { let el = document.getElementById(id); if (el) d[id] = (el.type === 'checkbox') ? el.checked : el.value; }); } catch (e) {}
@@ -2329,6 +2329,8 @@ function saveGame() {
         setPoly: document.getElementById('set-poly').checked,
         setMagicbarrier: document.getElementById('set-magicbarrier').checked,
         setTeleport: document.getElementById('set-teleport').checked,
+        setPatrol: (document.getElementById('set-patrol') || {}).value || '0',
+        setNoMobTp: !!(document.getElementById('set-nomob-tp') || {}).checked,
         setAutoBuyArrow: document.getElementById('set-auto-buy-arrow').checked,   // 🧪 v3.3.15 各藥水/卷軸「自動購買」已併入「自動使用」→移除獨立收集；弓箭自動購買維持
         autoBuffSkills: {} // 用來儲存動態生成的法術 Buff
     };
@@ -2744,6 +2746,8 @@ function loadGame() {
             if (c.setPoly !== undefined) document.getElementById('set-poly').checked = c.setPoly;
             if (c.setMagicbarrier !== undefined) document.getElementById('set-magicbarrier').checked = c.setMagicbarrier;
             if (c.setTeleport !== undefined) document.getElementById('set-teleport').checked = c.setTeleport;
+            if (c.setPatrol !== undefined && document.getElementById('set-patrol')) document.getElementById('set-patrol').value = c.setPatrol;
+            if (c.setNoMobTp !== undefined && document.getElementById('set-nomob-tp')) document.getElementById('set-nomob-tp').checked = !!c.setNoMobTp;
             if (c.setAutoBuyArrow !== undefined) document.getElementById('set-auto-buy-arrow').checked = c.setAutoBuyArrow;   // 🧪 v3.3.15 各藥水/卷軸「自動購買」勾選已移除（併入自動使用）→不再還原
             
             // 動態魔法 Buff 設定還原
