@@ -359,7 +359,7 @@ function grantAuthKillExp(mobOrName, share) {
     if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();
     if (share > 0 && share < 1) _expEach *= share;
     let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));
-    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));
+    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1) * (typeof expPotionMult === 'function' ? expPotionMult() : 1));
     if (_playerExpGain > 0) {
         player.exp += _playerExpGain;
         if (typeof checkLvUp === 'function') checkLvUp();
@@ -491,7 +491,7 @@ function killMob(idx) {
     if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();   // 🎉 全服經驗活動（可疊加）
     if (mob._expShare > 0 && mob._expShare < 1) _expEach *= mob._expShare;   // 👑 世界王：經驗依傷害比例
     let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));   // 🐾 每隻存活寵物各得完整玩家份額；玩家滿等不影響養寵
-    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
+    let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1) * (typeof expPotionMult === 'function' ? expPotionMult() : 1));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
     player.exp += _playerExpGain;
     checkLvUp();
     // 🐾 寵物經驗：每隻未倒地出戰寵物各得完整份額；不受玩家 Lv100 經驗封頂影響（升級需求＝玩家表 1/10）

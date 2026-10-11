@@ -452,8 +452,18 @@ section("34) 原版格步走路");
   ok("原版地圖玩家走格步（explorePlayerWalkStep → exploreLinWalkStep）", /function explorePlayerWalkStep\(dirx, diry, goal\) \{\s*var linW = exploreLinName\(\);\s*if \(linW && typeof linmapTileCenter === 'function'\)/.test(ex) && /var LIN_STEP_MS = \d+;/.test(ex));
   ok("只走 8 個格線方向（LIN_NB）＋格心（linmapTileCenter）", /var LIN_NB = \[\[1, 0\], \[1, 1\], \[0, 1\], \[-1, 1\], \[-1, 0\], \[-1, -1\], \[0, -1\], \[1, -1\]\];/.test(ex) && /global\.linmapTileCenter = linmapTileCenter;/.test(rd("js/49-linmap.js")));
   ok("點地／追怪帶 goal（先斜後直）", /explorePlayerWalkStep\(wdx, wdy, inp\.fromTap \? \{ x: _tapMove\.tx, y: _tapMove\.ty \} : null\)/.test(ex) && /explorePlayerWalkStep\(dirx, diry, \{ x: t\._fx, y: t\._fy \|\| 0 \}\)/.test(ex));
-  ok("每格 480ms＋位移跟幀跳（1/4 格）", /var LIN_STEP_MS = 480;/.test(ex) && /var kd = s\.cyc >= 1 \? Math\.floor\(k \* LIN_STEP_FRAMES\) \/ LIN_STEP_FRAMES : k;/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
+  ok("每格 640ms（加速 480）＋第 k 幀跳到 (k+1)/4 格＋每步從第 0 幀起播＋實際時間", /var LIN_STEP_MS = 640;/.test(ex) && /var kd = s\.cyc >= 1 \? Math\.min\(1, \(Math\.floor\(k \* LIN_STEP_FRAMES\) \+ 1\) \/ LIN_STEP_FRAMES\) : k;/.test(ex) && /_walkCycle = s\.c0 \+ k \* s\.cyc;/.test(ex) && /var el = Math\.max\(0, Math\.min\(120, now - s\.t\)\);/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
   ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
+  ok("格步跳位同時換幀（queueMicrotask _playerMorphApply）", /queueMicrotask\(function \(\) \{ try \{ _playerMorphApply\(\); \} catch \(e\) \{\} \}\)/.test(ex));
+}
+
+section("43) 新手禮包 200%經驗藥水／伺服器壞網址");
+{
+  const d = rd("js/00-data.js"), dc = rd("js/01-drops-config.js"), kp = rd("js/05-kill-progression.js"), ss = rd("js/13-shop-save.js"), sv = rd("_serve.js");
+  ok("potion_exp2 定義（exp2、1800 秒、有 img、不可賣）", /"potion_exp2": \{[^\n]*img: "assets\/icons\/items\/[^"%]+\.png"[^\n]*eff: "exp2", dur: 1800, noSell: true/.test(d));
+  ok("expPotionMult 套用到玩家經驗（兩處）", /function expPotionMult\(\)/.test(dc) && (kp.match(/expPotionMult\(\)/g) || []).length >= 2);
+  ok("創角送 200%經驗藥水 ×10", /gainItem\('potion_exp2', 10, true, true\)/.test(ss));
+  ok("_serve.js 壞 URI 回 400 不崩潰", /catch \(eUri\) \{\s*res\.writeHead\(400/.test(sv));
 }
 
 section("35) 名字在頭上");

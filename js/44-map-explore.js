@@ -1689,24 +1689,30 @@
      * 原版拼塊地圖：一格一步、只走 8 個格線方向（橫 48px、直 24px、斜 24×12），每步固定時間，停在格子中心；
      * 一步＝一整輪走路幀（_walkCycle）。goal 有給時照原版走法：先斜走到對齊再直走。
      * 位移跟著走路幀一格一格跳（每幀 1/4 格），不是平滑滑行——原版客戶端就是這樣，腳才會踩在地上。
+     * 照新創客戶端：第 k 幀一開始就跳到 (k+1)/4 格；每步從第 0 幀起播；進度用實際經過時間，超出的時間帶到下一步。
      */
-    var LIN_STEP_MS = 480;
+    var LIN_STEP_MS = 640;
     var LIN_STEP_FRAMES = 4;
     var LIN_NB = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
     var _linStep = null;
+    var _linCarry = null;
     var _walkCycle = 0;
-    function exploreLinStepReset() { _linStep = null; }
+    function exploreLinStepReset() { _linStep = null; _linCarry = null; }
     function exploreLinStepping() { return !!_linStep; }
     function exploreLinStepAdvance(name) {
         var s = _linStep;
         if (!s) return 0;
-        if (Math.abs(_tx - s.lx) > 2 || Math.abs(_ty - s.ly) > 2) { _linStep = null; return 0; }
-        var k = Math.min(1, s.k + TICK_MS / s.dur);
-        var kd = s.cyc >= 1 ? Math.floor(k * LIN_STEP_FRAMES) / LIN_STEP_FRAMES : k;
+        if (Math.abs(_tx - s.lx) > 2 || Math.abs(_ty - s.ly) > 2) { _linStep = null; _linCarry = null; return 0; }
+        var now = performance.now();
+        var el = Math.max(0, Math.min(120, now - s.t));
+        s.t = now;
+        var k = Math.min(1, s.k + el / s.dur);
+        var kd = s.cyc >= 1 ? Math.min(1, (Math.floor(k * LIN_STEP_FRAMES) + 1) / LIN_STEP_FRAMES) : k;
         var nx = s.fx + (s.tx - s.fx) * kd;
         var ny = s.fy + (s.ty - s.fy) * kd;
         var moved = Math.hypot(nx - _tx, ny - _ty);
-        _walkCycle += (k - s.k) * s.cyc;
+        _walkCycle = s.c0 + k * s.cyc;
+        if (k >= 1) _linCarry = { ms: (s.k + el / s.dur - 1) * s.dur, t: now };
         s.k = k;
         _tx = nx; _ty = ny;
         s.lx = nx; s.ly = ny;
@@ -1714,6 +1720,10 @@
         if (moved > 0.01) {
             _walkPhase += moved * WALK_PHASE_DIST;
             if (s.cyc >= 1) exploreSetFaceNow(s.tx - s.fx, -(s.ty - s.fy));
+            // 換幀與位移要同一畫面（新創同幀），不等 25fps 的 RAF
+            if (s.cyc >= 1 && typeof _playerMorphApply === 'function') {
+                try { queueMicrotask(function () { try { _playerMorphApply(); } catch (e) {} }); } catch (e2) {}
+            }
         }
         return Math.max(moved, 0.09);
     }
@@ -1760,8 +1770,11 @@
         if (!want) return 0;
         var o = exploreLinStepPick(name, dirx, diry, goal);
         if (!o) return 0;
-        var dur = (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult(true);
-        _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: Math.max(60, dur), cyc: o.cyc, lx: _tx, ly: _ty };
+        var dur = Math.max(60, (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult(true));
+        var now = performance.now();
+        var carry = (_linCarry && now - _linCarry.t < 100) ? Math.min(dur * 0.5, Math.max(0, _linCarry.ms) + (now - _linCarry.t)) : 0;
+        _linCarry = null;
+        _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: dur, cyc: o.cyc, lx: _tx, ly: _ty, t: now - carry, c0: o.cyc >= 1 ? Math.ceil(_walkCycle - 1e-6) : _walkCycle };
         if (o.cyc >= 1) exploreSetFaceNow(o.c.x - _tx, -(o.c.y - _ty));
         return exploreLinStepAdvance(name);
     }

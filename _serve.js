@@ -4353,7 +4353,14 @@ async function handleLeaderboardApi(req, res, u) {
 
 const server = http.createServer(async (req, res) => {
   countRequest();
-  let u = decodeURIComponent((req.url || "/").split("?")[0]);
+  let u;
+  try {
+    u = decodeURIComponent((req.url || "/").split("?")[0]);
+  } catch (eUri) {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad Request");
+    return;
+  }
   try {
     if (u === "/api/server/status") {
       await handleServerStatusApi(req, res);

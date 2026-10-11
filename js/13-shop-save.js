@@ -2110,6 +2110,7 @@ function startGame() {
             gainItem('bk_lightarrow', 1, true, true); // 光箭魔法書
         }
     }
+    gainItem('potion_exp2', 10, true, true);   // 🎁 新手禮包：200%經驗藥水 ×10（綁定）
     if (typeof loadSharedCollections === 'function') loadSharedCollections();   // 🎴🗡️🧰 創角：載入同模式共用收集圖鑑（新角色即承接同模式既有收集）
     if (typeof ensureCardBook === 'function') ensureCardBook();   // 🎴 怪物收集冊改由「收藏」面板開啟（移除道具欄本體）
     if (typeof ensureEquipBook === 'function') ensureEquipBook();   // 🗡️ 裝備收集冊改由「收藏」面板開啟＋登錄起始裝備

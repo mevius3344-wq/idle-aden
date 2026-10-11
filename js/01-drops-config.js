@@ -777,7 +777,7 @@
 // • 召喚物 / 迷魅 endTick：絕對 tick，已隨存檔保存（saveGame 的 ticks 欄位），重載後仍有效
 const BUFF_NAMES = {   // buff 鍵 → 顯示名稱（DB.skills 查不到時使用）
     haste: "加速", brave: "勇敢藥水", blue: "藍色藥水", cautious: "慎重藥水",
-    elfcookie: "精靈餅乾", poly: "變身", shield: "保護罩", taming: "誘捕", sk_set_dragonscion: "龍裔"
+    elfcookie: "精靈餅乾", poly: "變身", shield: "保護罩", taming: "誘捕", sk_set_dragonscion: "龍裔", exp2: "200%經驗"
 };
 // ===== 🔧 架構#3：物品「同一性簽章」單一事實來源 =====
 // 判斷兩件物品是否「完全相同（可堆疊/可合併/可比對）」一律使用 itemSig / sameItemSig，
@@ -1014,6 +1014,10 @@ function newbieBoostActive(now) {
 /** 掉寶／金幣／卡片倍率：啟程加成期間 ×3 */
 function newbieBoostMult() {
     return newbieBoostActive() ? 3 : 1;
+}
+/** 200%經驗藥水（buffs.exp2）：玩家打怪經驗 ×2（不影響寵物份額） */
+function expPotionMult() {
+    return (player && player.buffs && player.buffs.exp2 > 0) ? 2 : 1;
 }
 function newbieBoostRemainLabel(now) {
     let left = Math.max(0, newbieBoostExpireAt() - (now == null ? Date.now() : now));
