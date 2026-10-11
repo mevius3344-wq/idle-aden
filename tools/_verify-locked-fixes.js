@@ -221,9 +221,7 @@ section("13) 數值規格");
 {
   ok("萬能藥上限 30", /const PANACEA_USE_MAX\s*=\s*30;/.test(F.drops));
   ok("世界王重生 1 小時（前端）", /var _wbScheduleRespawnMs\s*=\s*3600000;/.test(F.wb));
-  if (exists("lib/rt-world-boss.js")) {
-    ok("世界王重生 1 小時（伺服器）", /WB_RESPAWN_MS \|\| 3600000/.test(rd("lib/rt-world-boss.js")));
-  }
+  ok("世界王重生 1 小時（伺服器）", exists("lib/rt-field-boss.js") && /WB_RESPAWN_MS \|\| 3600000/.test(rd("lib/rt-field-boss.js")));
   ok("傳送卷軸效果存在", /d\.eff === 'teleport_scroll'/.test(F.items));
 }
 
@@ -533,6 +531,23 @@ section("40) 掛機巡邏範圍／沒怪瞬移／書籤／掛機報告");
   ok("書籤傳送消耗瞬移卷軸、檢查進入條件", /consume\(item\)/.test(ab) && /mapOptDisabled\(def\)/.test(ab) && /window\.exploreTeleportTo = function/.test(ex));
   ok("掛機報告只算打怪掉落（killMob／commitWorldLootDrop 期間）", /\['killMob', 'commitWorldLootDrop'\]/.test(ab) && /if \(!_lootDepth\) return;/.test(ab));
   ok("選單有 掛機報告／書籤", /action: 'afkreport'/.test(tabs) && /action: 'bookmark'/.test(tabs) && /js\/54-afk-bookmark\.js/.test(F.html));
+}
+
+section("41) 世界王回原地圖（全服共用、傷害第一拿掉落、經驗依比例）");
+{
+  const fb = exists("lib/rt-field-boss.js") ? rd("lib/rt-field-boss.js") : "";
+  const ws = rd("lib/rt-world-ws.js");
+  const mm = rd("lib/rt-map-mobs.js");
+  const rw = rd("js/48-realtime-world.js");
+  const kp = rd("js/05-kill-progression.js");
+  const wm = rd("js/11-world-map.js");
+  const sv = rd("_serve.js");
+  ok("沒有 wb_ 專屬房（不再建 DB.maps[wb_*]、無 BOSS專區）", !/DB\.maps\[wbMap\]/.test(F.wb) && !/BOSS專區/.test(wm) && !/wbSpawnCenterBoss|wbShouldHost/.test(rd("js/03-combat-core.js")));
+  ok("頭目定義帶原地圖固定點（wbBossDefsForMap）＋進圖提報 boss_def", /function wbBossDefsForMap\(mapId\)/.test(F.wb) && /t: 'boss_def'/.test(rw) && /t === "boss_def"/.test(ws));
+  ok("伺服器全服一隻：掉落＝傷害第一、expShare 依比例、存 persistFile", /lootKey = top \|\| who/.test(fb) && /expShare\[k\] = total > 0/.test(fb) && /persistFile\("field-bosses\.json"\)/.test(sv));
+  ok("跨頻道同步（broadcastMapAll）＋各頻道 snap 帶頭目列", /broadcastMapAll\(mapId, killPack, null\)/.test(ws) && /fieldBoss\.rowsForMap\(room\.mapId\)/.test(mm));
+  ok("客戶端：世界王不本地補結算、同次擊殺只結算一次、經驗乘比例", /if \(!mob\._fieldBoss\) try \{/.test(kp) && /_expEach \*= mob\._expShare/.test(kp) && /_bossLooted\[bk\]/.test(rw) && /grantAuthKillExp\(mob \|\| data\.n \|\| '', bossShare\)/.test(rw));
+  ok("時刻表含地點欄＋傳送師前往", /<th>地點<\/th>/.test(F.html) && /function wbScheduleHtml\(withGo\)/.test(F.wb) && /wbScheduleHtml\(true\)/.test(wm));
 }
 
 section("14) 公告文字");

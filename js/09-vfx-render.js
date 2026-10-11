@@ -1831,9 +1831,11 @@ function _renderMobsImpl() {
         // 🚀 場戰只繪製鏡頭附近＋目前目標（避免 80 格整列 DOM／動畫拖死主執行緒）
         _order = [];
         let _tgt = (typeof mapState !== 'undefined') ? mapState.targetIdx : -1;
-        for (let _i = 0; _i < _fieldSlots; _i++) {
+        let _fieldEnd = Math.max(_fieldSlots, (mapState.mobs || []).length);
+        for (let _i = 0; _i < _fieldEnd; _i++) {
             let _fm = mapState.mobs[_i];
             if (!_fm || _fm._dead || !(_fm.curHp > 0)) continue;
+            if (_i >= _fieldSlots && !_fm._fieldBoss) continue;   // 👑 世界王在練功槽之後（slot 200+）
             let _near = true;
             try {
                 if (typeof exploreMobShouldRender === 'function') _near = !!exploreMobShouldRender(_fm);

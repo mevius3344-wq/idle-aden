@@ -744,10 +744,8 @@ function tick() {
     // === 出怪判定：以邏輯 tick (state.ticks) 為準，與主迴圈時間補跑同步 ===
     // mapState.spawnAt[i] = 該格子預定出怪的 tick 值；為 null 代表該格目前有怪、無需排程。
     if (!(typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs())
-        && !(typeof mapMobShouldFollow === 'function' && mapMobShouldFollow())
-        && !(typeof wbShouldFollow === 'function' && wbShouldFollow())) {
-        let isWbMap = typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current);
-        let isPureBossMap = (PURE_BOSS_MAPS.includes(mapState.current) && !KING_ROOMS[mapState.current]) || isWbMap;   // 👑 世界王欄位＝純BOSS房式中央重生
+        && !(typeof mapMobShouldFollow === 'function' && mapMobShouldFollow())) {
+        let isPureBossMap = PURE_BOSS_MAPS.includes(mapState.current) && !KING_ROOMS[mapState.current];
         if(!mapState.spawnAt) mapState.spawnAt = [null, null, null, null, null];
         let nowT = state.ticks;
         if(KING_ROOMS[mapState.current] && state._kbRespawnAt != null) {
@@ -776,22 +774,8 @@ function tick() {
             for(let i=0; i<slotCount; i++) {
                 if(mapState.mobs[i]) { mapState.spawnAt[i] = null; continue; } // 有怪：清除排程
                 if(isPureBossMap && i !== 1) continue;                          // 純 BOSS 房只生中央
-                if(isWbMap && i === 1 && typeof wbShouldHost === 'function' && !wbShouldHost()) continue;   // 👑 世界王：非主機不本地刷王
                 let delay;
-                if(isWbMap) {
-                    let _wbDead = false;
-                    try {
-                        if (typeof wbServerState === 'function') {
-                            let _st = wbServerState();
-                            _wbDead = !!(_st && _st.dead);
-                        }
-                    } catch (e) {}
-                    if (_wbDead) {
-                        mapState.spawnAt[i] = null;
-                        continue;
-                    }
-                    delay = 50;
-                } else if(isPureBossMap) {
+                if(isPureBossMap) {
                     delay = 50;                                                 // 🔧 純BOSS房(三龍窟)：BOSS死亡後固定 5 秒(50 tick)才刷新，不受日光術/席琳的世界加速影響（2026-06 用戶調整 3 分鐘→5 秒）
                 } else if(KING_ROOMS[mapState.current]) {
                     delay = 50;                                                 // 🔧 軍王之室：固定 5 秒復活，不受日光術/席琳的世界加速影響
@@ -1147,7 +1131,6 @@ const BOSS_BIG_MAPS = ['antaras_lair', 'fafurion_lair', 'valakas_lair'];   // �
 //    單體純BOSS房與雙BOSS祭壇維持三格；攻城建築出現時也不會壓縮為三格。
 function backSlotsActive() {
     let kingRoom = KING_ROOMS[mapState.current];
-    if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) return false;   // 👑 世界王欄位：中央單體（三格版面）
     return mapState.current === 'rift_battle'
         || !!(kingRoom && !kingRoom.dual)
         || !PURE_BOSS_MAPS.includes(mapState.current);
@@ -2108,12 +2091,6 @@ function spawnMob(idx) {
         mapState.mobs[idx] = { ..._wd, curHp: _wd.hp, uid: uid(), _born: ++_mobBornSeq, _bornMs: Date.now(), _magCd: {}, justHit: false, st: newMobStatus(), trainingDummy: true, noAttack: true };
         try { mapState.targetIdx = 1; } catch (eT) {}
         return;
-    }
-    // 👑 世界王欄位：中央固定頭目（全服即時同步）
-    if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
-        if (idx !== 1) { mapState.mobs[idx] = null; return; }
-        if (typeof wbShouldFollow === 'function' && wbShouldFollow()) return;
-        if (typeof wbSpawnCenterBoss === 'function') { wbSpawnCenterBoss(); return; }
     }
     let pool = DB.maps[mapState.current];
     if(!pool) return;

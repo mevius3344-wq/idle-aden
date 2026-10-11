@@ -1494,6 +1494,13 @@
 .tp-map-btn:hover:not(:disabled) { border-color: rgba(212, 175, 110, 0.55); background: rgba(30, 41, 59, 0.95); }
 .tp-map-btn:disabled { opacity: 0.4; color: #64748b; cursor: not-allowed; }
 .tp-map-btn.is-here { border-color: rgba(52, 211, 153, 0.55); color: #6ee7b7; }
+.wb-schedule-inline { border: 1px solid #5b3d2a; border-radius: 10px; }
+.wb-schedule-inline .wb-schedule-scroll { max-height: none; overflow-x: auto; }
+.wb-schedule-inline .wb-schedule-table th,
+.wb-schedule-inline .wb-schedule-table td { padding: 4px 3px; white-space: normal; }
+.wb-schedule-inline .wb-schedule-table td:last-child,
+.wb-schedule-inline .wb-schedule-cd { white-space: nowrap; }
+.wb-schedule-inline .wb-go { padding: 3px 8px; font-size: 12px; white-space: nowrap; border-radius: 8px; }
 
 /* 🩹 v3.9.40：取消頂部 #chud-target；鎖定怪改在怪卡上常顯名稱＋血條（見 style.css） */
 

@@ -791,6 +791,11 @@
         var def = exploreActiveMapDef();
         var layoutKey = (def && def.layout) ? def.layout : FIELD_LAYOUT;
         if (mob._fx != null && mob._fy != null && mob._fieldMap === mapState.current && mob._fieldLayout === layoutKey) return;
+        if (mob._fieldBoss && mob._fx != null && mob._fy != null) {   // 👑 世界王：固定在伺服器給的重生點
+            mob._fieldMap = mapState.current;
+            mob._fieldLayout = layoutKey;
+            return;
+        }
         var slot = Math.max(0, idx | 0);
         var spot = spots[Math.floor(slot / PACK_PER_SPOT) % spots.length];
         var member = slot % PACK_PER_SPOT;

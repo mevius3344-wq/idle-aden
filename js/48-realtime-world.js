@@ -63,6 +63,7 @@
     }
 
     var _mobsRev = 0;
+    var _mobsRevMap = '';
 
     function rtWorldFindMob(uid) {
         if (!uid || typeof mapState === 'undefined' || !mapState || !Array.isArray(mapState.mobs)) return null;
@@ -169,7 +170,37 @@
         if (row.x != null) mob._fx = Number(row.x) || 0;
         if (row.y != null) mob._fy = Number(row.y) || 0;
         if (mob.n === '木頭人') mob.trainingDummy = true;
+        if (row.boss) {
+            mob._fieldBoss = true;
+            if (base.hard && typeof initHardSkin === 'function') { try { initHardSkin(mob); } catch (eHs) {} }
+        }
         return mob;
+    }
+
+    /** 👑 世界王：固定在伺服器給的重生點（不走練功點分配） */
+    function rtWorldPinBoss(mob, row) {
+        if (!mob || !row) return;
+        var x = Number(row.x) || 0;
+        var y = Number(row.y) || 0;
+        mob._fx = mob._homeFx = mob._gridFx = x;
+        mob._fy = mob._homeFy = mob._gridFy = y;
+        mob._slideStart = 0;
+    }
+
+    var _bossLooted = {};
+    var _bossDefMap = '';
+
+    /** 👑 進圖提報本圖世界王（伺服器先到先登記；全服共用一隻） */
+    function rtWorldPushBossDefs() {
+        if (!_connected || !rtWorldOnline()) return false;
+        var mapId = '';
+        try { mapId = mapState.current || ''; } catch (e) { return false; }
+        if (!mapId || _bossDefMap === mapId || !rtWorldAuthMapOk(mapId)) return false;
+        if (typeof wbBossDefsForMap !== 'function') return false;
+        var defs = wbBossDefsForMap(mapId);
+        if (!defs || !defs.length) return false;
+        _bossDefMap = mapId;
+        return rtWorldSend({ t: 'boss_def', mapId: mapId, bosses: defs });
     }
 
     /** P1：套用伺服器 mobs snap */
@@ -179,6 +210,7 @@
         // 🪵 修練場個人區：忽略伺服器共用怪
         if (data.mapId === 'training') return;
         var rev = Math.floor(Number(data.rev) || 0);
+        if (_mobsRevMap !== data.mapId) { _mobsRevMap = data.mapId; _mobsRev = 0; }
         if (rev && rev < _mobsRev) return;
         _mobsRev = rev || _mobsRev;
         if (!Array.isArray(mapState.mobs)) mapState.mobs = [];
@@ -226,6 +258,10 @@
                             exploreAssignFieldPos(spawned, slot);
                         }
                     } catch (ePos) {}
+                    if (row.boss) {
+                        rtWorldPinBoss(spawned, row);
+                        try { if (typeof vfxBossEntrance === 'function') vfxBossEntrance(spawned); } catch (eVb) {}
+                    }
                 }
                 continue;
             }
@@ -376,11 +412,28 @@
         var expKeys = Array.isArray(data.expKeys) ? data.expKeys : [];
         var isLoot = !!(myKey && lootKey && myKey === lootKey);
         var isExp = !!(myKey && expKeys.indexOf(myKey) >= 0);
-        // 🩹 v3.9.32：hello key 尚未對齊／lootKey 空時，本地已 await 的擊殺仍要入帳
-        if (!isLoot && mob && mob._awaitAuthKill && !mob._dead) {
-            if ((myKey && data.by && data.by === myKey) || mob._localKillPending) isLoot = true;
+        var bossShare = 1;
+        if (data.boss) {
+            // 👑 世界王：掉落只給傷害第一名、經驗依傷害比例；同一次擊殺只結算一次
+            var bk = String(key) + '#' + (data.killSeq || 0);
+            if (_bossLooted[bk]) {
+                if (mob) rtWorldClearMobSilent(key);
+                return;
+            }
+            if (isLoot || isExp) _bossLooted[bk] = 1;
+            var sh = data.expShare && myKey ? Number(data.expShare[myKey]) : NaN;
+            if (sh > 0 && sh <= 1) bossShare = sh;
+            if (isLoot && idx < 0 && data.slot != null && mapState.mobs) {
+                idx = Math.max(0, Math.floor(Number(data.slot) || 0));
+                while (mapState.mobs.length <= idx) mapState.mobs.push(null);
+            }
+        } else {
+            // 🩹 v3.9.32：hello key 尚未對齊／lootKey 空時，本地已 await 的擊殺仍要入帳
+            if (!isLoot && mob && mob._awaitAuthKill && !mob._dead) {
+                if ((myKey && data.by && data.by === myKey) || mob._localKillPending) isLoot = true;
+            }
+            if (!isExp && myKey && data.by && data.by === myKey) isExp = true;
         }
-        if (!isExp && myKey && data.by && data.by === myKey) isExp = true;
 
         if (isLoot) {
             if (mob && mob._dead) return; // fallback 已結算
@@ -403,6 +456,7 @@
                 mob._awaitAuthKill = false;
                 mob._dead = false;
                 mob.curHp = 0;
+                if (data.boss) { mob._fieldBoss = true; mob._expShare = bossShare; }
                 try { if (typeof killMob === 'function') killMob(idx); } catch (eK) {}
             }
             return;
@@ -412,7 +466,7 @@
         if (isExp) {
             try {
                 if (typeof grantAuthKillExp === 'function') {
-                    grantAuthKillExp(mob || data.n || '');
+                    grantAuthKillExp(mob || data.n || '', bossShare);
                 }
             } catch (eE) {}
         }
@@ -443,7 +497,7 @@
             if (typeof mapState === 'undefined' || !mapState || !Array.isArray(mapState.mobs)) return;
             for (var i = 0; i < mapState.mobs.length; i++) {
                 var m = mapState.mobs[i];
-                if (!m || m._dead || m._authKillOk) continue;
+                if (!m || m._dead || m._authKillOk || m._fieldBoss) continue;
                 if (!(m._awaitAuthKill || m._localKillPending) || !(m.curHp <= 0)) continue;
                 try {
                     if (m._authFbTimer) { clearTimeout(m._authFbTimer); m._authFbTimer = null; }
@@ -686,6 +740,7 @@
         // P1：進圖後稍後推花名冊（等本地刷怪完成）
         setTimeout(function () {
             try { rtWorldPushRoster(); } catch (eR) {}
+            try { rtWorldPushBossDefs(); } catch (eB) {}
         }, 400);
     }
 
@@ -726,6 +781,7 @@
         _ws.onopen = function () {
             _connected = true;
             _myKey = '';
+            _bossDefMap = '';
             rtWorldHello();
             // P4：連上後立刻 enter 當前圖以拿頻道
             try {

@@ -171,10 +171,6 @@ const TOWN_BG_1920 = {
 function mapDisplayName(v) { for (let _c in MAP_CATEGORIES) { let _e = MAP_CATEGORIES[_c].find(x => x.v === v); if (_e) return _e.t; } return null; }
 function applyAreaBackground() {
     let cur = mapState.current, cat = mapCategoryOf(cur);
-    if (typeof isWorldBossMap === 'function' && isWorldBossMap(cur) && typeof wbEntryByMap === 'function') {
-        let _wbe = wbEntryByMap(cur);
-        if (_wbe && _wbe.srcMap) cur = _wbe.srcMap;   // 👑 世界王欄位：背景沿用原出沒地圖
-    }
     let bv = document.getElementById('battle-view');
     let _clearGround = (el) => {
         if (!el) return;

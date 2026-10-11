@@ -19,9 +19,11 @@ try {
   }
 } catch (e) {}
 
+let _fieldBoss = null;
 let _worldBossApiHandler = null;
 try {
-  _worldBossApiHandler = require("./lib/rt-world-boss").handleWorldBossApi;
+  _fieldBoss = require("./lib/rt-field-boss");
+  _worldBossApiHandler = _fieldBoss.handleApi;
 } catch (e) {}
 
 let _antiCheat = null;
@@ -4524,6 +4526,36 @@ server.on("error", (e) => {
   }
   throw e;
 });
+
+// 👑 原版世界王：全服共用、固定地點、1 小時重生（spawn／擊殺上世界頻道）
+if (_fieldBoss) {
+  const bossChat = (text) => {
+    try {
+      chatPush({
+        v: 1,
+        id: "wb" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+        ch: "world",
+        text: text,
+        name: "系統",
+        alignment: 0,
+        classic: true,
+        clanKey: "",
+        partyId: "",
+        slot: 0,
+        sessionId: "",
+        fp: "",
+        account: "",
+        at: Date.now(),
+      });
+    } catch (e) {}
+  };
+  _fieldBoss.configure({
+    persistPath: persistFile("field-bosses.json"),
+    onSpawn: (b) => bossChat("【頭目戰報】" + b.n + " 出現在 " + (b.mapName || b.mapId) + "！"),
+    onKill: (b, info) =>
+      bossChat("【頭目戰報】" + (info.killerName || "勇者") + " 於 " + (b.mapName || b.mapId) + " 擊敗了 " + b.n + "！"),
+  });
+}
 
 // 🌐 MMORPG：WebSocket 同圖即時通道（/ws/world）
 try {

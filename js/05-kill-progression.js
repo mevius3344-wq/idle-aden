@@ -342,7 +342,7 @@ function monsterGoldRange(mob) {
     return { min: Math.max(1, gMin), max: Math.max(Math.max(1, gMin), gMax) };
 }
 /** 🌐 P2：同圖參與者經驗（無掉落／金幣；掉落僅 lootKey） */
-function grantAuthKillExp(mobOrName) {
+function grantAuthKillExp(mobOrName, share) {
     if (!player || player.dead) return 0;
     let mob = mobOrName;
     if (typeof mobOrName === 'string') {
@@ -357,6 +357,7 @@ function grantAuthKillExp(mobOrName) {
     if (!mob || !(mob.exp > 0)) return 0;
     let _expEach = mob.exp * (1 + (typeof partyExpBonusPct === 'function' ? partyExpBonusPct() : 0) / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
     if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();
+    if (share > 0 && share < 1) _expEach *= share;
     let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));
     let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));
     if (_playerExpGain > 0) {
@@ -384,7 +385,8 @@ function killMob(idx) {
                 mob.curHp = 0;
                 try { if (typeof vfxKill === 'function') vfxKill(mob); } catch (eVk) {}
                 // 🩹 v3.9.32：伺服器 kill 遺失／hit 被節流／need_combat 拒收時，不可永遠卡住＝角色 0 經驗
-                try {
+                // 👑 世界王全服共用：掉落只給伺服器判定的傷害第一名，不可本地補結算
+                if (!mob._fieldBoss) try {
                     if (mob._authFbTimer) { clearTimeout(mob._authFbTimer); mob._authFbTimer = null; }
                     let _fbUid = mob.uid;
                     let _fbIdx = idx;
@@ -409,7 +411,6 @@ function killMob(idx) {
     } catch (eClrT) {}
     if (mob._mapMirror && typeof mapMobShouldFollow === 'function' && mapMobShouldFollow()) return;   // 👥 同圖共用怪：鏡像由地圖主機結算
     if (mob._partyMirror && typeof rtPartyShouldFollowMobs === 'function' && rtPartyShouldFollowMobs()) return;   // 🤝 組隊共用怪：隊員鏡像怪由隊長結算，避免重複掉落
-    if (mob._worldBossMirror && typeof wbShouldFollow === 'function' && wbShouldFollow()) return;   // 👑 世界王：鏡像怪由主機結算
     if (mob._justTransformedTick != null && state.ticks - mob._justTransformedTick <= 5 && mob.curHp > 0) return;   // 🌅 審查修：同一擊內的過時二次 killMob（on-hit 特效先殺→主判定又用舊 target.curHp 呼叫同槽位）→剛變身的滿血新階段不吃這種幽靈擊殺（真死亡 curHp<=0 不受影響）
     if (mob.transformTo && DB.mobs[mob.transformTo]) { doMobTransform(idx); return; }   // 🌅 三段變身：即使 HP=0 也不會死亡而是強制變身（先於 _dead/特效/獎勵）
     if (state.antharas && mapState.current === 'antharas_lair' && mob.n === '被侵蝕的瘋狂安塔瑞斯' &&
@@ -476,6 +477,7 @@ function killMob(idx) {
     // 🤝 v3.7.62 組隊經驗不再拆分：主玩家、每名未倒地傭兵、每隻未倒地寵物各取得完整經驗；既有組隊加成保留。
     let _expEach = mob.exp * (1 + partyExpBonusPct() / 100) * (typeof GAME_EXP_MULT === 'number' ? GAME_EXP_MULT : 1);
     if (typeof serverExpEventMult === 'function') _expEach *= serverExpEventMult();   // 🎉 全服經驗活動（可疊加）
+    if (mob._expShare > 0 && mob._expShare < 1) _expEach *= mob._expShare;   // 👑 世界王：經驗依傷害比例
     let _petExpGain = Math.floor(_expEach * (1 + (typeof dollFieldVal === 'function' ? dollFieldVal('expBonus') : 0) / 100));   // 🐾 每隻存活寵物各得完整玩家份額；玩家滿等不影響養寵
     let _playerExpGain = Math.floor(_petExpGain * (typeof getExpGainMult === 'function' ? getExpGainMult(player.lv) : 1));   // ⚠️v3.0.82 經典×0.5 已移除；Lv100 玩家自身仍不獲得經驗
     player.exp += _playerExpGain;
@@ -742,7 +744,7 @@ function killMob(idx) {
     if(isSiegeArea(mapState.current)) mapState.suppressSiegeBoss = false;   // 攻城區擊殺後，重生開始可出現城門/守護塔(10%)
     handleSiegeKill(mob);   // 攻城戰：擊殺計數 + 城門/守護塔判定
     if ((mob.boss || (mob.trollPlayer && !mob._siegePlayer)) && !player.dead) saveGame();   // 頭目／PVP玩家擊殺後存檔：保護稀有掉落與一小時密語排程
-    if (typeof announceBossDeath === 'function') announceBossDeath(mob);   // 📢 頭目死亡跑馬燈／世界廣播
+    if (typeof announceBossDeath === 'function' && !mob._fieldBoss) announceBossDeath(mob);   // 📢 頭目死亡跑馬燈／世界廣播（世界王由伺服器廣播）
     if (_kbRoom && mob.boss && !player.dead) {   // 🔧 軍王之室：擊敗頭目並取得掉落後，於清算時傳送回村/回城（🏛️ 雙BOSS祭壇：場上不再有其他存活BOSS時才算全滅）
         let _krm = KING_ROOMS[mapState.current];
         if (!_krm.dual || !mapState.mobs.some(m => m && m.boss && !m._dead && m.uid !== mob.uid)) state._kbVictory = true;

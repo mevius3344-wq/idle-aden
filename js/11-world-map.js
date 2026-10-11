@@ -161,13 +161,6 @@ const MAP_REGIONS = [
 function mapEntryOf(v) { for (let c in MAP_CATEGORIES) { let e = MAP_CATEGORIES[c].find(x => x.v === v); if (e) return e; } return null; }
 // 地圖 v 屬於哪個「地區」下拉分類（特例：攻城動態、攻城獲勝城堡歸所屬地區、傲慢之塔攀登樓層、時空裂痕戰場）
 function mapRegionOf(v) {
-    if (typeof isWorldBossMap === 'function' && isWorldBossMap(v)) {
-        if (typeof wbEntryByMap === 'function') {
-            let e = wbEntryByMap(v);
-            if (e && (e.zone === 'dream' || e.zone === 'oblivion')) return 'boss_zone';
-        }
-        return 'worldboss';
-    }
     if (SIEGE_OUTER_INNER.includes(v)) return 'siege';
     if (CASTLE_EXTRA.includes(v)) return 'windwood';   // 🏰 風木地監→風木地區（攻城獲勝後開放）
     for (let _ck in SIEGE_CITY) { if (SIEGE_CITY[_ck].castle === v) return _ck; }   // 🏰 攻城獲勝城堡→所屬地區(地區 key 與 SIEGE_CITY key 同名：kent/windwood/heine)
@@ -179,7 +172,7 @@ function mapRegionOf(v) {
 // 某地區下拉應顯示的地圖清單（攻城動態另接；其餘由 MAP_REGIONS 取 v、自 MAP_CATEGORIES 解析顏色/條件、以地區自訂名覆寫顯示）
 function regionMapList(rk) {
     if (rk === 'siege') return getSiegeAreas();
-    if (rk === 'worldboss' || rk === 'boss_zone') {
+    if (rk === 'worldboss') {
         if (typeof wbRegionMapList === 'function') {
             let wb = wbRegionMapList(rk);
             if (wb && wb.length) return wb;
@@ -272,7 +265,6 @@ function getCastleAreas() {
     return [{v:c.castle, t:c.castleName}];
 }
 function mapCategoryOf(v) {
-    if (typeof isWorldBossMap === 'function' && isWorldBossMap(v)) return 'special';
     if (SIEGE_OUTER_INNER.includes(v)) return 'siege';
     if (SIEGE_CASTLES.includes(v) || CASTLE_EXTRA.includes(v)) return 'castle';
     if (typeof v === 'string' && (v.startsWith('pride_f') || v === 'pride_climb')) return 'tower';   // 🗼 攀登中的樓層歸入傲慢之塔分類
@@ -292,9 +284,6 @@ function rebuildMapCategoryOptions() {
     let opts = [];
     if (player.siege && player.siege.active) opts.push(['siege','攻城']);   // ⚔️ 攻城進行中（攻城獲勝城堡不再獨立成「城堡」分類，已注入肯特/風木/海音地區）
     if (typeof wbWorldBossList === 'function' && wbWorldBossList().length) opts.push(['worldboss', '世界王']);
-    if (typeof wbBossZoneVisible === 'function' && wbBossZoneVisible() && typeof wbBossZoneList === 'function' && wbBossZoneList().length) {
-        opts.push(['boss_zone', 'BOSS專區']);
-    }
     MAP_REGIONS.forEach(r => { if (regionHasVisible(r.key)) opts.push([r.key, r.label]); });   // 🗺️ 17 地區（依 map_categories.md 順序；經典模式空地區自動隱藏）
     catSel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
 }
@@ -335,6 +324,12 @@ function onMapCategoryChange() {
     // 切換分類時，重建右側清單並讓人物一併移動到該分類的第一個可選地圖
     let cat = document.getElementById('map-category').value;
     populateMapSelect(cat);
+    if (cat === 'worldboss') {   // 👑 世界王＝重生時刻表；點選頭目才前往牠的地圖
+        let sel = document.getElementById('map-select');
+        if (sel) sel.selectedIndex = -1;
+        try { if (typeof wbOnCategoryChange === 'function') wbOnCategoryChange(cat); } catch (e) {}
+        return;
+    }
     let list = regionMapList(cat);
     let firstOk = list.find(m => !mapOptDisabled(m));
     // 優先回到該分類「上次到過」的地圖；無紀錄或已失效（如攻城結束／缺鑰匙）則用第一個可選地圖
@@ -461,10 +456,6 @@ function updatePrideFloorIndicator() {
         ind.classList.remove('hidden');
         if (sel) sel.classList.add('hidden');
         if (cat) cat.classList.remove('hidden');   // 傲慢之塔維持原行為：左側分類選單仍顯示
-    } else if (typeof isWorldBossMap === 'function' && isWorldBossMap(cur)) {
-        try { if (typeof wbUpdateIndicator === 'function') wbUpdateIndicator(); } catch (e) {}
-        if (sel) sel.classList.remove('hidden');
-        if (cat) cat.classList.remove('hidden');
     } else if (cur === 'dream_island') {
         try { rebuildMapCategoryOptions(); } catch (e) {}   // 🏝️ 進入夢幻之島→刷新選單以顯示 BOSS 專區
         ind.classList.add('hidden');
@@ -1497,14 +1488,8 @@ function changeMap(force) {
             if (typeof exploreInitFieldSpawns === 'function') _fieldInited = !!exploreInitFieldSpawns(t0);
         } catch (eFieldInit) { _fieldInited = false; }
         if (!_fieldInited) {
-            if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current)) {
-                mapState.spawnAt = [null, t0 + 50, null, null, null];   // 👑 世界王：僅中央格
-                try { if (typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (e) {}
-            } else {
-                mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
-            }
+            mapState.spawnAt = [t0 + 70, t0 + 50, t0 + 90]; // [左0, 中1, 右2]
         } else {
-            try { if (typeof isWorldBossMap === 'function' && isWorldBossMap(mapState.current) && typeof wbOnMapEnter === 'function') wbOnMapEnter(); } catch (eWb) {}
             // 🛡️ v3.8.307：進場戰圖強制恢復戰鬥迴圈（否則 spawnAt 永遠不消化＝空地圖）
             try {
                 if (typeof state !== 'undefined' && state && typeof player !== 'undefined' && player && player.cls && !player.dead) {
@@ -2114,9 +2099,6 @@ function _teleporterRegionTabs() {
     try {
         if (player && player.siege && player.siege.active) opts.push({ key: 'siege', label: '攻城' });
         if (typeof wbWorldBossList === 'function' && wbWorldBossList().length) opts.push({ key: 'worldboss', label: '世界王' });
-        if (typeof wbBossZoneVisible === 'function' && wbBossZoneVisible() && typeof wbBossZoneList === 'function' && wbBossZoneList().length) {
-            opts.push({ key: 'boss_zone', label: 'BOSS專區' });
-        }
         if (typeof MAP_REGIONS !== 'undefined' && Array.isArray(MAP_REGIONS)) {
             MAP_REGIONS.forEach(function (r) {
                 if (typeof regionHasVisible === 'function' && regionHasVisible(r.key)) opts.push({ key: r.key, label: r.label });
@@ -2153,6 +2135,22 @@ function renderTeleporterNPC(div) {
 
     function paintMaps() {
         if (!mapsEl) return;
+        if (curKey === 'worldboss' && typeof wbScheduleHtml === 'function') {   // 👑 重生時刻表＋地點，點「前往」到頭目所在地圖
+            mapsEl.innerHTML = wbScheduleHtml(true);
+            if (typeof wbFetchScheduleStatus === 'function') wbFetchScheduleStatus(false);
+            if (!mapsEl._wbTick) {
+                mapsEl._wbTick = setInterval(function () {
+                    if (!document.body.contains(mapsEl) || curKey !== 'worldboss') {
+                        clearInterval(mapsEl._wbTick);
+                        mapsEl._wbTick = null;
+                        return;
+                    }
+                    if (typeof wbFetchScheduleStatus === 'function') wbFetchScheduleStatus(false);
+                    mapsEl.innerHTML = wbScheduleHtml(true);
+                }, 1000);
+            }
+            return;
+        }
         var list = (typeof regionMapList === 'function') ? regionMapList(curKey) : [];
         if (!list || !list.length) {
             mapsEl.innerHTML = '<div class="tp-hint">此地區目前沒有可顯示的地圖。</div>';
