@@ -2108,6 +2108,30 @@ function _teleporterRegionTabs() {
     return opts;
 }
 
+// 🎁 功能道具「傳送」：隨處開傳送師選單（限制同瞬間移動卷軸）
+function openTeleportMenu() {
+    let st = player.statuses || {};
+    if (st.stone > 0 || st.paralyze > 0 || st.freeze > 0 || st.stun > 0 || st.sleep > 0) { logSys('你目前無法行動，無法使用傳送。'); return false; }
+    if (typeof pvpArenaTravelLocked === 'function' && pvpArenaTravelLocked()) { logSys('<span class="text-red-400">決鬥進行中無法使用傳送。</span>'); return false; }
+    if ((typeof KING_ROOMS !== 'undefined' && KING_ROOMS[mapState.current]) || state.oblivion || state.antharas || state.prideClimb || state.riftRun
+        || (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current))) {
+        logSys('<span class="text-red-400">此處的力量壓制了傳送，無法開啟傳送選單。</span>');
+        return false;
+    }
+    try { ensureTownTeleporters(); } catch (e) {}
+    _activePanel = null;
+    let box = document.getElementById('town-interaction-container');
+    if (!box) return false;
+    box.classList.remove('hidden');
+    box.classList.add('flex');
+    document.getElementById('interaction-npc-name').innerText = '傳送';
+    document.getElementById('interaction-npc-title').innerText = '[傳送選單]';
+    let contentDiv = document.getElementById('interaction-content');
+    contentDiv.innerHTML = '';
+    renderTeleporterNPC(contentDiv);
+    return true;
+}
+
 function renderTeleporterNPC(div) {
     if (!div) return;
     ensureTownTeleporters();

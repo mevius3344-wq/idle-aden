@@ -466,6 +466,16 @@ section("43) 新手禮包 200%經驗藥水／伺服器壞網址");
   ok("_serve.js 壞 URI 回 400 不崩潰", /catch \(eUri\) \{\s*res\.writeHead\(400/.test(sv));
 }
 
+section("44) 新手禮包（照新創）");
+{
+  const d = rd("js/00-data.js"), ie = rd("js/08-items-equip.js"), ss = rd("js/13-shop-save.js"), sk = rd("js/07-skills-cast.js"), st = rd("js/02-stats-recompute.js"), bm = rd("js/54-afk-bookmark.js"), wm = rd("js/11-world-map.js");
+  const ids = ["fn_home", "fn_tele", "fn_auto", "fn_settings", "fn_drop", "ivt_helm", "ivt_armor", "ivt_gloves", "ivt_boots", "ivt_sword", "ivt_2hsword", "ivt_scroll_teleport", "ivt_scroll_poly", "ivt_potion_haste"];
+  ok("14 個禮包道具定義、都有 img、都不可賣", ids.every((id) => new RegExp('"' + id + '": \\{ n: "[^"]+", img: "assets/[^"]+"[^\\n]*noSell: true').test(d)));
+  ok("功能道具不消耗（useFnItem）", /if \(d\.eff === 'fn'\) \{ if \(!silent\) useFnItem\(d\.fn\); return; \}/.test(ie) && /function openTeleportMenu\(\)/.test(wm));
+  ok("創角發放禮包並穿上象牙塔防具", /'fn_home', 'fn_tele', 'fn_auto', 'fn_settings', 'fn_drop', 'ivt_helm'/.test(ss) && /gainItem\('ivt_scroll_teleport', 500/.test(ss) && /\['ivt_helm', 'ivt_armor', 'ivt_gloves', 'ivt_boots'\]\.forEach\(id => \{ let it = player\.inv\.find\(i => i\.id === id\); if \(it\) equipItem\(it\); \}\)/.test(ss));
+  ok("自動使用／沒怪瞬移／書籤先用綁定版", /function invFindPref\(id\)/.test(ie) && /let item = invFindPref\(cfg\.pot\);/.test(sk) && /let item = invFindPref\('scroll_teleport'\);/.test(sk) && /let item = invFindPref\('scroll_teleport'\);/.test(st) && /var item = invFindPref\('scroll_teleport'\);/.test(bm));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

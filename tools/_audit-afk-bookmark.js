@@ -93,7 +93,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
 
     // 2) 附近沒怪自動瞬移：把所有怪標成不可達 → 4 秒後自動瞬移，卷軸 0 張時自動買 1 張並用掉
     const tp0 = await ev(`(()=>{if(!window.__gainWrap){window.__gainWrap=1;window.__tpBought=0;const g=window.gainItem;window.gainItem=function(id,n){if(id==='scroll_teleport')window.__tpBought+=(n||1);return g.apply(this,arguments)};}
-        window.__tpBought=0;player.inv=player.inv.filter(i=>i.id!=='scroll_teleport');document.getElementById('set-nomob-tp').checked=true;
+        window.__tpBought=0;player.inv=player.inv.filter(i=>i.id!=='scroll_teleport'&&i.id!=='ivt_scroll_teleport');document.getElementById('set-nomob-tp').checked=true;
         return JSON.stringify({x:explorePlayerX(),y:explorePlayerY(),gold:player.gold,cost:shopPrice(DB.items.scroll_teleport.p)})})()`);
     const t0 = JSON.parse(tp0);
     let jumped = null;
@@ -113,7 +113,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     ok(bm0.ok && bm0.n === 1, '記錄書籤 ' + JSON.stringify(bm0));
     await ev('exploreRandomTeleportOnMap({mode:"far"})');
     await sleep(800);
-    const g0 = await ev('(()=>{player.inv=player.inv.filter(i=>i.id!=="scroll_teleport");gainItem("scroll_teleport",2,true,true);return player.gold})()');
+    const g0 = await ev('(()=>{player.inv=player.inv.filter(i=>i.id!=="scroll_teleport"&&i.id!=="ivt_scroll_teleport");gainItem("scroll_teleport",2,true,true);return player.gold})()');
     const back = JSON.parse(await ev(`(()=>{const r=bookmarkGo(0);return JSON.stringify({r,x:explorePlayerX(),y:explorePlayerY(),map:mapState.current,gold:player.gold,sc:player.inv.filter(i=>i.id==='scroll_teleport').reduce((s,i)=>s+(i.cnt||1),0)})})()`));
     ok(back.r && Math.hypot(back.x - bm0.x, back.y - bm0.y) < 3 && back.map === FIELD && back.sc === 1 && back.gold === g0, '同圖書籤傳回原點、用掉 1 張卷軸 ' + asc(JSON.stringify(back)));
 
@@ -125,7 +125,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     ok(bm1.ok && bm1.n === 2 && bm1.map === other, '跨圖記錄書籤 ' + JSON.stringify(bm1));
     await goMap(FIELD);
     await sleep(2500);
-    await ev('(()=>{player.inv=player.inv.filter(i=>i.id!=="scroll_teleport");return 1})()');
+    await ev('(()=>{player.inv=player.inv.filter(i=>i.id!=="scroll_teleport"&&i.id!=="ivt_scroll_teleport");return 1})()');
     const g1 = await ev('player.gold');
     await ev('bookmarkGo(1)');
     await sleep(2500);

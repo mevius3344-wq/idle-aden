@@ -50,6 +50,7 @@
     }
     function quickSave(a) { try { localStorage.setItem(quickKey(), JSON.stringify(a)); } catch (e) {} }
     function invCount(id) {
+        if (typeof invCountPref === 'function') return invCountPref(id);
         var n = 0;
         try { (player.inv || []).forEach(function (i) { if (i && i.id === id && !i.gw) n += Math.max(1, Number(i.cnt) || 1); }); } catch (e) {}
         return n;
@@ -86,7 +87,7 @@
     function quickUse(i) {
         var id = quickLoad()[i];
         if (!id || !itemDef(id)) { openPicker(i); return; }
-        var it = (player.inv || []).find(function (x) { return x && x.id === id && !x.gw; });
+        var it = (typeof invFindPref === 'function') ? invFindPref(id) : (player.inv || []).find(function (x) { return x && x.id === id && !x.gw; });
         if (!it) {
             try { if (typeof logSys === 'function') logSys('<span class="text-slate-400">快捷欄：身上沒有 ' + esc(itemDef(id).n) + '。長按可更換。</span>'); } catch (e) {}
             return;

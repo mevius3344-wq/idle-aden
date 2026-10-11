@@ -229,7 +229,7 @@
         var def = _mapDef(bm.m);
         if (def && typeof mapOptDisabled === 'function' && mapOptDisabled(def)) { _bmToast('尚未滿足進入條件，無法傳送到「' + bm.n + '」。'); return false; }
         if (typeof window.exploreTeleportTo !== 'function') return false;
-        var item = player.inv.find(function (i) { return i && i.id === 'scroll_teleport' && (i.cnt || 1) >= 1; });
+        var item = invFindPref('scroll_teleport');
         if (!item) {
             var cost = (typeof shopPrice === 'function') ? shopPrice(DB.items.scroll_teleport.p) : DB.items.scroll_teleport.p;
             if (!(player.gold >= cost)) { _bmToast('沒有瞬間移動卷軸，金幣也不夠買。'); return false; }
@@ -272,7 +272,7 @@
         var w = document.getElementById('bm-win');
         if (!w || w.classList.contains('hidden')) return;
         var list = _bmList();
-        var cnt = (player.inv || []).filter(function (i) { return i && i.id === 'scroll_teleport'; }).reduce(function (s, i) { return s + (i.cnt || 1); }, 0);
+        var cnt = invCountPref('scroll_teleport');
         w.querySelector('.bm-count').textContent = '（' + list.length + '/' + BOOKMARK_MAX + '）瞬間移動卷軸 ' + cnt + ' 張';
         w.querySelector('.lin-list').innerHTML = list.length ? list.map(function (b, i) {
             return '<div class="lin-row">' +

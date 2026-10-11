@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.81';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.82';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1167,6 +1167,20 @@ const DB = {
         "potion_haste": { n: "自我加速藥水", type: "pot", req: "all", p: 200, c: "text-green-300", d: "飲下後身體變得輕盈，戰鬥動作也隨之加快。", eff: "haste", dur: 300, gachaWeight: 0 },
         "potion_blue": { n: "藍色藥水", type: "pot", req: "all", p: 1046, c: "text-blue-300", d: "以珍稀藍草煉製的藥水，精神越堅定，越能從中汲取充沛魔力。", eff: "blue", dur: 600, gachaWeight: 0 },
         "potion_exp2": { n: "200%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-yellow-300", d: "新手禮包贈送（綁定）。飲用後 30 分鐘內打怪獲得的經驗值變為 2 倍；重複飲用重新計時、不疊加。無法交易、無法販售。", eff: "exp2", dur: 1800, noSell: true, noJunk: true, gachaWeight: 0 },
+        "ivt_scroll_teleport": { n: "象牙塔瞬間移動卷軸", img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-sky-300", d: "新手禮包贈送（綁定）。使用後隨機瞬間移動到目前地圖的其他地點；自動瞬移、書籤會優先使用。無法交易、無法販售。", eff: "teleport_scroll", noSell: true, noJunk: true, gachaWeight: 0 },
+        "ivt_scroll_poly": { n: "象牙塔變身卷軸", img: "assets/icons/items/變形卷軸.png", type: "scroll", req: "all", p: 0, c: "text-gray-300", d: "新手禮包贈送（綁定）。效果同變形卷軸，變身 30 分鐘；自動變身會優先使用。無法交易、無法販售。", eff: "poly", dur: 1800, noSell: true, noJunk: true, gachaWeight: 0 },
+        "ivt_potion_haste": { n: "象牙塔加速藥水", img: "assets/icons/items/自我加速藥水.png", type: "pot", req: "all", p: 0, c: "text-green-300", d: "新手禮包贈送（綁定）。效果同自我加速藥水，持續 5 分鐘；自動加速會優先使用。無法交易、無法販售。", eff: "haste", dur: 300, noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_home": { n: "主城", img: "assets/icons/items/甘地圖騰.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後返回回家村莊，使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "home", noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_tele": { n: "傳送", img: "assets/icons/items/魔法書(指定傳送).png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟傳送選單，使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "tele", noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_auto": { n: "內掛選單", img: "assets/icons/items/調職命令書.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟內掛設定（巡邏範圍、沒怪自動瞬移、自動購買），使用後不會消失。", eff: "fn", fn: "auto", noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_settings": { n: "設定", img: "assets/ui/lin/menu_menu.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟遊戲設定（藥水、狀態等自動設定），使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "settings", noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_drop": { n: "掉落查詢", img: "assets/icons/items/歐林的日記本.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後查詢目前地圖每種怪物的掉落物，使用後不會消失。", eff: "fn", fn: "drop", noSell: true, noJunk: true, gachaWeight: 0 },
+        "ivt_helm": { n: "象牙塔皮頭盔", img: "assets/icons/armors/皮頭盔.png", type: "arm", slot: "helm", ac: 2, req: "all", safe: 4, p: 0, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。無法交易、無法販售。" },
+        "ivt_armor": { n: "象牙塔皮盔甲", img: "assets/icons/armors/皮盔甲.png", type: "arm", slot: "armor", ac: 4, req: "all", safe: 4, p: 0, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。無法交易、無法販售。" },
+        "ivt_gloves": { n: "象牙塔皮手套", img: "assets/icons/armors/手套.png", type: "arm", slot: "gloves", ac: 2, req: "all", safe: 4, p: 0, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。無法交易、無法販售。" },
+        "ivt_boots": { n: "象牙塔皮涼鞋", img: "assets/icons/armors/皮涼鞋.png", type: "arm", slot: "boots", ac: 2, req: "all", safe: 4, p: 0, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。無法交易、無法販售。" },
+        "ivt_sword": { n: "象牙塔單手劍", img: "assets/icons/weapons/長劍.png", type: "wpn", dmgS: 9, dmgL: 12, hit: 2, dmgBonus: 1, spd: 0.9, req: "royal,knight,elf", safe: 0, p: 0, noEnhance: true, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。單手劍，命中 +2、追加傷害 +1。無法強化、無法交易、無法販售。" },
+        "ivt_2hsword": { n: "象牙塔雙手劍", img: "assets/icons/weapons/雙手劍.png", type: "wpn", w2h: true, dmgS: 11, dmgL: 12, hit: 4, spd: 1, req: "royal,knight", safe: 0, p: 0, eff: "cleave", noEnhance: true, noSell: true, gachaWeight: 0, d: "新手禮包贈送（綁定）。雙手劍，命中 +4。無法強化、無法交易、無法販售。" },
         "potion_brave": { n: "勇敢藥水", type: "pot", req: "knight,dragon,warrior,royal", p: 880, c: "text-purple-300", d: "激起戰士血性的秘藥，使近身作戰者以更勇猛的步調迎敵。", eff: "brave", dur: 300, gachaWeight: 0 },
         "new_item_139": { n: "精靈餅乾", type: "pot", req: "elf", p: 1980, c: "text-yellow-200", d: "受精靈祝福的餅乾，妖精食用後能與風的律動同步。", eff: "elfcookie", dur: 300, gachaWeight: 0 },
         "new_item_140": { n: "慎重藥水", type: "pot", req: "mage,illusion", p: 600, c: "text-purple-300", d: "使思緒沉靜澄明的秘藥，能增進施法者的魔力運行與恢復。", eff: "cautious", dur: 300, gachaWeight: 0 },
@@ -1937,7 +1951,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.81：血量改回 40（曾誤設 800）
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.82：血量改回 40（曾誤設 800）
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },

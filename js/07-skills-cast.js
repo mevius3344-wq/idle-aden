@@ -1048,7 +1048,7 @@ function autoActions() {
         if (cfg.b === 'haste' && player._equipHaste) return;   // 裝備常駐加速（伊娃之盾）：不重複喝加速藥水
         if (document.getElementById(cfg.id).checked && (player.buffs[cfg.b] || 0) <= 0) {
             if(cfg.req && !cfg.req.split(',').includes(player.cls)) return;   // 🎮 支援逗號多職業（勇敢藥水 knight,dragon）
-            let item = player.inv.find(i => i.id === cfg.pot);
+            let item = invFindPref(cfg.pot);
             if(item) {
                  useItem(item.uid, true);
             } else {   // 🧪 v3.3.15 自動使用＝自動購買合併：勾選使用且缺貨→自動買一瓶再用（不再需要獨立「自動購買」勾選；魔法屏障卷軸亦同）
@@ -1066,7 +1066,7 @@ function autoActions() {
     {
         let tChk = document.getElementById('set-teleport');
         if (tChk && tChk.checked && mapState.mobs.some(m => m && m.boss && !m.noAutoTeleport) && !isSiegeArea(mapState.current) && !PURE_BOSS_MAPS.includes(mapState.current) && !state.prideClimb && !state.oblivion && !state.riftRun && (state._manualTpUntil == null || (state.ticks || 0) >= state._manualTpUntil)) {   // 🕒 手動瞬移後 5 秒內不自動瞬移/自動購買；攻城區與純BOSS房(安塔瑞斯/法利昂/巴拉卡斯)：BOSS為目標，不自動瞬移；🔧 卡瑞(noAutoTeleport)不觸發自動瞬移；🗼 傲慢之塔攀登中不自動瞬移；🌀 時空裂痕不自動瞬移逃離頭目
-            let item = player.inv.find(i => i.id === 'scroll_teleport');
+            let item = invFindPref('scroll_teleport');
             if (!item) {
                 let _tpCost = shopPrice(DB.items.scroll_teleport.p);   // 攻城獲勝 8 折亦適用
                 if (player.gold >= _tpCost) {   // 🧪 v3.3.15 自動使用＝自動購買合併：勾選瞬移且缺貨→自動買一張

@@ -609,6 +609,36 @@ function batchUseItem(u) {
     renderTabs(); updateUI(); saveGame();
     if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal();
 }
+// 🎁 新手禮包綁定版（象牙塔）：自動使用／書籤／快捷欄先用綁定版，用完才用一般版
+const IVT_ALT = { scroll_teleport: 'ivt_scroll_teleport', scroll_poly: 'ivt_scroll_poly', potion_haste: 'ivt_potion_haste' };
+function invFindPref(id) {
+    let inv = (player && player.inv) || [];
+    let alt = IVT_ALT[id];
+    let it = alt ? inv.find(i => i && i.id === alt && (i.cnt || 1) >= 1 && !i.gw) : null;
+    return it || inv.find(i => i && i.id === id && (i.cnt || 1) >= 1 && !i.gw) || null;
+}
+function invCountPref(id) {
+    let alt = IVT_ALT[id], n = 0;
+    ((player && player.inv) || []).forEach(i => { if (i && !i.gw && (i.id === id || (alt && i.id === alt))) n += Math.max(1, Number(i.cnt) || 1); });
+    return n;
+}
+function useFnItem(fn) {
+    try { if (typeof closeModal === 'function') closeModal(); } catch (e) {}
+    if (fn === 'home') {
+        if (mapState.current && String(mapState.current).indexOf('town_') === 0) { logSys('你已經在村莊裡了。'); return; }
+        if (typeof returnToTown === 'function') returnToTown();
+    } else if (fn === 'tele') {
+        if (typeof openTeleportMenu === 'function') openTeleportMenu();
+    } else if (fn === 'auto' || fn === 'settings') {
+        let tb = document.querySelector('#col-right .tab-bar-buttons [data-tab="automation"]');
+        if (typeof switchTab === 'function') switchTab('automation', tb || null);
+    } else if (fn === 'drop') {
+        try { _auditView = 'drops'; } catch (e) {}
+        let tb = document.querySelector('#col-right .tab-bar-buttons [data-tab="audit"]');
+        if (typeof switchTab === 'function') switchTab('audit', tb || null);
+    }
+}
+
 function useItem(u, silent = false) {
     let item = player.inv.find(i => i.uid === u);
     if (!item) return;
@@ -617,6 +647,7 @@ function useItem(u, silent = false) {
     if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後會自動回村甦醒；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
     let d = DB.items[item.id];
     if (d.noUse) { if(!silent) logSys(`此物品無法直接使用。`); return; }
+    if (d.eff === 'fn') { if (!silent) useFnItem(d.fn); return; }   // 🎁 功能道具（主城／傳送／內掛選單／設定／掉落查詢）：不消耗
 
     // 🌅 巨大骷髏的妖魂（eff:'expsoul'·expGain）：使用後獲得經驗值（批量走 batchUseItem）
     if (d.eff === 'expsoul') {

@@ -1132,7 +1132,7 @@ function enterHiddenArea(hiddenId) {
 }
 // 🌀 順移按鈕：v3.4.21 改為優先消耗 瞬間移動卷軸；沒有卷軸才判定手動施放傳送術（MP 足夠時）；皆無則提示
 function playerTeleport() {
-    let _it = player.inv.find(i => i.id === 'scroll_teleport' && (i.cnt || 1) >= 1);
+    let _it = invFindPref('scroll_teleport');
     if (_it) { state._manualTpUntil = (state.ticks || 0) + 50; useItem(_it.uid, false); return; }   // 🕒 手動瞬移後 5 秒內抑制自動瞬移/自動購買
     if (player.skills && player.skills.includes('sk_teleport')) {
         let _sk = DB.skills.sk_teleport;
@@ -1151,7 +1151,7 @@ function autoNoMobTeleport() {
     if (typeof KING_ROOMS !== 'undefined' && KING_ROOMS[mapState.current]) return false;
     if (typeof prideTeleportBlocked === 'function' && prideTeleportBlocked()) return false;
     if (state.prideClimb || state.oblivion || state.riftRun || state.antharas) return false;
-    let item = player.inv.find(i => i.id === 'scroll_teleport' && (i.cnt || 1) >= 1);
+    let item = invFindPref('scroll_teleport');
     if (!item) {
         let cost = shopPrice(DB.items.scroll_teleport.p);
         if (!(player.gold >= cost)) return false;

@@ -648,6 +648,7 @@ const WEAPON_TAGS = {
     relic_true_dragonslayer: ['雙手劍'], relic_flame_dk_sword: ['單手劍', '武士刀'],
     wpn_20: ['單手鈍器'], wpn_10: ['單手鈍器'], wpn_13: ['單手鈍器'], wpn_alien: ['單手鈍器'], wpn_1: ['單手鈍器'], wpn_2: ['單手鈍器'], wpn_ancient_axe: ['單手鈍器'], wpn_warrior_trial_axe: ['單手鈍器'], wpn_master_axe: ['單手鈍器'], wpn_demon_axehead: ['單手鈍器'], wpn_iron_axehead: ['單手鈍器'], wpn_giant_axehead: ['單手鈍器'],   // 🔧 古代神之斧／試煉斧頭／大匠的斧頭／魔物的斧頭／鐵斧頭／巨人的斧頭：單手鈍器（鈍擊）
     wpn_2hsword: ['雙手劍'], wpn_dragonslayer: ['雙手劍'], wpn_official_2h: ['雙手劍'],   // 🔧 雙手劍類型標註
+    ivt_sword: ['單手劍'], ivt_2hsword: ['雙手劍'],   // 🎁 新手禮包象牙塔劍
     // 🔧 重擊特效武器標註為「雙手鈍器」
     wpn_battleaxe: ['雙手鈍器'], wpn_19: ['雙手鈍器'], wpn_23: ['雙手鈍器'], wpn_giantaxe: ['雙手鈍器'], wpn_berserker: ['雙手鈍器'], wpn_silveraxe: ['雙手鈍器'], wpn_taurus_axe: ['雙手鈍器'],   // 🔧 牛人斧頭：補上漏標的雙手鈍器 tag（eff:crush 但原無 tag）
     // 🔧 黑暗妖精武器：鋼爪 / 雙刀 / 匕首

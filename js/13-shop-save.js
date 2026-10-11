@@ -2111,6 +2111,13 @@ function startGame() {
         }
     }
     gainItem('potion_exp2', 10, true, true);   // 🎁 新手禮包：200%經驗藥水 ×10（綁定）
+    // 🎁 新手禮包（照新創）：功能道具＋象牙塔裝備＋象牙塔卷軸／藥水，全部綁定
+    ['fn_home', 'fn_tele', 'fn_auto', 'fn_settings', 'fn_drop', 'ivt_helm', 'ivt_armor', 'ivt_gloves', 'ivt_boots'].forEach(id => gainItem(id, 1, true, true));
+    if (['royal', 'knight', 'elf'].includes(player.cls)) gainItem('ivt_sword', 1, true, true);
+    if (['royal', 'knight'].includes(player.cls)) gainItem('ivt_2hsword', 1, true, true);
+    gainItem('ivt_scroll_teleport', 500, true, true);
+    gainItem('ivt_scroll_poly', 10, true, true);
+    gainItem('ivt_potion_haste', 50, true, true);
     if (typeof loadSharedCollections === 'function') loadSharedCollections();   // 🎴🗡️🧰 創角：載入同模式共用收集圖鑑（新角色即承接同模式既有收集）
     if (typeof ensureCardBook === 'function') ensureCardBook();   // 🎴 怪物收集冊改由「收藏」面板開啟（移除道具欄本體）
     if (typeof ensureEquipBook === 'function') ensureEquipBook();   // 🗡️ 裝備收集冊改由「收藏」面板開啟＋登錄起始裝備
@@ -2143,6 +2150,8 @@ function startGame() {
         equipItem(player.inv.find(i=>i.id==='wpn_11'));        // 匕首（騎士、法師）
         equipItem(player.inv.find(i=>i.id==='amr_jacket'));
     }
+    ['ivt_helm', 'ivt_armor', 'ivt_gloves', 'ivt_boots'].forEach(id => { let it = player.inv.find(i => i.id === id); if (it) equipItem(it); });
+    if (player.cls === 'royal' || player.cls === 'knight') { let sw = player.inv.find(i => i.id === 'ivt_sword'); if (sw) equipItem(sw); }
     
     updateClassPotionRows();
     renderSkillSelects();
