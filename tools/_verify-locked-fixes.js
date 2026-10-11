@@ -476,6 +476,15 @@ section("44) 新手禮包（照新創）");
   ok("自動使用／沒怪瞬移／書籤先用綁定版", /function invFindPref\(id\)/.test(ie) && /let item = invFindPref\(cfg\.pot\);/.test(sk) && /let item = invFindPref\('scroll_teleport'\);/.test(sk) && /let item = invFindPref\('scroll_teleport'\);/.test(st) && /var item = invFindPref\('scroll_teleport'\);/.test(bm));
 }
 
+section("45) 橫式介面（電腦／手機橫放，照新創）");
+{
+  const css = rd("css/lr-wide.css"), html = rd("index.html");
+  ok("index.html 在 lr-hud.css 之後載入 lr-wide.css", /lr-hud\.css[^\n]*\n\s*<link rel="stylesheet" href="css\/lr-wide\.css/.test(html));
+  ok("只在橫式＋寬 ≥ 720px 套用（直式手機不變）", /@media \(orientation: landscape\) and \(min-width: 720px\) \{/.test(css) && !/@media \(orientation: portrait\)/.test(css));
+  ok("遊戲滿版＋底條畫在 #col-center 內（聊天在它的疊層，不可畫在 #game-screen 上蓋住聊天）", /width: 100vw !important;/.test(css) && /> #col-center::after \{/.test(css) && !/#game-screen\.combat-hud\.lr-hud::(before|after)/.test(css));
+  ok("分頁改右側浮窗、不蓋底條", /sheet-open > #tab-content-panel \{[^}]*left: auto !important;[^}]*bottom: calc\(var\(--lrw-bar-h\)/.test(css));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");
