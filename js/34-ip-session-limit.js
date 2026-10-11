@@ -140,8 +140,11 @@
       });
   }
 
-  function claim() {
-    return postJson("/api/session/claim", { clientId: getClientId() })
+  // opts.takeover：使用者主動登入時擠掉同 IP 舊視窗；背景重新佔位不可擠人（否則兩台互踢）
+  function claim(opts) {
+    var body = { clientId: getClientId() };
+    if (opts && opts.takeover) body.takeover = true;
+    return postJson("/api/session/claim", body)
       .then(function (r) {
         _apiOk = true;
         if (r && r.data && r.data.disabled) {
@@ -196,6 +199,7 @@
     postJson("/api/session/heartbeat", { clientId: getClientId() })
       .then(function (r) {
         if (r && r.data && r.data.ok) return;
+        if (r && r.data && r.data.error === "taken_over") return notifyIpSessionLost(r.data);
         return claim().then(function (cr) {
           if (!cr || !cr.ok) notifyIpSessionLost(cr || r && r.data);
         });

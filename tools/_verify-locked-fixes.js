@@ -485,6 +485,15 @@ section("45) 橫式介面（電腦／手機橫放，照新創）");
   ok("分頁改右側浮窗、不蓋底條", /sheet-open > #tab-content-panel \{[^}]*left: auto !important;[^}]*bottom: calc\(var\(--lrw-bar-h\)/.test(css));
 }
 
+section("46) 同 IP 新登入擠掉舊視窗");
+{
+  const sv = rd("_serve.js"), ip = rd("js/34-ip-session-limit.js"), au = rd("js/auth-login.js");
+  ok("伺服器 claim 支援 takeover、記錄被擠掉的視窗", /function claimIpSession\(ip, clientId, takeover\)/.test(sv) && /claimIpSession\(ip, clientId, data\.takeover === true\)/.test(sv) && /ipTakenOver\.set\(oldId, now\)/.test(sv));
+  ok("被擠掉的視窗心跳回 taken_over、不重新佔位", /if \(!result\.ok && ipTakenOver\.has\(clientId\)\)/.test(sv) && /error: "taken_over"/.test(sv));
+  ok("主動登入才帶 takeover；背景 claim 不帶", /window\.IpSessionLimit\.claim\(\{ takeover: true \}\)/.test(au) && /if \(opts && opts\.takeover\) body\.takeover = true;/.test(ip) && !/claim\(\{ takeover: true \}\)/.test(rd("js/27-offline-rewards.js")));
+  ok("被擠掉時停止遊戲並提示原因", /function onIpSessionLost\(payload\)/.test(au) && /window\.returnToCharacterSelect\(\)/.test(au) && /同一網路的另一個裝置已登入/.test(sv));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

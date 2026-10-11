@@ -280,7 +280,11 @@ function pruneIpBucket(bucket, now) {
   }
 }
 
-function claimIpSession(ip, clientId) {
+// clientId → 被同 IP 新登入擠下的時間（心跳時告知原因，且不可再自動搶回名額）
+const ipTakenOver = new Map();
+const IP_TAKEOVER_MEMO_MS = 10 * 60 * 1000;
+
+function claimIpSession(ip, clientId, takeover) {
   const now = Date.now();
   let bucket = ipSessions.get(ip);
   if (!bucket) {
@@ -291,6 +295,20 @@ function claimIpSession(ip, clientId) {
   if (bucket.has(clientId)) {
     bucket.set(clientId, now);
     return { ok: true, count: bucket.size, max: IP_SESSION_MAX, renewed: true };
+  }
+  if (takeover && bucket.size >= IP_SESSION_MAX) {
+    const olds = [...bucket.entries()].sort((a, b) => a[1] - b[1]);
+    let n = 0;
+    while (bucket.size >= IP_SESSION_MAX && olds.length) {
+      const [oldId] = olds.shift();
+      bucket.delete(oldId);
+      ipTakenOver.set(oldId, now);
+      n++;
+    }
+    for (const [id, ts] of ipTakenOver) if (now - ts > IP_TAKEOVER_MEMO_MS) ipTakenOver.delete(id);
+    ipTakenOver.delete(clientId);
+    bucket.set(clientId, now);
+    return { ok: true, count: bucket.size, max: IP_SESSION_MAX, renewed: false, tookOver: n };
   }
   if (bucket.size >= IP_SESSION_MAX) {
     return {
@@ -463,7 +481,7 @@ async function handleSessionApi(req, res, u) {
     }
     let clientId = parseClientId(data.clientId);
     if (!clientId) clientId = "c_" + crypto.randomBytes(12).toString("hex");
-    const result = claimIpSession(ip, clientId);
+    const result = claimIpSession(ip, clientId, data.takeover === true);
     if (!result.ok) return json(res, 429, result);
     return json(res, 200, Object.assign({ clientId: clientId }, result));
   }
@@ -479,6 +497,13 @@ async function handleSessionApi(req, res, u) {
     const clientId = parseClientId(data.clientId);
     if (!clientId) return json(res, 400, { ok: false, error: "bad clientId" });
     const result = heartbeatIpSession(ip, clientId);
+    if (!result.ok && ipTakenOver.has(clientId)) {
+      return json(res, 429, {
+        ok: false,
+        error: "taken_over",
+        message: "同一網路的另一個裝置已登入，本視窗已下線。",
+      });
+    }
     if (!result.ok) {
       const claim = claimIpSession(ip, clientId);
       if (!claim.ok) return json(res, 429, claim);

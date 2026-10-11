@@ -347,7 +347,7 @@
 
   function claimIp() {
     if (window.IpSessionLimit && typeof window.IpSessionLimit.claim === "function") {
-      return window.IpSessionLimit.claim();
+      return window.IpSessionLimit.claim({ takeover: true });
     }
     return Promise.resolve({ ok: true });
   }
@@ -823,11 +823,20 @@
     } catch (e3) {}
   }
 
-  function onIpSessionLost() {
+  function onIpSessionLost(payload) {
+    try {
+      if (typeof window.returnToCharacterSelect === "function") window.returnToCharacterSelect();
+    } catch (e0) {}
     setSession("");
     if (typeof window.anticheatSetAuthToken === "function") window.anticheatSetAuthToken("");
     showLoggedOut();
-    setStatus("連線名額已失效。請重新登入。", "err");
+    var msg = (payload && payload.message) || "連線名額已失效。請重新登入。";
+    setStatus(msg, "err");
+    if (payload && payload.error === "taken_over") {
+      try {
+        alert(msg);
+      } catch (e1) {}
+    }
   }
 
   var _sessionRecovering = false;
