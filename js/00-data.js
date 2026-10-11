@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.78';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.79';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1187,15 +1187,15 @@ const DB = {
         "panacea_white": { n: "純白的萬能藥", type: "misc", req: "all", p: 5000, c: "text-slate-100", noUse: true, d: "純白無瑕、尚未沾染屬性的萬能藥原料（無法直接使用，僅作製作材料）。使用回憶蠟燭重置配點時，依已使用過的萬能藥瓶數獲得。可在象牙塔的塔斯處，以 3 個製作成任一屬性的萬能藥。", gachaWeight: 0 },
         "panacea_cha": { n: "萬能藥(CHA)", type: "misc", req: "all", p: 10000, c: "text-pink-300", d: "令人顧盼生輝、風采動人的靈藥。", eff: "panacea", batchUse: true, pstat: "cha", gachaWeight: 5 },
         
-        // ===== 🐾 夥伴系統 v2（v3.2.17）：誘捕道具（使用後獲得對應誘捕狀態 600 秒·期間擊殺對應動物→寵物保管獲得基本等級寵物並失去狀態）=====
+        // ===== 🐾 夥伴系統 v2（v3.2.17）：誘捕道具（原版馴服：帶在身上，對應動物低於 1/3 血自動丟 1 個→當場變寵物·見 js/22 petTameOnKill）=====
         //   🚫 舊項圈系統（哨子/8種項圈/肉/舊進化果實）已全數移除；舊存檔項圈由 petMigrateLegacy 轉換為寵物。
-        "item_eye_meat":      { n: "漂浮之眼肉",       type: "pot", req: "all", p: 100, c: "text-pink-300",    eff: "petlure", lure: "lure_general",  dur: 600, d: "漂浮之眼身上切下的奇特肉塊，散發野獸無法抗拒的氣味。使用後獲得「一般誘捕」600秒：期間擊殺 狼／牧羊犬／杜賓狗／哈士奇／熊／貓／浣熊／聖伯納犬／狐狸／小獵犬／柯利 時，寵物保管將獲得基本等級的該寵物並失去此狀態。", gachaWeight: 0 },
-        "item_carrot":        { n: "胡蘿蔔",           type: "pot", req: "all", p: 100, c: "text-orange-300",  eff: "petlure", lure: "lure_rabbit",   dur: 600, d: "水靈飽滿的胡蘿蔔，暴走兔見了會不顧一切衝過來。使用後獲得「暴走兔誘捕」600秒：期間擊殺 暴走兔 時，寵物保管將獲得基本等級的暴走兔並失去此狀態。", gachaWeight: 0 },
-        "item_tiger_feed":    { n: "虎男誘食",         type: "pot", req: "all", p: 100, c: "text-amber-300",   eff: "petlure", lure: "lure_tiger",    dur: 600, d: "馴獸師特製的腥香餌食，能喚醒猛虎心中的認主之念。使用後獲得「虎男誘捕」600秒：期間擊殺 老虎 時，寵物保管將獲得基本等級的虎男並失去此狀態。", gachaWeight: 0 },
-        "item_kangaroo_feed": { n: "袋鼠的飼料",       type: "pot", req: "all", p: 100, c: "text-lime-300",    eff: "petlure", lure: "lure_kangaroo", dur: 600, d: "混入香草的特調飼料，袋鼠聞了便會收起拳頭。使用後獲得「袋鼠誘捕」600秒：期間擊殺 袋鼠 時，寵物保管將獲得基本等級的袋鼠並失去此狀態。", gachaWeight: 0 },
-        "item_panda_feed":    { n: "熊貓的飼料",       type: "pot", req: "all", p: 100, c: "text-slate-100",   eff: "petlure", lure: "lure_panda",    dur: 600, d: "以嫩竹筍壓成的飼料磚，是熊貓無法拒絕的美味。使用後獲得「熊貓誘捕」600秒：期間擊殺 熊貓 時，寵物保管將獲得基本等級的熊貓並失去此狀態。", gachaWeight: 0 },
-        "item_monkey_feed":   { n: "猴子的飼料",       type: "pot", req: "all", p: 100, c: "text-yellow-200",  eff: "petlure", lure: "lure_monkey",   dur: 600, d: "塞滿堅果與香蕉乾的飼料袋，猴群為之瘋狂。使用後獲得「猴子誘捕」600秒：期間擊殺 猴子 時，寵物保管將獲得基本等級的猴子並失去此狀態。", gachaWeight: 0 },
-        "item_koreadog_feed": { n: "高麗犬誘食",       type: "pot", req: "all", p: 100, c: "text-cyan-200",    eff: "petlure", lure: "lure_koreadog", dur: 600, d: "熬煮入味的肉乾誘食，幼犬聞香便搖著尾巴跟來。使用後獲得「高麗幼犬誘捕」600秒：期間擊殺 高麗幼犬 時，寵物保管將獲得基本等級的高麗幼犬並失去此狀態。", gachaWeight: 0 },
+        "item_eye_meat":      { n: "漂浮之眼肉",       type: "pot", req: "all", p: 100, c: "text-pink-300",    eff: "petlure", lure: "lure_general",  dur: 600, d: "漂浮之眼身上切下的奇特肉塊，散發野獸無法抗拒的氣味。帶在身上即可（不需使用）：把 狼／牧羊犬／杜賓狗／哈士奇／熊／貓／浣熊／聖伯納犬／狐狸／小獵犬／柯利 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的寵物並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
+        "item_carrot":        { n: "胡蘿蔔",           type: "pot", req: "all", p: 100, c: "text-orange-300",  eff: "petlure", lure: "lure_rabbit",   dur: 600, d: "水靈飽滿的胡蘿蔔，暴走兔見了會不顧一切衝過來。帶在身上即可（不需使用）：把 暴走兔 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的暴走兔並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
+        "item_tiger_feed":    { n: "虎男誘食",         type: "pot", req: "all", p: 100, c: "text-amber-300",   eff: "petlure", lure: "lure_tiger",    dur: 600, d: "馴獸師特製的腥香餌食，能喚醒猛虎心中的認主之念。帶在身上即可（不需使用）：把 老虎 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的虎男並送往寵物保管（被馴服的動物不給經驗與掉落）。老虎桀驁不馴，每次只有 1/16 機會成功，失敗照樣消耗。", gachaWeight: 0 },
+        "item_kangaroo_feed": { n: "袋鼠的飼料",       type: "pot", req: "all", p: 100, c: "text-lime-300",    eff: "petlure", lure: "lure_kangaroo", dur: 600, d: "混入香草的特調飼料，袋鼠聞了便會收起拳頭。帶在身上即可（不需使用）：把 袋鼠 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的袋鼠並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
+        "item_panda_feed":    { n: "熊貓的飼料",       type: "pot", req: "all", p: 100, c: "text-slate-100",   eff: "petlure", lure: "lure_panda",    dur: 600, d: "以嫩竹筍壓成的飼料磚，是熊貓無法拒絕的美味。帶在身上即可（不需使用）：把 熊貓 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的熊貓並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
+        "item_monkey_feed":   { n: "猴子的飼料",       type: "pot", req: "all", p: 100, c: "text-yellow-200",  eff: "petlure", lure: "lure_monkey",   dur: 600, d: "塞滿堅果與香蕉乾的飼料袋，猴群為之瘋狂。帶在身上即可（不需使用）：把 猴子 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的猴子並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
+        "item_koreadog_feed": { n: "高麗犬誘食",       type: "pot", req: "all", p: 100, c: "text-cyan-200",    eff: "petlure", lure: "lure_koreadog", dur: 600, d: "熬煮入味的肉乾誘食，幼犬聞香便搖著尾巴跟來。帶在身上即可（不需使用）：把 高麗幼犬 打到剩 1/3 血以下時會自動丟 1 個給牠，牠就成為你的高麗幼犬並送往寵物保管（被馴服的動物不給經驗與掉落）。", gachaWeight: 0 },
         // 🐾 進化材料（於包武的寵物保管介面對 Lv30+ 寵物使用進化按鈕時消耗；諾斯製作）
         "item_dragon_heart":  { n: "龍之心",   type: "etc", req: "all", p: 5000, c: "text-red-300",    noUse: true, gachaWeight: 0, d: "幼龍胸腔中仍在搏動的緋紅心臟，蘊含純粹的龍之力。製作材料：亞丁「諾斯」可用它製作勝利果實。" },
         "item_evo_fruit":     { n: "進化果實", type: "etc", req: "all", p: 0,    c: "text-green-300",  noUse: true, gachaWeight: 0, d: "蘊含生命躍遷之力的神祕果實。亞丁「諾斯」可製作：光明的鱗片×100＋綠寶石×20＋金幣20000。", gachaWeight: 0 },
@@ -1936,7 +1936,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.78：血量改回 40（曾誤設 800）
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.79：血量改回 40（曾誤設 800）
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },

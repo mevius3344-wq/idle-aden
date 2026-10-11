@@ -765,7 +765,7 @@ function useItem(u, silent = false) {
             if(!silent) logSys(`使用變形卷軸，變身為 <span class="${player.poly.c}">${player.poly.n}</span>。`);
 		} else if (d.eff === 'petlure') {
             // 🐾 v3.2.17 誘捕道具（漂浮之眼肉/胡蘿蔔/虎男誘食/袋鼠·熊貓·猴子的飼料/高麗犬誘食）：
-            //   使用後獲得對應「誘捕」狀態 600 秒；期間擊殺對應動物 → 寵物保管獲得基本等級寵物並失去該狀態。
+            //   原版不需使用：帶在身上即自動馴服（js/22 petTameOnKill），使用只顯示說明、不消耗。
             //   （🚫 舊「肉 eff:'meat' 誘捕項圈」與「哨子 eff:'whistle'」已隨項圈系統移除）
             if (silent) return;
             if (typeof petUseLureItem !== 'function' || !petUseLureItem(d, silent)) return;   // 失敗不消耗

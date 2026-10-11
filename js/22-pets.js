@@ -566,13 +566,11 @@ function petReleaseSlotAssignments(slot) {
 }
 
 // ---------- 四、道具使用（誘捕/幼龍蛋）與擊殺捕捉 ----------
-function petUseLureItem(d, silent) {   // eff:'petlure' → 掛 600 秒誘捕 buff（重複使用重置時間）
-    let key = d.lure, cfg = PET_LURES[key];
-    if (!cfg) return false;
-    player.buffs[key] = d.dur || 600;
-    if (!silent) logSys(`你使用了 ${d.n}，獲得增益 <span class="text-pink-300 font-bold">${cfg.n}</span>，持續 ${d.dur || 600} 秒。擊殺對應動物即可捕獲！`);
-    try { updateUI(); } catch (e) {}
-    return true;   // 呼叫端 fallthrough 消耗道具
+function petUseLureItem(d, silent) {   // eff:'petlure'：原版不需使用，帶在身上即可（回 false＝不消耗）
+    let cfg = PET_LURES[d.lure];
+    if (!cfg || silent) return false;
+    logSys(`<span class="text-pink-300">${d.n}</span> 不需要使用：帶在身上，把${Object.keys(cfg.mobs).join('／')}打到剩 1/3 血以下，就會自動丟給牠馴服。`);
+    return false;
 }
 function petUseDragonEgg(item) {   // 🐉 v3.7.56 幼龍蛋定向孵化：保管未滿→消耗·依蛋種 eggPet 孵出（頑皮幼龍蛋→頑皮龍、淘氣幼龍蛋→淘氣龍）
     if (petRoster().length >= PET_STORAGE_MAX) { logSys(`<span class="text-red-400">寵物保管已滿（上限 ${PET_STORAGE_MAX} 隻），無法孵化。</span>`); return; }
@@ -598,21 +596,40 @@ function petUseCursedEgg(item, petName, crackMsg) {   // 🏺 v3.6.44 充滿詛�
     try { renderTabs(); updateUI(); } catch (e) {}
     try { if (!document.getElementById('item-modal').classList.contains('hidden')) closeModal(); } catch (e) {}
 }
-function petCaptureOnKill(mob) {   // killMob 掛點：專屬誘捕優先於一般誘捕（高麗幼犬僅高麗幼犬誘捕可捕）
-    if (!mob || !player || !player.buffs) return;
+// 原版馴服（l1j C_GiveItem.tamePet）：身上帶對應道具，動物血量低於 1/3 時丟給牠＝當場變寵物（不死亡、無經驗／金幣／掉落）。
+//   致命一擊必定低於 1/3，故掛在 killMob 結算獎勵之前；回 true＝已馴服，呼叫端略過擊殺獎勵。
+const PET_TAME_ITEM = { lure_general: 'item_eye_meat', lure_rabbit: 'item_carrot', lure_tiger: 'item_tiger_feed', lure_kangaroo: 'item_kangaroo_feed', lure_panda: 'item_panda_feed', lure_monkey: 'item_monkey_feed', lure_koreadog: 'item_koreadog_feed' };
+const PET_TAME_ODDS = { lure_tiger: 16 };   // 原版老虎每丟一次 1/16 成功，失敗道具照扣
+let _petTameFullMsgAt = 0;
+function petTameOnKill(mob) {   // 專屬誘捕優先於一般誘捕（高麗幼犬僅高麗幼犬誘食可捕）
+    if (!mob || mob.boss || mob._fieldBoss || !player || !Array.isArray(player.inv)) return false;
     let order = ['lure_koreadog', 'lure_rabbit', 'lure_tiger', 'lure_kangaroo', 'lure_panda', 'lure_monkey', 'lure_general'];
     for (let key of order) {
-        if (!(player.buffs[key] > 0) && !player._allLures) continue;   // 🐾 馴獸師的飼料袋：裝備時所有誘捕狀態皆視為生效
         let form = PET_LURES[key].mobs[mob.n];
         if (!form) continue;
-        if (petRoster().length >= PET_STORAGE_MAX) { logSys(`<span class="text-red-400">寵物保管已滿，${PET_LURES[key].n} 未消耗——請先整理保管。</span>`); return; }
+        let free = !!player._allLures;   // 🐾 馴獸師的飼料袋：不消耗道具
+        let buff = !free && player.buffs && player.buffs[key] > 0;   // 舊版已使用的誘捕狀態仍可抵一次
+        let item = (free || buff) ? null : player.inv.find(i => i && i.id === PET_TAME_ITEM[key] && i.cnt > 0);
+        if (!free && !buff && !item) continue;
+        if (petRoster().length >= PET_STORAGE_MAX) {
+            if (Date.now() - _petTameFullMsgAt > 60000) { _petTameFullMsgAt = Date.now(); logSys(`<span class="text-red-400">寵物保管已滿（上限 ${PET_STORAGE_MAX} 隻），${mob.n} 無法馴服——請先整理保管。</span>`); }
+            return false;
+        }
         let snap = _petMutationSnapshot();
-        if (!player._allLures) player.buffs[key] = 0;   // 🐾 一般誘捕道具捕獲後消耗；飼料袋提供的誘捕不消耗（卸下即失效）
+        let itemName = (DB.items[PET_TAME_ITEM[key]] || {}).n || PET_LURES[key].n;
+        if (buff) player.buffs[key] = 0;
+        else if (item) { item.cnt--; if (item.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== item.uid); }
+        let odds = PET_TAME_ODDS[key];
+        if (odds && Math.floor(Math.random() * odds) !== 0) {
+            logSys(`你把 ${itemName} 丟給了 ${mob.n}，但牠不肯屈服……`);
+            return false;
+        }
         let added = petStoreAdd(form, null, true);
-        if (!added || !_petCommitMutation(snap)) return;
-        logSys(`<span class="text-green-300 font-bold">🐾 誘捕成功！${form}（Lv.${added.lv}）已送往寵物保管。</span>`);
-        return;
+        if (!added || !_petCommitMutation(snap)) return false;
+        logSys(`<span class="text-green-300 font-bold">🐾 你把 ${itemName} 丟給了 ${mob.n}，牠成為你的寵物！${form}（Lv.${added.lv}）已送往寵物保管。</span>`);
+        return true;
     }
+    return false;
 }
 
 // ---------- 五、出戰／放生／進化（包武）----------
@@ -1351,14 +1368,14 @@ function renderPetStorageNPC(div, confirmUid) {
     let vicCnt = player.inv.filter(i => i.id === 'item_victory_fruit').reduce((s, i) => s + (i.cnt || 0), 0);
     div.innerHTML = `
     <div class="flex flex-col gap-3 p-1" data-petui="1">
-        <div class="text-slate-300 text-sm leading-relaxed">${hostName}：我幫你照顧捕獲的寵物。<b class="text-amber-300">最多保管 ${PET_STORAGE_MAX} 隻，同一模式的角色共通</b>。其他角色出戰中的寵物會顯示「使用中」，<b class="text-amber-200">必須先由原角色收回，不能直接轉移</b>。使用誘捕道具後擊殺對應的動物即可捕獲；點「出戰」讓寵物加入隊伍（最多 ${PET_CARRY_MAX} 隻·依寵物需求消耗魅力）。<b class="text-amber-300">只有「一般型態」的寵物（Lv30 以上）可進化，且有兩條路</b>：用「進化果實」→對應的高等型態，或用「勝利果實」→黃金龍；兩種果實都帶在身上時，進化前可自行選擇要走哪條路。高等型態與黃金龍都是最終型態、不會再進化——身上沒有果實可是不能進化的喔。</div>
+        <div class="text-slate-300 text-sm leading-relaxed">${hostName}：我幫你照顧捕獲的寵物。<b class="text-amber-300">最多保管 ${PET_STORAGE_MAX} 隻，同一模式的角色共通</b>。其他角色出戰中的寵物會顯示「使用中」，<b class="text-amber-200">必須先由原角色收回，不能直接轉移</b>。身上帶著對應的誘捕道具（漂浮之眼肉、胡蘿蔔、各種飼料），把動物打到剩 1/3 血以下就會自動丟給牠馴服；點「出戰」讓寵物加入隊伍（最多 ${PET_CARRY_MAX} 隻·依寵物需求消耗魅力）。<b class="text-amber-300">只有「一般型態」的寵物（Lv30 以上）可進化，且有兩條路</b>：用「進化果實」→對應的高等型態，或用「勝利果實」→黃金龍；兩種果實都帶在身上時，進化前可自行選擇要走哪條路。高等型態與黃金龍都是最終型態、不會再進化——身上沒有果實可是不能進化的喔。</div>
         <div class="flex items-center gap-4 bg-slate-800/60 border border-slate-600 rounded p-3 text-sm flex-wrap">
             <span>保管：<span class="text-amber-300 font-bold">${list.length}/${PET_STORAGE_MAX}</span></span>
             <span>出戰：<span class="text-emerald-300 font-bold">${petsOutList().length}/${PET_CARRY_MAX}</span></span>
             <span>魅力：<span class="${petChaUsed() > cha ? 'text-red-400' : 'text-green-400'} font-bold">${petChaUsed()}/${cha}</span></span>
             <span>進化果實×<span class="text-amber-300 font-bold">${evoCnt}</span>　勝利果實×<span class="text-amber-300 font-bold">${vicCnt}</span></span>
         </div>
-        <div class="flex flex-col gap-1 overflow-y-auto pr-1" data-pet-storage-list="1" style="max-height:380px">${rows || '<div class="text-slate-500 text-sm text-center py-6">保管箱空空如也——去使用誘捕道具捕捉寵物吧！</div>'}</div>
+        <div class="flex flex-col gap-1 overflow-y-auto pr-1" data-pet-storage-list="1" style="max-height:380px">${rows || '<div class="text-slate-500 text-sm text-center py-6">保管箱空空如也——帶著誘捕道具去馴服寵物吧！</div>'}</div>
     </div>`;
     _petStorageRestoreScroll(div, scrollState);
 }

@@ -550,6 +550,18 @@ section("41) 世界王回原地圖（全服共用、傷害第一拿掉落、經�
   ok("時刻表含地點欄＋傳送師前往", /<th>地點<\/th>/.test(F.html) && /function wbScheduleHtml\(withGo\)/.test(F.wb) && /wbScheduleHtml\(true\)/.test(wm));
 }
 
+section("42) 原版寵物馴服（帶道具、1/3 血以下當場變寵物）");
+{
+  const pets = rd("js/22-pets.js");
+  const kp = rd("js/05-kill-progression.js");
+  const iTame = kp.indexOf("petTameOnKill(mob)");
+  const iExp = kp.indexOf("let _expEach = mob.exp", iTame);
+  ok("killMob 結算獎勵前先判定馴服（馴服＝無經驗／金幣／掉落）", iTame > 0 && iExp > iTame && !/petCaptureOnKill/.test(kp));
+  ok("觸發＝背包帶對應道具（不需使用、不靠誘捕狀態）", /function petTameOnKill\(mob\)/.test(pets) && /PET_TAME_ITEM = \{ lure_general: 'item_eye_meat'/.test(pets) && /return false;\s*\}\s*function petUseDragonEgg/.test(pets));
+  ok("老虎 1/16（失敗照扣）、保管滿不消耗", /PET_TAME_ODDS = \{ lure_tiger: 16 \}/.test(pets) && /petRoster\(\)\.length >= PET_STORAGE_MAX\) \{\s*if \(Date\.now\(\) - _petTameFullMsgAt/.test(pets));
+  ok("自動販賣預設不賣誘捕道具", /if \(d\.eff === 'petlure'\) return \{ sell:false \};/.test(F.tabs));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

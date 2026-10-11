@@ -738,7 +738,7 @@ d.mr += (baseMr + bonusMr);
     }
     d.aspd = d.aspd * spdMult;   // 攻速倍率（加速/勇敢/餅乾/精通/裝備等）套入攻擊間隔；施法改由 castIntervalTicks 只讀職業／變身 cast
 
-    // 🐾 馴獸師的飼料袋（allLures）：裝備時視為持有全部誘捕狀態；petCaptureOnKill 讀 player._allLures（不消耗、卸下即失效）
+    // 🐾 馴獸師的飼料袋（allLures）：裝備時視為持有全部誘捕狀態；petTameOnKill 讀 player._allLures（不消耗、卸下即失效）
     p._allLures = false;
     for (let _lk in p.eq) { let _li = p.eq[_lk]; if (_li) { let _ld = DB.items[_li.id]; if (_ld && _ld.allLures) { p._allLures = true; break; } } }
 

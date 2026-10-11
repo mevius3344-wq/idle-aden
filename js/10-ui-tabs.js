@@ -2257,6 +2257,7 @@ function _autoSellDecision(i, ruleSnapshot, craftRemain) {   // 🔧 v2.6.77 rul
     let ov = r.overrides[i.id];
     if (ov === 'keep') return { sell:false };
     if (ov === 'sell') return { sell:true, qty: Math.max(1, Math.floor(Number(i.cnt) || 1)) };
+    if (d.eff === 'petlure') return { sell:false };   // 🐾 誘捕道具帶在身上才會馴服（js/22 petTameOnKill），預設不自動賣
     // 🏛️ v2.7.56 解除封印後的「古老的○○」是普通武器／防具，沒有詞綴且多數無法強化，會立即符合一般裝備販賣規則；整系列優先保護（個別「永遠販賣」例外仍優先，故置於 overrides 之後）。
     if (r.protectOldSeries && (String(i.id).startsWith('wpn_old_') || String(i.id).startsWith('amr_old_'))) return { sell:false };
     if (r.protectRelic !== false && typeof isRelic === 'function' && isRelic(d)) return { sell:false };   // 🏺 v3.1.44 保護遺物（預設開·個別「永遠販賣」例外仍優先）

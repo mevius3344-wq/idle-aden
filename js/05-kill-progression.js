@@ -431,6 +431,18 @@ function killMob(idx) {
             return;
         }
     }
+    // 🐾 原版馴服：帶對應誘捕道具打倒動物＝牠變成寵物，不給經驗／金幣／掉落
+    if (typeof petTameOnKill === 'function' && petTameOnKill(mob)) {
+        mob._dead = true;
+        mob._authKillOk = false;
+        mob._awaitAuthKill = false;
+        mob._localKillPending = false;
+        mob.curHp = 0;
+        try { renderMobs(); } catch (eTmR) {}
+        try { updateUI(); } catch (eTmU) {}
+        if (!state.inTick) settleDeadMobs();
+        return;
+    }
     mob._dead = true;
     mob._authKillOk = false;
     mob._awaitAuthKill = false;
@@ -549,9 +561,6 @@ function killMob(idx) {
     } catch (e) {}
     // 🦴 v3.1.71 用戶要求：取消「怪物直接掉落席琳遺骸」——遺骸唯一取得管道＝席琳結晶（NPC 伊奧兌換）／菈克希絲拆分舊詞綴裝備。
     //    原掉落機率公式已移轉到下方「席琳結晶」掉落（見該區塊）。
-    // 🐾 v3.2.17 誘捕捕捉：身上有對應誘捕狀態且擊殺對應動物 → 寵物保管獲得基本等級寵物並失去該狀態
-    //   （舊「肉→taming→項圈」與「屬性怪掉舊進化果實」已隨項圈系統移除；新進化果實改由亞丁諾斯製作）
-    if (typeof petCaptureOnKill === 'function') petCaptureOnKill(mob);
     // 🗡️ 吉爾塔斯之劍：任意擊殺後 10 秒內依主玩家邪惡值取得額外傷害（滿邪惡 +10；傷害端＝js/03 getPhysicalDmg／js/06 傭兵普攻）
     if (player.eq && player.eq.wpn && player.eq.wpn.id === 'wpn_giltas_sword') player._giltasFuryUntil = state.ticks + 100;
     if (player.allies && player.allies.length) player.allies.forEach(a => { if (a && !a._downed && a.eq && a.eq.wpn && a.eq.wpn.id === 'wpn_giltas_sword') a._giltasFuryUntil = state.ticks + 100; });
