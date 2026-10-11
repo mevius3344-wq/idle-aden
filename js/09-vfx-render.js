@@ -5061,6 +5061,13 @@ function _remotePartySpritesApply() {
             el.addEventListener('click', function (ev) {
                 ev.preventDefault();
                 ev.stopPropagation();
+                var isParty = el.getAttribute('data-peer-party') === '1';
+                var pkOn = typeof fieldPvpSelfOn === 'function' && fieldPvpSelfOn();
+                if ((isParty || !pkOn) && typeof peerMenuOpen === 'function') {
+                    try { if (typeof exploreClearTapMove === 'function') exploreClearTapMove(); } catch (eC) {}
+                    peerMenuOpen(el.getAttribute('data-peer-key'), el.getAttribute('data-peer-name'), isParty, ev);
+                    return;
+                }
                 if (typeof fieldPvpOnRemoteClick !== 'function') return;
                 fieldPvpOnRemoteClick(
                     el.getAttribute('data-peer-key'),
@@ -5079,7 +5086,9 @@ function _remotePartySpritesApply() {
             var sh = document.createElement('img'); sh.className = 'pm-shadow';
             var bd = document.createElement('img'); bd.className = 'pm-body';
             [sh, bd].forEach(function (im) { im.alt = ''; im.draggable = false; });
-            el.append(tag, bar, sh, bd);
+            var hit = document.createElement('div');
+            hit.className = 'remote-party-hit';
+            el.append(tag, bar, sh, bd, hit);
             bv.appendChild(el);
             st.el = el; st.imgs = { sh: sh, bd: bd, tag: tag, bar: barIn };
         } else if (st.el.parentElement !== bv) bv.appendChild(st.el);

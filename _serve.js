@@ -3139,6 +3139,28 @@ try {
   auctionLoadFromDisk();
 } catch (e) {}
 
+let _tradeApi = null;
+function tradeApi() {
+  if (_tradeApi) return _tradeApi;
+  _tradeApi = require("./lib/rt-trade").createTradeApi({
+    json,
+    readBody,
+    requireAuth: auctionRequireAuth,
+    walletMutate: auctionFileWalletMutate,
+    wallet: _cloudWallet,
+    sanitizeItem: auctionSanitizeItem,
+    sanitizeName: partySanitizeName,
+    memberKey: partyMemberKey,
+    presenceGet: (key) => partyPresence.get(key),
+    presenceTtlMs: PARTY_TTL_MS,
+    pushEvent: partyPushEvent,
+    tradeLog: gmAppendTradeLog,
+    persistPath: persistFile("trades.json"),
+    sameAccount: (a, b) => accountKey(String(a || "")) === accountKey(String(b || "")),
+  });
+  return _tradeApi;
+}
+
 async function handleAuctionApi(req, res, u) {
   if (req.method === "OPTIONS") {
     partyCors(res);
@@ -4366,6 +4388,11 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       await handleAuctionApi(req, res, u);
+      return;
+    }
+    if (u.startsWith("/api/trade")) {
+      if (!_cloudWallet) return json(res, 503, { ok: false, error: "no_wallet", message: "交易系統未啟用。" });
+      await tradeApi().handle(req, res, u);
       return;
     }
     if (

@@ -507,6 +507,20 @@ section("38) NPC 頭上兩行（職稱＋名字）");
   ok("NPC 名牌依頭頂高度（sprHeadAbove）", /function sprHeadAbove\(key, spr, url, cb\)/.test(town) && /nm\.style\.bottom = Math\.round\(head \+ 3\) \+ 'px';/.test(town));
 }
 
+section("39) 玩家交易（點同圖玩家 → 交易，伺服器托管）");
+{
+  const has = (p) => fs.existsSync(path.join(ROOT, p));
+  const srv = rd("_serve.js");
+  const css = rd("css/style.css");
+  ok("lib/rt-trade.js＋js/53-trade.js 存在", has("lib/rt-trade.js") && has("js/53-trade.js"));
+  ok("_serve.js 轉送 /api/trade，交易狀態存 PERSIST_DIR", /u\.startsWith\("\/api\/trade"\)/.test(srv) && /persistFile\("trades\.json"\)/.test(srv));
+  ok("index.html 載入 js/53-trade.js", /js\/53-trade\.js/.test(F.html));
+  ok("同圖玩家可點區 .remote-party-hit pointer-events:auto", /\.remote-party-hit\s*\{[^}]*pointer-events:\s*auto/.test(css) && /remote-party-hit/.test(rd("js/09-vfx-render.js")));
+  ok("點玩家不觸發點地移動（isUiBlockTarget 含 .remote-party-hit）", /\.remote-party-hit, #peer-menu, #trade-win, #trade-ask/.test(rd("js/46-combat-hud.js")));
+  ok("party poll 轉交易事件", /ev\.type === 'trade' \|\| ev\.type === 'trade_claim'/.test(rd("js/36-realtime-party.js")));
+  ok("雲端存檔 _seedOf 有定義（否則同步上傳必拋錯、交易／拍賣鎖不了）", /function _seedOf\(data\)/.test(rd("js/35-cloud-save.js")));
+}
+
 section("14) 公告文字");
 {
   const all = F.html + fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).map((f) => rd("js/" + f)).join("\n");

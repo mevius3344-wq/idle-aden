@@ -399,6 +399,8 @@
                 fieldPvpHandleDeath(ev.fromName || '對手', ev.fromKey || '');
             } else if (ev.type === 'pvp_loot' && typeof fieldPvpApplyLootEvent === 'function') {
                 fieldPvpApplyLootEvent(ev);
+            } else if ((ev.type === 'trade' || ev.type === 'trade_claim') && typeof tradeOnEvent === 'function') {
+                if (!ev.toKey || ev.toKey === rtPartyMyKey()) tradeOnEvent(ev);
             }
         });
     }

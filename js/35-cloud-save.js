@@ -454,6 +454,10 @@
     return _writeDeletedSeeds(map);
   }
 
+  function _seedOf(data) {
+    return String((data && data.p && data.p.enSeed) || '').trim();
+  }
+
   function isCloudDeletedSeed(enSeed) {
     enSeed = String(enSeed || '').trim();
     if (!enSeed) return false;
