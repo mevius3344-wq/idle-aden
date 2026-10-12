@@ -164,11 +164,34 @@
   document.addEventListener("DOMContentLoaded", flushGameReadyQueue);
   window.addEventListener("load", flushGameReadyQueue);
 
+  function startDiag() {
+    var vis = function (id) {
+      var e = $(id);
+      if (!e) return "-";
+      var c = getComputedStyle(e);
+      return e.classList.contains("hidden") || c.display === "none" || c.visibility === "hidden" ? "off" : "on";
+    };
+    return { ready: gameScriptsReady(), ols: typeof window.openLoadSelect, main: vis("main-menu"), load: vis("load-select-panel"), auth: vis("account-auth-panel"), game: vis("game-screen") };
+  }
+
   function startMenu() {
+    var log = window.__clientLog || function () {};
+    var before = startDiag();
     if (gameScriptsReady()) {
-      window.openLoadSelect();
+      try {
+        window.openLoadSelect();
+      } catch (e) {
+        log("start_err", e && e.message ? e.message : String(e), { before: before, stack: e && e.stack ? String(e.stack).slice(0, 800) : "" });
+        setStatus("開啟選角失敗：" + (e && e.message ? e.message : e), "err");
+        return;
+      }
+      setTimeout(function () {
+        var after = startDiag();
+        log(after.load === "on" ? "start_ok" : "start_stuck", "start menu", { before: before, after: after });
+      }, 1500);
       return;
     }
+    log("start_wait", "start while loading", { before: before });
     if (document.readyState === "complete") {
       location.reload();
       return;

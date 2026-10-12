@@ -3646,6 +3646,53 @@ function serverLoadStats() {
   };
 }
 
+// 玩家端錯誤／開始遊戲狀態回報（手機卡住時 GM 後台 /api/gm/client-log 查看）
+const CLIENT_LOG_FILE = persistFile("client-log.json");
+const CLIENT_LOG_MAX = 300;
+const _clientLogRate = new Map();
+async function handleClientLog(req, res) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" });
+    return res.end();
+  }
+  if (req.method !== "POST") return json(res, 405, { ok: false });
+  const ip = clientIp(req);
+  const now = Date.now();
+  const r = _clientLogRate.get(ip) || { t: now, n: 0 };
+  if (now - r.t > 60000) { r.t = now; r.n = 0; }
+  r.n++;
+  _clientLogRate.set(ip, r);
+  if (r.n > 20) return json(res, 429, { ok: false });
+  let data = {};
+  try {
+    const raw = await readBody(req);
+    if (raw.length > 8192) return json(res, 413, { ok: false });
+    data = JSON.parse(raw || "{}");
+  } catch (e) {
+    return json(res, 400, { ok: false });
+  }
+  const clip = (v, n) => String(v == null ? "" : v).slice(0, n);
+  const row = {
+    at: new Date(now).toISOString(),
+    ip,
+    kind: clip(data.kind, 24),
+    account: clip(data.account, 24),
+    ver: clip(data.ver, 16),
+    msg: clip(data.msg, 600),
+    info: clip(typeof data.info === "string" ? data.info : JSON.stringify(data.info || {}), 1500),
+    ua: clip(req.headers["user-agent"], 200),
+  };
+  try {
+    let log = { rows: [] };
+    try { log = JSON.parse(fs.readFileSync(CLIENT_LOG_FILE, "utf8")); } catch (e) {}
+    const rows = Array.isArray(log.rows) ? log.rows : [];
+    rows.unshift(row);
+    fs.mkdirSync(path.dirname(CLIENT_LOG_FILE), { recursive: true });
+    fs.writeFileSync(CLIENT_LOG_FILE, JSON.stringify({ rows: rows.slice(0, CLIENT_LOG_MAX) }), "utf8");
+  } catch (e) {}
+  return json(res, 200, { ok: true });
+}
+
 let _fileGm = null;
 function fileGm() {
   if (_fileGm) return _fileGm;
@@ -3657,6 +3704,7 @@ function fileGm() {
     ratesFile: LOCAL_RATES_FILE,
     loadAccounts,
     saveAccounts,
+    clientLogFile: CLIENT_LOG_FILE,
     loadCharNames,
     sessions: _accountSessions,
     presenceRows: () => partyPresence.values(),
@@ -4439,6 +4487,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (u.startsWith("/api/pandora") && _pandoraApiHandler) {
       await _pandoraApiHandler(req, res, u);
+      return;
+    }
+    if (u === "/api/client-log") {
+      await handleClientLog(req, res);
+      return;
+    }
+    if (u === "/api/gm/client-log") {
+      await fileGm().handle(req, res, u);
       return;
     }
     if (u.startsWith("/api/gm/")) {
