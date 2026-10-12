@@ -39,7 +39,7 @@
   // 登入框比遊戲主程式（後面 50 多支同步腳本）先出現：慢網路／改版後首次下載要數十秒，
   // 這段期間「開始遊戲」與雲端同步都得排隊，等 openLoadSelect 等全部定義好才執行
   const LOGIN_HINT = "請輸入帳號與密碼。";
-  const LOADING_HINT = "遊戲資源下載中，可先登入……";
+  const LOADING_HINT = "遊戲資源下載中，可先輸入帳號密碼，下載完成才能登入。";
   var _gameReadyQueue = [];
   var _startQueued = false;
   var _startLabel = "";
@@ -67,7 +67,83 @@
     }
     b.classList.add("is-loading");
     if (document.readyState === "complete") b.textContent = "載入失敗，點此重新整理";
-    else b.textContent = _startQueued ? "載入中，完成後自動進入……" : "遊戲載入中……";
+    else b.textContent = (_startQueued ? "載入完成後自動進入 " : "遊戲下載中 ") + loadPercent() + "%";
+  }
+
+  // 下載進度：已下載完的遊戲腳本數／首頁腳本總數（總數由首頁 HTML 數出，未知前用 70）
+  var _bootTotal = 70;
+  var _bootTimer = null;
+  var _authBtnLabels = {};
+
+  function loadPercent() {
+    if (gameScriptsReady()) return 100;
+    var done = 0;
+    try {
+      done = performance.getEntriesByType("resource").filter(function (e) {
+        return e.initiatorType === "script" && /\/js\//.test(e.name);
+      }).length;
+    } catch (e) {}
+    return Math.max(1, Math.min(99, Math.round((done / Math.max(1, _bootTotal)) * 100)));
+  }
+
+  function countBootScripts() {
+    try {
+      fetch(location.pathname || "/", { cache: "force-cache" })
+        .then(function (r) {
+          return r.text();
+        })
+        .then(function (html) {
+          var n = (html.match(/<script src="js\//g) || []).length;
+          if (n > 0) _bootTotal = n;
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+  function syncLoadingUi() {
+    var ready = gameScriptsReady();
+    var pct = loadPercent();
+    var bar = $("auth-load-bar");
+    var box = document.querySelector(".account-auth-box");
+    if (!ready && !bar && box) {
+      bar = document.createElement("div");
+      bar.id = "auth-load-bar";
+      bar.innerHTML = '<div class="auth-load-track"><div class="auth-load-fill"></div></div><div class="auth-load-text"></div>';
+      var btns = box.querySelector(".account-auth-btns");
+      box.insertBefore(bar, btns || null);
+    }
+    if (bar) {
+      if (ready) {
+        bar.parentNode.removeChild(bar);
+      } else {
+        bar.querySelector(".auth-load-fill").style.width = pct + "%";
+        bar.querySelector(".auth-load-text").textContent =
+          document.readyState === "complete"
+            ? "遊戲下載失敗，請重新整理頁面"
+            : "遊戲下載中 " + pct + "%（第一次開啟或更新後較久，請稍候）";
+      }
+    }
+    ["btn-auth-login", "btn-auth-register"].forEach(function (id) {
+      var b = $(id);
+      if (!b) return;
+      if (_authBtnLabels[id] == null) _authBtnLabels[id] = b.textContent;
+      b.disabled = !ready;
+      b.classList.toggle("is-loading", !ready);
+      if (ready) b.textContent = _authBtnLabels[id];
+      else if (id === "btn-auth-login") b.textContent = "下載中 " + pct + "%";
+    });
+    syncStartMenuButton();
+    if (ready || document.readyState === "complete") {
+      if (_bootTimer) clearInterval(_bootTimer);
+      _bootTimer = null;
+    }
+  }
+
+  function startLoadingUi() {
+    if (gameScriptsReady()) return;
+    countBootScripts();
+    syncLoadingUi();
+    if (!_bootTimer) _bootTimer = setInterval(syncLoadingUi, 300);
   }
 
   function flushGameReadyQueue() {
@@ -82,7 +158,7 @@
         var st = $("auth-status");
         if (st && st.textContent === LOADING_HINT) setStatus(LOGIN_HINT);
       }
-      syncStartMenuButton();
+      syncLoadingUi();
     }, 0);
   }
   document.addEventListener("DOMContentLoaded", flushGameReadyQueue);
@@ -773,6 +849,11 @@
       setStatus("請輸入密碼。", "err");
       return;
     }
+    if (!gameScriptsReady()) {
+      setStatus("遊戲還在下載（" + loadPercent() + "%），下載完成後再按登入。", "err");
+      syncLoadingUi();
+      return;
+    }
     setStatus("連線中……", "ok");
 
     wakeServerBeforeAuth().then(function (wake) {
@@ -998,11 +1079,23 @@
   function boot() {
     // 🛡️ 清掉舊版本機明文密碼；「記住」只還原帳號
     try { scrubLocalPlaintextPasswords(); } catch (eScrub) {}
+    startLoadingUi();
     if (!applyRememberedCreds()) {
       clearCredFields();
-      setTimeout(clearCredFields, 0);
-      setTimeout(clearCredFields, 200);
-      setTimeout(clearCredFields, 800);
+      // 清瀏覽器自動填入，但玩家已經打字的不清（下載中先輸入帳密）
+      var typed = false;
+      ["auth-account", "auth-password"].forEach(function (id) {
+        var el = $(id);
+        if (el) el.addEventListener("input", function () {
+          typed = true;
+        });
+      });
+      var clearUntyped = function () {
+        if (!typed) clearCredFields();
+      };
+      setTimeout(clearUntyped, 0);
+      setTimeout(clearUntyped, 200);
+      setTimeout(clearUntyped, 800);
     }
 
     const btnReg = $("btn-auth-register");

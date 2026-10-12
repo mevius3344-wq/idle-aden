@@ -7038,6 +7038,35 @@ button.classic-skill-cell { cursor:pointer; }
 }
 .account-auth-status.ok { color: #9ddea8; }
 .account-auth-status.err { color: #f0a090; }
+/* 遊戲腳本下載進度（下載完才能登入） */
+#auth-load-bar { margin: 4px 0 12px; }
+#auth-load-bar .auth-load-track {
+  height: 10px;
+  border: 1px solid rgba(198, 156, 74, 0.82);
+  background: rgba(8, 6, 3, 0.9);
+  overflow: hidden;
+}
+#auth-load-bar .auth-load-fill {
+  width: 1%;
+  height: 100%;
+  background: linear-gradient(90deg, #8a5a14, #f3c86a, #fff2c4);
+  box-shadow: 0 0 8px rgba(243, 200, 106, 0.7);
+  transition: width 0.3s ease;
+}
+#auth-load-bar .auth-load-text {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffe9a8;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+.account-game-btn.is-loading,
+.login-menu-btn.is-loading {
+  opacity: 0.6;
+  cursor: wait;
+  filter: grayscale(0.4);
+}
 /* 手機收合鈕：桌面永遠隱藏（僅窄螢幕 media 內才可能顯示） */
 .mobile-tab-collapse-btn { display: none !important; }
 /* 右側「選單」鈕：僅 combat-hud 顯示（見 combat-hud.css） */

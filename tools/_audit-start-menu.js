@@ -71,32 +71,37 @@ async function run(label, port, W, H, mob, acct, PW, mode, slow) {
         a.dispatchEvent(new Event('input',{bubbles:true}));p.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     if (slow) {
         ok(await b.ev('document.readyState') === 'loading' && await b.ev('typeof openLoadSelect') !== 'function', `[${label}] 登入框出現時遊戲腳本仍在下載`);
-        ok(/下載中/.test(await b.ev(`document.getElementById('auth-status').textContent`)), `[${label}] 登入框提示「遊戲資源下載中」`);
-        await b.ev(`document.getElementById('btn-auth-login').click()`);
+        await sleep(1500);
+        const ui = await b.ev(`(()=>{const bar=document.getElementById('auth-load-bar');const bt=document.getElementById('btn-auth-login');return {bar:bar?bar.textContent:null,dis:bt.disabled,lbl:bt.textContent,status:document.getElementById('auth-status').textContent}})()`);
+        ok(ui.bar && /下載中 \d+%/.test(ui.bar), `[${label}] 登入框顯示下載進度條（${ui.bar}）`);
+        ok(ui.dis && /下載中 \d+%/.test(ui.lbl), `[${label}] 下載中登入鈕鎖住並顯示百分比（${ui.lbl}）`);
+        await b.ev(`(()=>{const p=document.getElementById('auth-password');p.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));})()`);
+        await sleep(800);
+        ok(!(await vis(b, '#main-menu')), `[${label}] 下載中按 Enter 不會登入（不會停在按了沒反應的開始遊戲）`);
+        const pcts = [];
+        let ready = false;
+        for (let i = 0; i < 720 && !ready; i++) {
+            await sleep(250);
+            ready = await b.ev(`!document.getElementById('btn-auth-login').disabled`);
+            if (i % 20 === 0) pcts.push(await b.ev(`(document.getElementById('auth-load-bar')||{}).textContent||''`));
+        }
+        console.log('  progress', pcts.map((t) => (t.match(/\d+%/) || [''])[0]).join(' '));
+        ok(ready && await b.ev(`!document.getElementById('auth-load-bar')&&document.getElementById('btn-auth-login').textContent==='登入'&&typeof openLoadSelect==='function'`), `[${label}] 下載完：進度條消失、登入鈕恢復`);
+        await b.unthrottle();
+        await b.realClick('#btn-auth-login');
     } else {
         await b.realClick('#btn-auth-login');
     }
     for (let i = 0; i < 40; i++) { await sleep(500); if (await vis(b, '#main-menu')) break; }
-    if (!slow) await sleep(2500);
+    await sleep(2500);
     ok(await vis(b, '#main-menu'), `[${label}] 登入後看到主選單`);
-    let box;
-    if (slow) {
-        ok(await b.ev('document.readyState') === 'loading', `[${label}] 按開始遊戲時腳本仍在下載`);
-        await b.ev(`document.getElementById('btn-start-menu').click()`);
-        await sleep(300);
-        const lbl = await b.ev(`document.getElementById('btn-start-menu').textContent`);
-        ok(/載入中/.test(lbl), `[${label}] 開始遊戲鈕顯示載入中（${lbl}）`);
-        ok(b.errors.length === 0, `[${label}] 載入中按開始遊戲不報錯 ` + b.errors.slice(0, 2).join(' | '));
-    } else {
-        box = await b.realClick('#btn-start-menu');
-        console.log(`  [${label}] 開始遊戲按鈕 ` + JSON.stringify(box));
-    }
+    if (!(await vis(b, '#main-menu'))) console.log('  auth-status:', await b.ev(`document.getElementById('auth-status').textContent`), b.logs.slice(-6).join(' || '));
+    const box = await b.realClick('#btn-start-menu');
+    console.log(`  [${label}] 開始遊戲按鈕 ` + JSON.stringify(box));
     let loadOn = false;
-    for (let i = 0; i < (slow ? 720 : 20) && !loadOn; i++) { await sleep(250); loadOn = await vis(b, '#load-select-panel'); }
+    for (let i = 0; i < 20 && !loadOn; i++) { await sleep(250); loadOn = await vis(b, '#load-select-panel'); }
     ok(loadOn, `[${label}] 按「開始遊戲」→ 選角畫面出現`);
     if (slow) {
-        await b.unthrottle();
-        ok(await b.ev(`document.getElementById('btn-start-menu').textContent`) === '開始遊戲', `[${label}] 載完後按鈕字恢復「開始遊戲」`);
         let sum = null;
         for (let i = 0; i < 40 && !sum; i++) { await sleep(500); sum = await b.ev(`(()=>{const s=typeof slotSummary==='function'&&slotSummary(1);return s?s.name:null})()`); }
         ok(!!sum, `[${label}] 雲端角色有同步進選角（${sum}）`);

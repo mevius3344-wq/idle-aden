@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
+const zlib = require("zlib");
 
 let _pandoraApiHandler = null;
 let _neonLeaderboardHandler = null;
@@ -4546,10 +4547,30 @@ const server = http.createServer(async (req, res) => {
                 : "no-store",
     };
     if (ext === ".html") headers.Pragma = "no-cache";
+    // 首頁同步腳本＋樣式約 7MB：文字檔 gzip（約剩 1/4），登入前的下載時間跟著縮短
+    if (GZIP_EXT.has(ext) && data.length > 1024 && /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""))) {
+      try {
+        data = gzipCached(full, ext === ".html" ? null : data.length, data);
+        headers["Content-Encoding"] = "gzip";
+        headers.Vary = "Accept-Encoding";
+      } catch (eZ) {}
+    }
+    headers["Content-Length"] = data.length;
     res.writeHead(200, headers);
     res.end(data);
   });
 });
+
+const GZIP_EXT = new Set([".js", ".css", ".html", ".json", ".svg", ".txt", ".map"]);
+const _gzipCache = new Map();
+function gzipCached(full, size, data) {
+  if (size == null) return zlib.gzipSync(data, { level: 6 });
+  const hit = _gzipCache.get(full);
+  if (hit && hit.size === size) return hit.gz;
+  const gz = zlib.gzipSync(data, { level: 9 });
+  _gzipCache.set(full, { size: size, gz: gz });
+  return gz;
+}
 
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") {

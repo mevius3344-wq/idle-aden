@@ -504,9 +504,11 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   const au = rd("js/auth-login.js");
   ok("開始遊戲鈕走 GameAccountAuth.startMenu（不可直接 openLoadSelect）", /onclick="GameAccountAuth\.startMenu\(\)" id="btn-start-menu"/.test(F.html) && !/onclick="openLoadSelect\(\)"/.test(F.html));
   ok("載入完成判定＝readyState 非 loading 且 openLoadSelect 已定義", /return document\.readyState !== "loading" && typeof window\.openLoadSelect === "function";/.test(au));
-  ok("未載完：按鈕顯示載入中、載完自動開選角", /function startMenu\(\)/.test(au) && /載入中，完成後自動進入/.test(au) && /document\.addEventListener\("DOMContentLoaded", flushGameReadyQueue\);/.test(au));
+  ok("未載完：開始遊戲鈕顯示百分比、載完自動開選角", /function startMenu\(\)/.test(au) && /載入完成後自動進入 /.test(au) && /document\.addEventListener\("DOMContentLoaded", flushGameReadyQueue\);/.test(au));
   ok("背景雲端同步等遊戲腳本載完（否則選角是空的）", /function runBackgroundCloudSync\(account\) \{\s*return new Promise\(function \(resolve\) \{\s*whenGameReady\(resolve\);/.test(au));
-  ok("登入框載入中提示", /遊戲資源下載中，可先登入/.test(au));
+  ok("登入框下載進度條＋登入／註冊鈕下載完才解鎖", /bar\.id = "auth-load-bar";/.test(au) && /b\.disabled = !ready;/.test(au) && /startLoadingUi\(\);/.test(au) && /#auth-load-bar \.auth-load-fill/.test(rd("css/style.css")));
+  ok("下載中按 Enter 也不登入", /if \(!gameScriptsReady\(\)\) \{\s*setStatus\("遊戲還在下載（"/.test(au));
+  ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
 section("35) 名字在頭上");
