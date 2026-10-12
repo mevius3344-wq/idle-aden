@@ -511,6 +511,14 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
+section("48) 主畫面捷徑舊頁面自動更新");
+{
+  const lu = rd("js/38-live-update.js");
+  ok("自己版本≠伺服器版本就更新（不可只記第一次伺服器版本當基準）", /clientVer && clientVer !== serverVer && _staleTryOnce\(serverVer\)/.test(lu));
+  ok("每個版本只試一次（sessionStorage 防無限重整）", /function _staleTryOnce\(ver\)/.test(lu) && /sessionStorage\.getItem\(k\) === ver/.test(lu));
+  ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

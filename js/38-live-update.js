@@ -68,6 +68,15 @@
         }, RELOAD_DELAY_MS);
     }
 
+    function _staleTryOnce(ver) {
+        try {
+            var k = 'liveUpdateTried';
+            if (sessionStorage.getItem(k) === ver) return false;
+            sessionStorage.setItem(k, ver);
+            return true;
+        } catch (e) { return false; }
+    }
+
     function _poll() {
         if (!_isHttp() || _reloading) return;
         fetch('/api/version?t=' + Date.now(), { method: 'GET', cache: 'no-store' })
@@ -75,6 +84,13 @@
             .then(function (data) {
                 if (!data || !data.ok || !data.gameVersion) return;
                 var serverVer = String(data.gameVersion);
+                // 手機主畫面捷徑會把舊頁面凍在記憶體，回前景時仍跑舊程式：自己版本≠伺服器就更新（每個版本只試一次，防無限重整）
+                var clientVer = _clientVer();
+                if (clientVer && clientVer !== serverVer && _staleTryOnce(serverVer)) {
+                    _bootGameVersion = serverVer;
+                    _doReload('新版本 ' + serverVer + ' 已上線，正在更新…', serverVer);
+                    return;
+                }
                 // 第一次只記住伺服器版本；勿因 client/server 短暫不一致狂重整（會把網址疊爆）
                 if (!_bootGameVersion) {
                     _bootGameVersion = serverVer;
