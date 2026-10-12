@@ -674,6 +674,7 @@ function useItem(u, silent = false) {
     if (d.eff === 'card') { if (silent) return; if (typeof useCardItem === 'function') useCardItem(item); return; }
     if (d.eff === 'doll_bag') { if (silent) return; if (typeof openDollBag === 'function') openDollBag(item, false); return; }   // 🪆 開啟魔法娃娃的袋子
     if (d.eff === 'doll_box_high') { if (silent) return; if (typeof openDollBox === 'function') openDollBox(item, false); return; }   // 🎁 開啟高級魔法娃娃的盒子
+    if (d.eff === 'doll_pick') { if (silent) return; if (typeof openDollPick === 'function') openDollPick(item); return; }   // 🎟️ 魔法娃娃任選卷：選定才扣卷
 
     // 🗼 封印的傲慢之塔傳送符：使用後解封，獲得對應的 傲慢之塔傳送符（消耗 1 個）
     if (d.eff === 'pride_unseal') {
@@ -745,7 +746,7 @@ function useItem(u, silent = false) {
         return;
     }
 
-    if (d.type === 'pot' || d.eff === 'poly' || d.eff === 'reset' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll' || d.eff === 'town_recall' || d.eff === 'panacea') {   // 變形卷軸／回憶蠟燭／魔法屏障／瞬間移動／傳送回家／萬能藥
+    if (d.type === 'pot' || d.eff === 'poly' || d.eff === 'reset' || d.eff === 'magicbarrier' || d.eff === 'teleport_scroll' || d.eff === 'town_recall' || d.eff === 'town_tp' || d.eff === 'panacea') {   // 變形卷軸／回憶蠟燭／魔法屏障／瞬間移動／傳送回家／村莊傳送／萬能藥
         // 職業限定檢查（如慎重藥水=法師、勇敢藥水=騎士、精靈餅乾=妖精）
         if (!reqAllowsClass(d, player.cls)) {
             if (!silent) logSys(`無法使用 ${d.n}，職業不符。`);
@@ -860,6 +861,19 @@ function useItem(u, silent = false) {
             }
             if (typeof returnToTown !== 'function' || !returnToTown()) return;
             logSys('使用傳送回家卷軸，空間裂縫將你送回村莊。');
+            // 落到下方 consume(item)
+        } else if (d.eff === 'town_tp') {
+            // 🏘️ 村莊傳送卷軸：傳送到卷軸指定的村莊
+            if (silent) return;
+            let _town = DB.towns && DB.towns[d.town];
+            if (!_town) { logSys('<span class="text-red-400">卷軸上的地名已模糊，無法傳送。</span>'); return; }
+            if (typeof pvpArenaTravelLocked === 'function' && pvpArenaTravelLocked()) {
+                logSys('<span class="text-red-400">決鬥進行中無法使用傳送卷軸；可按「投降」結束本場。</span>');
+                return;
+            }
+            if (mapState.current === d.town) { logSys(`你已經在${_town.n}了。`); return; }
+            if (typeof returnToTown !== 'function' || !returnToTown(d.town)) return;
+            logSys(`使用${d.n}，你被傳送到了${_town.n}。`);
             // 落到下方 consume(item)
         } else if (d.eff === 'panacea') {
             const STAT_CN = { str:'力量', dex:'敏捷', con:'體質', int:'智力', wis:'精神', cha:'魅力' };

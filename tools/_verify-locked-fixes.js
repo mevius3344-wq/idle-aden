@@ -183,6 +183,7 @@ section("8) 潘朵拉：遺物搜尋／布告欄／收購 下架");
     /function pandoraRelicBalanceHTML\([^)]*\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*return '';/.test(F.relic));
   ok("pandoraRelicBoardHTML 回傳空",
     /function pandoraRelicBoardHTML\([^)]*\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*return '';/.test(F.relic));
+  ok("抽抽樂下架：潘朵拉 NPC 不在任何村莊", !/id: "npc_pandora"/.test(rd("js/00-data.js")));
 }
 
 section("9) 死亡：自動回村、無原地復活");
@@ -521,6 +522,29 @@ section("52) 全服洗白（開機清玩家資料、客戶端清本機舊存檔�
   ok("洗白保留玩家回報／GM 操作紀錄／倍率", ['"client-log.json"', '"gm-audit.json"', '"gm-rates.json"', '"wipe-epoch.txt"', '"lost+found"'].every((s) => /const WIPE_KEEP = new Set\(\[[\s\S]{0,300}\]\);/.test(sv) && sv.match(/const WIPE_KEEP = new Set\(\[[\s\S]{0,300}\]\);/)[0].includes(s)));
   ok("只在 Railway 或 WIPE_ON_BOOT=1 才洗", /if \(!onRailway && process\.env\.WIPE_ON_BOOT !== "1"\) return;/.test(sv));
   ok("客戶端洗白腳本是 head 第一支腳本", F.html.indexOf("var EPOCH = '") > 0 && F.html.indexOf("var EPOCH = '") < F.html.indexOf("<script", F.html.indexOf("<script") + 1));
+}
+
+section("53) 私服整理（移除非原版系統、補私服道具）");
+{
+  const dt = rd("js/00-data.js");
+  const ie = rd("js/08-items-equip.js");
+  const dc = rd("js/01-drops-config.js");
+  const cd = rd("js/15-cards.js");
+  const wc = rd("js/26-world-channel.js");
+  ok("城堡護衛招募／魔物追蹤／決鬥競技場 NPC 不在任何村莊",
+    !/id: "npc_(kent_guard|ww_guard|heine_guard|obel|hert|diren|arena)"/.test(dt));
+  ok("世界頻道假玩家閒聊維持關閉", /function _wcPostIdleChat\(\) \{\s*return;/.test(wc));
+  const exps = { 130: 1.3, 150: 1.5, 170: 1.7, 200: 2, 250: 2.5, 300: 3 };
+  ok("經驗藥水 130~300%（10 分鐘、有原版圖示）", Object.keys(exps).every((k) =>
+    new RegExp('"potion_exp' + k + '": \\{[^\\n]*img: "assets/icons/items/翡翠藥水\\.png"[^\\n]*eff: "exp' + k + '", dur: 600').test(dt)));
+  ok("經驗藥水取最高倍率、不疊加", Object.keys(exps).every((k) => new RegExp("exp" + k + ": " + exps[k] + "\\b").test(dc)) &&
+    /if \(b\[k\] > 0 && EXP_POTION_BUFF_MULT\[k\] > m\) m = EXP_POTION_BUFF_MULT\[k\];/.test(dc));
+  const towns = ["talking", "gludin", "silver_knight", "gludio", "elf", "giran", "heine", "oren", "witon", "aden"];
+  ok("村莊傳送卷軸 10 張", towns.every((t) => new RegExp('"scroll_town_' + t + '":[^\\n]*eff: "town_tp", town: "town_' + t + '"').test(dt)));
+  ok("村莊傳送卷軸走 returnToTown(指定村莊)", /d\.eff === 'town_tp'/.test(ie) && /returnToTown\(d\.town\)/.test(ie));
+  ok("魔法娃娃任選卷 二~六階", [2, 3, 4, 5, 6].every((t) => new RegExp('"doll_pick_' + t + '": \\{[^\\n]*eff: "doll_pick", pickTier: ' + t).test(dt)));
+  ok("任選卷：選定才扣卷、只能選該階", /d\.eff === 'doll_pick'[^\n]*openDollPick\(item\)/.test(ie) &&
+    /function openDollPick\(item\)/.test(cd) && /\(DOLL_BY_TIER\[sd\.pickTier\] \|\| \[\]\)\.indexOf\(dollId\) < 0\) return;/.test(cd));
 }
 
 section("51) 主城奇岩");

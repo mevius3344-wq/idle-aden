@@ -404,6 +404,55 @@ function openDollBox(item, all) {
     if (typeof saveGame === 'function') saveGame();
     let _c = document.getElementById('interaction-content'); if (_c) renderCardSynth(_c);
 }
+
+// 🎟️ 魔法娃娃任選卷：列出該階全部娃娃（含能力），選定才扣 1 張卷
+function openDollPick(item) {
+    let d = item && DB.items[item.id];
+    let pool = (d && DOLL_BY_TIER[d.pickTier]) || [];
+    if (!pool.length) { logSys('<span class="text-slate-400">這張任選卷沒有可選的魔法娃娃。</span>'); return; }
+    if (!document.getElementById('item-modal').classList.contains('hidden') && typeof closeModal === 'function') closeModal();
+    let w = document.getElementById('dollpick-win');
+    if (!w) {
+        w = document.createElement('div');
+        w.id = 'dollpick-win';
+        w.className = 'trade-win';
+        w.innerHTML = '<div class="trade-box">' +
+            '<div class="trade-head"><span class="dp-title"></span></div>' +
+            '<div class="lin-list dp-list" style="max-height:60vh;overflow-y:auto"></div>' +
+            '<div class="trade-status">選一隻魔法娃娃（消耗 1 張任選卷）</div>' +
+            '<div class="trade-actions"><button type="button" class="trade-btn" data-act="close">關閉</button></div>' +
+            '</div>';
+        w.addEventListener('click', function (ev) {
+            let b = ev.target.closest('[data-act],[data-pick]');
+            if (ev.target === w || (b && b.getAttribute('data-act') === 'close')) { w.classList.add('hidden'); return; }
+            if (b && b.hasAttribute('data-pick')) dollPickChoose(w.getAttribute('data-scroll'), b.getAttribute('data-pick'));
+        });
+        document.body.appendChild(w);
+    }
+    w.setAttribute('data-scroll', item.id);
+    w.querySelector('.dp-title').textContent = d.n;
+    w.querySelector('.dp-list').innerHTML = pool.map(id => {
+        let dd = DB.items[id];
+        let desc = (typeof buildItemDescHTML === 'function') ? buildItemDescHTML({ id: id, uid: 'dollpick', cnt: 1, en: 0 }) : (dd.d || '');
+        return '<div class="lin-row">' +
+            `<div class="lin-row-main" style="text-align:left"><b class="${dd.c || ''}">${dd.n}</b><small style="display:block;white-space:normal">${desc}</small></div>` +
+            `<button type="button" class="trade-btn trade-btn-sm" data-pick="${id}">選擇</button></div>`;
+    }).join('');
+    w.classList.remove('hidden');
+}
+function dollPickChoose(scrollId, dollId) {
+    let sd = DB.items[scrollId], dd = DB.items[dollId];
+    if (!sd || sd.eff !== 'doll_pick' || !dd || (DOLL_BY_TIER[sd.pickTier] || []).indexOf(dollId) < 0) return;
+    let scroll = player.inv.find(i => i.id === scrollId && (i.cnt || 1) > 0);
+    let w = document.getElementById('dollpick-win');
+    if (!scroll) { logSys('<span class="text-slate-400">身上沒有' + sd.n + '。</span>'); if (w) w.classList.add('hidden'); return; }
+    scroll.cnt = (scroll.cnt || 1) - 1;
+    if (scroll.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== scroll.uid);
+    gainItem(dollId, 1, true, true, false, true);
+    logSys(`🎟️ 使用${sd.n}，獲得了 <span class="${dd.c || 'text-pink-300'} font-bold">${dd.n}</span>。`);
+    if (w) w.classList.add('hidden');
+    _dollAfterChange();
+}
 // 多餘卡片＝背包內該階卡片 且 該怪圖鑑「已開金階」(score>=100)：⚠️維持「需圖鑑開通金卡」才可兌換（銀卡/金卡皆 gate on 金階·只動用已收滿該怪的重複卡）
 function dollExcessSilverCards() { return player.inv.filter(it => { let d = DB.items[it.id]; return d && d.eff === 'card' && !it.lock && d.cardTier === 2 && cardDexTier(d.cardMob) >= 3; }); }   // 🔒 鎖定卡不列入可兌換
 function dollExcessSilverCount() { return dollExcessSilverCards().reduce((s, it) => s + (it.cnt || 1), 0) + _dollWhExcessCount(2); }   // 🔧 含倉庫多餘銀卡

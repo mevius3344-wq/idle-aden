@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.97';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.98';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1167,6 +1167,12 @@ const DB = {
         "potion_haste": { n: "自我加速藥水", type: "pot", req: "all", p: 200, c: "text-green-300", d: "飲下後身體變得輕盈，戰鬥動作也隨之加快。", eff: "haste", dur: 300, gachaWeight: 0 },
         "potion_blue": { n: "藍色藥水", type: "pot", req: "all", p: 1046, c: "text-blue-300", d: "以珍稀藍草煉製的藥水，精神越堅定，越能從中汲取充沛魔力。", eff: "blue", dur: 600, gachaWeight: 0 },
         "potion_exp2": { n: "200%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-yellow-300", d: "新手禮包贈送（綁定）。飲用後 30 分鐘內打怪獲得的經驗值變為 2 倍；重複飲用重新計時、不疊加。無法交易、無法販售。", eff: "exp2", dur: 1800, noSell: true, noJunk: true, gachaWeight: 0 },
+        "potion_exp130": { n: "130%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-lime-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 130%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp130", dur: 600, noJunk: true, gachaWeight: 0 },
+        "potion_exp150": { n: "150%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-lime-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 150%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp150", dur: 600, noJunk: true, gachaWeight: 0 },
+        "potion_exp170": { n: "170%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-green-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 170%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp170", dur: 600, noJunk: true, gachaWeight: 0 },
+        "potion_exp200": { n: "200%經驗藥水(10分鐘)", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-yellow-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 200%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp200", dur: 600, noJunk: true, gachaWeight: 0 },
+        "potion_exp250": { n: "250%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-amber-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 250%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp250", dur: 600, noJunk: true, gachaWeight: 0 },
+        "potion_exp300": { n: "300%經驗藥水", img: "assets/icons/items/翡翠藥水.png", type: "pot", req: "all", p: 0, c: "text-orange-300", d: "飲用後 10 分鐘內打怪獲得的經驗值變為 300%；各種經驗藥水不疊加，取倍率最高者生效，重複飲用重新計時。", eff: "exp300", dur: 600, noJunk: true, gachaWeight: 0 },
         "ivt_scroll_teleport": { n: "象牙塔瞬間移動卷軸", img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-sky-300", d: "新手禮包贈送（綁定）。使用後隨機瞬間移動到目前地圖的其他地點；自動瞬移、書籤會優先使用。無法交易、無法販售。", eff: "teleport_scroll", noSell: true, noJunk: true, gachaWeight: 0 },
         "ivt_scroll_poly": { n: "象牙塔變身卷軸", img: "assets/icons/items/變形卷軸.png", type: "scroll", req: "all", p: 0, c: "text-gray-300", d: "新手禮包贈送（綁定）。效果同變形卷軸，變身 30 分鐘；自動變身會優先使用。無法交易、無法販售。", eff: "poly", dur: 1800, noSell: true, noJunk: true, gachaWeight: 0 },
         "ivt_potion_haste": { n: "象牙塔加速藥水", img: "assets/icons/items/自我加速藥水.png", type: "pot", req: "all", p: 0, c: "text-green-300", d: "新手禮包贈送（綁定）。效果同自我加速藥水，持續 5 分鐘；自動加速會優先使用。無法交易、無法販售。", eff: "haste", dur: 300, noSell: true, noJunk: true, gachaWeight: 0 },
@@ -1188,6 +1194,16 @@ const DB = {
         "scroll_poly": { n: "變形卷軸", type: "scroll", req: "all", p: 1300, c: "text-gray-300", d: "記載古老變形術的卷軸，能讓使用者暫時化為與自身歷練相稱的姿態。", eff: "poly", dur: 1800, gachaWeight: 0 },
         "scroll_magicbarrier": { n: "魔法卷軸(魔法屏障)", type: "scroll", req: "all", p: 1500, c: "text-cyan-300", d: "封存魔法屏障的卷軸，展開後能抵擋一次來襲的技能。", eff: "magicbarrier", gachaWeight: 0 },
         "scroll_teleport": { n: "瞬間移動卷軸", type: "scroll", req: "all", p: 82, c: "text-sky-300", d: "使用後發動傳送術", eff: "teleport_scroll", gachaWeight: 0 },
+        "scroll_town_talking":       { n: "說話之島傳送卷軸",   img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到說話之島。", eff: "town_tp", town: "town_talking", noJunk: true, gachaWeight: 0 },
+        "scroll_town_gludin":        { n: "古魯丁村莊傳送卷軸", img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到古魯丁村莊。", eff: "town_tp", town: "town_gludin", noJunk: true, gachaWeight: 0 },
+        "scroll_town_silver_knight": { n: "銀騎士村傳送卷軸",   img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到銀騎士村。", eff: "town_tp", town: "town_silver_knight", noJunk: true, gachaWeight: 0 },
+        "scroll_town_gludio":        { n: "燃柳村傳送卷軸",     img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到燃柳村。", eff: "town_tp", town: "town_gludio", noJunk: true, gachaWeight: 0 },
+        "scroll_town_elf":           { n: "妖精森林傳送卷軸",   img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到妖精森林。", eff: "town_tp", town: "town_elf", noJunk: true, gachaWeight: 0 },
+        "scroll_town_giran":         { n: "奇岩傳送卷軸",       img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到奇岩。", eff: "town_tp", town: "town_giran", noJunk: true, gachaWeight: 0 },
+        "scroll_town_heine":         { n: "海音傳送卷軸",       img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到海音。", eff: "town_tp", town: "town_heine", noJunk: true, gachaWeight: 0 },
+        "scroll_town_oren":          { n: "歐瑞村莊傳送卷軸",   img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到歐瑞村莊。", eff: "town_tp", town: "town_oren", noJunk: true, gachaWeight: 0 },
+        "scroll_town_witon":         { n: "威頓村傳送卷軸",     img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到威頓村。", eff: "town_tp", town: "town_witon", noJunk: true, gachaWeight: 0 },
+        "scroll_town_aden":          { n: "亞丁傳送卷軸",       img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-cyan-300", d: "使用後傳送到亞丁。", eff: "town_tp", town: "town_aden", noJunk: true, gachaWeight: 0 },
         "scroll_revive": { n: "復活卷軸", type: "scroll", req: "all", p: 1000, c: "text-yellow-300", d: "蘊藏復甦之力的神聖卷軸，能使倒下的傭兵或寵物在原地重新站起。玩家本人死亡後會自動回村甦醒。", gachaWeight: 0 },
         "item_blueflute": { n: "藍色長笛", p: 10000, c: "text-pink-300", d: "試煉所需的材料。", gachaWeight: 5 },   // 🔧 試煉材料統一藍色
         "item_ancientkey": { n: "古代鑰匙", p: 1, c: "text-blue-300", d: "試煉所需的材料。", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
@@ -1295,6 +1311,11 @@ const DB = {
         "doll_巴拉卡斯":   { n: "魔法娃娃：巴拉卡斯", type: "acc", slot: "doll", req: "all", safe: 0, p: 0, doll: true, dollTier: 6, noEnhance: true, gachaWeight: 0, c: "text-red-400", hpR: 20, mpR: 10, resFire: 20, meleeDmg: 4, meleeHit: 8, dr: 5, stunResist: 100, d: "六階魔法娃娃。裝於魔法娃娃欄，游標變其模樣。" },
         "doll_bag":        { n: "魔法娃娃的袋子", type: "misc", p: 0, c: "text-pink-300", eff: "doll_bag", noSell: true, gachaWeight: 0, d: "打開可隨機獲得一隻魔法娃娃。於威頓村魔法娃娃商人用多餘銀卡兌換取得。" },
         "doll_box_high":   { n: "高級魔法娃娃的盒子", type: "misc", p: 0, c: "text-amber-300", eff: "doll_box_high", noSell: true, gachaWeight: 0, d: "打開可隨機獲得一隻較高階（二～四階）的魔法娃娃。於威頓村魔法娃娃商人用多餘金卡兌換取得。" },
+        "doll_pick_2": { n: "二階魔法娃娃任選卷", img: "assets/icons/items/高級魔法娃娃的盒子.png", type: "misc", p: 0, c: "text-green-300",  eff: "doll_pick", pickTier: 2, noJunk: true, gachaWeight: 0, d: "使用後可從所有二階魔法娃娃中任選一隻。" },
+        "doll_pick_3": { n: "三階魔法娃娃任選卷", img: "assets/icons/items/高級魔法娃娃的盒子.png", type: "misc", p: 0, c: "text-sky-300",    eff: "doll_pick", pickTier: 3, noJunk: true, gachaWeight: 0, d: "使用後可從所有三階魔法娃娃中任選一隻。" },
+        "doll_pick_4": { n: "四階魔法娃娃任選卷", img: "assets/icons/items/高級魔法娃娃的盒子.png", type: "misc", p: 0, c: "text-purple-300", eff: "doll_pick", pickTier: 4, noJunk: true, gachaWeight: 0, d: "使用後可從所有四階魔法娃娃中任選一隻。" },
+        "doll_pick_5": { n: "五階魔法娃娃任選卷", img: "assets/icons/items/高級魔法娃娃的盒子.png", type: "misc", p: 0, c: "text-amber-300",  eff: "doll_pick", pickTier: 5, noJunk: true, gachaWeight: 0, d: "使用後可從所有五階魔法娃娃中任選一隻。" },
+        "doll_pick_6": { n: "六階魔法娃娃任選卷", img: "assets/icons/items/高級魔法娃娃的盒子.png", type: "misc", p: 0, c: "text-red-300",    eff: "doll_pick", pickTier: 6, noJunk: true, gachaWeight: 0, d: "使用後可從所有六階魔法娃娃中任選一隻。" },
         "scroll_weapon": { n: "對武器施法的卷軸", p: 22500, c: "text-white", d: "刻著強化咒文的卷軸，能將魔力灌入武器；過度追求力量也可能使武器崩毀。", gachaWeight: 100 },
         "scroll_armor": { n: "對盔甲施法的卷軸", p: 9000, c: "text-white", d: "刻著防護咒文的卷軸，能強化盔甲；越過裝備承受的極限便可能使其崩毀。", gachaWeight: 100 },
         "scroll_weapon_b": { n: "祝福的 對武器施法的卷軸", p: 22500, c: "text-yellow-300", d: "受到殷海薩祝福的卷軸，較容易喚醒尚未成熟的武器潛能。", isB: true, gachaWeight: 0 },
@@ -1951,7 +1972,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.97：血量改回 40（曾誤設 800）
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.98：血量改回 40（曾誤設 800）
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },
@@ -2541,11 +2562,8 @@ const DB = {
                 { id: "npc_nichi", n: "尼奇", title: "雜貨商人", type: "shop", d: "硝煙散去後，尼奇在新得的城裡擺起攤子——攻城獲勝後開放的肯特城雜貨商。" },
                 { id: "npc_wh_kent", n: "巴歐", title: "倉庫", type: "warehouse", d: "巴歐替占領者看管著肯特城的庫房，存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ismael", n: "伊賽馬利", title: "交換物品", type: "exchange", d: "伊賽馬利精於以物易物，以卷軸或金幣交換稀有的祝福卷軸與飾品卷軸。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉抽抽樂：付費依權重抽出寶物（單抽／十連）。" },
-                { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長統領藍色鯊魚部隊，招募血厚耐打的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
-                { id: "npc_obel", n: "奧貝勒", title: "魔物追蹤", type: "exchange", d: "奧貝勒是追蹤魔物的老手，花費金幣追蹤指定地區的特定魔物。" }
             ]
         },
         "town_windwood_castle": {
@@ -2553,10 +2571,8 @@ const DB = {
             npcs: [
                 { id: "npc_landixi", n: "藍迪西", title: "雜貨商人", type: "shop", d: "風木城易主後，藍迪西重新支起攤位——攻下風木城後開放的雜貨商。" },
                 { id: "npc_wh_windwood", n: "寶金", title: "倉庫", type: "warehouse", d: "寶金在風木城的庫房裡清點貨物，替你存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_ww_guard", n: "風木傭兵隊長", title: "城堡護衛", type: "castleguard", d: "風木傭兵隊長統領暴風之刃部隊，招募攻速最快、輸出最高的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
-                { id: "npc_hert", n: "赫特", title: "魔物追蹤", type: "exchange", d: "赫特循著魔物的氣息而行，花費金幣追蹤指定地區的特定魔物。" }
             ]
         },
         "town_heine_castle": {
@@ -2564,10 +2580,8 @@ const DB = {
             npcs: [
                 { id: "npc_sufan", n: "須凡", title: "雜貨商人", type: "shop", d: "海音城歸入麾下後，須凡在港邊開張——攻下海音城後開放的雜貨商。" },
                 { id: "npc_wh_heine", n: "哈金", title: "倉庫", type: "warehouse", d: "哈金守著海音城的倉庫，替你存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_heine_guard", n: "海音神官隊長", title: "城堡護衛", type: "castleguard", d: "海音神官隊長統領毒蛇之牙部隊，招募攻守均衡的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
-                { id: "npc_diren", n: "帝倫", title: "魔物追蹤", type: "exchange", d: "帝倫熟知各地魔物的蹤跡，花費金幣追蹤指定地區的特定魔物。" }
             ]
         },
         "town_talking": {
@@ -2576,7 +2590,6 @@ const DB = {
                 { id: "npc_gilen", n: "吉倫", title: "魔法傳授者", type: "shop", d: "吉倫是位循循善誘的魔法導師，提供玩家學習1~3級一般魔法。" },
                 { id: "npc_basin", n: "巴辛", title: "妖魔商人", type: "shop", d: "巴辛是混跡市集的妖魔商人，販賣各種日常消耗品。" },
                 { id: "npc_wh_talking", n: "朵琳", title: "倉庫", type: "warehouse", d: "朵琳細心地替旅人看管行囊，存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_pandora", n: "潘朵拉", title: "抽抽樂", type: "exchange", d: "潘朵拉抽抽樂：付費依權重抽出寶物（單抽／十連）。" },
                 { id: "npc_ladal", n: "拉達爾", title: "製作", type: "craft", d: "拉達爾揉皮裁料樣樣精通，能為冒險者製作皮革裝備。" },
 				{ id: "npc_falin", n: "法林", title: "製作", type: "craft", d: "法林手藝獨到，能製作銀釘皮裝備。" },
                 { id: "npc_ryan", n: "萊恩", title: "製作", type: "craft", d: "萊恩在爐火旁默默打磨成品，提供物品製作服務。" },
@@ -2608,7 +2621,6 @@ const DB = {
 		"town_gludin": {
             n: "古魯丁村莊",
             npcs: [
-                { id: "npc_arena", n: "巴魯特", title: "鬥技場管理者", type: "quest", d: "古魯丁港口的退役鬥士，如今替往來的冒險者安排決鬥。可產生你的「對戰名片」交給其他玩家，或貼上對方的名片後由他安排場地——決鬥不給經驗與金幣，只記錄勝負戰績；落敗方完全無損失——不扣經驗、不掉裝備、不影響性向值，也無須祈求復活。任一方倒下即分出勝負，接著可自行選擇留在競技場再戰，或回古魯丁村莊。" },
                 { id: "npc_wh_gludin", n: "凱倫", title: "倉庫", type: "warehouse", d: "凱倫在港邊的庫房裡清點著往來的貨物，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_lucy", n: "露西", title: "雜貨商人", type: "shop", d: "露西的攤子就擺在通往碼頭的路上，出海遠行前該備的東西一樣不缺。販售各種日常消耗品。" },
                 { id: "npc_austin", n: "奧斯丁", title: "寵物保管", type: "petstore", d: "看慣了碼頭來去的旅人，奧斯丁願替他們照看捕獲的寵物。最多保管 32 隻（同模式角色共通）；可在此讓寵物出戰、鎖定、放生，或讓等級 30 以上「一般型態」的寵物進化——用進化果實→對應高等，或用勝利果實→黃金龍（兩種果實都帶著時可自選）；高等型態與黃金龍皆為最終型態。" }
