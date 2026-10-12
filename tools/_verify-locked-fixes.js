@@ -515,6 +515,7 @@ section("50) 原版地圖人物不疊 CSS 黑橢圓影");
 {
   const css = rd("css/style.css");
   ok("is-linmap＋人物圖自帶影子層時隱藏 ::after 橢圓", /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite:not\(:has\(> \.pm-shadow\[style\*="hidden"\]\)\)::after,[\s\S]{0,200}display: none;/.test(css));
+  ok("原版地圖職業圖人物 1:1（不吃 196×236 上限）", /#battle-view\.is-linmap\.is-real-map\.is-world-scroll > #player-morph-sprite:not\(\.q-chibi-actor\) > img,[\s\S]{0,200}max-width: none !important;\s*max-height: none !important;/.test(css));
 }
 
 section("49) 登入同步不用同步 XHR（慢網路整頁凍住）");

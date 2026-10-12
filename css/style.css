@@ -1951,6 +1951,12 @@
             transform: translateX(-50%) scaleX(calc(var(--walk-shadow-scale, 1) * (0.78 + 0.45 * var(--foot-plant, 0)))) scaleY(calc(0.65 + 0.55 * var(--foot-plant, 0)));
             filter: blur(0.4px);
         }
+        /* 原版拼塊地圖：職業圖人物 1:1 原版像素（同原版 NPC 比例；不吃大地圖 196×236 上限） */
+        #battle-view.is-linmap.is-real-map.is-world-scroll > #player-morph-sprite:not(.q-chibi-actor) > img,
+        #battle-view.is-linmap.is-real-map.is-world-scroll > .party-sprite:not(.q-chibi-actor) > img {
+            max-width: none !important;
+            max-height: none !important;
+        }
         /* 原版拼塊地圖：人物圖自帶原版影子層（.pm-shadow＝*_s 幀）時不再疊 CSS 黑橢圓（同原版八向怪 #24） */
         #battle-view.is-linmap.is-world-scroll > #player-morph-sprite:not(:has(> .pm-shadow[style*="hidden"]))::after,
         #battle-view.is-linmap.is-world-scroll > .party-sprite:not(.remote-party):not(:has(> .pm-shadow[style*="hidden"]))::after {
