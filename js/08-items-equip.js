@@ -625,8 +625,9 @@ function invCountPref(id) {
 function useFnItem(fn) {
     try { if (typeof closeModal === 'function') closeModal(); } catch (e) {}
     if (fn === 'home') {
-        if (mapState.current && String(mapState.current).indexOf('town_') === 0) { logSys('你已經在村莊裡了。'); return; }
-        if (typeof returnToTown === 'function') returnToTown();
+        let city = (typeof MAIN_CITY !== 'undefined') ? MAIN_CITY : 'town_giran';
+        if (mapState.current === city) { logSys('你已經在主城奇岩了。'); return; }
+        if (typeof returnToTown === 'function') returnToTown(city);
     } else if (fn === 'tele') {
         if (typeof openTeleportMenu === 'function') openTeleportMenu();
     } else if (fn === 'auto' || fn === 'settings') {

@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.9.95';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.9.96';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // 🏷️ 對外顯示名稱（分頁／登入／歡迎／伺服器說明）：改名只改這裡與 index.html 標題層
 const GAME_TITLE = '重生放置';
 try { if (typeof window !== 'undefined') window.GAME_TITLE = GAME_TITLE; } catch (e) {}
@@ -1170,7 +1170,7 @@ const DB = {
         "ivt_scroll_teleport": { n: "象牙塔瞬間移動卷軸", img: "assets/icons/items/瞬間移動卷軸.png", type: "scroll", req: "all", p: 0, c: "text-sky-300", d: "新手禮包贈送（綁定）。使用後隨機瞬間移動到目前地圖的其他地點；自動瞬移、書籤會優先使用。無法交易、無法販售。", eff: "teleport_scroll", noSell: true, noJunk: true, gachaWeight: 0 },
         "ivt_scroll_poly": { n: "象牙塔變身卷軸", img: "assets/icons/items/變形卷軸.png", type: "scroll", req: "all", p: 0, c: "text-gray-300", d: "新手禮包贈送（綁定）。效果同變形卷軸，變身 30 分鐘；自動變身會優先使用。無法交易、無法販售。", eff: "poly", dur: 1800, noSell: true, noJunk: true, gachaWeight: 0 },
         "ivt_potion_haste": { n: "象牙塔加速藥水", img: "assets/icons/items/自我加速藥水.png", type: "pot", req: "all", p: 0, c: "text-green-300", d: "新手禮包贈送（綁定）。效果同自我加速藥水，持續 5 分鐘；自動加速會優先使用。無法交易、無法販售。", eff: "haste", dur: 300, noSell: true, noJunk: true, gachaWeight: 0 },
-        "fn_home": { n: "主城", img: "assets/icons/items/甘地圖騰.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後返回回家村莊，使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "home", noSell: true, noJunk: true, gachaWeight: 0 },
+        "fn_home": { n: "主城", img: "assets/icons/items/甘地圖騰.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後返回主城奇岩，使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "home", noSell: true, noJunk: true, gachaWeight: 0 },
         "fn_tele": { n: "傳送", img: "assets/icons/items/魔法書(指定傳送).png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟傳送選單，使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "tele", noSell: true, noJunk: true, gachaWeight: 0 },
         "fn_auto": { n: "內掛選單", img: "assets/icons/items/調職命令書.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟內掛設定（巡邏範圍、沒怪自動瞬移、自動購買），使用後不會消失。", eff: "fn", fn: "auto", noSell: true, noJunk: true, gachaWeight: 0 },
         "fn_settings": { n: "設定", img: "assets/ui/lin/menu_menu.png", type: "scroll", req: "all", p: 0, c: "text-amber-200", d: "功能道具（新手禮包）。使用後開啟遊戲設定（藥水、狀態等自動設定），使用後不會消失。可設定到快捷欄。", eff: "fn", fn: "settings", noSell: true, noJunk: true, gachaWeight: 0 },
@@ -1951,7 +1951,7 @@ const DB = {
         "orc": { n: "妖魔", lv: 2, s: "S", beh: "被動", race: "妖魔", e: "fire", hp: 6, ac: 10, mr: 0, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         "goblin": { n: "哥布林", lv: 2, s: "S", beh: "被動", race: "哥布林", e: "earth", hp: 3, ac: 10, mr: 2, exp: 5, goldMin: 10, goldMax: 30, atkSpd: 2, dmg: [2, 2], db: 2, hit: 0 },
         // 🪵 v3.8.266／v3.8.328 新兵修練場專用木頭人（不還擊·中央單隻）
-        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.95：血量改回 40（曾誤設 800）
+        "wood_dummy": { n: "木頭人", img: "assets/icons/monsters/木頭人.png", lv: 1, s: "S", beh: "被動", race: "練習", e: "none", noAttack: true, trainingDummy: true, noGold: true, hp: 40, ac: 8, mr: 0, exp: 5, goldMin: 0, goldMax: 0, atkSpd: 99, dmg: [0, 0], db: 0, hit: 0, d: "銀騎士村新兵修練場的練習木人，專供新手敲打。" },   // 🪵 v3.9.96：血量改回 40（曾誤設 800）
         "esti_enemy": { n: "依詩蒂", img: "assets/icons/monsters/依詩蒂.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "女騎士", seeInsight: true, hp: 18, ac: -10, mr: 0, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.6, dmg: [1, 10], db: 0, hit: 0, regenHp: 15, scale: { hpC: 18, acBase: -10, acDiv: 3, mrBase: 0, mrDiv: 5, dmgSides: 14, hitBase: 0, atkSpd: 0.67 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "extra_attack", stunChance: 10 } },
         "aton_enemy": { n: "阿頓", img: "assets/icons/monsters/阿頓.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男騎士", seeInsight: true, hp: 12, ac: -15, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 14], db: 0, hit: 5, regenHp: 15, scale: { hpC: 12, acBase: -15, acDiv: 4, mrBase: 25, mrDiv: 2, dmgSides: 9, hitBase: 5, atkSpd: 0.6 }, mag: { skn: "衝擊之暈", cd: 50, chance: 0.2, type: "multi_attack", stunChance: 10 } },
         "julian_enemy": { n: "朱利安", img: "assets/icons/monsters/朱利安.png", lv: 1, s: "S", beh: "主動", race: "血盟", wild: true, e: "none", pledgeEnemy: true, excludeAvatar: "男妖精", hp: 10, ac: -18, mr: 25, exp: 100, goldMin: 1136, goldMax: 1136, atkSpd: 0.67, dmg: [1, 9], db: 0, hit: 5, regenHp: 15, scale: { hpC: 10, acBase: -10, acDiv: 5, mrBase: 25, mrDiv: 2, dmgSides: 8, hitBase: 5, atkSpd: 0.67 }, mag: { skn: "三重矢", cd: 50, chance: 0.2, type: "pledge_bless", times: 3 } },
@@ -2632,7 +2632,11 @@ const DB = {
                 { id: "npc_herbert", n: "哈巴特", title: "製作", type: "craft", d: "手藝精湛的裁縫師，一針一線都縫進了對穿戴者的庇護。可以為人們縫製布料防具。" },
                 { id: "npc_lentis", n: "倫提斯", title: "製作", type: "craft", d: "擅長將軍團之力封入金屬的戒指匠師。以軍團印記與軍王徽印打造四屬性的精靈戒指。" },
                 { id: "npc_sebas", n: "賽巴斯", title: "寶石加工", type: "craft", d: "奇岩寶石加工坊的巨匠賽巴斯，能將稀世寶石與龍鱗鍛入飾品。製作四屬性戒指與四精靈皮帶。" },
-                { id: "npc_wh_giran", n: "蘇瑞耳", title: "倉庫", type: "warehouse", d: "蘇瑞耳看守著奇岩繁忙商街旁的庫房，替你妥善存放物品與金幣，四個存檔角色共用。" }
+                { id: "npc_wh_giran", n: "蘇瑞耳", title: "倉庫", type: "warehouse", d: "蘇瑞耳看守著奇岩繁忙商街旁的庫房，替你妥善存放物品與金幣，四個存檔角色共用。" },
+                { id: "npc_teleport", n: "爾瑪", title: "傳送師", type: "teleport", d: "奇岩的傳送師爾瑪，掌握各地傳送陣。可將你送往已知的村莊、野外與地監。" },
+                { id: "npc_giran_magic", n: "瑟琳娜", title: "魔法傳授", type: "shop", d: "主城的魔法導師，收齊了各地魔法商人的魔法書與水晶。只會列出你的職業能學的魔法。" },
+                { id: "npc_giran_pet", n: "布魯諾", title: "寵物保管", type: "petstore", d: "主城的寵物看護人，替旅人照看捕獲的寵物。最多保管 32 隻（同模式角色共通）；可在此讓寵物出戰、鎖定、放生，或讓等級 30 以上「一般型態」的寵物進化。" },
+                { id: "npc_giran_recycle", n: "亞丁商團", title: "道具回收", type: "recycle", d: "亞丁商團在主城設的收購處，勾選背包裡的物品一次賣出。" }
             ]
         },
         "town_heine": {

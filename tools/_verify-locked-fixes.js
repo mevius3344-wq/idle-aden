@@ -511,6 +511,23 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
+section("51) 主城奇岩");
+{
+  const wm = rd("js/11-world-map.js");
+  const ss = rd("js/13-shop-save.js");
+  const ie = rd("js/08-items-equip.js");
+  const ui = rd("js/10-ui-tabs.js");
+  const dt = rd("js/00-data.js");
+  ok("主城常數＝奇岩，家鄉／回村／死亡都回主城", /const MAIN_CITY = 'town_giran';\s*function getHomeTown\(\) \{ return MAIN_CITY; \}/.test(wm) && /function getLastTown\(\) \{\s*return getHomeTown\(\);\s*\}/.test(wm));
+  ok("血盟據點（Ctrl+C）仍走原本家鄉邏輯 getPledgeTown", /function getPledgeTown\(\)/.test(wm) && /victoryCityCfg\(\)\.castle : getPledgeTown\(\)\);/.test(wm));
+  ok("回村鈕 onclick 帶事件不可當目的地", /function returnToTown\(dest\) \{\s*if \(typeof dest !== 'string'\) dest = '';/.test(wm));
+  ok("創角一律主城出生", /setMapSelectors\(getHomeTown\(\)\);\s*_uiConfigReady = true;/.test(ss) && !/startMap = 'town_silver_knight';\s*if \(player\.cls === 'mage'\)/.test(ss));
+  ok("主城符固定回奇岩、不消失", /if \(fn === 'home'\) \{[\s\S]{0,400}returnToTown\(city\);/.test(ie) && /"fn_home": \{[^}]*返回主城奇岩/.test(dt));
+  ok("奇岩補傳送師爾瑪／魔法傳授／寵物保管／道具回收", ['n: "爾瑪", title: "傳送師", type: "teleport"', 'id: "npc_giran_magic"', 'id: "npc_giran_pet"', 'type: "recycle"'].every((s) => dt.includes(s)));
+  ok("魔法傳授＝各魔法商人合集、只列本職業可學", /SHOP_LISTS\.npc_giran_magic = \[\.\.\.new Set/.test(ss) && /npcId === 'npc_giran_magic' && d\.type === 'skillbk'/.test(ss) && /\n\s+default: \['potion_heal'/.test(ss));
+  ok("道具回收不改自動販賣規則", /function _qjSellNow\(selected, label, remember\)/.test(ui) && /_qjSellNow\(selected, '道具回收', false\)/.test(ui) && /npc\.type === 'recycle'\) \{[\s\S]{0,80}renderRecycleNPC/.test(wm));
+}
+
 section("50) 原版地圖人物不疊 CSS 黑橢圓影");
 {
   const css = rd("css/style.css");

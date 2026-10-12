@@ -498,8 +498,11 @@ function updatePrideFloorIndicator() {
         if (cat) cat.classList.remove('hidden');   // 還原左側分類選單
     }
 }
-function getHomeTown() {
-    // 血盟優先回到盟主所在村莊；否則回該職業創角起始村莊
+// 🏰 主城：所有職業出生、回村、死亡、主城符一律回奇岩（照新創／火蜥蜴的單一主城）
+const MAIN_CITY = 'town_giran';
+function getHomeTown() { return MAIN_CITY; }
+// Ctrl+C 返回血盟據點：血盟優先回到盟主所在村莊；否則回該職業原本的家鄉
+function getPledgeTown() {
     if (player.cls === 'royal') return 'town_talking';   // 👑 王族：恆回說話之島（雖天生入盟，出生地仍為說話之島）
     if (player.bloodPledge === 'esti') return 'town_heine';
     if (player.bloodPledge === 'tros') return 'town_oren';
@@ -511,16 +514,12 @@ function getHomeTown() {
     if (player.cls === 'elf') return 'town_elf';
     return 'town_silver_knight';
 }
-// 🏘️ v3.0.94 回村改「回上一個待過的安全區」：changeMap 進村分支記錄 player.lastTownVisited；無紀錄/地圖無效→回家鄉。
-//    城堡安全區只允許目前持有該城堡的血盟返回；未持有時退回家鄉。
+// 回村／死亡一律回主城（持有城堡時由呼叫端改回城堡）；player.lastTownVisited 仍照常記錄
 function getLastTown() {
-    let t = player && player.lastTownVisited;
-    if (!t || typeof t !== 'string' || !t.startsWith('town_') || !(DB.towns[t] || DB.maps[t])) return getHomeTown();
-    let _isCastle = Object.values(SIEGE_CITY).some(c => c && c.castle === t);
-    if (_isCastle && (!siegeVictoryActive() || victoryCityCfg().castle !== t)) return getHomeTown();
-    return t;
+    return getHomeTown();
 }
-function returnToTown() {
+function returnToTown(dest) {
+    if (typeof dest !== 'string') dest = '';   // 回村鈕 onclick 直接掛本函式，會收到點擊事件
     if (state.riftRun && mapState.current === 'rift_battle') { logSys('<span class="text-violet-300">扭曲的時空緊緊纏繞著你，無法回村——唯有戰死方能離開時空裂痕。</span>'); return false; }   // 🌀 裂痕內不可回村
     // 與切換地圖相同的受控限制（石化／麻痺／冰凍／暈眩時無法回村）
     if (player.statuses && (player.statuses.stone > 0 || player.statuses.paralyze > 0 || player.statuses.freeze > 0 || player.statuses.stun > 0 || player.statuses.sleep > 0)) {
@@ -531,7 +530,7 @@ function returnToTown() {
     let _kingRegion = _wasKingRoom && typeof mapRegionOf === 'function' ? mapRegionOf(mapState.current) : null;   // 🗝️ 離場前先取得該軍王之室所屬地區（changeMap 後 mapState.current 已變）
     if (state.oblivion) { state.oblivion = null; state._oblivionAdvance = false; }   // 🏝️ 回村即結束遺忘之島旅程
     if (state.antharas) { state.antharas = 0; state._antAdvance = false; logSys('你離開了侵蝕的安塔瑞斯巢穴（挑戰失敗不消耗每日次數，隨時可再次挑戰）。'); }   // 🐉 v3.7.57 回村＝中離副本（不耗次數）
-    setMapSelectors(siegeVictoryActive() ? victoryCityCfg().castle : getLastTown());   // 持有城堡：回城＝血盟城堡；否則回上一個待過的安全區（無紀錄→家鄉）
+    setMapSelectors(dest || (siegeVictoryActive() ? victoryCityCfg().castle : getLastTown()));   // 持有城堡：回城＝血盟城堡；否則回主城
     changeMap();   // 走既有切換流程（進入村莊：補滿 HP/MP、清狀態、渲染 NPC）
     // 🔧 自軍王之室手動回城／回村：同樣將「特殊」記憶位置改為新兵修練場（避免下次自動回到需鑰匙的軍王之室）
     // 🗝️ 離開軍王之室：清掉該「地區」的最後位置記憶，否則下次在下拉選同一地區會自動再進 BOSS 房、白扣一把軍王的鑰匙。
@@ -578,7 +577,7 @@ function returnToPledgeBase() {
     let _kingRegion = _wasKingRoom && typeof mapRegionOf === 'function' ? mapRegionOf(mapState.current) : null;   // 🗝️ 同上：離場前記錄地區
     if (state.oblivion) { state.oblivion = null; state._oblivionAdvance = false; }   // 🏝️ 返回即結束遺忘之島旅程
     let _victory = siegeVictoryActive();
-    setMapSelectors(_victory ? victoryCityCfg().castle : getHomeTown());
+    setMapSelectors(_victory ? victoryCityCfg().castle : getPledgeTown());
     changeMap();
     // 🗝️ 離開軍王之室：清掉該「地區」的最後位置記憶，否則下次在下拉選同一地區會自動再進 BOSS 房、白扣一把軍王的鑰匙。
     //    （舊寫法寫的是 lastMapByCat.special，但分類改用 MAP_REGIONS 後 'special' 不再是任何鍵＝死碼。）
@@ -2047,6 +2046,8 @@ function interactNPC(npcId, townId) {
         renderPetStorageNPC(contentDiv);
     } else if (npc.type === 'teleport' || npc.id === 'npc_teleport') {   // 🧭 v3.8.255 村莊傳送師：取代頂部雙下拉
         renderTeleporterNPC(contentDiv);
+    } else if (npc.type === 'recycle') {   // 🏰 主城道具回收
+        renderRecycleNPC(contentDiv);
     } else if (npc.id === 'npc_isba') {
         renderIsbaTravel(contentDiv);
     } else if (npc.id === 'npc_doll_merchant') {

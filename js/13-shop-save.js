@@ -359,6 +359,8 @@ const SHOP_LISTS = {
     npc_sempal: ['bk_dragon_guardbreak','bk_dragon_slaughter','bk_dragon_flameslash','bk_dragon_terror'],   // 🐉 森帕爾：4 種龍騎士書板（消滅者鎖鏈劍改為潘朵拉/普洛凱爾試煉取得）
     default: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','potion_brave','new_item_140','new_item_139','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle']   // 🚫 v3.2.17 哨子/肉已隨舊項圈系統移除
 };
+// 🏰 主城魔法傳授：各村魔法商人的合集（getShopItemsForNpc 依職業只顯示可學的）
+SHOP_LISTS.npc_giran_magic = [...new Set([].concat(SHOP_LISTS.npc_gilen, SHOP_LISTS.npc_bayes, SHOP_LISTS.npc_linda, SHOP_LISTS.npc_saedia, SHOP_LISTS.npc_sphere, SHOP_LISTS.npc_sempal))];
 // 🔧 商店販售清單（單一來源）：getShopItemsForNpc 與潘朵拉權重覆寫共用此表
 function getShopItemsForNpc(npcId) {
     let list = SHOP_LISTS[npcId] || SHOP_LISTS.default;
@@ -369,6 +371,7 @@ function getShopItemsForNpc(npcId) {
         if (d.type === 'wpn' || d.type === 'arm') return true;
         // 飾品（acc）：仍以「實際可裝備」判定（涵蓋各職業白名單）。
         if (d.type === 'acc') return checkCanEquip({ id });
+        if (npcId === 'npc_giran_magic' && d.type === 'skillbk') { let sd = DB.skills[d.sk]; return !!sd && skillReqLv(sd, d.sk) !== undefined; }
         // 其餘（消耗品/技能書/材料等）：沿用職業白名單
         return reqAllowsClass(d, player.cls) || loadUpAllows(id);
     });
@@ -2162,17 +2165,8 @@ function startGame() {
     player.newbiePackExpireAt = null;
     player.newbieBoostExpireAt = null;
 
-    // 👇 正確的新版起點邏輯
-    let startMap = 'town_silver_knight';
-    if (player.cls === 'mage') startMap = 'town_talking';
-    else if (player.cls === 'elf') startMap = 'town_elf';
-    else if (player.cls === 'dark') startMap = 'town_silent';
-    else if (player.cls === 'illusion') startMap = 'town_hyperia';
-    else if (player.cls === 'dragon') startMap = 'town_behemoth';
-    else if (player.cls === 'warrior') startMap = 'town_heine';   // ⚔️ 戰士：海音
-    else if (player.cls === 'royal') startMap = 'town_talking';   // 👑 王族：說話之島
-
-    setMapSelectors(startMap);
+    // 🏰 所有職業都從主城奇岩出生
+    setMapSelectors(getHomeTown());
     _uiConfigReady = true;   // 🛡️ 審計#1：新角色 UI 已重設為預設（563 行）＝當下 DOM 即正確 config
     changeMap(true);
 

@@ -1881,9 +1881,13 @@ function runQuickJunk(type) {
         renderTabs(true);
         return;
     }
+    _qjSellNow(selected, '及時賣出', true);
+}
+function _qjSellNow(selected, label, remember) {
+    if (!player.junkPrefs) player.junkPrefs = {};
     // 記住勾選簽章（之後掉落同詞綴會進自動販賣規則／廢品標記）
     selected.forEach(i => {
-        player.junkPrefs[itemSig(i)] = true;
+        if (remember) player.junkPrefs[itemSig(i)] = true;
         delete i._userKeep;
         i.junk = true;
         i.junkSince = 0;   // 立即賣：跳過寬限
@@ -1902,11 +1906,67 @@ function runQuickJunk(type) {
     if (_gone.size) player.inv = player.inv.filter(i => !_gone.has(i.uid));
     if (typeof addPlayerGold === 'function') addPlayerGold(totalGold);
     else player.gold = (Number(player.gold) || 0) + totalGold;
-    logSys(`<span class="text-amber-300 font-bold">及時賣出：</span>${selected.length} 件(共 ${totalCount} 個)，獲得 <span class="text-yellow-400 font-bold">${totalGold.toLocaleString()}</span> 金幣。`);
+    logSys(`<span class="text-amber-300 font-bold">${label}：</span>${selected.length} 件(共 ${totalCount} 個)，獲得 <span class="text-yellow-400 font-bold">${totalGold.toLocaleString()}</span> 金幣。`);
     renderTabs(true);
     updateUI();
     if (_grantSold) { calcStats(); renderSkillSelects(); }
     saveGame();
+}
+
+// ========== 🏰 主城道具回收（亞丁商團）：勾選背包可賣物品一次賣出，資格同及時賣出 ==========
+let _recycleSel = {};
+function _recycleEligible() {
+    return player.inv.filter(i => {
+        let d = DB.items[i.id];
+        return d && (_qjCanSelect(d, i, 'wpn') || _qjCanSelect(d, i, 'arm') || _qjCanSelect(d, i, 'item'));
+    });
+}
+function renderRecycleNPC(div) {
+    div = div || document.getElementById('interaction-content');
+    if (!div) return;
+    let list = _recycleEligible();
+    let live = new Set(list.map(i => i.uid));
+    Object.keys(_recycleSel).forEach(k => { if (!live.has(k) && !live.has(Number(k))) delete _recycleSel[k]; });
+    let total = 0, n = 0;
+    list.forEach(i => { if (_recycleSel[i.uid]) { n++; total += getSellPrice(i) * Math.max(1, Math.floor(Number(i.cnt) || 1)); } });
+    let allSel = list.length > 0 && list.every(i => _recycleSel[i.uid]);
+    let rows = list.map(i => {
+        let d = DB.items[i.id];
+        let cnt = Math.max(1, Math.floor(Number(i.cnt) || 1));
+        let price = getSellPrice(i);
+        let icon = (typeof getIconUrl === 'function') ? getIconUrl(d) : '';
+        return `<label class="flex items-center gap-2 px-2 py-1 border-b border-slate-700/60 cursor-pointer hover:bg-slate-700/40">
+            <input type="checkbox" ${_recycleSel[i.uid] ? 'checked' : ''} onchange="recycleToggle('${i.uid}')">
+            ${icon ? `<img src="${icon}" class="w-7 h-7 object-contain" onerror="this.style.visibility='hidden'">` : ''}
+            <span class="flex-1 text-sm">${getItemFullName(i)}${cnt > 1 ? ` <span class="text-slate-400">×${cnt}</span>` : ''}</span>
+            <span class="text-xs text-yellow-400 whitespace-nowrap">${(price * cnt).toLocaleString()} 金</span>
+        </label>`;
+    }).join('');
+    div.innerHTML = `<div class="flex flex-col gap-2">
+        <div class="text-sm text-slate-300">收購你身上的道具（鎖定、綁定、不可販售的物品不會列出）。</div>
+        <div class="flex items-center gap-2 bg-slate-900/80 border border-amber-800/60 rounded p-1">
+            <label class="flex items-center gap-1 text-xs text-slate-300 cursor-pointer select-none"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="recycleSelectAll(this.checked)"> 全選</label>
+            <span class="ml-auto text-xs text-slate-300">已選 ${n} 件，共 <span class="text-yellow-400 font-bold">${total.toLocaleString()}</span> 金</span>
+            <button onclick="recycleSellNow()" class="btn border-amber-600 bg-amber-800 hover:bg-amber-700 px-3 py-1 text-xs font-bold text-amber-100 rounded">賣出</button>
+        </div>
+        <div id="recycle-list" class="max-h-[50vh] overflow-y-auto">${rows || '<div class="py-8 text-center text-slate-500">背包裡沒有可收購的物品。</div>'}</div>
+    </div>`;
+}
+function recycleToggle(uid) {
+    if (_recycleSel[uid]) delete _recycleSel[uid]; else _recycleSel[uid] = true;
+    renderRecycleNPC();
+}
+function recycleSelectAll(on) {
+    _recycleSel = {};
+    if (on) _recycleEligible().forEach(i => { _recycleSel[i.uid] = true; });
+    renderRecycleNPC();
+}
+function recycleSellNow() {
+    let selected = _recycleEligible().filter(i => _recycleSel[i.uid]);
+    _recycleSel = {};
+    if (!selected.length) { logSys('<span class="text-slate-400">未勾選任何物品。</span>'); renderRecycleNPC(); return; }
+    _qjSellNow(selected, '道具回收', false);
+    renderRecycleNPC();
 }
 
 // 計算物品賣價（含詞綴疊乘）：與物品面板顯示價一致
