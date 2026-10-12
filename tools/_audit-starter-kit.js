@@ -99,7 +99,8 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
         out.teleOpen=!!box&&!box.classList.contains('hidden')&&!!document.querySelector('#interaction-content .tp-panel');
         try{ closeNpcInteraction(); }catch(e){}
         use('fn_settings'); await new Promise(r=>setTimeout(r,400));
-        out.settingsTab=(document.querySelector('#col-right .tab-bar-buttons .active')||{}).getAttribute?document.querySelector('#col-right .tab-bar-buttons .active').getAttribute('data-tab'):null;
+        out.settingsTab=(()=>{const w=document.getElementById('lm-win-assist');return w&&!w.classList.contains('hidden')?'assist':null;})();
+        try{ linMenuClose(); }catch(e){}
         use('fn_drop'); await new Promise(r=>setTimeout(r,400));
         out.dropTab=document.querySelector('#col-right .tab-bar-buttons .active')&&document.querySelector('#col-right .tab-bar-buttons .active').getAttribute('data-tab');
         out.auditView=_auditView;
@@ -121,7 +122,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
     ok(f.prefTp === 'ivt_scroll_teleport' && f.prefPoly === 'ivt_scroll_poly' && f.prefHaste === 'ivt_potion_haste', '自動使用優先綁定版');
     ok(f.prefTp2 === 'ivt_scroll_teleport' && f.cntTp === 503, '同時有一般卷軸仍先用綁定版、計數合併 (' + f.cntTp + ')');
     ok(f.teleOpen, '傳送 開啟傳送選單');
-    ok(f.settingsTab === 'automation', '設定 開設定分頁 (' + f.settingsTab + ')');
+    ok(f.settingsTab === 'assist', '設定 開輔助設定視窗 (' + f.settingsTab + ')');
     ok(f.dropTab === 'audit' && f.auditView === 'drops', '掉落查詢 開本圖掉落物');
     ok(f.fnStill, '功能道具使用後不消失');
     ok(f.hasteBuff > 0 && f.ivtHasteUsed === 1, '自動加速用掉 1 瓶象牙塔加速藥水 (' + f.ivtHasteUsed + ')');

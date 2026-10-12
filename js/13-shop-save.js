@@ -357,7 +357,7 @@ const SHOP_LISTS = {
     npc_saedia: ['bk_dark_str','bk_dark_mrup','bk_dark_stealth','bk_dark_poison','bk_dark_refine','bk_dark_dex','bk_dark_poisonres','bk_dark_burn','bk_dark_walkhaste'],
     npc_sphere: ['mem_confuse','mem_mirror','mem_crush','mem_ogre','mem_focus','mem_skullbreak','mem_lich','mem_endure'],   // 🔮 史菲爾只販賣這 8 種記憶水晶；其餘水晶改由掉落/製作/兌換取得（日光術改由吉蘭購得）
     npc_sempal: ['bk_dragon_guardbreak','bk_dragon_slaughter','bk_dragon_flameslash','bk_dragon_terror'],   // 🐉 森帕爾：4 種龍騎士書板（消滅者鎖鏈劍改為潘朵拉/普洛凱爾試煉取得）
-    default: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_haste','potion_brave','new_item_140','new_item_139','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle']   // 🚫 v3.2.17 哨子/肉已隨舊項圈系統移除
+    default: ['potion_heal','potion_strong','potion_ult','potion_blue','potion_cure','potion_haste','potion_brave','new_item_140','new_item_139','scroll_poly','scroll_magicbarrier','scroll_teleport','scroll_town_home','scroll_revive','wpn_5','wpn_22','candle']   // 🚫 v3.2.17 哨子/肉已隨舊項圈系統移除
 };
 // 🏰 主城魔法傳授：各村魔法商人的合集（getShopItemsForNpc 依職業只顯示可學的）
 SHOP_LISTS.npc_giran_magic = [...new Set([].concat(SHOP_LISTS.npc_gilen, SHOP_LISTS.npc_bayes, SHOP_LISTS.npc_linda, SHOP_LISTS.npc_saedia, SHOP_LISTS.npc_sphere, SHOP_LISTS.npc_sempal))];
@@ -2188,7 +2188,8 @@ function startGame() {
 //   於本檔求值當下擷取——index.html 的設定面板 markup 在 <script> 標籤之前，此時取到的就是 HTML 預設值。
 const CONFIG_DOM_IDS = ['set-pot', 'set-hp-pot', 'set-auto-buy-pot', 'set-mp-atk', 'sel-atk-skill', 'set-mp-heal', 'sel-heal-skill',
     'set-hp-skill', 'set-mp-convert', 'sel-convert-skill', 'set-haste', 'set-brave', 'set-blue', 'set-cautious',
-    'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow', 'set-patrol', 'set-nomob-tp'];
+    'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow', 'set-patrol', 'set-nomob-tp',
+    'set-emerg-hp', 'set-emerg-item', 'set-auto-cure', 'set-pet-heal-hp', 'set-buy-qty-pot', 'set-buy-qty-arrow'];
 const CONFIG_DOM_DEFAULTS = (function () {
     let d = {};
     try { CONFIG_DOM_IDS.forEach(id => { let el = document.getElementById(id); if (el) d[id] = (el.type === 'checkbox') ? el.checked : el.value; }); } catch (e) {}
@@ -2332,6 +2333,12 @@ function saveGame() {
         setPatrol: (document.getElementById('set-patrol') || {}).value || '0',
         setNoMobTp: !!(document.getElementById('set-nomob-tp') || {}).checked,
         setAutoBuyArrow: document.getElementById('set-auto-buy-arrow').checked,   // 🧪 v3.3.15 各藥水/卷軸「自動購買」已併入「自動使用」→移除獨立收集；弓箭自動購買維持
+        setEmergHp: (document.getElementById('set-emerg-hp') || {}).value || '0',
+        setEmergItem: (document.getElementById('set-emerg-item') || {}).value || 'fn_home',
+        setAutoCure: !!(document.getElementById('set-auto-cure') || {}).checked,
+        setPetHealHp: (document.getElementById('set-pet-heal-hp') || {}).value || '0',
+        setBuyQtyPot: (document.getElementById('set-buy-qty-pot') || {}).value || '100',
+        setBuyQtyArrow: (document.getElementById('set-buy-qty-arrow') || {}).value || '1000',
         autoBuffSkills: {} // 用來儲存動態生成的法術 Buff
     };
     
@@ -2749,6 +2756,15 @@ function loadGame() {
             if (c.setPatrol !== undefined && document.getElementById('set-patrol')) document.getElementById('set-patrol').value = c.setPatrol;
             if (c.setNoMobTp !== undefined && document.getElementById('set-nomob-tp')) document.getElementById('set-nomob-tp').checked = !!c.setNoMobTp;
             if (c.setAutoBuyArrow !== undefined) document.getElementById('set-auto-buy-arrow').checked = c.setAutoBuyArrow;   // 🧪 v3.3.15 各藥水/卷軸「自動購買」勾選已移除（併入自動使用）→不再還原
+            [['setEmergHp', 'set-emerg-hp'], ['setPetHealHp', 'set-pet-heal-hp'], ['setBuyQtyPot', 'set-buy-qty-pot'], ['setBuyQtyArrow', 'set-buy-qty-arrow']].forEach(function (p) {
+                let el = document.getElementById(p[1]); if (el && c[p[0]] != null && c[p[0]] !== '') el.value = c[p[0]];
+            });
+            if (c.setEmergItem && document.getElementById('set-emerg-item')) {
+                let es = document.getElementById('set-emerg-item');
+                if (!es.querySelector('option[value="' + c.setEmergItem + '"]')) { let o = document.createElement('option'); o.value = c.setEmergItem; o.textContent = (DB.items[c.setEmergItem] || {}).n || c.setEmergItem; es.appendChild(o); }
+                es.value = c.setEmergItem;
+            }
+            if (c.setAutoCure !== undefined && document.getElementById('set-auto-cure')) document.getElementById('set-auto-cure').checked = !!c.setAutoCure;
             
             // 動態魔法 Buff 設定還原
             if (c.autoBuffSkills) {

@@ -999,6 +999,12 @@ function applyTeamHot(skId, sk, dStats, caster) {
     try { if (typeof healingSpellCasterMult === 'function') _hm = Math.max(0, Number(healingSpellCasterMult(sk, caster)) || 1); } catch (e) {}
     player.hots[skId] = { skId: skId, healDice: sk.healDice, healBase: sk.healBase, valDice: sk.valDice, magicDmg: mDmg, spCoef: 1 + (3 * mDmg / 32), interval: sk.hot.interval, ticksLeft: sk.hot.ticks, cd: sk.hot.interval, skName: sk.n, msg: sk.msg, healMult: _hm };
 }
+// 內掛「補給」：自動購買一次買的數量（讀設定欄，夾在 lo~hi）
+function autoBuyQty(elId, def, lo, hi) {
+    let v = parseInt((document.getElementById(elId) || {}).value, 10);
+    if (!Number.isFinite(v) || v <= 0) v = def;
+    return Math.max(lo, Math.min(hi, v));
+}
 function autoActions() {
     let hpPct = (player.hp / player.mhp) * 100;
     let mpPct = (player.mp / player.mmp) * 100;
@@ -1014,7 +1020,7 @@ function autoActions() {
             let _cur = player.inv.find(i => i.id === potId);
             let _cnt = _cur ? (Number(_cur.cnt) || 0) : 0;
             if (_cnt <= 0) {
-                let _need = 100;
+                let _need = autoBuyQty('set-buy-qty-pot', 100, 1, 1000);
                 let _unit = (typeof shopPrice === 'function') ? shopPrice(DB.items[potId].p) : (DB.items[potId].p || 0);
                 _unit = Math.max(0, Math.floor(Number(_unit) || 0));
                 if (_unit > 0) {
@@ -1023,7 +1029,7 @@ function autoActions() {
                     if (_buy > 0) {
                         player.gold -= _buy * _unit;
                         gainItem(potId, _buy, true, true);
-                        logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${DB.items[potId].n}（用完補貨 ${_buy}/100）。`);
+                        logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${DB.items[potId].n}（用完補貨 ${_buy}/${_need}）。`);
                         try { if (typeof updateUI === 'function') updateUI(); } catch (eG) {}
                     }
                 }
@@ -1033,6 +1039,31 @@ function autoActions() {
     if (!_duelNoPot && hpPct <= potThr && player.cds.pot <= 0) {
         let item = player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
         if (item) useItem(item.uid, true);
+    }
+    // 🚨 應急：HP 低於門檻 → 用指定的回村道具（村莊內／決鬥中不動作；每 3 秒最多一次）
+    try {
+        let _eThr = parseInt((document.getElementById('set-emerg-hp') || {}).value, 10) || 0;
+        let _inTown = mapState.current && String(mapState.current).indexOf('town_') === 0;
+        let _duelLock = typeof pvpArenaTravelLocked === 'function' && pvpArenaTravelLocked();
+        if (_eThr > 0 && hpPct < _eThr && player.hp > 0 && !_inTown && !_duelLock && (state._emergAt == null || (state.ticks || 0) >= state._emergAt)) {
+            let _eId = (document.getElementById('set-emerg-item') || {}).value || 'fn_home';
+            let _eIt = player.inv.find(i => i.id === _eId && (i.cnt || 1) > 0);
+            if (_eIt && DB.items[_eId]) {
+                state._emergAt = (state.ticks || 0) + 30;
+                logSys(`<span class="text-red-300">HP 低於 ${_eThr}%，應急使用${DB.items[_eId].n}。</span>`);
+                if (DB.items[_eId].eff === 'fn' && typeof useFnItem === 'function') useFnItem(DB.items[_eId].fn);
+                else useItem(_eIt.uid);
+            }
+        }
+    } catch (eEmerg) {}
+    // 🧪 自動解毒：中毒時喝翡翠藥水（沒有就買 1 瓶）
+    if ((document.getElementById('set-auto-cure') || {}).checked && player.statuses && player.statuses.poison > 0 && DB.items.potion_cure) {
+        let _cu = player.inv.find(i => i.id === 'potion_cure' && (i.cnt || 0) > 0);
+        if (!_cu) {
+            let _cp = shopPrice(DB.items.potion_cure.p);
+            if (player.gold >= _cp) { player.gold -= _cp; gainItem('potion_cure', 1, true, true); _cu = player.inv.find(i => i.id === 'potion_cure'); }
+        }
+        if (_cu) useItem(_cu.uid, true);
     }
     
     const buffs = [   // 🗑️ v3.5.87 刪除六筆 buyId 欄位：v3.3.15「自動購買併入自動使用」時對應 DOM id 已移除·欄位零讀取（自動補購改由缺貨自動買一瓶邏輯處理）

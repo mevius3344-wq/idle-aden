@@ -631,6 +631,7 @@ function useFnItem(fn) {
     } else if (fn === 'tele') {
         if (typeof openTeleportMenu === 'function') openTeleportMenu();
     } else if (fn === 'auto' || fn === 'settings') {
+        if (typeof linMenuOpen === 'function') { linMenuOpen(fn === 'auto' ? 'auto' : 'assist'); return; }
         let tb = document.querySelector('#col-right .tab-bar-buttons [data-tab="automation"]');
         if (typeof switchTab === 'function') switchTab('automation', tb || null);
     } else if (fn === 'drop') {
@@ -892,6 +893,10 @@ function useItem(u, silent = false) {
             player.panaceaUsed = (player.panaceaUsed || 0) + 1;
             if(!silent) logSys(`使用了 ${d.n}，${STAT_CN[st]} 永久 +1！（萬能藥已使用 ${player.panaceaUsed}/${useMax}）`);
             // 落到下方 consume(item) + calcStats()，由 useItem 結尾 updateUI 刷新
+        } else if (d.eff === 'curepoison') {
+            if (!(player.statuses && player.statuses.poison > 0)) { if (!silent) logSys('你沒有中毒，不需要飲用' + d.n + '。'); return; }
+            player.statuses.poison = 0; player.statuses.poisonDmg = 0;
+            logSys(`飲用${d.n}，體內的毒素消退了。`);
         } else if (d.eff === 'reset') {
             startRespec(); return;   // 🕯️ 回憶蠟燭：改為「資訊面板配點重置」流程（確認時才消耗蠟燭，故此處不 consume）
         } else {

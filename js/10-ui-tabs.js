@@ -3107,7 +3107,9 @@ const MOBILE_TAB_GROUPS = {
         { key: 'items', label: '道具', tab: 'items' }
     ],
     settings: [
-        { key: 'automation', label: '設定', tab: 'automation' },
+        { key: 'gamemenu', label: '設定', action: 'gamemenu' },
+        { key: 'automenu', label: '內掛', action: 'automenu' },
+        { key: 'assist', label: '輔助設定', action: 'assist' },
         { key: 'autosell', label: '自動賣出', action: 'autosell' },
         { key: 'bookmark', label: '書籤', action: 'bookmark' }
     ],
@@ -3117,10 +3119,10 @@ const MOBILE_TAB_GROUPS = {
         { key: 'auction', label: '拍賣', tab: 'auction' }
     ]
 };
-const MOBILE_TAB_DEFAULTS = { ability: 'stats', gear: 'equip', settings: 'automation', social: 'clan' };
+const MOBILE_TAB_DEFAULTS = { ability: 'stats', gear: 'equip', settings: 'gamemenu', social: 'clan' };
 let _mobileTabGroup = 'ability';
 let _mobileTabSubKey = 'stats';
-let _mobileTabSubByGroup = { ability: 'stats', gear: 'equip', settings: 'automation', social: 'clan' };
+let _mobileTabSubByGroup = { ability: 'stats', gear: 'equip', settings: 'gamemenu', social: 'clan' };
 
 function _mobileTabGroupOf(tabOrAction) {
     let id = String(tabOrAction || '');
@@ -3223,6 +3225,11 @@ function activateMobileTabSub(key) {
         if (typeof bookmarkOpen === 'function') bookmarkOpen();
         return;
     }
+    if (it.action === 'gamemenu' || it.action === 'automenu' || it.action === 'assist') {
+        setMobileTabPanelOpen(false);
+        if (typeof linMenuOpen === 'function') linMenuOpen(it.action === 'gamemenu' ? 'settings' : (it.action === 'automenu' ? 'auto' : 'assist'));
+        return;
+    }
     let btn = document.querySelector(`#col-right .tab-bar-buttons [data-tab="${it.tab}"]`);
     switchTab(it.tab, btn || null, { fromMobileSub: true });
 }
@@ -3308,6 +3315,7 @@ function collapseMobileTabPanel() {
 }
 function switchTab(t, btn, opts) {
     opts = opts || {};
+    if (t === 'automation' && typeof linMenuOpen === 'function') { linMenuOpen('settings'); return; }   // 設定改開原版風格視窗（js/55-lin-menus.js）
     // 🩹 v3.8.319／374：切分頁時關掉收藏／收集冊；若剛關掉 overlay，勿走「再點收合」捷徑
     var _hadCollection = false;
     try {

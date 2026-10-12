@@ -2522,11 +2522,12 @@ function consumeArrow() {
             // 2. 背包也沒箭，檢查是否開啟自動購買
             let autoBuyCheckbox = document.getElementById('set-auto-buy-arrow');
             if (autoBuyCheckbox && autoBuyCheckbox.checked) {
-                let cost = shopPrice(200); // 1000 銀箭，5 銀箭 = 1 金幣 → 200 金幣（攻城獲勝 8 折亦適用）
+                let _qty = (typeof autoBuyQty === 'function') ? autoBuyQty('set-buy-qty-arrow', 1000, 100, 5000) : 1000;
+                let cost = shopPrice(Math.ceil(_qty / 5)); // 5 銀箭 = 1 金幣（1000 支 200 金幣；攻城獲勝 8 折亦適用）
                 if (player.gold >= cost) {
                     player.gold -= cost;
-                    gainItem('wpn_22', 1000, true, true);
-                    logSys(`自動花費 ${cost} 金幣購買了 1000 銀箭。`);
+                    gainItem('wpn_22', _qty, true, true);
+                    logSys(`自動花費 ${cost} 金幣購買了 ${_qty} 銀箭。`);
                     let freshArrow = player.inv.find(i => i.id === 'wpn_22');
                     if (freshArrow) equipItem(freshArrow);
                 } else {

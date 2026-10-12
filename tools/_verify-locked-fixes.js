@@ -547,6 +547,26 @@ section("53) 私服整理（移除非原版系統、補私服道具）");
     /function openDollPick\(item\)/.test(cd) && /\(DOLL_BY_TIER\[sd\.pickTier\] \|\| \[\]\)\.indexOf\(dollId\) < 0\) return;/.test(cd));
 }
 
+section("54) 設定／內掛選單／輔助設定 視窗（照新創）");
+{
+  const lm = rd("js/55-lin-menus.js");
+  const tb = rd("js/10-ui-tabs.js");
+  const ie = rd("js/08-items-equip.js");
+  const sc = rd("js/07-skills-cast.js");
+  const ss = rd("js/13-shop-save.js");
+  ok("index 載入 55-lin-menus.js／lin-menus.css", /js\/55-lin-menus\.js/.test(F.html) && /css\/lin-menus\.css/.test(F.html));
+  ok("三個視窗：設定（遊戲選單）／內掛選單 狩獵·補給·魔法·召喚／輔助設定 一般·藥水·狀態·輔助",
+    /\['hunt', '狩獵'\], \['supply', '補給'\], \['magic', '魔法'\], \['summon', '召喚'\]/.test(lm) && /\['general', '一般'\], \['potion', '藥水'\], \['status', '狀態'\], \['aux', '輔助'\]/.test(lm));
+  ok("設定欄位沿用原元素（同 id 搬進視窗，不另做一份）", /function grab\(id\) \{ var e = \$\(id\); return e/.test(lm) && /id="set-patrol"/.test(F.html) && /id="set-hp-skill"/.test(F.html));
+  ok("舊設定分頁入口改開視窗", /if \(t === 'automation' && typeof linMenuOpen === 'function'\) \{ linMenuOpen\('settings'\); return; \}/.test(tb));
+  ok("右側選單「設定」組：設定／內掛／輔助設定／自動賣出／書籤", /key: 'gamemenu'[\s\S]{0,200}key: 'automenu'[\s\S]{0,200}key: 'assist'[\s\S]{0,200}action: 'autosell'[\s\S]{0,200}action: 'bookmark'/.test(tb));
+  ok("內掛道具開內掛選單、設定道具開輔助設定", /linMenuOpen\(fn === 'auto' \? 'auto' : 'assist'\)/.test(ie));
+  ok("應急（HP 低於門檻用回村道具）／自動解毒（翡翠藥水）", /set-emerg-hp/.test(sc) && /useFnItem\(DB\.items\[_eId\]\.fn\)/.test(sc) && /set-auto-cure/.test(sc) && /"potion_cure": \{[^\n]*eff: "curepoison"/.test(F.data));
+  ok("自動購買一次買幾個（仍只在 0 個時才買）", /autoBuyQty\('set-buy-qty-pot', 100, 1, 1000\)/.test(sc) && /autoBuyQty\('set-buy-qty-arrow'/.test(rd("js/03-combat-core.js")));
+  ok("寵物補血預設門檻（個別寵物設定優先）", /p\.potPct > 0 \? p\.potPct : \(parseInt\(\(typeof document !== 'undefined' && document\.getElementById\('set-pet-heal-hp'\)/.test(rd("js/22-pets.js")));
+  ok("新設定會存檔", ["setEmergHp", "setEmergItem", "setAutoCure", "setPetHealHp", "setBuyQtyPot", "setBuyQtyArrow"].every((k) => ss.includes(k + ":")));
+}
+
 section("51) 主城奇岩");
 {
   const wm = rd("js/11-world-map.js");

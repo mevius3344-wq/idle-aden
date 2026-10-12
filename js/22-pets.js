@@ -1248,9 +1248,10 @@ function applyMobMagicToPet(mob, sk, p) {
 }
 function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryPotion：喝「隊長設定的藥水」·缺貨且勾自動購買→補到100瓶）
     if (typeof pvpArenaPotionBlocked === 'function' && pvpArenaPotionBlocked()) return;   // 🚫 v3.7.17 決鬥中禁治癒藥水（⚠️寵物不像傭兵會被移到場邊·決鬥時仍在場上→這道閘是真的會擋到東西的那一個）
-    if (!(p.potPct > 0) || p._downed) return;
+    let _pct = p.potPct > 0 ? p.potPct : (parseInt((typeof document !== 'undefined' && document.getElementById('set-pet-heal-hp') || {}).value, 10) || 0);   // 個別寵物沒設定 → 用內掛「召喚」的寵物補血門檻
+    if (!(_pct > 0) || p._downed) return;
     if ((p._potCd || 0) > 0) { p._potCd--; return; }
-    if (p.hp <= 0 || p.hp > petMhpEff(p) * (p.potPct / 100)) return;
+    if (p.hp <= 0 || p.hp > petMhpEff(p) * (_pct / 100)) return;
     let potSel = (typeof document !== 'undefined') ? document.getElementById('set-pot') : null;
     let potId = potSel ? potSel.value : 'potion_heal';
     let pdef = DB.items[potId];
@@ -1269,13 +1270,13 @@ function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryP
             let _unit = (typeof shopPrice === 'function') ? shopPrice(pdef.p || 0) : (pdef.p || 0);
             _unit = Math.max(0, Math.floor(Number(_unit) || 0));
             if (_unit > 0) {
-                let _need = 100;
+                let _need = (typeof autoBuyQty === 'function') ? autoBuyQty('set-buy-qty-pot', 100, 1, 1000) : 100;
                 let _can = Math.floor(Math.max(0, Number(player.gold) || 0) / _unit);
                 let _buy = Math.min(_need, _can);
                 if (_buy > 0) {
                     player.gold -= _buy * _unit;
                     gainItem(potId, _buy, true, true);
-                    logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${pdef.n}（用完補貨 ${_buy}/100）。`);
+                    logSys(`自動消耗 ${_buy * _unit} 金幣購買了 ${_buy} 瓶${pdef.n}（用完補貨 ${_buy}/${_need}）。`);
                     try { if (typeof updateUI === 'function') updateUI(); } catch (eG2) {}
                 }
             }

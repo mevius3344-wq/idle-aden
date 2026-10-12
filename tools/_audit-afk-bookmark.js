@@ -152,9 +152,10 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     const bmw = await ev(`(()=>{const w=document.getElementById('bm-win');return w&&!w.classList.contains('hidden')?w.querySelectorAll('[data-go]').length:-1})()`);
     ok(bmw === 2, '選單 → 書籤（列出 ' + bmw + ' 個）');
     await shot('afkbm_bookmark.png');
-    await ev(`(()=>{document.getElementById('bm-win').classList.add('hidden');switchMobileTabGroup('settings');activateMobileTabSub('automation');return 1})()`);
+    await ev(`(()=>{document.getElementById('bm-win').classList.add('hidden');linMenuOpen('auto');return 1})()`);
     await sleep(600);
-    await ev(`(()=>{const e=document.getElementById('set-patrol');if(e)e.scrollIntoView({block:'center'});return 1})()`);
+    const patrolIn = await ev(`(()=>{const e=document.getElementById('set-patrol');return !!(e&&e.closest('#lm-win-auto')&&e.offsetParent)})()`);
+    ok(patrolIn, '內掛選單 → 狩獵 看得到巡邏範圍');
     await sleep(300);
     await shot('afkbm_settings.png');
 
