@@ -1500,10 +1500,8 @@ function changeMap(force) {
             // 🛡️ v3.8.307：進場戰圖強制恢復戰鬥迴圈（否則 spawnAt 永遠不消化＝空地圖）
             try {
                 if (typeof state !== 'undefined' && state && typeof player !== 'undefined' && player && player.cls && !player.dead) {
-                    if (state.autoHunt !== false) {
-                        state.running = true;
-                        if (typeof startGameTimers === 'function') startGameTimers();
-                    }
+                    state.running = true;
+                    if (typeof startGameTimers === 'function') startGameTimers();
                 }
             } catch (eRunMap) {}
         }

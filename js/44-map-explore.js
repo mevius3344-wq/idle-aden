@@ -1761,16 +1761,19 @@
      */
     function exploreCombatCamChaseTick(manualControl) {
         if (!exploreFieldCombatActive() || manualControl || explorePlayerDead()) return false;
-        try {
-            if (typeof state !== 'undefined' && state && state.autoHunt === false) { _patrolAnchor = null; _noMobSince = 0; return false; }
-        } catch (eA) {}
+        var manualHunt = typeof state !== 'undefined' && state && state.autoHunt === false;
+        if (manualHunt) {
+            _patrolAnchor = null; _noMobSince = 0;
+            var pt = typeof mapState !== 'undefined' && mapState.mobs ? mapState.mobs[mapState.targetIdx] : null;
+            if (!pt || !pt._picked || pt._dead || !(pt.curHp > 0) || pt._fx == null) return false;
+        }
         if (typeof mapState === 'undefined' || !mapState.mobs) return false;
         if (!_patrolAnchor) _patrolAnchor = { x: _tx, y: _ty };
         var t = mapState.mobs[mapState.targetIdx];
         if (!t || t._dead || !(t.curHp > 0) || t._fx == null) t = null;
         var engaged = !!(t && exploreMobInEngageRange(t));
         if (!engaged) {
-            var ai = (t && t._townDummy && t._picked) ? mapState.targetIdx : exploreNearestApproachIdx(APPROACH_WORLD);
+            var ai = (t && t._picked && (t._townDummy || manualHunt)) ? mapState.targetIdx : exploreNearestApproachIdx(APPROACH_WORLD);
             if (ai < 0) return explorePatrolIdleTick();
             _noMobSince = 0;
             t = mapState.mobs[ai];
@@ -1800,14 +1803,14 @@
             exploreSetFaceFromVec(dirx, -diry);
             return false;
         }
-        if (!engaged && dist > APPROACH_WORLD && !(explorePatrolCells() > 0)) return false;
+        if (!engaged && dist > APPROACH_WORLD && !(explorePatrolCells() > 0) && !manualHunt) return false;
         var nowC = Date.now();
         var ti = mapState.mobs.indexOf(t);
         if (engaged || ti !== _chaseIdx || dist < _chaseBest - 6) {
             _chaseSince = nowC;
             _chaseIdx = ti;
             _chaseBest = dist;
-        } else if (nowC - _chaseSince > CHASE_STUCK_MS) {
+        } else if (!manualHunt && nowC - _chaseSince > CHASE_STUCK_MS) {
             t._unreachUntil = nowC + CHASE_UNREACH_MS;
             _chaseIdx = -1;
             _chaseBest = Infinity;
@@ -2046,6 +2049,7 @@
     /** 距離開戰器：鎖最近交戰圈內目標（不改攻速算式） */
     function exploreEngageRetarget() {
         if (!exploreFieldCombatActive()) return;
+        if (typeof state !== 'undefined' && state && state.autoHunt === false) return;   // AUTO 關：不自動改鎖
         exploreEnsureAllFieldPos();
         var idx = exploreNearestEngageIdx();
         if (idx < 0) {
@@ -3789,6 +3793,11 @@
         if (wantMove && inp.manual) {
             _patrolAnchor = null;
             _noMobSince = 0;
+            // AUTO 關：點地走路＝取消攻擊點過的怪
+            if (typeof state !== 'undefined' && state && state.autoHunt === false && typeof mapState !== 'undefined' && mapState.mobs) {
+                var _mt = mapState.mobs[mapState.targetIdx];
+                if (_mt && _mt._picked) _mt._picked = false;
+            }
             var wdx = inp.dx;
             var wdy = -inp.dy;
             if (Math.abs(wdx) > 0.001 || Math.abs(wdy) > 0.001) {

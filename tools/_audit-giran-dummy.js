@@ -59,14 +59,16 @@ async function main() {
     const a = await ev(`(()=>{
         const ds=(mapState.mobs||[]).filter(m=>m&&m._townDummy);
         const sel=document.getElementById('map-select');
+        const autoDef=state.autoHunt, autoLab=(document.getElementById('chud-auto-label')||{}).textContent;
         state.autoHunt=false; mapState.targetIdx=-1;
-        return {map:mapState.current, n:ds.length, pos:ds.map(m=>m._fx+','+m._fy).join(' '), names:ds.map(m=>m.n).join(','),
+        return {autoDef, autoLab, map:mapState.current, n:ds.length, pos:ds.map(m=>m._fx+','+m._fy).join(' '), names:ds.map(m=>m.n).join(','),
             cards:document.querySelectorAll('#mob-list .mob-target').length,
             spots:JSON.stringify(townDummySpots('town_giran')),
             zoom:exploreLinZoom(), trainingOpt:[...sel.options].some(o=>o.value==='training'),
             regionTraining:JSON.stringify(MAP_REGIONS).indexOf('"training"')>=0};
     })()`);
     ok('創角出生在奇岩', a.map === 'town_giran', a.map);
+    ok('自動練功預設關（按鈕顯示手動）', a.autoDef === false && a.autoLab === '手動', a.autoDef + ' ' + a.autoLab);
     ok('奇岩有 3 個木頭人', a.n === 3 && /^木頭人,木頭人,木頭人$/.test(a.names), a.n + ' ' + a.names);
     ok('木頭人站在指定格子', a.pos === '600,1080 504,1080 408,1080', a.pos);
     ok('木頭人有畫出來', a.cards >= 3, 'cards ' + a.cards);
@@ -102,7 +104,7 @@ async function main() {
     const c = await ev(`(async()=>{
         const idx=mapState.mobs.findIndex(m=>m&&m._townDummy&&m._fx===600&&m._fy===1080&&m.curHp>0);
         const uid0=mapState.mobs[idx].uid; const exp0=(player.exp||0)+(player.lv||1)*1e6; const hp0=player.hp;
-        player.hp=player.mhp; state.autoHunt=true; mapState.mobs[idx]._picked=true; setTarget(idx);
+        player.hp=player.mhp; state.autoHunt=false; mapState.mobs[idx]._picked=true; setTarget(idx);
         let killed=false, respawn=false, t0=Date.now();
         for(let i=0;i<300;i++){ await new Promise(r=>setTimeout(r,100));
             const m=mapState.mobs[idx];
@@ -117,21 +119,55 @@ async function main() {
     ok('木頭人在原位重生', c.respawn === '600,1080', String(c.respawn));
     ok('木頭人不還手（玩家沒扣血）', c.hpOk && c.map === 'town_giran');
 
-    // 城鎮按 AUTO：維持開、開傳送選單
+    // 城鎮按 AUTO：開＝提示＋開傳送選單，再按＝關
     const d = await ev(`(async()=>{
+        state.autoHunt=false;
         const box=document.getElementById('town-interaction-container'); if(box) box.classList.add('hidden');
         const r=[]; for(let k=0;k<2;k++){ document.getElementById('chud-auto').click(); await new Promise(r=>setTimeout(r,300));
             r.push({auto:state.autoHunt, tp:!!box&&!box.classList.contains('hidden')&&(document.getElementById('interaction-npc-name')||{}).innerText==='傳送'});
             if(box) box.classList.add('hidden'); }
         return r;
     })()`);
-    ok('城鎮按 AUTO 開傳送選單且維持 AUTO', Array.isArray(d) && d.every((x) => x.auto && x.tp), JSON.stringify(d));
+    ok('城鎮開 AUTO 開傳送選單、再按關掉', Array.isArray(d) && d[0].auto && d[0].tp && !d[1].auto && !d[1].tp, JSON.stringify(d));
+
+    // 野外 AUTO 關：不自己找怪；點怪＝走過去打；點地＝取消
+    const fmap = await ev(`(async()=>{state.autoHunt=false;const sel=document.getElementById('map-select');
+        if(![...sel.options].some(o=>o.value==='zone_13')){const o=document.createElement('option');o.value='zone_13';sel.appendChild(o);}
+        sel.value='zone_13';changeMap(true);await new Promise(r=>setTimeout(r,1500));return mapState.current+' running='+state.running})()`);
+    console.log('  field ' + fmap);
+    let nm = 0;
+    for (let i = 0; i < 30 && nm < 1; i++) { await sleep(500); nm = await ev(`(mapState.mobs||[]).filter(m=>m&&!m._dead&&m.curHp>0&&m._fx!=null&&!m.boss).length`); }
+    const f0 = await ev(`(()=>{player.hp=player.mhp;player.lv=30;calcStats();player.hp=player.mhp;return Math.round(explorePlayerX())+','+Math.round(explorePlayerY())})()`);
+    await sleep(4000);
+    const f1 = await ev(`(()=>{const t=getTarget();return Math.round(explorePlayerX())+','+Math.round(explorePlayerY())+(t?' 有目標':'')})()`);
+    ok('野外 AUTO 關：場上有怪、不自己去打', nm > 0 && f0 === f1, nm + ' 隻 ' + f0 + ' → ' + f1);
+    const g = await ev(`(async()=>{
+        const x=explorePlayerX(), y=explorePlayerY();
+        let idx=-1, bd=1e9; (mapState.mobs||[]).forEach((m,i)=>{ if(!m||m._dead||!(m.curHp>0)||m._fx==null||m.boss) return; const d=Math.hypot(m._fx-x,(m._fy||0)-y); if(d<bd){bd=d;idx=i;} });
+        if(idx<0) return {err:'no mob'};
+        const m=mapState.mobs[idx], uid0=m.uid, hp0=m.curHp;
+        const L=exploreActiveMapDef().lin;
+        const off=[[96,0],[-96,0],[0,48],[0,-48],[48,24],[-48,-24]].find(([a,b])=>linmapWalkable(L,m._fx+a,m._fy+b)&&linmapWalkable(L,m._fx+a/2,m._fy+b/2));
+        if(off) exploreTeleportTo(mapState.current,m._fx+off[0],m._fy+off[1]);
+        state.autoHunt=false; await new Promise(r=>setTimeout(r,300));
+        const card=document.querySelector('#mob-list .mob-target[data-uid="'+uid0+'"]');
+        if(!card) return {err:'no card'};
+        card.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+        let hit=false; const trail=[]; for(let i=0;i<200&&!hit;i++){ await new Promise(r=>setTimeout(r,100)); player.hp=player.mhp; const n=mapState.mobs[idx]; hit=!n||n.uid!==uid0||n.curHp<hp0;
+            if(i%10===0&&n) trail.push([Math.round(explorePlayerX()),Math.round(explorePlayerY()),Math.round(n._fx),Math.round(n._fy),mapState.targetIdx].join(',')); }
+        window.__trail=trail;
+        if(!hit){ const L=exploreActiveMapDef().lin; const px=explorePlayerX(), py=explorePlayerY();
+            const nb=[[48,0],[-48,0],[0,24],[0,-24],[24,12],[24,-12],[-24,12],[-24,-12]].map(([a,b])=>a+':'+b+'='+(linmapWalkable(L,px+a,py+b)?1:0)).join(' ');
+            trail.push('nb '+nb); }
+        const n=mapState.mobs[idx];
+        return {hit, dist:Math.round(bd), idx, tgt:mapState.targetIdx, picked:!!(n&&n._picked), me:[Math.round(explorePlayerX()),Math.round(explorePlayerY())],
+            mob:n&&[Math.round(n._fx),Math.round(n._fy)], eng:!!(n&&exploreMobInEngageRange(n)), gt:!!getTarget(), run:state.running, auth:typeof rtWorldAuthCombatActive==='function'&&rtWorldAuthCombatActive(), trail:hit?undefined:trail.join(' | ')};
+    })()`);
+    ok('野外 AUTO 關：點怪會走過去打', g && g.hit, JSON.stringify(g));
 
     // 野外按 AUTO 仍可正常開關
-    await ev(`(()=>{const sel=document.getElementById('map-select');sel.value='talking_island';changeMap(true);return 1})()`);
-    await sleep(3000);
     const e = await ev(`(async()=>{ const r=[]; for(let k=0;k<2;k++){ document.getElementById('chud-auto').click(); await new Promise(r=>setTimeout(r,200)); r.push(state.autoHunt); } return r; })()`);
-    ok('野外 AUTO 可開關', Array.isArray(e) && e[0] === false && e[1] === true, JSON.stringify(e));
+    ok('野外 AUTO 可開關', Array.isArray(e) && e[0] === true && e[1] === false, JSON.stringify(e));
     ok('野外沒有木頭人', await ev(`!(mapState.mobs||[]).some(m=>m&&m._townDummy)`));
 
     ok('無 JS 例外', exc.length === 0, exc.slice(0, 3).join(' | '));

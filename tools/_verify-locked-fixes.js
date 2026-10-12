@@ -103,9 +103,14 @@ section("3) 新兵修練場（回報壞過 5+ 次）");
   ok("spawnMob 生城鎮木頭人（不還手、_townDummy）", /let _tds = townDummySpots\(\);[\s\S]{0,400}trainingDummy: true, noAttack: true, _townDummy: true/.test(cc));
   ok("進奇岩就生木頭人", /_tds\.forEach\(\(p, k\) => spawnMob\(k\)\);/.test(wm));
   ok("城鎮木頭人不走動、不重排出生點", /m\._linOnGrid = true;\s*if \(m\._townDummy\) return;/.test(F.explore) && /if \(mob\._townDummy\) return;/.test(F.explore));
-  ok("自動狩獵不挑城鎮木頭人、只打玩家點過的", /\|\| m\._townDummy\) continue;/.test(F.explore) && /if \(t && t\._townDummy && !t\._picked\) t = null;/.test(cc) && /mapState\.mobs\[idx\]\._townDummy\) mapState\.mobs\[idx\]\._picked = true;/.test(cc));
+  ok("自動狩獵不挑城鎮木頭人、只打玩家點過的", /\|\| m\._townDummy\) continue;/.test(F.explore) && /if \(t && t\._townDummy && !t\._picked\) t = null;/.test(cc) && /if \(idx >= 0\) mapState\.mobs\[idx\]\._picked = true;/.test(cc));
   ok("木頭人點擊範圍只留本體（不蓋 NPC）", /#battle-view \.mob-target\.town-dummy > \.mob-img-wrap::after \{/.test(rd("css/style.css")));
-  ok("城鎮按 AUTO＝提示＋開傳送選單（維持 AUTO）", /state\.autoHunt = inTown \? true :/.test(hud) && /openTeleportMenu\(\)/.test(hud));
+  ok("城鎮開 AUTO＝提示＋開傳送選單", /if \(inTown && state\.autoHunt\) \{/.test(hud) && /openTeleportMenu\(\)/.test(hud));
+  // v3.10.2：AUTO 預設關；關時只打玩家點過的怪（點地取消），進場戰圖照樣開戰鬥迴圈
+  ok("AUTO 預設關", /inTick: false, autoHunt: false \}/.test(rd("js/01-drops-config.js")) && /state\.autoHunt == null\) state\.autoHunt = false;/.test(hud));
+  ok("AUTO 關＝只打點過的怪", /if \(state && state\.autoHunt === false\) \{\s*if \(!t \|\| !t\._picked/.test(cc) && /var _autoOn = !\(state && state\.autoHunt === false\) \|\| !!getTarget\(\);/.test(cc) && /if \(!pt \|\| !pt\._picked/.test(F.explore));
+  ok("AUTO 關不自動改鎖、追點過的怪不放棄", /state\.autoHunt === false\) return;   \/\/ AUTO 關：不自動改鎖/.test(F.explore) && /else if \(!manualHunt && nowC - _chaseSince > CHASE_STUCK_MS\)/.test(F.explore));
+  ok("AUTO 關也開戰鬥迴圈（不然場上沒怪）", !/if \(state\.autoHunt !== false\) \{\s*state\.running = true;/.test(wm));
 }
 
 section("4) 村莊背景不可消失");

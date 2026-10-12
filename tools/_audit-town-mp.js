@@ -108,7 +108,7 @@ async function page(wsUrl) {
     const FIELD = 'talking_island';
     for (const P of [A, B]) {
         await P.send('Page.bringToFront');
-        await P.ev(`(()=>{player.lv=60;calcStats();player.hp=player.mhp;const sel=document.getElementById('map-select');const id=${JSON.stringify(FIELD)};
+        await P.ev(`(()=>{player.lv=60;calcStats();player.hp=player.mhp;state.autoHunt=true;const sel=document.getElementById('map-select');const id=${JSON.stringify(FIELD)};
             if(![...sel.options].some(o=>o.value===id)){const o=document.createElement('option');o.value=id;sel.appendChild(o);}
             sel.value=id; changeMap(true);})()`);
         await sleep(2500);

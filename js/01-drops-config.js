@@ -1641,7 +1641,7 @@ function skillReqLv(sk, skId) {
 let _echoFree = false;        // 🏅 迴響精通：免費連發旗標（連發那次不耗MP、不再連鎖）
 let _royalFreeCast = false;   // 👑 魔法精通：一般攻擊命中 10% 免MP額外施放選定攻擊技的旗標
 
-let state = { running: false, ticks: 0, pDmgTick: 0, ff: false, ffSmall: false, inTick: false, autoHunt: true };
+let state = { running: false, ticks: 0, pDmgTick: 0, ff: false, ffSmall: false, inTick: false, autoHunt: false };
 // 🗑️ v3.7.94 用戶指定移除離線掛機（js/27 整檔刪除）：現在只剩「網頁還開著」這一軌——
 //    切分頁／縮小的背景期間由下方 Worker 心跳持續跑，被節流到的差額則於回前景時補幀補跑（state.ff 補跑重建）。
 //    **真正關閉網頁＝進度完全停止**，重開不再有任何離線結算。

@@ -174,7 +174,7 @@
             ensureHudDom();
             screen.classList.toggle('combat-hud', want);
             if (want) {
-                if (typeof state !== 'undefined' && state && state.autoHunt == null) state.autoHunt = true;
+                if (typeof state !== 'undefined' && state && state.autoHunt == null) state.autoHunt = false;
                 syncAutoBtn();
                 refreshHotbar(true);
                 startAfkClock();
@@ -253,8 +253,8 @@
     function toggleAuto() {
         if (typeof state === 'undefined' || !state) return;
         var inTown = typeof mapState !== 'undefined' && mapState && String(mapState.current || '').indexOf('town_') === 0;
-        state.autoHunt = inTown ? true : !(state.autoHunt !== false);
-        if (inTown) {
+        state.autoHunt = !(state.autoHunt !== false);
+        if (inTown && state.autoHunt) {
             try {
                 if (typeof logSys === 'function') logSys('<span class="text-amber-300">城鎮內沒有可狩獵的怪物，請選擇練功地點傳送後自動狩獵。</span>');
                 if (typeof openTeleportMenu === 'function') openTeleportMenu();

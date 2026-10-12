@@ -542,7 +542,7 @@ function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 inn
         let uid = card.getAttribute('data-uid');
         if (!uid) return;   // 空格(無 data-uid·pointer-events:none)→略過
         let idx = mapState.mobs.findIndex(m => m && String(m.uid) === String(uid) && !m._dead);
-        if (idx >= 0 && mapState.mobs[idx]._townDummy) mapState.mobs[idx]._picked = true;   // 🪵 城鎮木頭人只打玩家點過的
+        if (idx >= 0) mapState.mobs[idx]._picked = true;   // 🪵 城鎮木頭人／AUTO 關時只打玩家點過的
         if (idx >= 0 && idx !== mapState.targetIdx) setTarget(idx);
     });
     let release = () => { if (!_mobPointerDown) return; _mobPointerDown = false; if (_mobRebuildPending) { _mobRebuildPending = false; setTimeout(() => _renderMobsImpl(), 0); } };   // 放開後(讓 click→setTarget 先在存活節點上觸發)再補一次重繪
@@ -833,8 +833,8 @@ function tick() {
         state._pAtkIntervalTicks = aspdTicks;
         state.pDmgTick = attackProgress + 1;
         if(state.pDmgTick >= aspdTicks) {
-            // 🎮 AUTO OFF：暫停一般攻擊節奏（技能快捷列仍可手動施放）
-            var _autoOn = !(state && state.autoHunt === false);
+            // 🎮 AUTO OFF：只打玩家點過的目標（技能快捷列仍可手動施放）
+            var _autoOn = !(state && state.autoHunt === false) || !!getTarget();
             if (_autoOn && !bindSelfBlocked(player)) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
             state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
             state._pStunCycle = false;   // ⚔️ 硬直：每次攻擊後重置「本週期已硬直」旗標（下週期被擊可再延遲一次）
@@ -854,7 +854,7 @@ function tick() {
             state.pOffDmgTick = offProgress + 1;
             if (state.pOffDmgTick >= offTicks) {
                 let _ot = getTarget();   // 副手自行取目標（不依賴主手這一拍有沒有攻擊）
-                var _autoOnOff = !(state && state.autoHunt === false);
+                var _autoOnOff = !(state && state.autoHunt === false) || !!_ot;
                 if (_autoOnOff && _ot && !bindSelfBlocked(player)) dualWieldOffhandAttack(_ot);   // 🕸️ v3.7.75 束縛：副手必為近戰→被束縛時同樣打不出去
                 state.pOffDmgTick = Math.max(0, state.pOffDmgTick - offTicks);
             }
@@ -2349,6 +2349,12 @@ function getTarget() {
     if (t && t._dead) t = null;   // 🔧 架構#2：已死亡待清算的怪不可作為目標
     if (t && t._townDummy && !t._picked) t = null;
     let _field = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive());
+    // 🎮 AUTO 關（預設）：只打玩家點過的那隻，不自動改鎖
+    if (state && state.autoHunt === false) {
+        if (!t || !t._picked || !(t.curHp > 0)) return null;
+        if (_field && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(t)) return null;
+        return t;
+    }
     if (_field) {
         try { if (typeof exploreEnsureAllFieldPos === 'function') exploreEnsureAllFieldPos(); } catch (e0) {}
         if (t && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(t)) t = null;
