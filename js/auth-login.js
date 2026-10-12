@@ -552,6 +552,7 @@
       .then(function () {
         _syncT0 = Date.now();
         if (window.__clientLog) window.__clientLog("sync_begin", "login cloud sync", {});
+        if (window.__clientAlive) window.__clientAlive();
         return syncCloud();
       })
       .then(function (synced) {
