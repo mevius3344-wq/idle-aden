@@ -538,6 +538,7 @@
     return Promise.resolve(false);
   }
 
+  var _syncT0 = 0;
   function runBackgroundCloudSync(account) {
     return new Promise(function (resolve) {
       whenGameReady(resolve);
@@ -549,9 +550,12 @@
         return false;
       })
       .then(function () {
+        _syncT0 = Date.now();
+        if (window.__clientLog) window.__clientLog("sync_begin", "login cloud sync", {});
         return syncCloud();
       })
       .then(function (synced) {
+        if (window.__clientLog) window.__clientLog("sync_done", "login cloud sync", { ms: Date.now() - _syncT0, synced: !!synced });
         if (synced) setStatus("雲端存檔已同步。", "ok");
       })
       .catch(function () {});

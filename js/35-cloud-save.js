@@ -488,10 +488,11 @@
     return { seeds: _pruneDeletedSeeds(seeds) };
   }
 
-  function _persistDeletedCharsShared(merged) {
+  function _persistDeletedCharsShared(merged, async) {
     if (!cloudCanSync()) return false;
     try {
-      var r = _xhrJson('PUT', _base() + '/shared/' + encodeURIComponent(DELETED_CHARS_SHARED), JSON.stringify(merged || { seeds: {} }), true, 4000);
+      var r = _xhrJson('PUT', _base() + '/shared/' + encodeURIComponent(DELETED_CHARS_SHARED), JSON.stringify(merged || { seeds: {} }), !async, async ? 8000 : 4000);
+      if (async) return true;
       return !!(r && r.ok);
     } catch (e) {
       return false;
@@ -664,11 +665,13 @@
   function cloudPullBeforeLoad(slot) {
     if (!cloudCanSync()) return false;
     slot = slot || (typeof currentSlot !== 'undefined' ? currentSlot : 1);
-    // 登入／選角已非阻塞拉過 bundle：30 秒內進角直接用本機快取，背景再補倉庫／寵物
+    // 登入／選角已非阻塞拉過 bundle：10 分鐘內進角直接用本機快取，背景再補倉庫／寵物
+    // （下面的同步 XHR 在視窗內設不了逾時，慢網路會整頁凍住，只當最後手段）
+    var RECENT_MS = 10 * 60000;
     var recent =
-      (_cloudBundleSyncedAt > 0 && Date.now() - _cloudBundleSyncedAt < 30000) ||
-      (typeof window !== 'undefined' && window.__cloudBundleSyncedAt > 0 && Date.now() - window.__cloudBundleSyncedAt < 30000) ||
-      (typeof _loadCloudRefreshAt === 'number' && _loadCloudRefreshAt > 0 && Date.now() - _loadCloudRefreshAt < 30000);
+      (_cloudBundleSyncedAt > 0 && Date.now() - _cloudBundleSyncedAt < RECENT_MS) ||
+      (typeof window !== 'undefined' && window.__cloudBundleSyncedAt > 0 && Date.now() - window.__cloudBundleSyncedAt < RECENT_MS) ||
+      (typeof _loadCloudRefreshAt === 'number' && _loadCloudRefreshAt > 0 && Date.now() - _loadCloudRefreshAt < RECENT_MS);
     if (recent) {
       cloudPullSharedDeferred(slot);
       return false;
@@ -739,7 +742,7 @@
           if (!slot) return;
           if (isCloudDeletedSeed(_seedOf(data))) {
             _removeSlotLocal(slot);
-            try { _xhrJson('DELETE', _base() + '/slot/' + slot, null, true, 4000); } catch (eDel) {}
+            try { _xhrJson('DELETE', _base() + '/slot/' + slot, null, false, 8000); } catch (eDel) {}
             return;
           }
           var localData = _readSlotLocal(slot);
@@ -759,7 +762,7 @@
           if (!localData || !localData.p || cloudSaveBeats(data, localData)) {
             if (_writeSlotLocal(slot, data)) any = true;
           } else if (_localBelongsToCurrent(localData, true)) {
-            cloudPushSlotSync(slot, localData);
+            cloudPushSlot(slot, localData);
           }
         });
       }
@@ -1009,7 +1012,7 @@
                     (data.shared && data.shared[DELETED_CHARS_SHARED]) || null,
                     { seeds: tombs }
                   );
-                  _persistDeletedCharsShared(mergedTombs);
+                  _persistDeletedCharsShared(mergedTombs, true);
                 }
               } catch (eTombSync) {}
               _cloudBundleSyncedAt = Date.now();

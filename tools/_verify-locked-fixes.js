@@ -511,6 +511,14 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
+section("49) 登入同步不用同步 XHR（慢網路整頁凍住）");
+{
+  const cs = rd("js/35-cloud-save.js");
+  ok("登入同步：刪角墓碑非同步上傳", /_persistDeletedCharsShared\(mergedTombs, true\);/.test(cs) && /function _persistDeletedCharsShared\(merged, async\)/.test(cs));
+  ok("套用雲端包：本機較佳改非同步回填、刪殘留改非同步", /\} else if \(_localBelongsToCurrent\(localData, true\)\) \{\s*cloudPushSlot\(slot, localData\);/.test(cs) && /_xhrJson\('DELETE', _base\(\) \+ '\/slot\/' \+ slot, null, false, 8000\)/.test(cs));
+  ok("進角 10 分鐘內同步過就不再同步 XHR 拉槽", /var RECENT_MS = 10 \* 60000;/.test(cs));
+}
+
 section("48) 主畫面捷徑舊頁面自動更新");
 {
   const lu = rd("js/38-live-update.js");
