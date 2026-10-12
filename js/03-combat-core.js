@@ -938,16 +938,40 @@ function tick() {
         // ... (下方保留原有的怪物攻擊與魔法邏輯)
 
         let slowAdd = (m.st && m.st.slow > 0) ? 10 : 0; // 緩速：攻擊間隔 +1 秒
+        // 原版地圖：攻擊動作播到打中幀才結算（exploreLinMobAttackTiming）
+        if (m._linHitAt && Date.now() >= m._linHitAt) {
+            let _late = Date.now() - m._linHitAt;
+            m._linHitAt = 0;
+            if (_late < 1500 && !player.dead && m.curHp > 0) {
+                _dpsReactWrap(() => enemyAttackChooseVictim(m, i));
+                m._bluntDelayed = false;
+                if (player.dead) break;
+                if (m.curHp <= 0) continue;
+            }
+        }
         if(m._atkCd <= 0) {
+            let _fieldOn = typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive();
             // 🗺️ 場戰距離閘：圈外怪不打玩家（站開就不被遠距戳）
-            if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()
-                && typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(m)) {
+            let _canHit = (typeof exploreMobCanHitPlayer === 'function') ? exploreMobCanHitPlayer(m)
+                : (typeof exploreMobInEngageRange !== 'function' || exploreMobInEngageRange(m));
+            if (_fieldOn && !_canHit) {
                 m._atkCd = Math.max(1, Math.floor(m.atkSpd * 10)) + slowAdd;
                 continue;
             }
-            _dpsReactWrap(() => enemyAttackChooseVictim(m, i));   // 🤝 Phase 3：一般物理攻擊可能改打非倒地傭兵（加權隨機）；魔法/狀態仍只打玩家；🎯 DPS：受擊反應(反擊/居合/反射/荊棘/爆彈/受傷施法)歸玩家，傭兵反應由 _allyDamageMob/_dpsAllyReact 扣除
-            m._atkCd = Math.max(1, Math.floor(m.atkSpd * 10)) + slowAdd;
-            m._bluntDelayed = false;   // 攻擊後重置鈍擊延遲標記，下一週期可再被延遲一次
+            let _lt = (_fieldOn && !state.ff && typeof exploreLinMobAttackTiming === 'function') ? exploreLinMobAttackTiming(m) : null;
+            if (_lt) {
+                let _now = Date.now();
+                m._linAtkHold = 0;
+                if (typeof _mobAnimTrigger === 'function') _mobAnimTrigger(m, 'attack');
+                m._facePartyKey = 'P';
+                m._linAtkHold = _now + _lt.atk;
+                m._linHitAt = _now + _lt.hit;
+                m._atkCd = Math.max(Math.max(1, Math.floor(m.atkSpd * 10)), Math.ceil(_lt.atk / 100)) + slowAdd;
+            } else {
+                _dpsReactWrap(() => enemyAttackChooseVictim(m, i));   // 🤝 Phase 3：一般物理攻擊可能改打非倒地傭兵（加權隨機）；魔法/狀態仍只打玩家；🎯 DPS：受擊反應(反擊/居合/反射/荊棘/爆彈/受傷施法)歸玩家，傭兵反應由 _allyDamageMob/_dpsAllyReact 扣除
+                m._atkCd = Math.max(1, Math.floor(m.atkSpd * 10)) + slowAdd;
+                m._bluntDelayed = false;   // 攻擊後重置鈍擊延遲標記，下一週期可再被延遲一次
+            }
         }
 
         if(player.dead) break;

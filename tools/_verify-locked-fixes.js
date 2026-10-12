@@ -461,7 +461,7 @@ section("34) 原版格步走路");
 section("43) 新手禮包 200%經驗藥水／伺服器壞網址");
 {
   const d = rd("js/00-data.js"), dc = rd("js/01-drops-config.js"), kp = rd("js/05-kill-progression.js"), ss = rd("js/13-shop-save.js"), sv = rd("_serve.js");
-  ok("potion_exp2 定義（exp2、1800 秒、有 img、不可賣）", /"potion_exp2": \{[^\n]*img: "assets\/icons\/items\/[^"%]+\.png"[^\n]*eff: "exp2", dur: 1800, noSell: true/.test(d));
+  ok("potion_exp2 定義（exp2、1800 秒、有 img、不可賣）", /"potion_exp2": \{[^\n]*img: "assets\/icons\/(items|private)\/[^"%]+\.png"[^\n]*eff: "exp2", dur: 1800, noSell: true/.test(d));
   ok("expPotionMult 套用到玩家經驗（兩處）", /function expPotionMult\(\)/.test(dc) && (kp.match(/expPotionMult\(\)/g) || []).length >= 2);
   ok("創角送 200%經驗藥水 ×10", /gainItem\('potion_exp2', 10, true, true\)/.test(ss));
   ok("_serve.js 壞 URI 回 400 不崩潰", /catch \(eUri\) \{\s*res\.writeHead\(400/.test(sv));
@@ -535,8 +535,10 @@ section("53) 私服整理（移除非原版系統、補私服道具）");
     !/id: "npc_(kent_guard|ww_guard|heine_guard|obel|hert|diren|arena)"/.test(dt));
   ok("世界頻道假玩家閒聊維持關閉", /function _wcPostIdleChat\(\) \{\s*return;/.test(wc));
   const exps = { 130: 1.3, 150: 1.5, 170: 1.7, 200: 2, 250: 2.5, 300: 3 };
-  ok("經驗藥水 130~300%（10 分鐘、有原版圖示）", Object.keys(exps).every((k) =>
-    new RegExp('"potion_exp' + k + '": \\{[^\\n]*img: "assets/icons/items/翡翠藥水\\.png"[^\\n]*eff: "exp' + k + '", dur: 600').test(dt)));
+  ok("經驗藥水 130~300%（10 分鐘、私服自製圖示）", Object.keys(exps).every((k) =>
+    new RegExp('"potion_exp' + k + '": \\{[^\\n]*img: "assets/icons/private/potion_exp' + k + '\\.png"[^\\n]*eff: "exp' + k + '", dur: 600').test(dt)));
+  ok("私服道具自製圖示檔都在（tools/lin/build-private-icons.js）", ["potion_exp2", "potion_exp130", "potion_exp300", "scroll_town_giran", "doll_pick_6", "fn_home", "item_newbie_embark", "scroll_attr_fire"]
+    .every((k) => fs.existsSync(path.join(ROOT, "assets/icons/private/" + k + ".png")) && new RegExp('"?' + k + '"?:\\s*\\{[^\\n]*img: "assets/icons/private/' + k + '\\.png"').test(dt)));
   ok("經驗藥水取最高倍率、不疊加", Object.keys(exps).every((k) => new RegExp("exp" + k + ": " + exps[k] + "\\b").test(dc)) &&
     /if \(b\[k\] > 0 && EXP_POTION_BUFF_MULT\[k\] > m\) m = EXP_POTION_BUFF_MULT\[k\];/.test(dc));
   const towns = ["talking", "gludin", "silver_knight", "gludio", "elf", "giran", "heine", "oren", "witon", "aden"];
@@ -545,6 +547,20 @@ section("53) 私服整理（移除非原版系統、補私服道具）");
   ok("魔法娃娃任選卷 二~六階", [2, 3, 4, 5, 6].every((t) => new RegExp('"doll_pick_' + t + '": \\{[^\\n]*eff: "doll_pick", pickTier: ' + t).test(dt)));
   ok("任選卷：選定才扣卷、只能選該階", /d\.eff === 'doll_pick'[^\n]*openDollPick\(item\)/.test(ie) &&
     /function openDollPick\(item\)/.test(cd) && /\(DOLL_BY_TIER\[sd\.pickTier\] \|\| \[\]\)\.indexOf\(dollId\) < 0\) return;/.test(cd));
+}
+
+section("55) 原版地圖怪物一格一步／打中幀才扣血");
+{
+  const ex = rd("js/44-map-explore.js");
+  const cc = rd("js/03-combat-core.js");
+  const vr = rd("js/09-vfx-render.js");
+  const tm = rd("js/49-linmob-timing.js");
+  ok("index 載入 49-linmob-timing（l1j passispeed／atkspeed＋list.spr 打中幀）", /js\/49-linmob-timing\.js/.test(F.html) && /var LIN_MOB_TIMING = \{/.test(tm) && fs.existsSync(path.join(ROOT, "tools/lin/export-mob-timing.js")));
+  ok("怪一格一步：位移跟走路幀一格格跳、連續走接上一步結束時刻", /function exploreMobLinTick\(/.test(ex) && /var kd = \(f \+ 1\) \/ n;/.test(ex) && /now - m\._lsEnd < dur\) \? Math\.min\(dur \* 0\.9/.test(ex));
+  ok("一格一隻（佔格表）、不進玩家格、原版地圖不推擠", /function exploreLinMobOccupy\(/.test(ex) && /if \(pt && gx === pt\.gx && gy === pt\.gy\) return null;/.test(ex) && /if \(!linN\) try \{ exploreMobSeparateTick\(\); \}/.test(ex));
+  ok("怪站定且在自身攻擊距離（格）內才攻擊；玩家近戰＝鄰格", /function exploreMobCanHitPlayer\(/.test(ex) && /mob\._ls\) return false;/.test(ex) && /exploreEngageLimit\(\) > ENGAGE_MELEE \? 8 : 1/.test(ex) && /exploreMobCanHitPlayer\(m\)/.test(cc));
+  ok("攻擊先播動作、打中幀才結算", /m\._linHitAt = _now \+ _lt\.hit;/.test(cc) && /if \(m\._linHitAt && Date\.now\(\) >= m\._linHitAt\)/.test(cc));
+  ok("攻擊動作照原版各幀時長、不被受擊打斷、原版地圖 ~25fps 換幀", /function _linMobActFrame\(/.test(vr) && /\(k === 'attack' \|\| k === 'hurt'\) && m\._linAtkHold && Date\.now\(\) < m\._linAtkHold\) return;/.test(vr) && /classList\.contains\('is-linmap'\)\) \? 38 :/.test(vr));
 }
 
 section("54) 設定／內掛選單／輔助設定 視窗（照新創）");

@@ -3264,6 +3264,8 @@ function _mobAnimTrigger(m, k) {
     // 🎬 v3.8.317：只在長段補跑靜音；前景 tick 追趕不可吃掉攻擊動作
     if (typeof _ffCatchupLong === 'function' && _ffCatchupLong()) return;
     let cur = m._animAct;
+    // 原版地圖：攻擊動作播完前不被受擊／打中結算重播打斷
+    if (cur && cur.k === 'attack' && (k === 'attack' || k === 'hurt') && m._linAtkHold && Date.now() < m._linAtkHold) return;
     if (cur && cur.lock) {   // 鎖定動作播放中？（以快取序列長度判斷是否還沒播完）
         let a = _mobAnimCache[m.n];
         let seq = (a && a !== 'probing') ? a[cur.k] : null;
@@ -3465,6 +3467,8 @@ function _mob8FaceDir(m, box) {
             m._face8 = m._moveFace8;
             return m._face8;
         }
+        // 原版地圖閒逛中的怪維持自己的面向（不一直盯著玩家）
+        if (m && m._linFaceHold && !m._animAct) return (m._face8 != null) ? m._face8 : 6;
         let stickAdj = 180, stickTurn = 70;
         let tr = _mob8TargetRect(m); if (!tr) return (m._face8 != null) ? m._face8 : 6;
         let mr = box.getBoundingClientRect(); if (!mr.width) return (m._face8 != null) ? m._face8 : 6;
@@ -3487,6 +3491,17 @@ function _mob8FaceDir(m, box) {
         }
         return m._face8;
     } catch (e) { return (m._face8 != null) ? m._face8 : 6; }
+}
+/** 原版怪攻擊：依 list.spr 各幀時長（縮放到 l1j atkspeed）回傳幀號；播完 -1；無資料 null */
+function _linMobActFrame(m, k, now) {
+    if (k !== 'attack' || !m || !m._animAct || typeof LIN_MOB_TIMING === 'undefined') return null;
+    let t = LIN_MOB_TIMING[m.n];
+    if (!t || !t[5] || !t[5].length) return null;
+    let el = now - m._animAct.t, tot = 0, acc = 0;
+    for (let i = 0; i < t[5].length; i++) tot += t[5][i];
+    let sc = t[1] / tot;
+    for (let i = 0; i < t[5].length; i++) { acc += t[5][i] * sc; if (el < acc) return i; }
+    return -1;
 }
 function _mob8DirReady(a) {
     return !!(a && a !== 'probing' && ((a.walk && a.walk.length) || (a.idle && a.idle.length)));
@@ -3575,7 +3590,8 @@ function _mob8Apply(c, m, uid, now) {
                 let _ak = m._animAct.k;
                 if (_ak === 'skill' || _ak === 'spawn') _ak = 'attack';
                 let _nA = _mobDirectFrameCount(m.n, _ak, _useDir);
-                let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
+                let _lf8 = _linMobActFrame(m, _ak, now);
+                let ff = (_lf8 != null) ? (_lf8 < 0 ? 1e9 : _lf8) : Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
                 if (ff < Math.max(1, _nA)) { _act8 = _ak; _f8 = ff; }
                 else m._animAct = null;
             }
@@ -3585,7 +3601,9 @@ function _mob8Apply(c, m, uid, now) {
                 _act8 = _ra8.act;
                 let _n8 = _ra8.n;
                 try { c.classList.toggle('is-mob-walk-synth', !!_ra8.synth); } catch (eSy8) {}
-                if (_mv8 && m._walkPhase > 0) {
+                if (_mv8 && m._linWalkF != null) {
+                    _f8 = m._linWalkF % Math.max(1, _n8 || 4);
+                } else if (_mv8 && m._walkPhase > 0) {
                     _f8 = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, _n8 || 4);
                 } else {
                     _f8 = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs8) % Math.max(1, _n8 || 4);
@@ -3603,7 +3621,8 @@ function _mob8Apply(c, m, uid, now) {
         if (!seq && (_ak === 'skill' || _ak === 'spawn') && a.attack) { _ak = 'attack'; seq = a.attack; }
         // 🩹 v3.8.346：cache 缺序列仍直連播完，勿清掉 _animAct
         let nA = (seq && seq.length) ? seq.length : _mobDirectFrameCount(m.n, (_ak === 'skill' || _ak === 'spawn') ? 'attack' : _ak, dir);
-        let ff = Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
+        let _lf = _linMobActFrame(m, _ak, now);
+        let ff = (_lf != null) ? (_lf < 0 ? 1e9 : _lf) : Math.floor((now - m._animAct.t) / (1000 / MOB_ANIM_FPS));
         if (ff < Math.max(1, nA)) {
             _act = (_ak === 'skill' || _ak === 'spawn') ? 'attack' : _ak;
             _f = ff;
@@ -3618,7 +3637,9 @@ function _mob8Apply(c, m, uid, now) {
         let seqL = a[_act];
         let nL = (seqL && seqL.length) ? seqL.length : _ra.n;
         if (!(nL > 0)) nL = _ra.n || 4;
-        if (_mv && m._walkPhase > 0) {
+        if (_mv && m._linWalkF != null) {
+            _f = m._linWalkF % Math.max(1, nL || 4);
+        } else if (_mv && m._walkPhase > 0) {
             _f = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, nL || 4);
         } else {
             _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % Math.max(1, nL || 4);
@@ -5217,10 +5238,11 @@ let _pmWalkRafWas = false;
                 requestAnimationFrame(tick);
                 return;
             }
-            let gap = (1000 / MOB_ANIM_FPS) - 2;
+            let bv = document.getElementById('battle-view');
+            // 原版地圖怪一格一步、幀長 80～200ms：~25fps 換幀才跟得上
+            let gap = (bv && bv.classList.contains('is-linmap')) ? 38 : (1000 / MOB_ANIM_FPS) - 2;
             if (!document.hidden && ts - last >= gap) {
                 let gs = document.getElementById('game-screen');
-                let bv = document.getElementById('battle-view');
                 let gsOk = !!(gs && !gs.classList.contains('hidden'));
                 let bvOk = !!(bv && !bv.classList.contains('hidden'));
                 if (gsOk || bvOk) {

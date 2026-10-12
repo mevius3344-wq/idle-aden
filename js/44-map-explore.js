@@ -1179,6 +1179,9 @@
         if (!mob || mob._dead || !(mob.curHp > 0)) return false;
         // 🩹 v3.8.403：世界腳距 strictly；近戰須貼近
         if (mob._fx == null) return false;
+        if (exploreLinName() && typeof linmapTileAt === 'function') {
+            return exploreTileDist(mob._fx, mob._fy || 0, _tx, _ty) <= (exploreEngageLimit() > ENGAGE_MELEE ? 8 : 1);
+        }
         return exploreMobWorldDist(mob) <= exploreEngageLimit();
     }
 
@@ -1382,6 +1385,202 @@
         exploreMobSetMoveFace(m, dx, dy, now);
     }
 
+    // ===== 原版地圖怪物：一格一步（l1j passispeed）、八方向、站定才攻擊（js/49-linmob-timing.js） =====
+    var LIN_MOB_DEF_WALK = 800;
+    function exploreLinMobTiming(m) {
+        var T = (typeof LIN_MOB_TIMING !== 'undefined') ? LIN_MOB_TIMING : null;
+        return (T && m && T[m.n]) || null;
+    }
+    function exploreLinMobWalkMs(m) {
+        var t = exploreLinMobTiming(m);
+        var ms = t ? t[0] : LIN_MOB_DEF_WALK;
+        if (m && m.st && m.st.slow > 0) ms *= 1.5;
+        return Math.max(240, ms);
+    }
+    function exploreLinMobRange(m) {
+        var t = exploreLinMobTiming(m);
+        return t ? t[3] : 1;
+    }
+    /** 原版攻擊節奏：{ atk: 動作 ms, hit: 打中 ms }；非原版地圖或無資料 → null */
+    function exploreLinMobAttackTiming(m) {
+        if (!exploreLinName()) return null;
+        var t = exploreLinMobTiming(m);
+        if (t) return { atk: t[1], hit: t[2] };
+        // 沒有原版節奏的怪：依自己的攻擊幀數（8fps），最後一幀打中
+        var n = 0;
+        try { if (typeof _mobDirectFrameCount === 'function') n = _mobDirectFrameCount(m.n, 'attack', m._face8 != null ? m._face8 : 6) || 0; } catch (e) {}
+        if (n > 1) return { atk: n * 125, hit: (n - 1) * 125 };
+        return { atk: 600, hit: 300 };
+    }
+    function exploreLinMobOccupy(name) {
+        var occ = Object.create(null);
+        var ms = (typeof mapState !== 'undefined' && mapState.mobs) || [];
+        for (var i = 0; i < ms.length; i++) {
+            var o = ms[i];
+            if (!o || o._dead || !(o.curHp > 0) || o._fx == null) continue;
+            var a = linmapTileAt(name, o._fx, o._fy || 0);
+            if (a) occ[a.gx + ',' + a.gy] = o;
+            if (o._ls) {
+                var b = linmapTileAt(name, o._ls.tx, o._ls.ty);
+                if (b) occ[b.gx + ',' + b.gy] = o;
+            }
+        }
+        return occ;
+    }
+    function exploreLinMobFree(name, m, gx, gy, occ, pt) {
+        if (pt && gx === pt.gx && gy === pt.gy) return null;
+        var o = occ[gx + ',' + gy];
+        if (o && o !== m) return null;
+        var c = linmapTileCenter(name, gx, gy);
+        if (!c || !linmapWalkable(name, c.x, c.y)) return null;
+        if (linmapSafeZone(name, c.x, c.y) && !linmapSafeZone(name, m._fx, m._fy || 0)) return null;
+        return c;
+    }
+    /** 朝目標走一格：先斜後直（同玩家），被擋改兩側；沒路回 null */
+    function exploreLinMobPick(name, m, goal, occ, pt) {
+        var t = linmapTileAt(name, m._fx, m._fy || 0);
+        var gt = linmapTileAt(name, goal.x, goal.y);
+        if (!t || !gt) return null;
+        var sx = Math.sign(gt.gx - t.gx), sy = Math.sign(gt.gy - t.gy);
+        if (!sx && !sy) return null;
+        var cands = [[sx, sy]];
+        if (sx && sy) cands.push([sx, 0], [0, sy]);
+        else if (sx) cands.push([sx, 1], [sx, -1]);
+        else cands.push([1, sy], [-1, sy]);
+        for (var i = 0; i < cands.length; i++) {
+            var cx = cands[i][0], cy = cands[i][1];
+            var ngx = t.gx + cx, ngy = t.gy + cy;
+            var c = exploreLinMobFree(name, m, ngx, ngy, occ, pt);
+            if (!c) continue;
+            if (cx && cy) {
+                var a1 = linmapTileCenter(name, ngx, t.gy), a2 = linmapTileCenter(name, t.gx, ngy);
+                if (!linmapWalkable(name, a1.x, a1.y) && !linmapWalkable(name, a2.x, a2.y)) continue;
+            }
+            return { gx: ngx, gy: ngy, c: c };
+        }
+        return null;
+    }
+    function exploreLinMobFace(m, dx, dy, now) {
+        if (typeof _vec2dir !== 'function' || !(Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)) return;
+        var d = _vec2dir(dx, -dy);
+        m._moveFace8 = d;
+        m._face8 = d;
+        m._faceStickAt = now;
+        m._fvx = dx;
+        m._fvy = dy;
+    }
+    function exploreLinMobStartStep(name, m, o, now, occ) {
+        var dur = exploreLinMobWalkMs(m);
+        // 連續走時下一步接上一步的結束時刻（主執行緒卡頓也不會每步多停一下）
+        var carry = (m._lsEnd && now >= m._lsEnd && now - m._lsEnd < dur) ? Math.min(dur * 0.9, now - m._lsEnd) : 0;
+        m._ls = { fx: m._fx, fy: m._fy || 0, tx: o.c.x, ty: o.c.y, t0: now - carry, dur: dur };
+        occ[o.gx + ',' + o.gy] = m;
+        exploreLinMobFace(m, o.c.x - m._fx, o.c.y - (m._fy || 0), now);
+        m._linFaceHold = true;
+        exploreLinMobAdvance(m, now);
+    }
+    /** 一步＝一整輪走路幀；位移跟著幀一格格跳（同玩家 #34）；走完回 false */
+    function exploreLinMobAdvance(m, now) {
+        var s = m._ls;
+        if (!s) return false;
+        var k = (now - s.t0) / s.dur;
+        if (k >= 1) {
+            m._fx = s.tx; m._fy = s.ty;
+            m._gridFx = s.tx; m._gridFy = s.ty;
+            m._lsEnd = s.t0 + s.dur;
+            m._ls = null;
+            m._linWalkF = null;
+            return false;
+        }
+        var t = exploreLinMobTiming(m);
+        var wd = (t && t[4] && t[4].length) ? t[4] : null;
+        var n = wd ? wd.length : 4;
+        var f = Math.min(n - 1, Math.floor(Math.max(0, k) * n));
+        if (wd) {
+            var tot = 0, acc = 0, j;
+            for (j = 0; j < n; j++) tot += wd[j];
+            var pos = Math.max(0, k) * tot;
+            for (j = 0; j < n; j++) { acc += wd[j]; if (pos < acc) { f = j; break; } }
+        }
+        var kd = (f + 1) / n;
+        m._fx = s.fx + (s.tx - s.fx) * kd;
+        m._fy = s.fy + (s.ty - s.fy) * kd;
+        m._gridFx = m._fx; m._gridFy = m._fy;
+        m._linWalkF = f;
+        return true;
+    }
+    function exploreLinMobWander(name, m, now, occ, pt) {
+        m._linFaceHold = true;
+        if (m._wandMode === 'pause' && now < (m._wandPauseUntil || 0)) return;
+        if (m._wandMode !== 'go' || m._wandFx == null) exploreMobPickWanderGoal(m, now);
+        var o = (exploreTileDist(m._fx, m._fy || 0, m._wandFx, m._wandFy) >= 1)
+            ? exploreLinMobPick(name, m, { x: m._wandFx, y: m._wandFy }, occ, pt) : null;
+        if (!o) {
+            m._wandMode = 'pause';
+            m._wandPauseUntil = now + WANDER_PAUSE_MIN + (exploreHashStr(String(m.uid) + ':' + now) % (WANDER_PAUSE_MAX - WANDER_PAUSE_MIN));
+            return;
+        }
+        exploreLinMobStartStep(name, m, o, now, occ);
+    }
+    function exploreMobLinTick(name, m, now, tgt, occ, pt) {
+        if (m._ls && exploreLinMobAdvance(m, now)) { m._animMoving = true; return; }
+        m._animMoving = false;
+        m._moveStickUntil = 0;
+        m._mobBob = 0; m._mobPlant = 0; m._mobShadow = 1;
+        var t0 = linmapTileAt(name, m._fx, m._fy || 0);
+        var c0 = t0 && linmapTileCenter(name, t0.gx, t0.gy);
+        if (c0 && Math.hypot(c0.x - m._fx, c0.y - (m._fy || 0)) > 1.5) { m._fx = c0.x; m._fy = c0.y; m._gridFx = c0.x; m._gridFy = c0.y; }
+        m._linOnGrid = true;
+        if (m._linAtkHold && now < m._linAtkHold) return;
+        var hx = m._homeFx, hy = m._homeFy || 0;
+        var homeDist = Math.hypot((m._fx || 0) - hx, (m._fy || 0) - hy);
+        var toPlayer = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
+        var engaged = !!(tgt && m === tgt && exploreMobInEngageRange(m));
+        var o;
+        var _hold = t0 && occ[t0.gx + ',' + t0.gy];
+        if (t0 && ((pt && t0.gx === pt.gx && t0.gy === pt.gy) || (_hold && _hold !== m))) {
+            for (var i = 0; i < LIN_NB.length && !o; i++) {
+                var c = exploreLinMobFree(name, m, t0.gx + LIN_NB[i][0], t0.gy + LIN_NB[i][1], occ, pt);
+                if (c) o = { gx: t0.gx + LIN_NB[i][0], gy: t0.gy + LIN_NB[i][1], c: c };
+            }
+            if (o) exploreLinMobStartStep(name, m, o, now, occ);
+            return;
+        }
+        if (homeDist > LEASH) {
+            m._aggro = false;
+            m._wandMode = null;
+            o = exploreLinMobPick(name, m, { x: hx, y: hy }, occ, pt);
+            if (o) exploreLinMobStartStep(name, m, o, now, occ);
+            return;
+        }
+        var wantChase = !!engaged;
+        var passiveFull = (m.beh === '被動' && m.curHp >= (m.hp || 1));
+        var sight = passiveFull ? MOB_SIGHT_PASSIVE : MOB_SIGHT;
+        if (m._aggro) {
+            if (toPlayer > CHASE_RANGE) m._aggro = false;
+            else wantChase = true;
+        }
+        if (!wantChase && toPlayer <= sight) { m._aggro = true; wantChase = true; }
+        if (engaged) m._aggro = true;
+        if (!wantChase) { exploreLinMobWander(name, m, now, occ, pt); return; }
+        m._wandMode = null;
+        m._linFaceHold = false;
+        if (exploreTileDist(m._fx, m._fy || 0, _tx, _ty) <= exploreLinMobRange(m)) {
+            exploreLinMobFace(m, _tx - m._fx, _ty - (m._fy || 0), now);
+            return;
+        }
+        o = exploreLinMobPick(name, m, { x: _tx, y: _ty }, occ, pt);
+        if (o) exploreLinMobStartStep(name, m, o, now, occ);
+        else exploreLinMobFace(m, _tx - m._fx, _ty - (m._fy || 0), now);
+    }
+    /** 怪能不能打到玩家：原版地圖＝站定且在自身攻擊距離（格）內；其他地圖同交戰圈 */
+    function exploreMobCanHitPlayer(mob) {
+        var ln = exploreLinName();
+        if (!ln || !exploreFieldCombatActive()) return exploreMobInEngageRange(mob);
+        if (!mob || mob._dead || !(mob.curHp > 0) || mob._fx == null || mob._ls) return false;
+        return exploreTileDist(mob._fx, mob._fy || 0, _tx, _ty) <= exploreLinMobRange(mob);
+    }
+
     /** 練功點內追逐：靠近點內怪會追；離巢太遠回家；不跨點亂追 */
     function exploreMobChaseTick() {
         if (!exploreFieldCombatActive()) return;
@@ -1391,9 +1590,19 @@
         try { tgt = mapState.mobs[mapState.targetIdx]; } catch (e0) {}
         if (tgt && (tgt._dead || !(tgt.curHp > 0))) tgt = null;
         var now = Date.now();
+        var linN = (exploreLinName() && typeof linmapTileCenter === 'function') ? exploreLinName() : null;
+        var linOcc = linN ? exploreLinMobOccupy(linN) : null;
+        var linPt = linN ? linmapTileAt(linN, _tx, _ty) : null;
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0)) continue;
+            if (linN) {
+                exploreAssignFieldPos(m, i);
+                if (m._homeFx == null) continue;
+                if (Math.hypot(m._homeFx - _tx, (m._homeFy || 0) - _ty) > SIM_PX + 80 && !m._ls) { m._animMoving = false; continue; }
+                exploreMobLinTick(linN, m, now, tgt, linOcc, linPt);
+                continue;
+            }
             // 移動旗標黏滯：停走邊界不狂切 walk/idle
             m._animMoving = !!(m._moveStickUntil && now < m._moveStickUntil);
             if (m._animMoving) {
@@ -1481,8 +1690,8 @@
                 exploreMobSetMoveFace(m, _tx - m._fx, _ty - (m._fy || 0), now, true);
             }
         }
-        // 站定交戰時微推開，避免重疊成一團
-        try { exploreMobSeparateTick(); } catch (eSep) {}
+        // 站定交戰時微推開，避免重疊成一團（原版地圖一格一隻，不推）
+        if (!linN) try { exploreMobSeparateTick(); } catch (eSep) {}
     }
 
     function explorePatrolCells() {
@@ -1577,6 +1786,12 @@
         if (!(dist > 1)) return false;
         var dirx = dx / dist;
         var diry = dy / dist;
+        if (engaged && exploreLinName()) {
+            _vx = 0;
+            _vy = 0;
+            if (!exploreLinStepping()) exploreSetFaceNow(dx, -dy);
+            return false;
+        }
         if (dist <= COMBAT_STAND_OFF) {
             _vx = 0;
             _vy = 0;
@@ -3892,6 +4107,8 @@
     window.exploreEnsureAllFieldPos = exploreEnsureAllFieldPos;
     window.exploreMobScreenDistPx = exploreMobScreenDistPx;
     window.exploreMobInEngageRange = exploreMobInEngageRange;
+    window.exploreMobCanHitPlayer = exploreMobCanHitPlayer;
+    window.exploreLinMobAttackTiming = exploreLinMobAttackTiming;
     window.exploreNearestEngageIdx = exploreNearestEngageIdx;
     window.exploreEngageRetarget = exploreEngageRetarget;
     window.exploreMobShouldSim = exploreMobShouldSim;
