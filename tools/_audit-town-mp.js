@@ -53,7 +53,7 @@ async function page(wsUrl) {
         const token = await login(acct);
         await P.send('Page.enable'); await P.send('Runtime.enable');
         await P.send('Emulation.setDeviceMetricsOverride', { width: 412, height: 892, deviceScaleFactor: 1, mobile: true });
-        await P.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(token) + ')}catch(e){}'
+        await P.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(token) + ')}catch(e){}'
             + 'window.__hb=[];const _f=window.fetch;window.fetch=function(u,o){const p=_f.apply(this,arguments);if(String(u).indexOf("/api/party/")>=0){p.then(r=>r.clone().text()).then(t=>{window.__hb.push(String(u).slice(0,40)+" "+t.slice(0,200));if(window.__hb.length>12)window.__hb.shift();}).catch(()=>{});}return p;};' });
         await P.send('Page.navigate', { url: BASE + '/' });
         for (let i = 0; i < 120; i++) { await sleep(500); if (await P.ev('typeof startGame==="function"&&typeof changeMap==="function"')) break; }

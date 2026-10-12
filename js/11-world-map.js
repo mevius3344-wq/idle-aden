@@ -38,7 +38,7 @@ const MAP_CATEGORIES = {
         {v:'shadow_temple',t:'暗影神殿',c:'#7c3aed',keyHoldReq:'item_shadow_temple_key',affinityReq:1000}
     ],
     special: [
-        {v:'training',t:'新兵修練場'}, {v:'dream_island',t:'夢幻之島'},   // ⚔️ 決鬥競技場刻意不列選單：入口＝古魯丁村莊「鬥技場管理者 巴魯特」（js/28 pvpArenaEnter 臨時補 option 傳送）
+        {v:'dream_island',t:'夢幻之島'},   // 🪵 v3.10.1 新兵修練場已下架（木頭人改放奇岩村莊）　⚔️ 決鬥競技場刻意不列選單：入口＝古魯丁村莊「鬥技場管理者 巴魯特」（js/28 pvpArenaEnter 臨時補 option 傳送）
         {v:'king_baranka_room',t:'魔獸軍王之室',c:'#f87171',needKey:'item_king_key'},
         {v:'law_king_room',t:'法令軍王之室',c:'#f87171',needKey:'item_king_key'},
         {v:'necro_king_room',t:'冥法軍王之室',c:'#f87171',needKey:'item_king_key'},
@@ -87,7 +87,7 @@ const MAP_CATEGORIES = {
 //  ⚠️新增地圖時：除了加進 MAP_CATEGORIES，也要在此對應地區補一筆，否則該圖不會出現在下拉。
 const MAP_REGIONS = [
     { key: 'silverknight', label: '銀騎士村', maps: [
-        {v:'town_silver_knight', t:'銀騎士村莊'}, {v:'silver_knight', t:'銀騎士地區'}, {v:'training', t:'新兵修練場'}
+        {v:'town_silver_knight', t:'銀騎士村莊'}, {v:'silver_knight', t:'銀騎士地區'}
     ]},
     { key: 'fairyforest', label: '妖精森林', maps: [
         {v:'town_elf', t:'妖精森林村莊'}, {v:'zone_01', t:'妖精森林周邊'},
@@ -612,16 +612,17 @@ function departToLastBattle() {
     if (isHiddenArea(player.lastBattleMap)) { enterHiddenArea(player.lastBattleMap); return; }   // 🏛️ 上一張為隱藏狩獵區域→直接 force 重進（繞過選單可選性檢查）
     let tgt = player.lastBattleMap;
     if (tgt === 'rift_battle') { logSys('<span class="text-violet-300">扭曲的時空已經崩塌消失，沒有可以出發的地圖。</span>'); return; }   // 🌀 裂痕已崩塌：不可用「出發」重進，須在入口以龜裂之核重新進入
-    // 🔧 攻城結束後，上一張戰鬥地圖若為攻城區（外門/內城）：強制改往新手修練場，避免重新進入已結束的攻城區
+    // 🔧 攻城結束後，上一張戰鬥地圖若為攻城區（外門/內城）：改回主城（新兵修練場已下架），避免重新進入已結束的攻城區
     if (tgt && SIEGE_OUTER_INNER.includes(tgt) && !(player.siege && player.siege.active)) {
-        tgt = 'training';
-        player.lastBattleMap = 'training';
+        tgt = MAIN_CITY;
+        player.lastBattleMap = MAIN_CITY;
     }
-    // 血盟不再持有風木城時，上一張若為風木地監則改往新兵修練場。
+    // 血盟不再持有風木城時，上一張若為風木地監則改回主城。
     if (tgt && CASTLE_EXTRA.includes(tgt) && !siegeVictoryActive()) {
-        tgt = 'training';
-        player.lastBattleMap = 'training';
+        tgt = MAIN_CITY;
+        player.lastBattleMap = MAIN_CITY;
     }
+    if (tgt === 'training') { tgt = MAIN_CITY; player.lastBattleMap = MAIN_CITY; }
     // 🗼 傲慢之塔：上一個戰鬥地點若在塔內 → 預設導回 傲慢之塔1樓（入口），不直接重進樓層（避免重複消耗移動卷軸）。
     //    唯一例外：上一處是「樓層區間(pride_X_Y)」且仍持有該層的「傳送符或支配符」(持有即可進入、不消耗) → 直接回到原本樓層；
     //    排名攀登層(pride_fN)、2~10樓(無傳送符機制)、或未持符者一律回 1樓。
@@ -1464,6 +1465,13 @@ function changeMap(force) {
         if (_townWalk) {
             try { applyAreaBackground(); } catch (eTw) {}
             try { if (typeof linTownEnter === 'function') linTownEnter(mapState.current); } catch (eLt) {}
+            try {
+                let _tds = typeof townDummySpots === 'function' && townDummySpots();
+                if (_tds) {
+                    _tds.forEach((p, k) => spawnMob(k));
+                    mapState.spawnAt = [null, null, null, null, null];
+                }
+            } catch (eTd) {}
             renderMobs();
         }
     } else {

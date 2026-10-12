@@ -199,7 +199,7 @@ const chatTexts = async () => ((await getJson('/api/chat/poll?since=0')).message
     if (!lr || !lr.authToken) throw new Error('login failed');
     await send('Page.enable'); await send('Runtime.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 892, deviceScaleFactor: 1, mobile: true });
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(lr.authToken) + ')}catch(e){}' });
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(lr.authToken) + ')}catch(e){}' });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 120; i++) { await sleep(500); if (await ev('typeof startGame==="function"&&typeof wbBossDefsForMap==="function"')) break; }
     await ev(`(async()=>{
@@ -248,7 +248,7 @@ const chatTexts = async () => ((await getJson('/api/chat/poll?since=0')).message
     let seen = null;
     for (let i = 0; i < 40 && !seen; i++) {
         await sleep(500);
-        const r = await ev(`(()=>{const i=(mapState.mobs||[]).findIndex(m=>m&&m._fieldBoss&&m.curHp>0);if(i<0)return null;const m=mapState.mobs[i];
+        const r = await ev(`(()=>{const i=(mapState.mobs||[]).findIndex(m=>m&&m._fieldBoss&&m.curHp>0&&m._serverMobId===${JSON.stringify(BSID)});if(i<0)return null;const m=mapState.mobs[i];
             return JSON.stringify({i,n:m.n,x:Math.round(m._fx),y:Math.round(m._fy),hp:m.curHp,mhp:m.hp,sid:m._serverMobId})})()`);
         if (r) seen = JSON.parse(r);
     }

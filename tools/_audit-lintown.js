@@ -104,7 +104,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
             const L=linmapData(MAP_DEFS[${JSON.stringify(tid)}].lin);
             return {bvOn:!bv.classList.contains('hidden'),tvOff:tv.classList.contains('hidden'),lin:bv.classList.contains('is-linmap'),explore:exploreWorldActive(),
               imgs:imgs.length,loaded:imgs.filter(i=>i.complete&&i.naturalWidth>0).length,ents:ents.length,game:game.length,want,same,
-              mobs:(mapState.mobs||[]).filter(Boolean).length,walk:linmapWalkReady(L&&MAP_DEFS[${JSON.stringify(tid)}].lin)?linmapWalkable(MAP_DEFS[${JSON.stringify(tid)}].lin,explorePlayerX(),explorePlayerY()):null,
+              mobs:(mapState.mobs||[]).filter(m=>m&&!m._townDummy).length,walk:linmapWalkReady(L&&MAP_DEFS[${JSON.stringify(tid)}].lin)?linmapWalkable(MAP_DEFS[${JSON.stringify(tid)}].lin,explorePlayerX(),explorePlayerY()):null,
               safe:linmapSafeZone(MAP_DEFS[${JSON.stringify(tid)}].lin,explorePlayerX(),explorePlayerY()),
               walkCls:document.getElementById('game-screen').classList.contains('lin-town-walk'),
               name:(document.getElementById('lr-map-name')||{}).textContent,coord:(document.getElementById('lr-map-coord')||{}).textContent};})()`);
@@ -112,7 +112,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
         ok(st && st.bvOn && st.tvOff && st.lin && st.explore, tag + '戰鬥框＝原版拼塊、探索啟用');
         ok(st && st.imgs > 0 && st.loaded === st.imgs, tag + '拼塊圖載入 ' + (st && st.loaded) + '/' + (st && st.imgs));
         ok(st && st.game === st.want && st.want > 0, tag + '本遊戲 NPC 全上地圖 ' + (st && st.game) + '/' + (st && st.want) + '（同名原版位 ' + (st && st.same) + '），原版 NPC 共 ' + (st && st.ents));
-        ok(st && st.mobs === 0, tag + '村莊無怪');
+        ok(st && st.mobs === 0, tag + '村莊無怪（奇岩木頭人不算）');
         ok(st && st.walk !== false, tag + '出生點可走' + (st && st.safe ? '（安全區）' : ''));
         ok(st && st.walkCls, tag + 'game-screen 有 lin-town-walk');
         // 點最近的本遊戲 NPC → 浮動視窗（畫面上沒有就沿原版可走格走過去）

@@ -64,7 +64,7 @@ const invCnt = (save, id) => ((save && save.p && save.p.inv) || []).filter((i) =
         const token = await login(acct);
         await P.send('Page.enable'); await P.send('Runtime.enable');
         await P.send('Emulation.setDeviceMetricsOverride', { width: 412, height: 892, deviceScaleFactor: 1, mobile: true });
-        await P.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__promptAns=null;window.prompt=function(){return window.__promptAns};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(token) + ')}catch(e){}' });
+        await P.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};window.__promptAns=null;window.prompt=function(){return window.__promptAns};window.__DEV_OFFLINE=false;window.__fb5AuthAccount=' + JSON.stringify(acct) + ';try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(token) + ')}catch(e){}' });
         await P.send('Page.navigate', { url: BASE + '/' });
         for (let i = 0; i < 120; i++) { await sleep(500); if (await P.ev('typeof startGame==="function"&&typeof changeMap==="function"&&typeof tradeRequest==="function"')) break; }
         P.slot = await P.ev(`(async()=>{

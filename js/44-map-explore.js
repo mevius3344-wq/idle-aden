@@ -787,6 +787,7 @@
     /** 每點連續填滿 4 隻；點有 x/y（俯視網格） */
     function exploreAssignFieldPos(mob, idx) {
         if (!mob || !exploreFieldCombatActive()) return;
+        if (mob._townDummy) return;
         var spots = exploreActiveGrindSpots();
         var def = exploreActiveMapDef();
         var layoutKey = (def && def.layout) ? def.layout : FIELD_LAYOUT;
@@ -1216,7 +1217,7 @@
         var best = -1, bestD = Infinity;
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
-            if (!m || m._dead || !(m.curHp > 0)) continue;
+            if (!m || m._dead || !(m.curHp > 0) || m._townDummy) continue;
             if (!exploreMobInEngageRange(m)) continue;
             var d = (m._fx != null)
                 ? Math.hypot(m._fx - _tx, (m._fy || 0) - _ty)
@@ -1531,6 +1532,7 @@
         var c0 = t0 && linmapTileCenter(name, t0.gx, t0.gy);
         if (c0 && Math.hypot(c0.x - m._fx, c0.y - (m._fy || 0)) > 1.5) { m._fx = c0.x; m._fy = c0.y; m._gridFx = c0.x; m._gridFy = c0.y; }
         m._linOnGrid = true;
+        if (m._townDummy) return;
         if (m._linAtkHold && now < m._linAtkHold) return;
         var hx = m._homeFx, hy = m._homeFy || 0;
         var homeDist = Math.hypot((m._fx || 0) - hx, (m._fy || 0) - hy);
@@ -1719,7 +1721,7 @@
         var now = Date.now();
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
-            if (!m || m._dead || !(m.curHp > 0) || m._fx == null) continue;
+            if (!m || m._dead || !(m.curHp > 0) || m._fx == null || m._townDummy) continue;
             if (m._unreachUntil && m._unreachUntil > now) continue;
             if (anchor && exploreTileDist(anchor.x, anchor.y, m._fx, m._fy || 0) > cells) continue;
             var d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
@@ -1768,7 +1770,7 @@
         if (!t || t._dead || !(t.curHp > 0) || t._fx == null) t = null;
         var engaged = !!(t && exploreMobInEngageRange(t));
         if (!engaged) {
-            var ai = exploreNearestApproachIdx(APPROACH_WORLD);
+            var ai = (t && t._townDummy && t._picked) ? mapState.targetIdx : exploreNearestApproachIdx(APPROACH_WORLD);
             if (ai < 0) return explorePatrolIdleTick();
             _noMobSince = 0;
             t = mapState.mobs[ai];
@@ -2996,12 +2998,12 @@
     }
 
     /**
-     * 原版地圖畫面放大（同新創：短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 2 倍）。
+     * 原版地圖畫面放大（短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 LIN_ZOOM_MAX 倍；v3.10.1 依使用者要求拉遠）。
      * 整個 #battle-view 以腳底錨點用 scale 屬性放大：各層不可各自 transform（會拆開人／怪／NPC 前後遮擋、武器 screen 混色變黑框）；
      * 用 scale 不用 transform，免得蓋掉 vfx-shake 動畫；HUD 在 #game-screen 不受影響，#game-screen 負責裁切。
      */
-    var LIN_VIEW_SPAN = 280;
-    var LIN_ZOOM_MAX = 2;
+    var LIN_VIEW_SPAN = 340;
+    var LIN_ZOOM_MAX = 1.6;
     var _linZoom = 1;
     function exploreLinZoom() { return _linZoom; }
     function exploreLinZoomPivot(bv) {

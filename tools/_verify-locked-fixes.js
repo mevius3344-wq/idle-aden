@@ -95,6 +95,17 @@ section("3) 新兵修練場（回報壞過 5+ 次）");
   ok("修練場不開探索（exploreAllowed 排除 training）",
     /id\s*===\s*'training'[^\n]*return false/.test(F.explore));
   ok("木頭人 HP = 40", /"wood_dummy":\s*\{[^\n]*\bhp:\s*40\b/.test(F.data));
+  // v3.10.1：新兵修練場下架（不在地圖選單），木頭人改放奇岩村莊 3 個
+  const wm = rd("js/11-world-map.js"), cc = rd("js/03-combat-core.js"), hud = rd("js/46-combat-hud.js");
+  ok("新兵修練場不在地圖選單／地區", !/\{v:'training'/.test(wm));
+  ok("出發回退不再去修練場（改主城）", !/tgt = 'training';/.test(wm) && /if \(tgt === 'training'\) \{ tgt = MAIN_CITY;/.test(wm));
+  ok("奇岩 3 個木頭人固定格子", /const TOWN_DUMMY_SPOTS = \{ town_giran: \[\[600, 1080\], \[504, 1080\], \[408, 1080\]\] \};/.test(cc));
+  ok("spawnMob 生城鎮木頭人（不還手、_townDummy）", /let _tds = townDummySpots\(\);[\s\S]{0,400}trainingDummy: true, noAttack: true, _townDummy: true/.test(cc));
+  ok("進奇岩就生木頭人", /_tds\.forEach\(\(p, k\) => spawnMob\(k\)\);/.test(wm));
+  ok("城鎮木頭人不走動、不重排出生點", /m\._linOnGrid = true;\s*if \(m\._townDummy\) return;/.test(F.explore) && /if \(mob\._townDummy\) return;/.test(F.explore));
+  ok("自動狩獵不挑城鎮木頭人、只打玩家點過的", /\|\| m\._townDummy\) continue;/.test(F.explore) && /if \(t && t\._townDummy && !t\._picked\) t = null;/.test(cc) && /mapState\.mobs\[idx\]\._townDummy\) mapState\.mobs\[idx\]\._picked = true;/.test(cc));
+  ok("木頭人點擊範圍只留本體（不蓋 NPC）", /#battle-view \.mob-target\.town-dummy > \.mob-img-wrap::after \{/.test(rd("css/style.css")));
+  ok("城鎮按 AUTO＝提示＋開傳送選單（維持 AUTO）", /state\.autoHunt = inTown \? true :/.test(hud) && /openTeleportMenu\(\)/.test(hud));
 }
 
 section("4) 村莊背景不可消失");
@@ -604,6 +615,8 @@ section("50) 原版地圖人物不疊 CSS 黑橢圓影");
 {
   const css = rd("css/style.css");
   ok("is-linmap＋人物圖自帶影子層時隱藏 ::after 橢圓", /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite:not\(:has\(> \.pm-shadow\[style\*="hidden"\]\)\)::after,[\s\S]{0,200}display: none;/.test(css));
+  ok("所有地圖：人物圖自帶影子層就不疊橢圓（v3.10.1）", /#battle-view > #player-morph-sprite:has\(> \.pm-shadow\[src\]:not\(\[style\*="hidden"\]\)\)::after,[\s\S]{0,200}display: none !important;/.test(css));
+  ok("奇岩木頭人縮到人物大小", /#battle-view \.mob-target\.town-dummy \.mob-img-inner \{\s*scale: 0\.62;/.test(css));
   ok("原版地圖職業圖人物 1:1（不吃 196×236 上限）", /#battle-view\.is-linmap\.is-real-map\.is-world-scroll > #player-morph-sprite:not\(\.q-chibi-actor\) > img,[\s\S]{0,200}max-width: none !important;\s*max-height: none !important;/.test(css));
 }
 
@@ -643,7 +656,7 @@ section("36) 原版地圖畫面放大");
 {
   const ex = rd("js/44-map-explore.js");
   const css = rd("css/style.css");
-  ok("整個 #battle-view 以 scale 屬性放大（短邊 280 世界像素、上限 2 倍）", /var LIN_VIEW_SPAN = 280;/.test(ex) && /var LIN_ZOOM_MAX = 2;/.test(ex) && /bv\.style\.setProperty\('scale', String\(z\)\);/.test(ex));
+  ok("整個 #battle-view 以 scale 屬性放大（短邊 340 世界像素、上限 1.6 倍，v3.10.1 拉遠）", /var LIN_VIEW_SPAN = 340;/.test(ex) && /var LIN_ZOOM_MAX = 1\.6;/.test(ex) && /bv\.style\.setProperty\('scale', String\(z\)\);/.test(ex));
   ok("不可對各世界層各自 transform／scale（會拆散前後遮擋）", !/LIN_ZOOM_IDS/.test(ex));
   ok("點地換算含放大（exploreLinZoomPivot）＋反函數 exploreWorldToClient", /_tapMove\.tx = _cx \+ \(clientX - \(r\.left \+ pv\.x \* lz\)\) \/ lz;/.test(ex) && /window\.exploreWorldToClient = exploreWorldToClient;/.test(ex));
   ok("名牌字級反向縮回（--lin-zoom）", /#battle-view\.is-lin-zoom #player-morph-sprite \.pm-name \{\s*font-size: calc\(13px \/ var\(--lin-zoom, 1\)\);/.test(css));

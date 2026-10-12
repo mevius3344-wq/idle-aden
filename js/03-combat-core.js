@@ -542,6 +542,7 @@ function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 inn
         let uid = card.getAttribute('data-uid');
         if (!uid) return;   // 空格(無 data-uid·pointer-events:none)→略過
         let idx = mapState.mobs.findIndex(m => m && String(m.uid) === String(uid) && !m._dead);
+        if (idx >= 0 && mapState.mobs[idx]._townDummy) mapState.mobs[idx]._picked = true;   // 🪵 城鎮木頭人只打玩家點過的
         if (idx >= 0 && idx !== mapState.targetIdx) setTarget(idx);
     });
     let release = () => { if (!_mobPointerDown) return; _mobPointerDown = false; if (_mobRebuildPending) { _mobRebuildPending = false; setTimeout(() => _renderMobsImpl(), 0); } };   // 放開後(讓 click→setTarget 先在存活節點上觸發)再補一次重繪
@@ -781,7 +782,7 @@ function tick() {
                     delay = 50;                                                 // 🔧 軍王之室：固定 5 秒復活，不受日光術/席琳的世界加速影響
                 } else if(mapState.current === 'antharas_lair') {
                     delay = 50;                                                 // 🐉 v3.7.57 侵蝕的安塔瑞斯棲息地（BOSS房）：固定 5 秒重生
-                } else if(mapState.current === 'training') {
+                } else if(mapState.current === 'training' || townDummySpots()) {
                     delay = 15;                                                 // 🪵 v3.8.449 新兵修練場：木頭人約 1.5 秒重生
                 } else {
                     // 🐾 重生延遲＝基準 50 tick(5秒) × 玩家有效移動延遲倍率。
@@ -2106,8 +2107,23 @@ function pledgeBlessTick() {
     if(pb.left <= 0) mapState.pledgeBless = null;
 }
 
+// 🪵 v3.10.1 奇岩村莊木頭人（取代已下架的新兵修練場）：原版地圖固定格子、不走不還手、約 1.5 秒重生
+const TOWN_DUMMY_SPOTS = { town_giran: [[600, 1080], [504, 1080], [408, 1080]] };
+function townDummySpots(mapId) {
+    return TOWN_DUMMY_SPOTS[mapId || (mapState && mapState.current)] || null;
+}
+try { window.townDummySpots = townDummySpots; } catch (eTds) {}
+
 function spawnMob(idx) {
     if (mapState.current === 'rift_battle') { spawnRiftMob(idx); return; }   // 🌀 時空裂痕：自訂動態出怪（不靠 DB.maps）
+    let _tds = townDummySpots();
+    if (_tds) {
+        let _p = _tds[idx], _td = DB.mobs.wood_dummy;
+        if (!_p || !_td) { mapState.mobs[idx] = null; return; }
+        mapState.mobs[idx] = { ..._td, curHp: _td.hp, uid: uid(), _born: ++_mobBornSeq, _bornMs: Date.now(), _magCd: {}, justHit: false, st: newMobStatus(), trainingDummy: true, noAttack: true, _townDummy: true,
+            _fx: _p[0], _fy: _p[1], _homeFx: _p[0], _homeFy: _p[1], _gridFx: _p[0], _gridFy: _p[1], _slideStart: 0, _fieldMap: mapState.current };
+        return;
+    }
     // 🪵 v3.8.266 新兵修練場：只生中央木頭人（其餘格清空）→ 新手敲打木人畫面
     if (mapState.current === 'training') {
         if (idx !== 1) { mapState.mobs[idx] = null; return; }
@@ -2331,6 +2347,7 @@ function getMobNameClass(m) {
 function getTarget() {
     let t = mapState.mobs[mapState.targetIdx];
     if (t && t._dead) t = null;   // 🔧 架構#2：已死亡待清算的怪不可作為目標
+    if (t && t._townDummy && !t._picked) t = null;
     let _field = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive());
     if (_field) {
         try { if (typeof exploreEnsureAllFieldPos === 'function') exploreEnsureAllFieldPos(); } catch (e0) {}

@@ -252,7 +252,14 @@
 
     function toggleAuto() {
         if (typeof state === 'undefined' || !state) return;
-        state.autoHunt = !(state.autoHunt !== false);
+        var inTown = typeof mapState !== 'undefined' && mapState && String(mapState.current || '').indexOf('town_') === 0;
+        state.autoHunt = inTown ? true : !(state.autoHunt !== false);
+        if (inTown) {
+            try {
+                if (typeof logSys === 'function') logSys('<span class="text-amber-300">城鎮內沒有可狩獵的怪物，請選擇練功地點傳送後自動狩獵。</span>');
+                if (typeof openTeleportMenu === 'function') openTeleportMenu();
+            } catch (eTp) {}
+        }
         if (state.autoHunt) {
             state.running = true;
             _afkSec = 0;

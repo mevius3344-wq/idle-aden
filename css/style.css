@@ -1962,6 +1962,32 @@
         #battle-view.is-linmap.is-world-scroll > .party-sprite:not(.remote-party):not(:has(> .pm-shadow[style*="hidden"]))::after {
             display: none;
         }
+        /* 奇岩木頭人：縮到跟人物差不多高（v3.10.1） */
+        #battle-view .mob-target.town-dummy .mob-img-inner {
+            scale: 0.62;
+            transform-origin: 50% 100%;
+        }
+        /* 點擊範圍只留本體，免得 192 框蓋住旁邊 NPC */
+        #battle-view .mob-target.town-dummy,
+        #battle-view .mob-target.town-dummy * { pointer-events: none !important; }
+        #battle-view .mob-target.town-dummy > .mob-img-wrap::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 60px;
+            height: 70px;
+            translate: -50% 0;
+            pointer-events: auto !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-name { top: 102px; }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-hp-bar { top: 118px; }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-badge-row { top: 84px; }
+        /* 非原版地圖也一樣：人物圖自帶影子層就不疊 CSS 黑橢圓（v3.10.1） */
+        #battle-view > #player-morph-sprite:has(> .pm-shadow[src]:not([style*="hidden"]))::after,
+        #battle-view > .party-sprite:not(.remote-party):has(> .pm-shadow[src]:not([style*="hidden"]))::after {
+            display: none !important;
+        }
         #explore-foot-patch {
             position: absolute;
             left: 50%;

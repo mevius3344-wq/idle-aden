@@ -1943,7 +1943,7 @@ function _renderMobsImpl() {
                 // 🗺️ v3.8.317：left/bottom/is-engage 不進 HTML diff——相機一動字串全變→每幀 innerHTML
                 //    整列重建＝所有 sprite <img> 被砍回靜態幀（看起來永遠不動）。座標只由 exploreApplyFieldDomPos 寫。
                 _scat = '';
-                _sfCls = ' field-mob';
+                _sfCls = m._townDummy ? ' field-mob town-dummy' : ' field-mob';
             } else {
                 // 🦶 v3.8.275：亂飄高度從 0–40 壓到 0–10，避免腳離地面像浮空貼紙
                 if (!_isBossUnit && (m._yScat == null || m._yScat > 10)) m._yScat = Math.floor(Math.random() * 10);
