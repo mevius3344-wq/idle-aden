@@ -5,6 +5,49 @@ const os = require("os");
 const crypto = require("crypto");
 const zlib = require("zlib");
 
+/**
+ * 全服洗白：持久資料夾記的編號 ≠ WIPE_EPOCH 就清空所有玩家資料（帳號、存檔、倉庫、血盟、隊伍、拍賣、交易、
+ * 雲端錢包、GM 信箱、世界王、備份），只留玩家回報／GM 操作紀錄／倍率；每個編號只清一次。
+ * 必須在任何 lib 載入前執行（部分 lib 一載入就讀檔）；只在 Railway 或 WIPE_ON_BOOT=1 時動作。
+ * 客戶端 index.html 用同一個編號清本機舊存檔。
+ */
+const WIPE_EPOCH = "2026-10-12";
+const WIPE_KEEP = new Set([
+  "client-log.json",
+  "gm-audit.json",
+  "gm-rates.json",
+  "wipe-epoch.txt",
+  "lost+found",
+  "world.json",
+  "pandora-gacha-pool.json",
+]);
+(function bootWipe() {
+  const onRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID);
+  if (!onRailway && process.env.WIPE_ON_BOOT !== "1") return;
+  const dir = process.env.CLOUD_SAVE_DIR ? path.resolve(process.env.CLOUD_SAVE_DIR) : path.join(__dirname, "data");
+  const marker = path.join(dir, "wipe-epoch.txt");
+  try {
+    if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim() === WIPE_EPOCH) return;
+  } catch (e) {}
+  let removed = 0;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of fs.readdirSync(dir)) {
+      if (WIPE_KEEP.has(name)) continue;
+      try {
+        fs.rmSync(path.join(dir, name), { recursive: true, force: true });
+        removed++;
+      } catch (e) {
+        console.warn("WIPE 無法刪除 " + name + "：" + (e && e.message));
+      }
+    }
+    fs.writeFileSync(marker, WIPE_EPOCH + "\n", "utf8");
+    console.log("WIPE " + WIPE_EPOCH + "：已清空玩家資料 " + removed + " 項（" + dir + "）");
+  } catch (e) {
+    console.warn("WIPE 失敗：" + (e && e.message));
+  }
+})();
+
 let _pandoraApiHandler = null;
 let _neonLeaderboardHandler = null;
 try {

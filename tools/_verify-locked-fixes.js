@@ -511,6 +511,18 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
+section("52) 全服洗白（開機清玩家資料、客戶端清本機舊存檔）");
+{
+  const sv = rd("_serve.js");
+  const se = (sv.match(/const WIPE_EPOCH = "([^"]+)";/) || [])[1];
+  const ce = (F.html.match(/var EPOCH = '([^']+)';/) || [])[1];
+  ok("伺服器與 index.html 洗白編號一致", !!se && se === ce);
+  ok("洗白在任何 lib 載入前執行", sv.indexOf("(function bootWipe()") > 0 && sv.indexOf("(function bootWipe()") < sv.indexOf('require("./lib/'));
+  ok("洗白保留玩家回報／GM 操作紀錄／倍率", ['"client-log.json"', '"gm-audit.json"', '"gm-rates.json"', '"wipe-epoch.txt"', '"lost+found"'].every((s) => /const WIPE_KEEP = new Set\(\[[\s\S]{0,300}\]\);/.test(sv) && sv.match(/const WIPE_KEEP = new Set\(\[[\s\S]{0,300}\]\);/)[0].includes(s)));
+  ok("只在 Railway 或 WIPE_ON_BOOT=1 才洗", /if \(!onRailway && process\.env\.WIPE_ON_BOOT !== "1"\) return;/.test(sv));
+  ok("客戶端洗白腳本是 head 第一支腳本", F.html.indexOf("var EPOCH = '") > 0 && F.html.indexOf("var EPOCH = '") < F.html.indexOf("<script", F.html.indexOf("<script") + 1));
+}
+
 section("51) 主城奇岩");
 {
   const wm = rd("js/11-world-map.js");
