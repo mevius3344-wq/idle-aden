@@ -511,6 +511,12 @@ section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同�
   ok("靜態文字檔 gzip（首頁約 7MB 腳本）", /const GZIP_EXT = new Set\(/.test(rd("_serve.js")) && /headers\["Content-Encoding"\] = "gzip";/.test(rd("_serve.js")));
 }
 
+section("50) 原版地圖人物不疊 CSS 黑橢圓影");
+{
+  const css = rd("css/style.css");
+  ok("is-linmap＋人物圖自帶影子層時隱藏 ::after 橢圓", /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite:not\(:has\(> \.pm-shadow\[style\*="hidden"\]\)\)::after,[\s\S]{0,200}display: none;/.test(css));
+}
+
 section("49) 登入同步不用同步 XHR（慢網路整頁凍住）");
 {
   const cs = rd("js/35-cloud-save.js");
