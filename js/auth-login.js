@@ -36,6 +36,77 @@
     else if (tone === false || tone === "err") el.classList.add("err");
   }
 
+  // 登入框比遊戲主程式（後面 50 多支同步腳本）先出現：慢網路／改版後首次下載要數十秒，
+  // 這段期間「開始遊戲」與雲端同步都得排隊，等 openLoadSelect 等全部定義好才執行
+  const LOGIN_HINT = "請輸入帳號與密碼。";
+  const LOADING_HINT = "遊戲資源下載中，可先登入……";
+  var _gameReadyQueue = [];
+  var _startQueued = false;
+  var _startLabel = "";
+
+  function gameScriptsReady() {
+    return document.readyState !== "loading" && typeof window.openLoadSelect === "function";
+  }
+
+  function whenGameReady(fn) {
+    if (gameScriptsReady()) {
+      fn();
+      return;
+    }
+    _gameReadyQueue.push(fn);
+  }
+
+  function syncStartMenuButton() {
+    var b = $("btn-start-menu");
+    if (!b) return;
+    if (!_startLabel) _startLabel = b.textContent || "開始遊戲";
+    if (gameScriptsReady()) {
+      b.textContent = _startLabel;
+      b.classList.remove("is-loading");
+      return;
+    }
+    b.classList.add("is-loading");
+    if (document.readyState === "complete") b.textContent = "載入失敗，點此重新整理";
+    else b.textContent = _startQueued ? "載入中，完成後自動進入……" : "遊戲載入中……";
+  }
+
+  function flushGameReadyQueue() {
+    setTimeout(function () {
+      if (gameScriptsReady()) {
+        var q = _gameReadyQueue.splice(0);
+        q.forEach(function (fn) {
+          try {
+            fn();
+          } catch (e) {}
+        });
+        var st = $("auth-status");
+        if (st && st.textContent === LOADING_HINT) setStatus(LOGIN_HINT);
+      }
+      syncStartMenuButton();
+    }, 0);
+  }
+  document.addEventListener("DOMContentLoaded", flushGameReadyQueue);
+  window.addEventListener("load", flushGameReadyQueue);
+
+  function startMenu() {
+    if (gameScriptsReady()) {
+      window.openLoadSelect();
+      return;
+    }
+    if (document.readyState === "complete") {
+      location.reload();
+      return;
+    }
+    if (_startQueued) return;
+    _startQueued = true;
+    syncStartMenuButton();
+    whenGameReady(function () {
+      _startQueued = false;
+      var main = $("main-menu");
+      if (main && !main.classList.contains("hidden") && window.__fb5AuthAccount) window.openLoadSelect();
+    });
+  }
+
   var _serverStatsTimer = null;
 
   function formatMult(n) {
@@ -296,6 +367,7 @@
     try {
       window.__fb5AuthAccount = account;
     } catch (e) {}
+    syncStartMenuButton();
     // 🩹 v3.8.333：不在選單自動載入（避免卡在「載入 77%」）；按開始遊戲再載
   }
 
@@ -312,7 +384,7 @@
     const welcome = $("auth-welcome");
     if (welcome) welcome.textContent = "";
     if (!applyRememberedCreds()) clearCredFields();
-    setStatus("請輸入帳號與密碼。");
+    setStatus(gameScriptsReady() ? LOGIN_HINT : LOADING_HINT);
     startServerStatsPolling();
     try {
       window.__fb5AuthAccount = "";
@@ -367,7 +439,12 @@
   }
 
   function runBackgroundCloudSync(account) {
-    return ensureLocalAccountsOnServer()
+    return new Promise(function (resolve) {
+      whenGameReady(resolve);
+    })
+      .then(function () {
+        return ensureLocalAccountsOnServer();
+      })
       .catch(function () {
         return false;
       })
@@ -991,5 +1068,7 @@
     currentAccount: currentSession,
     onIpSessionLost: onIpSessionLost,
     onAccountSessionLost: onAccountSessionLost,
+    startMenu: startMenu,
+    gameScriptsReady: gameScriptsReady,
   };
 })();

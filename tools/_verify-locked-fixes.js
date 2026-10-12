@@ -499,6 +499,16 @@ section("46) 同 IP 新登入擠掉舊視窗");
   ok("登出狀態收起選角／創角面板", /\["load-select-panel", "creation-panel"\]\.forEach/.test(au));
 }
 
+section("47) 遊戲腳本還在下載時登入（開始遊戲排隊、雲端同步等載完）");
+{
+  const au = rd("js/auth-login.js");
+  ok("開始遊戲鈕走 GameAccountAuth.startMenu（不可直接 openLoadSelect）", /onclick="GameAccountAuth\.startMenu\(\)" id="btn-start-menu"/.test(F.html) && !/onclick="openLoadSelect\(\)"/.test(F.html));
+  ok("載入完成判定＝readyState 非 loading 且 openLoadSelect 已定義", /return document\.readyState !== "loading" && typeof window\.openLoadSelect === "function";/.test(au));
+  ok("未載完：按鈕顯示載入中、載完自動開選角", /function startMenu\(\)/.test(au) && /載入中，完成後自動進入/.test(au) && /document\.addEventListener\("DOMContentLoaded", flushGameReadyQueue\);/.test(au));
+  ok("背景雲端同步等遊戲腳本載完（否則選角是空的）", /function runBackgroundCloudSync\(account\) \{\s*return new Promise\(function \(resolve\) \{\s*whenGameReady\(resolve\);/.test(au));
+  ok("登入框載入中提示", /遊戲資源下載中，可先登入/.test(au));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");
