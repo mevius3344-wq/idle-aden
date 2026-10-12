@@ -516,6 +516,12 @@ section("48) 主畫面捷徑舊頁面自動更新");
   const lu = rd("js/38-live-update.js");
   ok("自己版本≠伺服器版本就更新（不可只記第一次伺服器版本當基準）", /clientVer && clientVer !== serverVer && _staleTryOnce\(serverVer\)/.test(lu));
   ok("每個版本只試一次（sessionStorage 防無限重整）", /function _staleTryOnce\(ver\)/.test(lu) && /sessionStorage\.getItem\(k\) === ver/.test(lu));
+  ok("登入框最底：目前版本＋更新鈕（內嵌腳本，不依賴後面遊戲腳本）", /id="auth-cur-ver">目前版本 v3\.\d+\.\d+</.test(F.html) && /id="btn-auth-update" onclick="authForceUpdate\(\)"/.test(F.html) && /function authForceUpdate\(\)[\s\S]{0,900}location\.replace\(/.test(F.html));
+  {
+    const gv = (rd("js/00-data.js").match(/GAME_VERSION = '([^']+)'/) || [])[1];
+    const hv = (F.html.match(/id="auth-cur-ver">目前版本 (v[\d.]+)</) || [])[1];
+    ok("登入框顯示的版本＝GAME_VERSION（bump 會一起改）", !!gv && gv === hv);
+  }
   ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
 }
 

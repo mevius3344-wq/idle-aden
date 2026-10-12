@@ -7038,6 +7038,17 @@ button.classic-skill-cell { cursor:pointer; }
 }
 .account-auth-status.ok { color: #9ddea8; }
 .account-auth-status.err { color: #f0a090; }
+/* 登入框最底：目前版本＋手動更新（舊頁面卡住時自救） */
+.account-auth-update {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(202, 160, 80, .25);
+  font-size: 12px; color: #b8a078;
+}
+#btn-auth-update {
+  padding: 3px 14px; border-radius: 6px; border: 1px solid #a07a3a;
+  background: linear-gradient(#4a3518, #2a1d0c); color: #f3dca0; font-size: 12px; cursor: pointer;
+}
+#btn-auth-update:disabled { opacity: .6; cursor: wait; }
 /* 遊戲腳本下載進度（下載完才能登入） */
 #auth-load-bar { margin: 4px 0 12px; }
 #auth-load-bar .auth-load-track {

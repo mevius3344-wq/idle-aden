@@ -88,6 +88,7 @@ for (const rel of FILES) {
     s = before
       .replace(/\?v=v3\.\d+\.\d+/g, "?v=" + to)
       .replace(/(content=["'])v3\.\d+\.\d+(["'])/g, "$1" + to + "$2")
+      .replace(/(id="auth-cur-ver">目前版本 )v3\.\d+\.\d+/g, "$1" + to)
       .replace(/(GAME_VERSION\s*=\s*')[^']+(')/g, "$1" + to + "$2");
   }
   if (s !== before) {
