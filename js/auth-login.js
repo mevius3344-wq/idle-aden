@@ -177,6 +177,7 @@
   function startMenu() {
     var log = window.__clientLog || function () {};
     var before = startDiag();
+    log("start_tap", "start tapped", { before: before });
     if (gameScriptsReady()) {
       try {
         window.openLoadSelect();

@@ -522,7 +522,7 @@ section("48) 主畫面捷徑舊頁面自動更新");
     const hv = (F.html.match(/id="auth-cur-ver">目前版本 (v[\d.]+)</) || [])[1];
     ok("登入框顯示的版本＝GAME_VERSION（bump 會一起改）", !!gv && gv === hv);
   }
-  ok("玩家端錯誤／開始遊戲狀態回報（/api/client-log → GM /api/gm/client-log）", /window\.__clientLog = function/.test(F.html) && /log\(after\.load === "on" \? "start_ok" : "start_stuck"/.test(rd("js/auth-login.js")) && /if \(u === "\/api\/client-log"\)/.test(rd("_serve.js")) && /u === "\/api\/gm\/client-log"/.test(rd("lib/rt-gm-file.js")));
+  ok("玩家端錯誤／開始遊戲狀態回報（/api/client-log → GM /api/gm/client-log）", /window\.__clientLog = function/.test(F.html) && /log\(after\.load === "on" \? "start_ok" : "start_stuck"/.test(rd("js/auth-login.js")) && /if \(u === "\/api\/client-log"\)/.test(rd("_serve.js")) && /u === "\/api\/gm\/client-log"/.test(rd("lib/rt-gm-file.js")) && /'tap_trail'/.test(F.html) && /'freeze'/.test(F.html) && /log\("start_tap"/.test(rd("js/auth-login.js")));
   ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
 }
 
