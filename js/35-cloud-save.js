@@ -314,7 +314,7 @@
           if (res.status === 409) {
             return res.json().then(function (body) {
               if (body && (body.error === 'identity_conflict' || body.error === 'stale_save')) {
-                cloudPullSlotIntoStorage(slot);
+                _adoptCloudSlotAsync(slot);
                 if (body.error === 'identity_conflict') {
                   _notifyConflict('此存檔位雲端為不同角色，已改載入雲端版本。');
                 }
@@ -333,15 +333,33 @@
     if (isCloudDeletedSeed(_seedOf(dataObj))) return false;   // 🪦 已刪角色禁止再上傳
     var r = _xhrJson('PUT', _base() + '/slot/' + slot, _cloudPutBody(dataObj), true);
     if (r && r.status === 409 && r.data && r.data.error === 'identity_conflict') {
-      cloudPullSlotIntoStorage(slot);
+      cloudPullSlotIntoStorage(slot, { adoptCloud: true });
       _notifyConflict('此存檔位雲端為不同角色，已改載入雲端版本。');
       return false;
     }
     if (r && r.status === 409 && r.data && r.data.error === 'stale_save') {
-      cloudPullSlotIntoStorage(slot);
+      cloudPullSlotIntoStorage(slot, { adoptCloud: true });
       return false;
     }
     return !!(r && r.ok);
+  }
+
+  // 伺服器拒收（409）＝雲端為準：直接改用雲端版本，絕不再回推（本機／伺服器比較規則不同，回推會無限 GET↔PUT 卡死）
+  function _adoptCloudSlotAsync(slot) {
+    if (!cloudCanSync()) return;
+    fetch(_base() + '/slot/' + slot, { cache: 'no-store' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (j) {
+        var cloudData = j && j.ok && j.data && j.data.p ? j.data : null;
+        if (!cloudData) return;
+        if (isCloudDeletedSeed(_seedOf(cloudData))) { _removeSlotLocal(slot); return; }
+        _writeSlotLocal(slot, cloudData);
+        try {
+          var load = document.getElementById('load-select-panel');
+          if (load && !load.classList.contains('hidden') && typeof renderLoadSelect === 'function') renderLoadSelect(true);
+        } catch (eR) {}
+      })
+      .catch(function () {});
   }
 
   /**
@@ -356,6 +374,11 @@
     var cloudData = r && r.ok && r.data && r.data.ok && r.data.data && r.data.data.p ? r.data.data : null;
     if (r && r.status === 404) cloudData = null;
     if (!cloudData && !(r && r.ok) && r && r.status !== 404) return false;
+    if (opts.adoptCloud) {
+      if (!cloudData) return false;
+      if (isCloudDeletedSeed(_seedOf(cloudData))) { _removeSlotLocal(slot); return false; }
+      return _writeSlotLocal(slot, cloudData);
+    }
 
     var localData = _readSlotLocal(slot);
     if (localData && _isForeignAccountSave(localData)) {
