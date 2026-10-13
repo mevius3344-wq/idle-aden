@@ -694,6 +694,12 @@ section("60) 排行榜（照新創：職業分頁＋血盟、自己固定在最�
   ok("排行榜樣式（.lr-row／.lr-foot）", /\.lr-row \{/.test(rd("css/lin-menus.css")) && /\.lr-foot \{/.test(rd("css/lin-menus.css")));
 }
 
+section("61) 存檔成功不顯示訊息（失敗仍提示）");
+{
+  const sv = rd("js/13-shop-save.js");
+  ok("saveGame 成功不再 logSys「遊戲進度已儲存」", !/遊戲進度已儲存/.test(sv) && /遊戲進度儲存失敗，本次進度未寫入/.test(sv));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

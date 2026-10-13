@@ -2363,7 +2363,6 @@ function saveGame() {
     if(typeof petRosterSave === 'function' && !petRosterSave()) throw new Error('pet roster write failed');
     try { if (typeof desktopMirrorAfterSave === 'function') desktopMirrorAfterSave(currentSlot); } catch (_deskE) {}
     try { if (typeof cloudMirrorAfterSave === 'function') cloudMirrorAfterSave(currentSlot); } catch (_cloudE) {}
-    logSys(`遊戲進度已儲存。`);
     _saveFailureNotified = false;
     return true;
     } catch(e) {
