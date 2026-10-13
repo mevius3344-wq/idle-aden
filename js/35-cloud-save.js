@@ -994,6 +994,7 @@
       return fetch(_base() + '/bundle', { cache: 'no-store' })
         .then(function (res) {
           return res.json().then(function (data) {
+            if (window.__phase) window.__phase('bundle');
             for (var i = 1; i <= 8; i++) {
               var loc = _readSlotLocal(i);
               if (loc && loc.p && _isForeignAccountSave(loc)) _removeSlotLocal(i);
@@ -1003,6 +1004,7 @@
               try { purgeClosedClassCloudSlots(data); } catch (ePurge) {}
               _stripClosedSlotsFromBundle(data);
               cloudApplyBundle(data);
+              if (window.__phase) window.__phase('applied');
               try {
                 // 🪦 把本機刪角墓碑推上雲端，讓其他裝置登入時也能擋回寫
                 var tombs = _pruneDeletedSeeds(_readDeletedSeeds());
@@ -1034,6 +1036,7 @@
                 }
               }
               try { if (typeof invalidateSlotSummary === 'function') invalidateSlotSummary(null); } catch (eInv) {}
+              if (window.__phase) window.__phase('slots');
               return true;
             }
             try {

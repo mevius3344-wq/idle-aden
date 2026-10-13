@@ -544,6 +544,7 @@
       whenGameReady(resolve);
     })
       .then(function () {
+        if (window.__phase) window.__phase("scriptsReady");
         return ensureLocalAccountsOnServer();
       })
       .catch(function () {

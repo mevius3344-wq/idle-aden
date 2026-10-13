@@ -1211,6 +1211,7 @@ function loadFirstFrame(key){
     return range[0];
 }
 function openLoadSelect(){
+    if (window.__phase) window.__phase('openLoadSelect');
     const main = document.getElementById('main-menu');
     const create = document.getElementById('creation-panel');
     const load = document.getElementById('load-select-panel');
@@ -1975,6 +1976,7 @@ function updateCreateUI() {
 }
 
 function startGame() {
+    if (window.__phase) window.__phase('startGame');
     if(!curCreate.cls || !curCreate.rawCls) return;
     if (isCreationClsClosed(curCreate.cls)) {
         alert(CREATION_CLOSED_MESSAGE);
@@ -2431,6 +2433,7 @@ function purgeOrphanItems(warehouse) {
 }
 
 function loadGame() {
+    if (window.__phase) window.__phase('loadGame');
     _uiConfigReady = false;   // 🛡️ 審計#1：載入期間 DOM 仍是上一個畫面/預設值，禁止 saveGame 以它重建 config
     let _masteryRepair = null;
     // 🐾 v3.3.16 換角色前：先把上一角色未存的寵物進度 flush 進共用桶，再失效記憶體快取→新角色 petRoster() 從桶重載（防跨角色髒鏡像互洗裝備/出戰）。
