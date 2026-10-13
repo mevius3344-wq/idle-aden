@@ -2041,6 +2041,9 @@
             height: 44px;
             background: radial-gradient(ellipse at center, rgba(22, 44, 10, 0.6) 0%, rgba(36, 62, 18, 0.26) 52%, transparent 76%);
         }
+        /* 原版地圖：走路不冒腳下大陰影圈／草屑，只留人物圖自帶的原版影子 */
+        #battle-view.is-linmap > #explore-foot-patch,
+        #battle-view.is-linmap .explore-grass-puff { display: none !important; }
         .explore-grass-puff {
             position: absolute;
             left: 50%;
