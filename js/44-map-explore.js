@@ -3002,12 +3002,12 @@
     }
 
     /**
-     * 原版地圖畫面放大（短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 LIN_ZOOM_MAX 倍；v3.10.1 依使用者要求拉遠）。
+     * 原版地圖畫面放大（短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 LIN_ZOOM_MAX 倍；v3.10.1／v3.10.8 依使用者要求拉遠，手機＝原版 1:1）。
      * 整個 #battle-view 以腳底錨點用 scale 屬性放大：各層不可各自 transform（會拆開人／怪／NPC 前後遮擋、武器 screen 混色變黑框）；
      * 用 scale 不用 transform，免得蓋掉 vfx-shake 動畫；HUD 在 #game-screen 不受影響，#game-screen 負責裁切。
      */
-    var LIN_VIEW_SPAN = 340;
-    var LIN_ZOOM_MAX = 1.6;
+    var LIN_VIEW_SPAN = 440;
+    var LIN_ZOOM_MAX = 1.3;
     var _linZoom = 1;
     function exploreLinZoom() { return _linZoom; }
     function exploreLinZoomPivot(bv) {

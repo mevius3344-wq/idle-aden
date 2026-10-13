@@ -610,6 +610,9 @@
         .party-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         .party-sprite .pm-shadow { mix-blend-mode: multiply; }
+        /* 原版地圖：人物影子半透明（原版影子是淡黑，不是實心黑） */
+        #battle-view.is-linmap #player-morph-sprite .pm-shadow,
+        #battle-view.is-linmap .party-sprite .pm-shadow { opacity: .45; }
         #player-morph-sprite .pm-weapon { mix-blend-mode: screen; }
         #player-morph-sprite .pm-castle-crown {
             position: absolute; z-index: 6; width: 16px; height: 12px; object-fit: contain;

@@ -73,7 +73,7 @@ async function main() {
     ok('木頭人站在指定格子', a.pos === '600,1080 504,1080 408,1080', a.pos);
     ok('木頭人有畫出來', a.cards >= 3, 'cards ' + a.cards);
     ok('地圖選單沒有新兵修練場', !a.trainingOpt && !a.regionTraining);
-    ok('原版地圖畫面拉遠（1280×720 → 1.6 倍）', a.zoom === 1.6, 'zoom ' + a.zoom);
+    ok('原版地圖畫面拉遠（1280×720 → 1.3 倍）', a.zoom === 1.3, 'zoom ' + a.zoom);
     await shot('_giran_dummy.jpg');
 
     // AUTO 開著也不會自己去打木頭人（回村買東西不被拖走）
