@@ -646,6 +646,7 @@ section("48) 主畫面捷徑舊頁面自動更新");
   }
   ok("玩家端錯誤／開始遊戲狀態回報（/api/client-log → GM /api/gm/client-log）", /window\.__clientLog = function/.test(F.html) && /log\(after\.load === "on" \? "start_ok" : "start_stuck"/.test(rd("js/auth-login.js")) && /if \(u === "\/api\/client-log"\)/.test(rd("_serve.js")) && /u === "\/api\/gm\/client-log"/.test(rd("lib/rt-gm-file.js")) && /'tap_trail'/.test(F.html) && /'freeze'/.test(F.html) && /window\.__clientAlive = function/.test(F.html) && /log\("start_tap"/.test(rd("js/auth-login.js")));
   ok("主執行緒卡死由 Worker 看門狗代報 hard_freeze（附最後步驟）", /kind:"hard_freeze"/.test(F.html) && /new Worker\(URL\.createObjectURL/.test(F.html) && /window\.__phase = function/.test(F.html) && /'tap_any'/.test(F.html) && /window\.__phase\('applied'\)/.test(rd("js/35-cloud-save.js")) && /window\.__phase\('openLoadSelect'\)/.test(rd("js/13-shop-save.js")));
+  ok("卡死回報附正在跑的計時器／動畫幀（task）＋長畫面幀歸因（loaf）", /task:info\.task/.test(F.html) && /wd\.postMessage\(\{ task: curTask/.test(F.html) && /type: 'long-animation-frame'/.test(F.html) && /window\.__clientLog\('loaf'/.test(F.html));
   ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
 }
 
