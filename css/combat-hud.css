@@ -1376,6 +1376,8 @@
   color: #fde68a;
   margin-left: 2px;
 }
+/* 左下 擊殺／EXP/分／金/分 一排不顯示（使用者要求，數據看掛機報告） */
+#game-screen .chud-dps { display: none !important; }
 
 .chud-auto,
 .chud-pvp,

@@ -80,6 +80,9 @@ async function main() {
     const st = await probe();
     ok('原版影子層仍在（.pm-shadow）', st.lin && st.shadow, JSON.stringify(st));
 
+    const dps = await ev(`(()=>{const e=document.getElementById('chud-dps');return e?getComputedStyle(e).display+'/'+e.getClientRects().length:'none';})()`);
+    ok('左下 擊殺／EXP/分 一排不顯示', dps === 'none' || /^none\//.test(dps), dps);
+
     ok('無 JS 例外', exc.length === 0, exc.slice(0, 3).join(' | '));
     try { ws.close(); } catch (e2) {} try { br.kill(); } catch (e3) {}
     console.log(fails ? '\nFAIL ' + fails : '\nPASS');
