@@ -54,6 +54,9 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
         let slot=1; for(let s=1;s<=8;s++){ try{ if(!slotSummary(s)){slot=s;break;} }catch(e){} }
         currentSlot=slot; curCreate.rawCls='m_knight'; curCreate.cls='knight';
         document.getElementById('create-name-input').value='樂園'+Date.now()%100000;
+        window.__oldHudFrames=0;(function f(){const g=document.getElementById('game-screen');
+            if(g&&!g.classList.contains('hidden')&&!g.classList.contains('lr-hud')&&getComputedStyle(g).opacity!=='0')window.__oldHudFrames++;
+            if(!g||!g.classList.contains('lr-hud'))requestAnimationFrame(f);})();
         startGame(); await new Promise(r=>setTimeout(r,3000));
         try{ setPowerSaveOn(false); }catch(e){}
     })()`);
@@ -66,6 +69,8 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
         home:vis('#lr-home'),mm:vis('#lr-minimap'),mapbox:vis('#lr-mapbox'),auto:vis('#chud-auto'),mail:vis('#lr-mail'),pvp:vis('#chud-pvp'),chat:vis('#combat-log-panel'),input:vis('#world-input'),tabs:document.querySelectorAll('.lr-chat-tabs [data-lr]').length,
         coord:document.getElementById('lr-map-coord').textContent,target:vis('#chud-target')};})()`);
     ok(base && base.lr, 'game-screen 有 lr-hud');
+    const oldHud = await ev('window.__oldHudFrames');
+    ok(oldHud === 0, '進遊戲不閃舊直式 HUD（套上 lr-hud 前畫面不顯示，閃了 ' + oldHud + ' 幀）');
     ok(base && !base.joy && !base.fabLog, '搖桿／日誌浮鈕已隱藏');
     ok(base && base.menu && base.exp, '下方選單列＋整條經驗條');
     ok(base && base.quick === 5 && base.home, '5 格快捷＋回村鈕');

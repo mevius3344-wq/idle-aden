@@ -22,6 +22,11 @@
 #game-screen.combat-hud.lr-hud.lr-chat-big {
   --lr-chat-h: min(44dvh, 360px);
 }
+/* 進遊戲到套上樂園風之間（HUD 啟動排在 setTimeout，載入中可達 0.7 秒）不露出舊直式版面／搖桿 */
+#game-screen:not(.lr-hud) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 
 /* ---------- 搖桿／舊浮鈕／選單鈕 移除（點地面移動） ---------- */
 #game-screen.combat-hud.lr-hud .chud-joystick,

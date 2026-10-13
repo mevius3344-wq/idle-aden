@@ -409,4 +409,16 @@
     window.lrHudActive = function () { var s = gs(); return !!(s && s.classList.contains('lr-hud')); };
     window.lrHudQuickUse = quickUse;
     setInterval(tick, 500);
+    // 進遊戲第一幀就要是樂園風（等 500ms 計時器＝先閃舊直式 HUD／搖桿）；observer 在畫面重繪前執行
+    function watchScreen() {
+        var s = gs();
+        if (!s || typeof MutationObserver !== 'function') return false;
+        new MutationObserver(function () {
+            if (!s.classList.contains('lr-hud') && s.classList.contains('combat-hud') && !s.classList.contains('hidden')) {
+                try { tick(); } catch (eT) {}
+            }
+        }).observe(s, { attributes: true, attributeFilter: ['class'] });
+        return true;
+    }
+    if (!watchScreen()) document.addEventListener('DOMContentLoaded', watchScreen);
 })();
