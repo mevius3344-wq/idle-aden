@@ -111,9 +111,32 @@
         if (w && !w.classList.contains('hidden')) afkRender();
     }, 1000);
 
+    // 掛機報告＝唯一的統計畫面（舊「統計」分頁併進來）：報告／本圖掉落 兩頁
+    var _afkView = 'report';
+    function _afkDropsHtml() {
+        var rows = typeof auditMapDropRows === 'function' ? auditMapDropRows() : [];
+        if (!rows.length) return '<div class="trade-empty">目前地圖沒有怪物掉落資料</div>';
+        return rows.map(function (r) {
+            var names = r.drops.map(function (id) { return _esc((DB.items[id] || {}).n || id); }).join('、');
+            return '<div class="lin-row afk-drop-row"><span class="afk-drop-mob">' + (r.mob.boss ? '頭目 ' : '') + _esc(r.mob.n) +
+                ' <small>Lv.' + _num(r.mob.lv) + '</small></span><span class="afk-drop-items">' + (names || '（無掉落物）') + '</span></div>';
+        }).join('');
+    }
     function afkRender() {
         var w = document.getElementById('afk-win');
         if (!w || w.classList.contains('hidden') || !_afk) return;
+        w.querySelectorAll('[data-view]').forEach(function (b) { b.classList.toggle('is-on', b.getAttribute('data-view') === _afkView); });
+        var resetBtn = w.querySelector('[data-act="reset"]');
+        if (resetBtn) resetBtn.style.visibility = _afkView === 'report' ? '' : 'hidden';
+        var body = w.querySelector('.afk-body');
+        if (_afkView === 'drops') {
+            if (body.getAttribute('data-map') === String(mapState.current)) return;
+            body.setAttribute('data-map', String(mapState.current));
+            body.innerHTML = '<div class="trade-bag-title">' + _esc(_mapName(mapState.current)) + '：出沒怪物與掉落（不含機率）</div>' +
+                '<div class="lin-list">' + _afkDropsHtml() + '</div>';
+            return;
+        }
+        body.removeAttribute('data-map');
         var a = _afk;
         var gold = ((typeof player !== 'undefined' && player) ? (player.gold || 0) : 0) - a.gold0;
         var hrs = Math.max(1 / 60, a.huntMs / 3600000);
@@ -122,22 +145,19 @@
             var d = DB.items[id] || {};
             return '<div class="lin-row"><span>' + _esc(d.n || id) + '</span><b>× ' + _num(a.items[id]) + '</b></div>';
         }).join('') : '<div class="trade-empty">尚未取得物品</div>';
-        w.querySelector('.afk-body').innerHTML =
+        body.innerHTML =
             '<div class="lin-stat-grid">' +
             '<div><span>掛機時間</span><b>' + _dur(a.huntMs) + '</b></div>' +
-            '<div><span>經過時間</span><b>' + _dur(Date.now() - a.start) + '</b></div>' +
-            '<div><span>擊殺</span><b>' + _num(a.kills) + '</b></div>' +
-            '<div><span>死亡</span><b>' + _num(a.deaths) + '</b></div>' +
-            '<div><span>經驗</span><b>' + _num(a.exp) + '</b></div>' +
-            '<div><span>經驗 / 小時</span><b>' + _num(a.exp / hrs) + '</b></div>' +
-            '<div><span>金幣淨增</span><b>' + _num(gold) + '</b></div>' +
-            '<div><span>金幣 / 小時</span><b>' + _num(gold / hrs) + '</b></div>' +
+            '<div><span>擊殺／死亡</span><b>' + _num(a.kills) + '／' + _num(a.deaths) + '</b></div>' +
+            '<div><span>經驗（每小時）</span><b>' + _num(a.exp) + '<small>（' + _num(a.exp / hrs) + '）</small></b></div>' +
+            '<div><span>金幣淨增（每小時）</span><b>' + _num(gold) + '<small>（' + _num(gold / hrs) + '）</small></b></div>' +
             '</div>' +
             '<div class="trade-bag-title">取得物品（' + ids.length + ' 種）</div>' +
             '<div class="lin-list">' + itemsHtml + '</div>';
     }
-    function afkReportOpen() {
+    function afkReportOpen(view) {
         _afkEnsure();
+        _afkView = view === 'drops' ? 'drops' : 'report';
         var w = document.getElementById('afk-win');
         if (!w) {
             w = document.createElement('div');
@@ -145,18 +165,25 @@
             w.className = 'trade-win';
             w.innerHTML = '<div class="trade-box">' +
                 '<div class="trade-head">掛機報告</div>' +
+                '<div class="afk-tabs">' +
+                '<button type="button" data-view="report">報告</button>' +
+                '<button type="button" data-view="drops">本圖掉落</button>' +
+                '</div>' +
                 '<div class="afk-body"></div>' +
                 '<div class="trade-actions">' +
                 '<button type="button" class="trade-btn" data-act="reset">重新計算</button>' +
                 '<button type="button" class="trade-btn trade-btn-main" data-act="close">關閉</button>' +
                 '</div></div>';
             w.addEventListener('click', function (ev) {
-                var b = ev.target.closest('[data-act]');
+                var b = ev.target.closest('[data-act],[data-view]');
                 if (ev.target === w || (b && b.getAttribute('data-act') === 'close')) { w.classList.add('hidden'); return; }
-                if (b && b.getAttribute('data-act') === 'reset') afkReset();
+                if (!b) return;
+                if (b.getAttribute('data-act') === 'reset') afkReset();
+                else if (b.hasAttribute('data-view')) { _afkView = b.getAttribute('data-view'); afkRender(); }
             });
             document.body.appendChild(w);
         }
+        w.querySelector('.afk-body').removeAttribute('data-map');
         w.classList.remove('hidden');
         afkRender();
     }

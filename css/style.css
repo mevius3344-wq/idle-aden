@@ -2752,6 +2752,17 @@
         }
         .lin-stat-grid span { font-size: 11px; color: #a89a7c; }
         .lin-stat-grid b { font-size: 15px; color: #fde68a; }
+        .lin-stat-grid b small { font-size: 11px; font-weight: 400; color: #c9b891; }
+        .afk-tabs { display: flex; gap: 6px; }
+        .afk-tabs button {
+            flex: 1; padding: 4px 0; border-radius: 3px; font: 700 13px 'Noto Serif TC', 'PMingLiU', serif; cursor: pointer;
+            color: #c9b891; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(232, 198, 117, 0.3);
+        }
+        .afk-tabs button.is-on { color: #1a1206; background: linear-gradient(180deg, #f3d98e, #c49a45); border-color: #e8c675; }
+        .afk-drop-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+        .afk-drop-mob { color: #e8c675; font-weight: 700; }
+        .afk-drop-mob small { font-weight: 400; color: #a89a7c; }
+        .afk-drop-items { font-size: 12px; color: #d6c8a8; line-height: 1.5; }
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
         /* ⚔️ v2.7.22 武器揮動特效層：與影子同定位(絕對·底部置中·native)但疊在本體「前」(DOM 順序在本體 img 之後)＋screen 加亮(金色刀光弧發光) */

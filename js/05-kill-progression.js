@@ -204,23 +204,33 @@ function _auditMobDrops(mobName) {
     if (typeof MEM_DROPS !== 'undefined') push(MEM_DROPS);   // 🔮 記憶水晶掉落表（全職可掉）
     return ids;
 }
-function renderAuditDrops(el) {
+// 目前地圖出沒的怪物（等級低→高）＋各自掉落物 ID；統計分頁與掛機報告共用
+function auditMapDropRows() {
     let pool = (typeof DB !== 'undefined' && DB.maps && typeof mapState !== 'undefined') ? (DB.maps[mapState.current] || null) : null;
+    if (!pool || !pool.length) return [];
+    // 🔧 依怪物等級由低到高排序（同級維持原出現順序）
+    let sorted = pool.slice().sort((a, b) => ((DB.mobs[a] && DB.mobs[a].lv) || 0) - ((DB.mobs[b] && DB.mobs[b].lv) || 0));
+    let rows = [];
+    sorted.forEach(mid => {
+        let mob = DB.mobs[mid]; if (!mob) return;
+        let drops = _auditMobDrops(mob.n);
+        // 🦊 v3.5.4 變身鏈頭目（玉藻→九尾→殺生石）：後續階不在出怪池無自己的列→掉落物併入鏈根（玉藻）顯示（實際掉落也確實由打倒最終階獲得）
+        let _seen = { [mid]: 1 }, _t = mob.transformTo;
+        while (_t && DB.mobs[_t] && !_seen[_t]) { _seen[_t] = 1; _auditMobDrops(DB.mobs[_t].n).forEach(id => { if (drops.indexOf(id) === -1) drops.push(id); }); _t = DB.mobs[_t].transformTo; }
+        if ((mob.lv || 0) >= (typeof LV30_SCROLL_DROP_MIN === 'number' ? LV30_SCROLL_DROP_MIN : 30) && mob.race !== '血盟' && typeof LV30_SCROLL_DROPS !== 'undefined') {
+            LV30_SCROLL_DROPS.forEach(entry => { let id = entry[0]; if (id && DB.items[id] && drops.indexOf(id) === -1) drops.push(id); });
+        }
+        rows.push({ mob, drops });
+    });
+    return rows;
+}
+function renderAuditDrops(el) {
+    let rows = auditMapDropRows();
     let body;
-    if (!pool || !pool.length) {
+    if (!rows.length) {
         body = '<div class="text-slate-500 text-sm">目前地圖沒有怪物掉落資料。</div>';
     } else {
-        // 🔧 依怪物等級由低到高排序（同級維持原出現順序）
-        let sorted = pool.slice().sort((a, b) => ((DB.mobs[a] && DB.mobs[a].lv) || 0) - ((DB.mobs[b] && DB.mobs[b].lv) || 0));
-        body = sorted.map(mid => {
-            let mob = DB.mobs[mid]; if (!mob) return '';
-            let drops = _auditMobDrops(mob.n);
-            // 🦊 v3.5.4 變身鏈頭目（玉藻→九尾→殺生石）：後續階不在出怪池無自己的列→掉落物併入鏈根（玉藻）顯示（實際掉落也確實由打倒最終階獲得）
-            let _seen = { [mid]: 1 }, _t = mob.transformTo;
-            while (_t && DB.mobs[_t] && !_seen[_t]) { _seen[_t] = 1; _auditMobDrops(DB.mobs[_t].n).forEach(id => { if (drops.indexOf(id) === -1) drops.push(id); }); _t = DB.mobs[_t].transformTo; }
-            if ((mob.lv || 0) >= (typeof LV30_SCROLL_DROP_MIN === 'number' ? LV30_SCROLL_DROP_MIN : 30) && mob.race !== '血盟' && typeof LV30_SCROLL_DROPS !== 'undefined') {
-                LV30_SCROLL_DROPS.forEach(entry => { let id = entry[0]; if (id && DB.items[id] && drops.indexOf(id) === -1) drops.push(id); });
-            }
+        body = rows.map(({ mob, drops }) => {
             let dropHtml = drops.length
                 ? drops.map(id => `<span class="${getItemColor({ id })}">${DB.items[id].n}</span>`).join('、')
                 : '<span class="text-slate-500">（無掉落物）</span>';

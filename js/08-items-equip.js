@@ -635,6 +635,7 @@ function useFnItem(fn) {
         let tb = document.querySelector('#col-right .tab-bar-buttons [data-tab="automation"]');
         if (typeof switchTab === 'function') switchTab('automation', tb || null);
     } else if (fn === 'drop') {
+        if (typeof afkReportOpen === 'function') { afkReportOpen('drops'); return; }
         try { _auditView = 'drops'; } catch (e) {}
         let tb = document.querySelector('#col-right .tab-bar-buttons [data-tab="audit"]');
         if (typeof switchTab === 'function') switchTab('audit', tb || null);

@@ -771,6 +771,7 @@ section("40) 掛機巡邏範圍／沒怪瞬移／書籤／掛機報告");
   ok("書籤傳送消耗瞬移卷軸、檢查進入條件", /consume\(item\)/.test(ab) && /mapOptDisabled\(def\)/.test(ab) && /window\.exploreTeleportTo = function/.test(ex));
   ok("掛機報告只算打怪掉落（killMob／commitWorldLootDrop 期間）", /\['killMob', 'commitWorldLootDrop'\]/.test(ab) && /if \(!_lootDepth\) return;/.test(ab));
   ok("選單有 掛機報告／書籤", /action: 'afkreport'/.test(tabs) && /action: 'bookmark'/.test(tabs) && /js\/54-afk-bookmark\.js/.test(F.html));
+  ok("統計併入掛機報告（選單無統計、舊入口與掉落查詢開同一視窗、本圖掉落頁）", !/label: '統計'/.test(tabs) && /if \(t === 'audit' && typeof afkReportOpen === 'function'\) \{ afkReportOpen\(\); return; \}/.test(tabs) && /afkReportOpen\('drops'\)/.test(rd("js/08-items-equip.js")) && /data-view="drops">本圖掉落/.test(ab) && /function auditMapDropRows\(\)/.test(rd("js/05-kill-progression.js")) && /afkReportState\(\)/.test(rd("js/46-combat-hud.js")));
 }
 
 section("41) 世界王回原地圖（全服共用、傷害第一拿掉落、經驗依比例）");

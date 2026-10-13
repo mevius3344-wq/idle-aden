@@ -102,8 +102,10 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
         out.settingsTab=(()=>{const w=document.getElementById('lm-win-assist');return w&&!w.classList.contains('hidden')?'assist':null;})();
         try{ linMenuClose(); }catch(e){}
         use('fn_drop'); await new Promise(r=>setTimeout(r,400));
-        out.dropTab=document.querySelector('#col-right .tab-bar-buttons .active')&&document.querySelector('#col-right .tab-bar-buttons .active').getAttribute('data-tab');
-        out.auditView=_auditView;
+        const aw=document.getElementById('afk-win');
+        out.dropOpen=!!(aw&&!aw.classList.contains('hidden'));
+        out.dropView=aw&&aw.querySelector('[data-view].is-on')&&aw.querySelector('[data-view].is-on').getAttribute('data-view');
+        if(aw) aw.classList.add('hidden');
         out.fnStill=['fn_home','fn_tele','fn_settings','fn_drop'].every(id=>player.inv.some(i=>i.id===id));
         // 自動加速優先綁定版
         const h0=invCountPref('potion_haste'), hv0=player.inv.filter(i=>i.id==='ivt_potion_haste').reduce((a,i)=>a+i.cnt,0);
@@ -123,7 +125,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
     ok(f.prefTp2 === 'ivt_scroll_teleport' && f.cntTp === 503, '同時有一般卷軸仍先用綁定版、計數合併 (' + f.cntTp + ')');
     ok(f.teleOpen, '傳送 開啟傳送選單');
     ok(f.settingsTab === 'assist', '設定 開輔助設定視窗 (' + f.settingsTab + ')');
-    ok(f.dropTab === 'audit' && f.auditView === 'drops', '掉落查詢 開本圖掉落物');
+    ok(f.dropOpen && f.dropView === 'drops', '掉落查詢 開掛機報告的本圖掉落頁');
     ok(f.fnStill, '功能道具使用後不消失');
     ok(f.hasteBuff > 0 && f.ivtHasteUsed === 1, '自動加速用掉 1 瓶象牙塔加速藥水 (' + f.ivtHasteUsed + ')');
     await shot('kit_mage.jpg');

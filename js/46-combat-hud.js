@@ -669,10 +669,12 @@
             var e = document.getElementById('chud-expm');
             var g = document.getElementById('chud-goldm');
             if (!k) return;
-            var a = (typeof auditStats === 'function') ? auditStats() : null;
+            var r = (typeof afkReportState === 'function') ? afkReportState() : null;
+            var a = r || ((typeof auditStats === 'function') ? auditStats() : null);
             k.textContent = String((a && a.kills) || 0);
             if (!a) return;
-            var mins = Math.max(1 / 60, (Date.now() - (a.start || Date.now())) / 60000);
+            var mins = r ? Math.max(1, (r.huntMs || 0) / 60000)
+                : Math.max(1 / 60, (Date.now() - (a.start || Date.now())) / 60000);
             if (e) e.textContent = String(Math.max(0, Math.floor((a.exp || 0) / mins)));
             if (g) {
                 var goldGain = (typeof player !== 'undefined' && player)

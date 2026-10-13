@@ -147,6 +147,15 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     const afkItems = await ev('JSON.stringify(Object.keys(afkReportState().items))');
     ok(afkItems && afkItems.indexOf('scroll_teleport') < 0, '掛機報告只算掉落，不算買的卷軸 ' + afkItems);
     await shot('afkbm_report.png');
+    // 統計已併入掛機報告：能力選單沒有「統計」、舊統計入口開同一個視窗、本圖掉落在第二頁
+    const subs = await ev(`(()=>MOBILE_TAB_GROUPS.ability.map(x=>x.label).join(','))()`);
+    ok(!/統計/.test(subs) && /掛機報告/.test(subs), '能力選單只剩掛機報告（無統計）' + asc(subs));
+    const merged = JSON.parse(await ev(`(()=>{const w=document.getElementById('afk-win');w.classList.add('hidden');switchTab('audit');const open=!w.classList.contains('hidden');w.querySelector('[data-view="drops"]').click();const rows=w.querySelectorAll('.afk-drop-row').length;const on=w.querySelector('[data-view].is-on').getAttribute('data-view');return JSON.stringify({open,rows,on})})()`));
+    ok(merged.open && merged.on === 'drops' && merged.rows > 0, '舊統計入口開掛機報告＋本圖掉落頁 ' + JSON.stringify(merged));
+    await shot('afkbm_drops.png');
+    await ev(`(()=>{document.querySelector('#afk-win [data-view="report"]').click();return 1})()`);
+    const backRep = await ev(`(()=>{const w=document.getElementById('afk-win');return !!w.querySelector('.lin-stat-grid')&&!w.querySelector('.afk-drop-row')})()`);
+    ok(backRep, '切回報告頁');
     await ev(`(()=>{document.getElementById('afk-win').classList.add('hidden');switchMobileTabGroup('settings');activateMobileTabSub('bookmark');return 1})()`);
     await sleep(600);
     const bmw = await ev(`(()=>{const w=document.getElementById('bm-win');return w&&!w.classList.contains('hidden')?w.querySelectorAll('[data-go]').length:-1})()`);
