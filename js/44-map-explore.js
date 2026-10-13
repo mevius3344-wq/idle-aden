@@ -3007,28 +3007,42 @@
     }
 
     /**
-     * 原版地圖畫面放大（短邊約顯示 LIN_VIEW_SPAN 世界像素，上限 LIN_ZOOM_MAX 倍；v3.10.1／v3.10.8 依使用者要求拉遠，手機＝原版 1:1）。
-     * 整個 #battle-view 以腳底錨點用 scale 屬性放大：各層不可各自 transform（會拆開人／怪／NPC 前後遮擋、武器 screen 混色變黑框）；
+     * 原版地圖畫面縮放（短邊約顯示 LIN_VIEW_SPAN＝原版 640×480 的 480 世界像素，LIN_ZOOM_MIN～LIN_ZOOM_MAX 倍；v3.10.15 依使用者要求再拉遠：手機約 0.86、電腦 1.1）。
+     * 放大時整個 #battle-view 以腳底錨點用 scale 屬性；拉遠（<1）用 zoom（瀏覽器不支援標準 zoom 時退回 1:1）。各層不可各自 transform（會拆開人／怪／NPC 前後遮擋、武器 screen 混色變黑框）；
      * 用 scale 不用 transform，免得蓋掉 vfx-shake 動畫；HUD 在 #game-screen 不受影響，#game-screen 負責裁切。
      */
-    var LIN_VIEW_SPAN = 440;
-    var LIN_ZOOM_MAX = 1.3;
+    var LIN_VIEW_SPAN = 480;
+    var LIN_ZOOM_MAX = 1.1;
+    var LIN_ZOOM_MIN = 0.8;
     var _linZoom = 1;
+    var _linZoomOutOk = true;
     function exploreLinZoom() { return _linZoom; }
     function exploreLinZoomPivot(bv) {
         return { x: (bv.clientWidth || 0) / 2, y: (bv.clientHeight || 0) - (exploreGroundYLive() - FOOT_CONTACT_SINK) };
     }
     function exploreApplyLinZoom(bv, on) {
-        var w = bv.clientWidth || 0, h = bv.clientHeight || 0;
+        var k = _linZoom < 1 ? _linZoom : 1;
+        var w = (bv.clientWidth || 0) * k, h = (bv.clientHeight || 0) * k;
         var z = 1;
-        if (on && w > 40 && h > 40) z = Math.max(1, Math.min(LIN_ZOOM_MAX, Math.min(w, h) / LIN_VIEW_SPAN));
+        if (on && w > 40 && h > 40) z = Math.max(_linZoomOutOk ? LIN_ZOOM_MIN : 1, Math.min(LIN_ZOOM_MAX, Math.min(w, h) / LIN_VIEW_SPAN));
         z = Math.round(z * 100) / 100;
         if (z !== _linZoom) {
             _linZoom = z;
             bv.style.setProperty('--lin-zoom', String(z));
-            bv.classList.toggle('is-lin-zoom', z > 1);
+            bv.classList.toggle('is-lin-zoom', z !== 1);
             if (z > 1) bv.style.setProperty('scale', String(z));
             else { bv.style.removeProperty('scale'); bv.style.removeProperty('transform-origin'); }
+            // 拉遠（<1）用 zoom：版面格子不變、內部變大 1/z（scale<1 會把整塊縮小、四周露空）
+            if (z < 1) {
+                bv.style.zoom = String(z);
+                if (Math.abs(bv.getBoundingClientRect().width - bv.clientWidth * z) > 4) {
+                    _linZoomOutOk = false;
+                    bv.style.zoom = '';
+                    _linZoom = 1;
+                    bv.style.setProperty('--lin-zoom', '1');
+                    bv.classList.remove('is-lin-zoom');
+                }
+            } else bv.style.zoom = '';
         }
         if (z > 1) {
             var p = exploreLinZoomPivot(bv);
