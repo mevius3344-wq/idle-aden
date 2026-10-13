@@ -707,6 +707,12 @@ section("62) GM 刪除帳號＋線上實測不留測試帳號");
   ok("實測註冊的線上帳號結束時自動刪除（_gm-cleanup autoCleanup）", exists("tools/_gm-cleanup.js") && /autoCleanup\(\)/.test(rd("tools/_audit-start-menu.js")) && /autoCleanup\(\)/.test(rd("tools/_audit-stale-loop.js")) && /if \(account && !isLocal\(origin\)\)/.test(rd("tools/_gm-cleanup.js")));
 }
 
+section("34b) 格步跟畫面幀同步（走路不飄跳）");
+{
+  const ex = rd("js/44-map-explore.js");
+  ok("走一步期間 RAF 每幀推進、走完當幀補跑 tick", /function exploreLinRafFrame\(\)/.test(ex) && /if \(!_linStep\) \{ try \{ exploreTick\(\); \} catch \(eT\) \{\} return; \}/.test(ex) && /if \(k >= 1\) _linStep = null;\s*else exploreLinRafKick\(\);/.test(ex));
+}
+
 section("64) 進屋收外殼（原版天堂）");
 {
   const lm = rd("js/49-linmap.js");

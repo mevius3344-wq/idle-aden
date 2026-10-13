@@ -1939,6 +1939,7 @@
         _tx = nx; _ty = ny;
         s.lx = nx; s.ly = ny;
         if (k >= 1) _linStep = null;
+        else exploreLinRafKick();
         if (moved > 0.01) {
             _walkPhase += moved * WALK_PHASE_DIST;
             if (s.cyc >= 1) exploreSetFaceNow(s.tx - s.fx, -(s.ty - s.fy));
@@ -2003,6 +2004,29 @@
         return exploreLinStepAdvance(name);
     }
     function exploreWalkCycle() { return exploreLinName() ? _walkCycle : null; }
+
+    /**
+     * 格步跟畫面更新同步：33ms 計時器抓幀邊界會晚 0～33ms，每幀 132～201ms 忽快忽慢＝走路飄跳。
+     * 走一步期間每個畫面幀都推進（時間制，不改速度），跳格當幀就畫；一步走完當幀補跑一次 tick 接下一步。
+     */
+    var _linRaf = 0;
+    function exploreLinRafKick() {
+        if (!_linRaf && typeof requestAnimationFrame === 'function') _linRaf = requestAnimationFrame(exploreLinRafFrame);
+    }
+    function exploreLinRafFrame() {
+        _linRaf = 0;
+        if (!_linStep) return;
+        var name = exploreLinName();
+        if (!name) return;
+        var bx = _tx, by = _ty;
+        exploreLinStepAdvance(name);
+        if (!_linStep) { try { exploreTick(); } catch (eT) {} return; }
+        if (_tx !== bx || _ty !== by) {
+            _cx = Math.max(-CAM_MAX_X, Math.min(CAM_MAX_X, _tx - exploreViewCenterBiasX()));
+            _cy = Math.max(-CAM_MAX_Y, Math.min(CAM_MAX_Y, _ty));
+            try { exploreApplyWorld(); exploreApplyFieldDomPos(); } catch (eW) {}
+        }
+    }
 
     function explorePlayerWalkStep(dirx, diry, goal) {
         var linW = exploreLinName();
