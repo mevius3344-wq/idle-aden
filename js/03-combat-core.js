@@ -821,6 +821,10 @@ function tick() {
     }
 
     // 🔧 slowAtk / cleave 的遞減已由上方 statuses 通用迴圈處理（先前此處第二次遞減導致持續時間減半：寒冰吐息 8 秒變 4 秒、切割 2 秒變 1 秒）
+    if (state._pLinHitAt && Date.now() >= state._pLinHitAt) {
+        if (canAct && !bindSelfBlocked(player)) playerAttackLinHit();
+        else { state._pLinHitAt = 0; state._pLinHitUid = null; }
+    }
     if(canAct) {
         let aspdTicks = playerAttackIntervalTicks(true);
         let attackProgress = Number(state.pDmgTick);
@@ -835,7 +839,7 @@ function tick() {
         if(state.pDmgTick >= aspdTicks) {
             // 🎮 AUTO OFF：只打玩家點過的目標（技能快捷列仍可手動施放）
             var _autoOn = !(state && state.autoHunt === false) || !!getTarget();
-            if (_autoOn && !bindSelfBlocked(player)) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
+            if (_autoOn && !bindSelfBlocked(player) && !playerAttackLinBegin()) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
             state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
             state._pStunCycle = false;   // ⚔️ 硬直：每次攻擊後重置「本週期已硬直」旗標（下週期被擊可再延遲一次）
         }

@@ -673,6 +673,17 @@ section("58) 房屋可進（l1j 邊界通行）＋NPC 不被屋頂蓋住");
   ok("gzip 快取鍵含修改時間（同大小改內容也重壓）", /size = size \+ ":" \+ fs\.statSync\(full\)\.mtimeMs/.test(rd("_serve.js")));
 }
 
+section("59) 原版地圖玩家普攻（原版節奏＋打中幀才扣血）");
+{
+  const fx = rd("js/09-vfx-render.js");
+  const atk = rd("js/04-combat-attack.js");
+  const core = rd("js/03-combat-core.js");
+  ok("index 載入 49-linpc-atk（list.spr 各幀 dur＋打中幀）", /js\/49-linpc-atk\.js/.test(F.html) && /var LIN_PC_ATK = \{/.test(rd("js/49-linpc-atk.js")) && exists("tools/lin/export-pc-atk.js") && /"男騎士\|sword1":\[\[3,6,5,1,4,3\],4\]/.test(rd("js/49-linpc-atk.js")));
+  ok("攻擊動作照原版各幀、整段＝攻擊間隔", /function _linPcAtkProfile\(form, n\)/.test(fx) && /function _pmAtkFrameAt\(form, elapsed, n\)/.test(fx) && (fx.match(/_pmAtkFrameAt\(form, Date\.now\(\) - /g) || []).length >= 1 && /_pmAtkFrameAt\(form, Date\.now\(\) - _pmState\.t, _nA\)/.test(fx));
+  ok("先揮後算：playerAttackLinBegin 播動作、打中幀 playerAttackLinHit 才結算", /function playerAttackLinBegin\(\)/.test(atk) && /state\._pLinHitAt = Date\.now\(\) \+ prof\.hit;/.test(atk) && /function playerAttackLinHit\(\)/.test(atk) && /!playerAttackLinBegin\(\)\) playerAttack\(\);/.test(core) && /playerAttackLinHit\(\);/.test(core));
+  ok("原版地圖普攻不被受擊打斷", /if \(k === 'hurt' && st\.act === 'attack' && curP === _PM_PRIO\.attack\) return;/.test(fx));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

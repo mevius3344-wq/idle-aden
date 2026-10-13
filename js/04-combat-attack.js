@@ -1,23 +1,54 @@
-function playerAttack() {
-    if (typeof fieldPvpTryAttack === 'function' && fieldPvpTryAttack()) return;
-    let target = getTarget();
-    if(!target) return;
-    // 🗺️ 場戰：鄰格才近戰（格子距離）
+// 🗺️ 場戰：鄰格才近戰（格子距離）；非場戰一律可打
+function playerAttackInRange(target) {
     if (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()) {
-        if (typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(target)) return;
+        if (typeof exploreMobInEngageRange === 'function' && !exploreMobInEngageRange(target)) return false;
         // 🩹 v3.8.404：世界腳距須 ≤ 交戰格；踏格途中不揮
         try {
             if (target._fx != null && typeof explorePlayerX === 'function') {
                 let _pd = Math.hypot(target._fx - explorePlayerX(), (target._fy || 0) - (typeof explorePlayerY === 'function' ? explorePlayerY() : 0));
                 let _stop = (typeof exploreEngageLimit === 'function') ? exploreEngageLimit() : 24;
-                if (_pd > _stop + 0.5) return;
-                if (typeof exploreIsMoving === 'function' && exploreIsMoving() && _pd > _stop * 0.55) return;
+                if (_pd > _stop + 0.5) return false;
+                if (typeof exploreIsMoving === 'function' && exploreIsMoving() && _pd > _stop * 0.55) return false;
             }
         } catch (eEng) {}
     }
+    return true;
+}
+// ⚔️ 原版地圖普攻（同 #55 怪物）：先播攻擊動作，播到打中幀（LIN_PC_ATK 的 "!"）才結算；回 true＝已開始揮
+function playerAttackLinBegin() {
+    if (state.ff || typeof exploreLinName !== 'function' || !exploreLinName()) return false;
+    if (typeof fieldPvpTargetKey === 'function' && fieldPvpTargetKey()) return false;
+    if (typeof _linPcAtkProfile !== 'function' || typeof _playerBattleForm !== 'function') return false;
+    let target = getTarget();
+    if (!target || !playerAttackInRange(target)) return !!target;
+    let form = _playerBattleForm();
+    let n = (typeof _pmAtkSeqLen === 'function') ? _pmAtkSeqLen(form) : 0;
+    let prof = _linPcAtkProfile(form, n);
+    if (!prof) return false;
+    player._faceTgtUid = target.uid;
+    delete player._faceTgt;
+    try { _playerMorphTrigger('attack'); } catch (e) {}
+    state._pLinHitAt = Date.now() + prof.hit;
+    state._pLinHitUid = target.uid;
+    return true;
+}
+function playerAttackLinHit() {
+    let uid = state._pLinHitUid;
+    state._pLinHitAt = 0; state._pLinHitUid = null;
+    let target = getTarget();
+    if (!target || target.uid !== uid || !(target.curHp > 0) || player.dead) return;
+    _linAtkSwung = true;
+    try { playerAttack(); } finally { _linAtkSwung = false; }
+}
+let _linAtkSwung = false;
+function playerAttack() {
+    if (typeof fieldPvpTryAttack === 'function' && fieldPvpTryAttack()) return;
+    let target = getTarget();
+    if(!target) return;
+    if (!playerAttackInRange(target)) return;
     player._faceTgtUid = target.uid;   // 🧭 只記錄可序列化 UID；不可保存怪物物件，否則與 mob→player 面向參照形成循環而使存檔失敗
     delete player._faceTgt;
-    if (typeof _playerMorphTrigger === 'function') { try { _playerMorphTrigger('attack'); } catch (e) {} }   // 🧝 v3.0.46 玩家變身 sprite：攻擊動作（含被迴避＝有揮擊）
+    if (!_linAtkSwung && typeof _playerMorphTrigger === 'function') { try { _playerMorphTrigger('attack'); } catch (e) {} }   // 🧝 v3.0.46 玩家變身 sprite：攻擊動作（含被迴避＝有揮擊）
     // 🔮 幻術士 奇古獸攻擊：裝備奇古獸(必中魔法)或魔劍精通(任意非弓武器套用奇古獸公式) → 走奇古獸路徑，繞過物理命中/迴避
     if (player.cls === 'illusion') {
         let _qw = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;

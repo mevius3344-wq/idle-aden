@@ -4187,8 +4187,8 @@ function _pmCurActivePrio() {   // 目前「仍在播放中」動作的權重（
     }
     // 🩹 v3.8.343：探測中用估幀數，勿回 0（否則 hurt/skill 權重失效、attack 被當可打斷）
     let n = (seq && seq.length) ? seq.length : 4;
-    let fms = (st.act === 'attack') ? _atkFrameMs((player.d && player.d.aspd) || 0, n)
-        : (st.act === 'skill') ? _skillFrameMs(n) : (1000 / MOB_ANIM_FPS);
+    if (st.act === 'attack') return (_pmAtkFrameAt(form, Date.now() - st.t, n) < n) ? _PM_PRIO.attack : 0;
+    let fms = (st.act === 'skill') ? _skillFrameMs(n) : (1000 / MOB_ANIM_FPS);
     return ((Date.now() - st.t) < n * fms) ? (_PM_PRIO[st.act] || 0) : 0;   // 仍在播→其權重·已播完→0(idle)
 }
 function _playerMorphSkillSkip(skId) {
@@ -4209,6 +4209,11 @@ function _playerMorphTrigger(k, skId) {   // js/04 attack／castSkill·manualCas
     if (st.act === 'death') return;   // 死亡鎖定：復活前不接受任何動作（最高權重）
     // 🩹 v3.8.390：恢復攻擊／變身施法動畫（舊制移動中直接 return＝畫面永遠只走路）
     let newP = _PM_PRIO[k] || 0, curP = _pmCurActivePrio();   // 🎬 v3.0.106 依權重決定是否打斷（hurt>skill>attack）
+    // ⚔️ 原版地圖職業外形：普攻揮到底不被受擊打斷（同 #55 怪物），出手可打斷受擊動作
+    if (form.classAnim && typeof exploreLinName === 'function' && exploreLinName()) {
+        if (k === 'hurt' && st.act === 'attack' && curP === _PM_PRIO.attack) return;
+        if (k === 'attack' && st.act === 'hurt') curP = 0;
+    }
     if (newP < curP) { if (k === 'attack') st.pendAtk = true; return; }   // 權重較低→不打斷（attack 排隊·hurt/skill 直接略過）
     if (k === 'skill') st.skGen = (skId === 'sk_warrior_roar');   // 🗡️ v3.0.70 戰士咆哮用「通用」skill 動作（CSV 規則）·其餘技能優先武器專屬 wskill
     st.act = k; st.t = Date.now(); st.pendAtk = false;   // 🔮 新動作生效→清掉排隊中的攻擊（已被取代）
@@ -4383,6 +4388,35 @@ function _atkFrameMs(intervalSec, seqLen) {
     let fromAspd = intervalSec * 1000 / seqLen;
     let minReadable = 380 / seqLen;
     return Math.max(55, minReadable, Math.min(base, fromAspd));
+}
+// ⚔️ 原版地圖職業普攻：照原版各幀節奏（LIN_PC_ATK＝list.spr 各幀 dur＋"!" 打中幀），整段拉成攻擊間隔＝連續揮不閃待機
+//    回 { ms: 各幀 ms[], hit: 打中時刻 ms }；非原版地圖／非職業外形回 null（照舊 _atkFrameMs）
+function _linPcAtkProfile(form, n) {
+    if (!(n > 0) || !form || !form.classAnim) return null;
+    if ((typeof state !== 'undefined' && state && state.ff) || typeof exploreLinName !== 'function' || !exploreLinName()) return null;
+    let total = Math.max(380, ((typeof playerAttackIntervalTicks === 'function') ? playerAttackIntervalTicks(true) : 10) * 100);
+    let t = (typeof LIN_PC_ATK !== 'undefined' && player) ? LIN_PC_ATK[player.avatar + '|' + form.wpn] : null;
+    let durs = (t && t[0].length === n) ? t[0] : null;
+    let hi = durs ? t[1] : Math.max(0, Math.floor(n * 0.6));
+    if (!durs) { durs = []; for (let i = 0; i < n; i++) durs.push(1); }
+    let sum = 0; durs.forEach(function (d) { sum += d; });
+    let ms = durs.map(function (d) { return d * total / sum; });
+    let hit = 0; for (let i = 0; i < hi; i++) hit += ms[i];
+    return { ms: ms, hit: Math.round(hit), total: total };
+}
+function _pmAtkSeqLen(form) {
+    if (!form) return 0;
+    let a = _morphBattleCache[form.key];
+    if (a && a !== 'probing' && a.attack && a.attack.length) return a.attack.length;
+    return form.classAnim ? (_classAnimFrameCount(form, 'attack') || 0) : 0;
+}
+// 攻擊動作播到第幾幀（≥ n＝播完）
+function _pmAtkFrameAt(form, elapsed, n) {
+    let p = _linPcAtkProfile(form, n);
+    if (!p) return Math.floor(elapsed / _atkFrameMs((player.d && player.d.aspd) || 0, n));
+    let acc = 0;
+    for (let i = 0; i < n; i++) { acc += p.ms[i]; if (elapsed < acc) return i; }
+    return n;
 }
 // 🔮 v3.0.94 技能動畫播放速度隨施法速度：比照 _atkFrameMs·間隔＝castLock(tick·職業施法冷卻下限·js/07 施法鎖同源)÷10 秒·只加速不放慢（慢施法維持 8fps 早播完待機）
 //    v3.0.96 第2參 lockTicks（選用）：傭兵傳自身 ally.d.castLock；未傳＝主玩家 player.d.castLock（fallback 12）
@@ -4678,12 +4712,11 @@ function _playerMorphApplyBody() {
         if (_pmState.act === 'skill' && !_pmState.skGen && a.wskill) { seq = a.wskill; _useW = true; }   // 🗡️ v3.0.70 武器專屬 skill 優先（戰士咆哮 skGen→通用）
         if (seq) {
             // 🎨 v3.8.274：Q 不再額外 ×0.65/0.7 加速（與幀＋CSS 疊加會像「抖／加速」）；死亡略慢可讀
-            let _fms = (_pmState.act === 'attack')
-                ? _atkFrameMs((player.d && player.d.aspd) || 0, seq.length)
-                : (_pmState.act === 'skill') ? _skillFrameMs(seq.length)
+            let _fms = (_pmState.act === 'skill') ? _skillFrameMs(seq.length)
                 : (_pmState.act === 'death' && form.qSkin) ? 100
                 : (form.qSkin ? (1000 / MOB_ANIM_FPS) : (1000 / MOB_ANIM_FPS));
-            let ff = Math.floor((Date.now() - _pmState.t) / _fms);
+            let ff = (_pmState.act === 'attack') ? _pmAtkFrameAt(form, Date.now() - _pmState.t, seq.length)
+                : Math.floor((Date.now() - _pmState.t) / _fms);
             if (_pmState.act === 'death') { act = 'death'; f = Math.min(ff, seq.length - 1); }
             else if (ff < seq.length) { act = _pmState.act; f = ff; }
             else {
@@ -4695,12 +4728,11 @@ function _playerMorphApplyBody() {
             // 🩹 v3.8.343／344／347：探測中空 cache 勿清 attack——直連播幀
             let _ak = _pmState.act;
             let _nA = form.qSkin ? _qPlayerFrameCount(_ak) : _classAnimFrameCount(form, _ak);
-            let _fmsD = (_ak === 'attack')
-                ? _atkFrameMs((player.d && player.d.aspd) || 0, _nA)
-                : (_ak === 'skill') ? _skillFrameMs(_nA)
+            let _fmsD = (_ak === 'skill') ? _skillFrameMs(_nA)
                 : (_ak === 'death' && form.qSkin) ? 100
                 : (1000 / MOB_ANIM_FPS);
-            let ff = Math.floor((Date.now() - _pmState.t) / _fmsD);
+            let ff = (_ak === 'attack') ? _pmAtkFrameAt(form, Date.now() - _pmState.t, _nA)
+                : Math.floor((Date.now() - _pmState.t) / _fmsD);
             if (_ak === 'death') { act = 'death'; f = Math.min(ff, Math.max(0, _nA - 1)); }
             else if (ff < _nA) { act = _ak; f = ff; }
             else {
