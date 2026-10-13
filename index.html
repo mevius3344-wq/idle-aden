@@ -159,6 +159,17 @@
         setInterval(beat, 1000);
         document.addEventListener('visibilitychange', beat);
         window.addEventListener('pagehide', function () { try { wd.postMessage({ hidden: true }); } catch (e) {} });
+        // 登入後前 4 下觸控落在哪裡、當時哪個畫面開著（不限主選單）
+        var anyTaps = 0;
+        document.addEventListener('pointerdown', function (ev) {
+          try {
+            if (!aliveOn || anyTaps >= 4) return;
+            anyTaps++;
+            var t = ev.target;
+            window.__clientLog('tap_any', 'tap ' + anyTaps, { hit: t ? (t.tagName + '#' + t.id + '.' + String(t.className).slice(0, 60)) : null, x: Math.round(ev.clientX), y: Math.round(ev.clientY),
+              main: vis('main-menu'), load: vis('load-select-panel'), create: vis('creation-panel'), auth: vis('account-auth-panel'), game: vis('game-screen'), status: String((document.getElementById('auth-status') || {}).textContent || '').slice(0, 60) });
+          } catch (e) {}
+        }, true);
         var _cl = window.__clientLog;
         window.__clientLog = function (kind, msg, info) { window.__phase(kind); return _cl(kind, msg, info); };
       } catch (e) {}
