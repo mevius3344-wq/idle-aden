@@ -1,5 +1,6 @@
 // 實測：新手禮包（照新創）—功能道具／象牙塔裝備／象牙塔卷軸藥水；自動系統優先用綁定版；不可販售；負重不超標
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-starter-kit.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

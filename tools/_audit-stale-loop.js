@@ -1,5 +1,6 @@
 // 重現：本機存檔較新但金幣較少（城裡花錢）→ 伺服器 409 stale_save → 舊碼無限同步 GET↔PUT 卡死
 // 用法：node tools/_audit-stale-loop.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs'); const os = require('os'); const path = require('path');
 const BASE = process.argv[2] || 'http://localhost:5199';

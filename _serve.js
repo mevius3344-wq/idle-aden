@@ -3736,6 +3736,30 @@ async function handleClientLog(req, res) {
   return json(res, 200, { ok: true });
 }
 
+/** GM 刪除帳號後：退出血盟（盟主換人、沒人就解散）、排行榜重算 */
+function gmPurgeAccountRefs(account) {
+  const ak = String(account || "").toLowerCase();
+  let touched = false;
+  for (const clan of Array.from(rtClans.values())) {
+    const before = clan.members.length;
+    clan.members = clan.members.filter((m) => !(m && String(m.account || "").toLowerCase() === ak));
+    if (clan.members.length === before) continue;
+    touched = true;
+    if (!clan.members.length) {
+      rtClans.delete(clan.id);
+      continue;
+    }
+    if (!clan.members.some((m) => m.key === clan.leaderKey)) {
+      clan.leaderKey = clan.members[0].key;
+      clan.members.forEach((m) => {
+        m.leader = m.key === clan.leaderKey;
+      });
+    }
+  }
+  if (touched) clanSaveToDiskSoon();
+  leaderboardCache.at = 0;
+}
+
 let _fileGm = null;
 function fileGm() {
   if (_fileGm) return _fileGm;
@@ -3749,6 +3773,8 @@ function fileGm() {
     saveAccounts,
     clientLogFile: CLIENT_LOG_FILE,
     loadCharNames,
+    saveCharNames,
+    purgeAccountRefs: gmPurgeAccountRefs,
     sessions: _accountSessions,
     presenceRows: () => partyPresence.values(),
     presenceTtlMs: PARTY_TTL_MS,

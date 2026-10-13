@@ -1,5 +1,6 @@
 // 實測：私服整理（v3.9.98）——下架 NPC 不在村莊、經驗藥水取最高倍率、村莊傳送卷軸、魔法娃娃任選卷
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-private-items.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

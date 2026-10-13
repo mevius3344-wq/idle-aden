@@ -1,5 +1,6 @@
 // 實測：原版村莊多人同圖（兩個瀏覽器分頁進同一村莊，互相看得到、位置跟著動）
 // 用法：node tools/_audit-town-mp.js [baseUrl]   截圖 → tools/lin/_out/townmp_*.png
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

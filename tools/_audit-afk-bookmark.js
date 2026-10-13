@@ -1,5 +1,6 @@
 // 實測：掛機巡邏範圍／附近沒怪自動瞬移／書籤（同圖＋跨圖，消耗瞬移卷軸）／掛機報告
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-afk-bookmark.js [baseUrl]   截圖 → tools/lin/_out/afkbm_*.png
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

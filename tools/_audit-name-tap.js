@@ -1,5 +1,6 @@
 // 實測：角色 ID 點到才顯示（自己／同圖玩家），點地面收起、點別人換人
 // 用法：node tools/_audit-name-tap.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

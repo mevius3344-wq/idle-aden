@@ -1,5 +1,6 @@
 // 實測：設定／內掛選單／輔助設定 視窗（照新創）＋應急／自動解毒／自動購買數量
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-lin-menus.js [baseUrl]；SHOTS=資料夾 另存截圖
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

@@ -1,5 +1,6 @@
 // 實測：世界王回原地圖（全服跨頻道共用一隻、傷害第一拿掉落、經驗依比例、1 小時重生→測試縮短、存檔）
 // 用法：node tools/_audit-field-boss.js   （自己起 _serve.js 在 5211，資料寫 tools/lin/_out/fb-data；截圖 → tools/lin/_out/fb_*.png）
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

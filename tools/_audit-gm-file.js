@@ -186,10 +186,31 @@ async function waitUp() {
     const det3 = await gmGet("/api/gm/account?account=" + acc);
     check("slot survives restart", det3.data.ok && det3.data.slots.length === 1 && det3.data.slots[0].gold === 600, JSON.stringify(det3.data.slots || []).slice(0, 120));
 
+    console.log("=== 刪除帳號 ===");
+    const dacc = "DelMe1";
+    await call("POST", "/api/accounts/register", { account: dacc, password: pw });
+    const dlog = await call("POST", "/api/accounts/login", { account: dacc, password: pw, clientId: "c2" });
+    const dsave = { p: { name: "刪我角", cls: "royal", lv: 9, exp: 0, gold: 50, inv: [], eq: {}, enSeed: "seed-del" } };
+    await call("PUT", "/api/cloud/" + dacc + "/slot/1", { account: dacc, authToken: dlog.data.authToken, save: dsave });
+    const dcr = await call("POST", "/api/clan/create", { account: dacc, slot: 1, name: "刪我角", lv: 9, cls: "royal", clanName: "刪盟" + (Date.now() % 1000) });
+    const clanBefore = (await call("GET", "/api/leaderboard?board=clan")).data.rows || [];
+    check("clan exists before delete", dcr.data.ok && clanBefore.some((r) => /^刪盟/.test(r.name)), JSON.stringify(dcr.data).slice(0, 120));
+    check("delete needs confirm", (await gmPost("/api/gm/account/delete", { account: dacc })).status === 400);
+    check("delete unknown -> 404", (await gmPost("/api/gm/account/delete", { account: "nobody999", confirm: "nobody999" })).status === 404);
+    check("delete no token -> 401", (await call("POST", "/api/gm/account/delete", { account: dacc, confirm: dacc })).status === 401);
+    const del = await gmPost("/api/gm/account/delete", { account: dacc, confirm: dacc });
+    check("delete account", del.data.ok && del.data.chars === 1 && del.data.dirs >= 1, JSON.stringify(del.data));
+    check("deleted: search empty", !((await gmGet("/api/gm/search?q=delme")).data.accounts || []).length && !((await gmGet("/api/gm/search?q=" + encodeURIComponent("刪我"))).data.chars || []).length);
+    check("deleted: save folder gone", !fs.existsSync(path.join(DIR, dacc)));
+    check("deleted: login fails", !(await call("POST", "/api/accounts/login", { account: dacc, password: pw, clientId: "c2" })).data.ok);
+    const clanAfter = (await call("GET", "/api/leaderboard?board=clan")).data.rows || [];
+    check("deleted: clan dissolved", !clanAfter.some((r) => /^刪盟/.test(r.name)), JSON.stringify(clanAfter));
+    check("other account kept", (await gmGet("/api/gm/account?account=" + acc)).data.ok);
+
     console.log("=== 操作紀錄 ===");
     const au = await gmGet("/api/gm/audit?limit=50");
     const acts = (au.data.rows || []).map((r) => r.action);
-    for (const a of ["grant_item", "grant_gold", "grant_cancel", "rates_set", "rates_reset", "kick", "ban", "unban", "backup_download", "backup_snapshot"]) {
+    for (const a of ["grant_item", "grant_gold", "grant_cancel", "rates_set", "rates_reset", "kick", "ban", "unban", "backup_download", "backup_snapshot", "account_delete"]) {
       check("audit has " + a, acts.indexOf(a) >= 0);
     }
   } catch (e) {

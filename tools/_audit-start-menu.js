@@ -1,5 +1,6 @@
 // 實測：登入 → 按「開始遊戲」（真實滑鼠／觸控點擊）→ 選角出現 → 創角／進入遊戲
 // 用法：node tools/_audit-start-menu.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

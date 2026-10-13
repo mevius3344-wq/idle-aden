@@ -700,6 +700,13 @@ section("61) 存檔成功不顯示訊息（失敗仍提示）");
   ok("saveGame 成功不再 logSys「遊戲進度已儲存」", !/遊戲進度已儲存/.test(sv) && /遊戲進度儲存失敗，本次進度未寫入/.test(sv));
 }
 
+section("62) GM 刪除帳號＋線上實測不留測試帳號");
+{
+  const gf = rd("lib/rt-gm-file.js");
+  ok("檔案模式 /api/gm/account/delete（需再打一次帳號、刪存檔資料夾／角色名／血盟）", /if \(u === "\/api\/gm\/account\/delete"\) return accountDelete\(req, res, ip\);/.test(gf) && /error: "confirm_mismatch"/.test(gf) && /if \(path\.dirname\(abs\) !== root \|\| !fs\.existsSync\(abs\)\) continue;/.test(gf) && /function gmPurgeAccountRefs\(account\)/.test(rd("_serve.js")));
+  ok("實測註冊的線上帳號結束時自動刪除（_gm-cleanup autoCleanup）", exists("tools/_gm-cleanup.js") && /autoCleanup\(\)/.test(rd("tools/_audit-start-menu.js")) && /autoCleanup\(\)/.test(rd("tools/_audit-stale-loop.js")) && /if \(account && !isLocal\(origin\)\)/.test(rd("tools/_gm-cleanup.js")));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

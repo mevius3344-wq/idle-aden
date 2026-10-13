@@ -1,5 +1,6 @@
 // 實測：新手禮包 200%經驗藥水（創角送 10 瓶、喝下 exp2=1800 秒、玩家經驗 ×2、圖示載入、不可賣）
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-exp-potion.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

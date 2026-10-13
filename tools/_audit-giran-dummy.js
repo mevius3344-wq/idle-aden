@@ -1,5 +1,6 @@
 // 實測：奇岩村莊 3 個木頭人（取代新兵修練場）、城鎮按 AUTO 開傳送選單、原版地圖畫面拉遠
 // 用法：node tools/_audit-giran-dummy.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

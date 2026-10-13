@@ -1,5 +1,6 @@
 // 實測：主城奇岩—所有職業出生奇岩；主城符／回村鈕／死亡都回奇岩；奇岩有傳送師爾瑪、魔法傳授、寵物保管、道具回收
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-main-city.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

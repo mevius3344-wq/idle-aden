@@ -1,5 +1,6 @@
 // 實測：同 IP 新登入擠掉舊視窗（電腦＋手機同一網路不會卡在登入）
 // 用法：node tools/_audit-ip-takeover.js [baseUrl]
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

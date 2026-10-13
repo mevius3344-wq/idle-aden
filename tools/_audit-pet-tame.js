@@ -1,5 +1,6 @@
 // 實測：原版寵物馴服（帶誘捕道具、打到 1/3 血以下＝當場變寵物、不給經驗／金幣／掉落；老虎 1/16；保管滿不消耗；道具不需使用）
 // 用法：先起 _serve.js（PORT=5199），再 node tools/_audit-pet-tame.js [baseUrl]   截圖 → tools/lin/_out/tame_*.png
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');

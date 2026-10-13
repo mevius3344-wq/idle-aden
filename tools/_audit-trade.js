@@ -1,6 +1,7 @@
 // 實測：玩家交易（兩個分頁同村莊 → 點對方 → 交易 → 放物品／金幣 → 雙方鎖定 → 成交；另測取消退回）
 // 用法：先以 CLOUD_SAVE_DIR=<dir> PORT=5199 起 _serve.js，再 node tools/_audit-trade.js [dir（預設同 CLOUD_SAVE_DIR 或 tools/lin/_out/trade-data）] [baseUrl]
 // 截圖 → tools/lin/_out/trade_*.png
+require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
