@@ -7,7 +7,8 @@
 #   （帳號／存檔若也要走這台 Neon，可加 DATABASE_URL；預設仍走 Vercel API）
 
 [build]
-builder = "NIXPACKS"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "node _serve.js"
