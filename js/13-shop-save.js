@@ -550,6 +550,7 @@ function _summaryFromRaw(s){
 function slotSummary(n){
     n = Math.max(1, Math.min(8, parseInt(n, 10) || 1));
     if (Object.prototype.hasOwnProperty.call(_slotSummaryCache, n)) return _slotSummaryCache[n];
+    if (window.__phase) window.__phase('sum' + n);
     var sum = _summaryFromRaw(_lzGet('lineage_idle_save_' + n));
     _slotSummaryCache[n] = sum;
     return sum;
@@ -1221,11 +1222,16 @@ function openLoadSelect(){
     _loadLastClickSlot = 0; _loadLastClickAt = 0;
     _loadPage = 0;
     _loadSelectedSlot = [1,2,3,4].find(n => !!slotSummary(n)) || 1;
+    if (window.__phase) window.__phase('olsSlots');
     // 先本機快繪畫面；purge／雲端／立繪預熱全部延後，避免「開始遊戲」一按就卡
     renderLoadSelect(true);
+    if (window.__phase) window.__phase('olsDone');
     requestAnimationFrame(function () {
+        if (window.__phase) window.__phase('olsFrame');
         setTimeout(function () {
+            if (window.__phase) window.__phase('olsLater');
             try { _purgeClosedClassesThrottled(); } catch (eP) {}
+            if (window.__phase) window.__phase('olsPurged');
             try {
                 var sum0 = slotSummary(_loadSelectedSlot);
                 var key0 = loadStartKeyFromSummary(sum0);
@@ -1362,6 +1368,7 @@ function renderLoadSelect(skipCloudRefresh){
             + `</button>`;
     }
     grid.innerHTML = html;
+    if (window.__phase) window.__phase('olsGrid');
     const selectedSum = slotSummary(_loadSelectedSlot);
     const selectedKey = loadStartKeyFromSummary(selectedSum);
     _loadAnimState.key = selectedKey;
