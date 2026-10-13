@@ -647,7 +647,7 @@ function useItem(u, silent = false) {
     if (!item) return;
     if (player.dead) { if (!silent) logSys(`死亡狀態無法使用道具，請先復活。`); return; }   // 死亡(未復活前)鎖住手動使用
     if (inAbsBarrier()) { if(!silent) logSys('絕對屏障期間與世界隔絕，無法使用藥水與道具。'); return; }   // 🛡️ 絕對屏障：禁止使用任何道具（自動使用 silent 亦略過）
-    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後會自動回村甦醒；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
+    if (item.id === 'scroll_revive') { if(!silent) logSys(`復活卷軸無法從道具欄使用。玩家死亡後按「重新開始」回村甦醒；卷軸仍可用於復活倒地的傭兵／寵物。`); return; }
     let d = DB.items[item.id];
     if (d.noUse) { if(!silent) logSys(`此物品無法直接使用。`); return; }
     if (d.eff === 'fn') { if (!silent) useFnItem(d.fn); return; }   // 🎁 功能道具（主城／傳送／內掛選單／設定／掉落查詢）：不消耗

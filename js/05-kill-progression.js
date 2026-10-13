@@ -1688,7 +1688,7 @@ function revive() {
 function reviveInPlace() {
     if (!player.dead) return;
     if (typeof logSys === 'function') {
-        logSys('<span class="text-amber-300">死亡後會自動回村甦醒，無需手動復活。</span>');
+        logSys('<span class="text-amber-300">請按「重新開始」回到村莊甦醒。</span>');
     }
 }
 

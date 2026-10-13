@@ -202,10 +202,14 @@ section("8) 潘朵拉：遺物搜尋／布告欄／收購 下架");
   ok("抽抽樂下架：潘朵拉 NPC 不在任何村莊", !/id: "npc_pandora"/.test(rd("js/00-data.js")));
 }
 
-section("9) 死亡：自動回村、無原地復活");
+section("9) 死亡：倒地＋「重新開始」回村、無原地復活");
 {
+  const dz = rd("js/58-lin-death.js"), atk = rd("js/04-combat-attack.js"), wm9 = rd("js/11-world-map.js");
   ok("reviveInPlace 已停用（不復活）",
-    /function reviveInPlace\(\)\s*\{\s*if \(!player\.dead\) return;\s*if \(typeof logSys === 'function'\) \{\s*logSys\([^)]*自動回村/.test(F.kill));
+    /function reviveInPlace\(\)\s*\{\s*if \(!player\.dead\) return;\s*if \(typeof logSys === 'function'\) \{\s*logSys\([^)]*重新開始/.test(F.kill));
+  ok("死亡不自動回村：跳重新開始視窗", /if \(typeof linDeathSync === 'function'\) \{ linDeathSync\(\); return; \}/.test(atk) && /id="lin-death-restart"/.test(dz) && /js\/58-lin-death\.js/.test(F.html));
+  ok("重新開始＝revive 回村", /function linDeathRestart\(\)[\s\S]{0,200}revive\(\)/.test(dz));
+  ok("死亡中不可回村／傳送", /function returnToTown\(dest\) \{[\s\S]{0,200}if \(player && player\.dead\)/.test(wm9) && /function openTeleportMenu\(\) \{\s*if \(player && player\.dead\)/.test(wm9));
   ok("原地復活按鈕永遠隱藏",
     /function updateReviveInPlaceBtn\(\)\s*\{\s*let btn = document\.getElementById\('btn-revive-inplace'\);\s*if \(btn\) btn\.classList\.add\('hidden'\);\s*\}/.test(F.kill));
   ok("index.html 沒有原地復活按鈕", !/id="btn-revive-inplace"/.test(F.html));

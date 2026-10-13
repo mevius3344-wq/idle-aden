@@ -1939,7 +1939,7 @@ function killPlayer() {
     logSys(`<span class="text-red-500 font-bold text-lg">${msg}</span>`);
     logCombat(`你的角色已經死亡。`, 'enemy');
     
-    // v3.8.281：死亡後自動回村甦醒（不再按「祈求復活」）。決鬥落敗仍交 js/28 結果視窗。
+    // 原版天堂：倒地不自動回村，跳「重新開始」視窗（js/58-lin-death.js），按下才 revive() 回村。決鬥落敗仍交 js/28 結果視窗。
     try {
         let b1 = document.getElementById('btn-revive'); if (b1) b1.classList.add('hidden');
         let b2 = document.getElementById('btn-revive-inplace'); if (b2) b2.classList.add('hidden');
@@ -1947,11 +1947,12 @@ function killPlayer() {
     if (typeof updateReviveInPlaceBtn === 'function') updateReviveInPlaceBtn();
     updateUI();
     if (!_duelDeath) {
-        // 短暫讓死亡幀／音效露臉，再自動走 revive() 回村（與時空裂痕自動結算同精神）
+        // 先讓倒地動作播完，再跳視窗；視窗模組沒載到才退回自動回村（不可卡死在戰場）
         setTimeout(function () {
             try {
                 if (!player || !player.dead) return;
                 if ((typeof pvpArenaDeathExempt === 'function') && pvpArenaDeathExempt()) return;
+                if (typeof linDeathSync === 'function') { linDeathSync(); return; }
                 if (typeof revive === 'function') revive();
             } catch (eAuto) {
                 // 🩹 v3.8.439：revive 拋錯時仍強制回家鄉，避免卡死在戰場

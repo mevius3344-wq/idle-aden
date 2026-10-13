@@ -520,6 +520,7 @@ function getLastTown() {
 }
 function returnToTown(dest) {
     if (typeof dest !== 'string') dest = '';   // 回村鈕 onclick 直接掛本函式，會收到點擊事件
+    if (player && player.dead) { logSys('<span class="text-red-400">你已經死亡，請按「重新開始」回到村莊。</span>'); return false; }
     if (state.riftRun && mapState.current === 'rift_battle') { logSys('<span class="text-violet-300">扭曲的時空緊緊纏繞著你，無法回村——唯有戰死方能離開時空裂痕。</span>'); return false; }   // 🌀 裂痕內不可回村
     // 與切換地圖相同的受控限制（石化／麻痺／冰凍／暈眩時無法回村）
     if (player.statuses && (player.statuses.stone > 0 || player.statuses.paralyze > 0 || player.statuses.freeze > 0 || player.statuses.stun > 0 || player.statuses.sleep > 0)) {
@@ -2117,6 +2118,7 @@ function _teleporterRegionTabs() {
 
 // 🎁 功能道具「傳送」：隨處開傳送師選單（限制同瞬間移動卷軸）
 function openTeleportMenu() {
+    if (player && player.dead) { logSys('<span class="text-red-400">你已經死亡，請按「重新開始」回到村莊。</span>'); return false; }
     let st = player.statuses || {};
     if (st.stone > 0 || st.paralyze > 0 || st.freeze > 0 || st.stun > 0 || st.sleep > 0) { logSys('你目前無法行動，無法使用傳送。'); return false; }
     if (typeof pvpArenaTravelLocked === 'function' && pvpArenaTravelLocked()) { logSys('<span class="text-red-400">決鬥進行中無法使用傳送。</span>'); return false; }

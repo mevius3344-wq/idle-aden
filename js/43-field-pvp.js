@@ -222,9 +222,16 @@
         fpTransferDeathLoot(fromKey || '', fromName || '對手');
         try {
             if (typeof logSys === 'function') {
-                logSys('<span class="text-red-400 font-bold">【野外 PK】你被 ' + String(fromName || '對手') + ' 擊敗，已送回村莊。</span>');
+                logSys('<span class="text-red-400 font-bold">【野外 PK】你被 ' + String(fromName || '對手') + ' 擊敗了。</span>');
             }
         } catch (e) {}
+        if (typeof linDeathSync === 'function') {
+            player.hp = 0;
+            player.dead = true;
+            try { if (typeof updateUI === 'function') updateUI(); } catch (eU) {}
+            setTimeout(function () { try { linDeathSync(); } catch (eL) {} }, 650);
+            return;
+        }
         player.hp = Math.max(1, Math.floor((player.mhp || 1) * 0.3));
         try {
             if (typeof returnToTown === 'function') returnToTown();
