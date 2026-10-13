@@ -684,6 +684,16 @@ section("59) 原版地圖玩家普攻（原版節奏＋打中幀才扣血）");
   ok("原版地圖普攻不被受擊打斷", /if \(k === 'hurt' && st\.act === 'attack' && curP === _PM_PRIO\.attack\) return;/.test(fx));
 }
 
+section("60) 排行榜（照新創：職業分頁＋血盟、自己固定在最底）");
+{
+  const rk = rd("js/56-lin-rank.js");
+  const sv = rd("_serve.js");
+  ok("index 載入 56-lin-rank、視窗＝職業五頁＋血盟＋綜合榜", /js\/56-lin-rank\.js/.test(F.html) && /\['royal', '王族'\], \['knight', '騎士'\], \['elf', '妖精'\], \['mage', '法師'\], \['dark', '黑妖'\], \['clan', '血盟'\]/.test(rk) && /\['level', '等級總榜'\]/.test(rk) && /window\.linRankOpen = linRankOpen;/.test(rk));
+  ok("排行榜入口：pvp 分頁與設定選單都開新視窗", /if \(t === 'pvp' && typeof linRankOpen === 'function'\) \{ linRankOpen\(\); return; \}/.test(rd("js/10-ui-tabs.js")) && /\['排行榜', function \(\) \{ if \(typeof linRankOpen === 'function'\) linRankOpen\(\); \}\]/.test(rd("js/55-lin-menus.js")));
+  ok("伺服器 cls／clan 榜＋自己名次 me（榜外也給）", /const LEADERBOARD_BOARDS = new Set\(\["level", "gold", "pride", "rift", "cls", "clan"\]\);/.test(sv) && /function leaderboardClanByName\(\)/.test(sv) && /function leaderboardClanRows\(clanOf\)/.test(sv) && /me: mi >= 0 \? \{ \.\.\.pub\(sorted\[mi\], mi\), inTop: mi < limit \} : null,/.test(sv));
+  ok("排行榜樣式（.lr-row／.lr-foot）", /\.lr-row \{/.test(rd("css/lin-menus.css")) && /\.lr-foot \{/.test(rd("css/lin-menus.css")));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

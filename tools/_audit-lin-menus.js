@@ -121,7 +121,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
         return {open,n:btns.length,btns:btns.join('|'),vol,viaTab,sub}; })()`);
     console.log('INFO settings ' + asc(JSON.stringify(c)));
     ok(c && c.open, '右側選單「設定」開遊戲選單視窗');
-    ok(c && c.n === 10 && /輔助設定/.test(c.btns) && /內掛選單/.test(c.btns) && /書籤/.test(c.btns) && /回選角/.test(c.btns), '遊戲選單 10 項（輔助設定／內掛／自動賣出／書籤／音量／畫面／全螢幕／回選角／刪除角色／離開）');
+    ok(c && c.n === 11 && /輔助設定/.test(c.btns) && /內掛選單/.test(c.btns) && /書籤/.test(c.btns) && /排行榜/.test(c.btns) && /回選角/.test(c.btns), '遊戲選單 11 項（輔助設定／內掛／自動賣出／書籤／排行榜／音量／畫面／全螢幕／回選角／刪除角色／離開）');
     ok(c && c.vol, '音樂／音效音量 子頁');
     ok(c && c.viaTab, '舊「設定分頁」入口改開視窗');
     await shot('lm_settings.jpg');

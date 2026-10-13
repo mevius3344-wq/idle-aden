@@ -3316,6 +3316,7 @@ function collapseMobileTabPanel() {
 function switchTab(t, btn, opts) {
     opts = opts || {};
     if (t === 'automation' && typeof linMenuOpen === 'function') { linMenuOpen('settings'); return; }   // 設定改開原版風格視窗（js/55-lin-menus.js）
+    if (t === 'pvp' && typeof linRankOpen === 'function') { linRankOpen(); return; }   // 排行榜改開原版風格視窗（js/56-lin-rank.js）
     // 🩹 v3.8.319／374：切分頁時關掉收藏／收集冊；若剛關掉 overlay，勿走「再點收合」捷徑
     var _hadCollection = false;
     try {

@@ -4181,7 +4181,7 @@ const LEADERBOARD_CLASS_NAMES = {
   warrior: "戰士",
   illusion: "幻術士",
 };
-const LEADERBOARD_BOARDS = new Set(["level", "gold", "pride", "rift"]);
+const LEADERBOARD_BOARDS = new Set(["level", "gold", "pride", "rift", "cls", "clan"]);
 const LEADERBOARD_CACHE_MS = 60 * 1000;
 let leaderboardCache = { at: 0, entries: [] };
 
@@ -4337,6 +4337,7 @@ function collectLeaderboardEntries() {
           slot,
           cls: String(p.cls || ""),
           clsName: leaderboardClassName(p.cls),
+          avatar: typeof p.avatar === "string" ? p.avatar.slice(0, 16) : "",
           lv: Math.max(1, Math.floor(Number(p.lv) || 1)),
           exp: Math.max(0, Math.floor(Number(p.exp) || 0)),
           gold: Math.max(0, Math.floor(Number(p.gold) || 0)),
@@ -4449,23 +4450,75 @@ async function handleLeaderboardApi(req, res, u) {
   if (!ENABLE_CLOUD_SAVE) {
     return json(res, 503, { ok: false, error: "offline", message: "排行榜需要線上伺服器。" });
   }
-  const sorted = leaderboardSort(board, getLeaderboardEntries()).slice(0, limit);
-  const rows = sorted.map((row, i) => ({
+  const meKey = charNameKey(normalizeCharName(q.searchParams.get("me") || ""));
+  const clanOf = leaderboardClanByName();
+  if (board === "clan") {
+    const all = leaderboardClanRows(clanOf);
+    const myClan = meKey ? clanOf.get(meKey) : "";
+    const mi = myClan ? all.findIndex((c) => c.name === myClan) : -1;
+    return json(res, 200, {
+      ok: true,
+      board,
+      updatedAt: leaderboardCache.at,
+      total: all.length,
+      rows: all.slice(0, limit).map((c, i) => ({ rank: i + 1, ...c })),
+      me: mi >= 0 ? { rank: mi + 1, inTop: mi < limit, ...all[mi] } : null,
+    });
+  }
+  const cls = String(q.searchParams.get("cls") || "");
+  let list = getLeaderboardEntries();
+  if (board === "cls") list = list.filter((r) => r.cls === cls);
+  const sorted = leaderboardSort(board === "cls" ? "level" : board, list);
+  const pub = (row, i) => ({
     rank: i + 1,
     name: row.name,
     cls: row.cls,
     clsName: row.clsName,
+    avatar: row.avatar || "",
+    clan: clanOf.get(charNameKey(row.name)) || "",
     lv: row.lv,
     value: board === "gold" ? row.gold : board === "pride" ? row.prideFloor : board === "rift" ? row.riftMs : row.lv,
     valueLabel: leaderboardValueLabel(board, row),
-  }));
+  });
+  const mi = meKey ? sorted.findIndex((r) => charNameKey(r.name) === meKey) : -1;
   return json(res, 200, {
     ok: true,
     board,
+    cls: board === "cls" ? cls : undefined,
     updatedAt: leaderboardCache.at,
-    total: getLeaderboardEntries().length,
-    rows,
+    total: sorted.length,
+    rows: sorted.slice(0, limit).map(pub),
+    me: mi >= 0 ? { ...pub(sorted[mi], mi), inTop: mi < limit } : null,
   });
+}
+
+// 線上血盟成員（角色名 → 血盟名）
+function leaderboardClanByName() {
+  const out = new Map();
+  try {
+    for (const c of rtClans.values()) {
+      if (!c || !c.name) continue;
+      for (const m of c.members || []) if (m && m.name) out.set(charNameKey(m.name), c.name);
+    }
+  } catch (e) {}
+  return out;
+}
+
+// 血盟榜：人數＋等級總和（成員等級取排行榜存檔，沒有才用血盟名單記的等級）
+function leaderboardClanRows(clanOf) {
+  const lvOf = new Map(getLeaderboardEntries().map((r) => [charNameKey(r.name), r.lv]));
+  const rows = [];
+  try {
+    for (const c of rtClans.values()) {
+      if (!c || !c.name || !(c.members || []).length) continue;
+      let lvSum = 0;
+      for (const m of c.members) if (m) lvSum += lvOf.get(charNameKey(m.name)) || Math.max(1, Number(m.lv) || 1);
+      const leader = c.members.find((m) => m && m.key === c.leaderKey);
+      rows.push({ name: c.name, members: c.members.length, lvSum, leader: leader ? leader.name : "" });
+    }
+  } catch (e) {}
+  rows.sort((a, b) => b.lvSum - a.lvSum || b.members - a.members || a.name.localeCompare(b.name, "zh-Hant"));
+  return rows;
 }
 
 const server = http.createServer(async (req, res) => {

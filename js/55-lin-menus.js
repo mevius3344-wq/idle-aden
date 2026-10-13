@@ -159,6 +159,7 @@
             ['內掛選單（巡邏／補給／魔法／召喚）', function () { linMenuOpen('auto'); }],
             ['自動賣出', function () { linMenuClose(); if (typeof openAutoSellRules === 'function') openAutoSellRules(); }],
             ['書籤', function () { linMenuClose(); if (typeof bookmarkOpen === 'function') bookmarkOpen(); }],
+            ['排行榜', function () { if (typeof linRankOpen === 'function') linRankOpen(); }],
             ['音樂／音效音量', function () { audioPage(w); }],
             ['畫面：' + (ps && ps.checked ? '省電（目前）→ 點一下改標準' : '標準（目前）→ 點一下改省電'), function () {
                 if (!ps) return;
