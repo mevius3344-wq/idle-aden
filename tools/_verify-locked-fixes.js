@@ -652,6 +652,27 @@ section("48) 主畫面捷徑舊頁面自動更新");
   ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
 }
 
+section("58) 房屋可進（l1j 邊界通行）＋NPC 不被屋頂蓋住");
+{
+  const lin = rd("js/49-linmap.js");
+  const ex = rd("js/44-map-explore.js");
+  const town = rd("js/52-lin-town.js");
+  const exp = rd("tools/lin/export-linmap.js");
+  ok("linmapCanStep：bit4 有邊界資料、bit2 東／bit3 北、斜走走 L 形", /function linmapCanStep\(name, gx, gy, dx, dy\)/.test(lin) && /if \(!\(c0 & 16\) \|\| !\(c0 & 1\)\) return/.test(lin) && /& 4\) === 4/.test(lin) && /& 8\) === 8/.test(lin) && /global\.linmapCanStep = linmapCanStep;/.test(lin));
+  ok("玩家／怪格步都走 linmapCanStep", (ex.match(/if \(typeof linmapCanStep === 'function'\) \{/g) || []).length === 2 && /linmapCanStep\(name, t\.gx, t\.gy, o\.gx - t\.gx, o\.gy - t\.gy\)/.test(ex) && /linmapCanStep\(name, t\.gx, t\.gy, cx, cy\)/.test(ex));
+  ok("export-linmap 套 l1j 邊界（tools/lin/l1j-walk.js）", /require\("\.\/l1j-walk"\)\.applyL1jWalk\(walk, meta\)/.test(exp) && exists("tools/lin/l1j-walk.js"));
+  for (const n of ["wd_main", "ti_island"]) {
+    let edge = 0;
+    try { const w = fs.readFileSync(path.join(ROOT, "assets/linmap", n, "walk.bin")); for (let i = 0; i < w.length; i += 997) if (w[i] & 16) edge++; } catch (e) {}
+    ok(n + " walk.bin 帶 l1j 邊界資料（bit4）", edge > 100, "samples " + edge);
+  }
+  ok("NPC 是 shield：屋頂只有擋到玩家本人才疊", /h: 72, shield: true/.test(town) && /if \(a\.shield\) \{ shield = true; continue; \}/.test(lin) && /if \(hit && \(hero \|\| !shield\)\) want\.push/.test(lin) && /if \(typeof linTownActors === 'function'\) out = out\.concat\(linTownActors\(\)\);/.test(ex));
+  ok("擋到玩家的物件收進同一個半透明盒（只淡一次）", /veilBox\.className = 'explore-linobj-veil';/.test(lin) && /var home = w\.hero \? veilBox : layer;/.test(lin) && /#explore-linobj > \.explore-linobj-veil \{[^}]*opacity: \.5;/.test(rd("css/style.css")));
+  ok("本遊戲 NPC 只接手走得到的原版站位", /reachable\(orig\[j\]\)\) free\.push\(j\);/.test(town) && /_walkWait/.test(town));
+  ok("村莊 NPC 圖層漏建／被清掉會自動補（linTownEnsure）", /global\.linTownEnsure = function/.test(town) && /linTownEnsure\(mapState\.current\)/.test(ex) && /!_ents\[0\]\.el\.isConnected/.test(town));
+  ok("gzip 快取鍵含修改時間（同大小改內容也重壓）", /size = size \+ ":" \+ fs\.statSync\(full\)\.mtimeMs/.test(rd("_serve.js")));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

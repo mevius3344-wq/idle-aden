@@ -78,6 +78,35 @@
         return (c & 1) === 1;
     }
 
+    function linmapCellG(name, gx, gy) {
+        var d = linmapData(name);
+        var w = _walk[name];
+        if (!d || !w) return -1;
+        if (gx < 0 || gy < 0 || gx >= d.nx || gy >= d.ny) return 0;
+        return w[gy * d.nx + gx];
+    }
+
+    /**
+     * 從格 (gx,gy) 走一格 (dx,dy)。tools/lin/l1j-walk.js 匯出的地圖（bit4）照原版伺服器「邊」判斷：
+     * bit2＝東邊 (x+1) 可通、bit3＝北邊 (y-1) 可通，牆是格子之間的線（房屋門口／內部可走、穿不過牆）；
+     * 斜走＝兩條 L 形路徑任一條通。站在不可走格上（舊出生點）可走到任一可走鄰格。
+     */
+    function linmapCanStep(name, gx, gy, dx, dy) {
+        var c0 = linmapCellG(name, gx, gy);
+        if (c0 < 0) return true;
+        var cd = linmapCellG(name, gx + dx, gy + dy);
+        if (!(cd & 1)) return false;
+        var corner = function () {
+            return (linmapCellG(name, gx + dx, gy) & 1) === 1 || (linmapCellG(name, gx, gy + dy) & 1) === 1;
+        };
+        if (!(c0 & 16) || !(c0 & 1)) return !(dx && dy) || corner();
+        var ex = function (x, y, sx) { return (linmapCellG(name, sx > 0 ? x : x - 1, y) & 4) === 4; };
+        var ny = function (x, y, sy) { return (linmapCellG(name, x, sy < 0 ? y : y + 1) & 8) === 8; };
+        if (!dy) return ex(gx, gy, dx);
+        if (!dx) return ny(gx, gy, dy);
+        return (ex(gx, gy, dx) && ny(gx + dx, gy, dy)) || (ny(gx, gy, dy) && ex(gx, gy + dy, dx));
+    }
+
     function linmapSafeZone(name, wx, wy) {
         var c = linmapCell(name, wx, wy);
         return c > 0 && (c & 2) === 2;
@@ -358,16 +387,18 @@
                 for (var i = 0; i < list.length; i++) {
                     var s = list[i];
                     if (s.wl > xr || s.wl + s.w < xl) continue;
-                    var hit = false, hero = false;
+                    var hit = false, hero = false, shield = false;
                     for (var k = 0; k < actors.length; k++) {
                         var a = actors[k];
                         if (a.y <= s.wbase) continue;
                         if (a.x + a.w / 2 <= s.wl || a.x - a.w / 2 >= s.wl + s.w) continue;
                         if (a.y + a.h <= s.wb || a.y >= s.wt) continue;
+                        if (a.shield) { shield = true; continue; }
                         hit = true;
-                        if (a.hero) { hero = true; break; }
+                        if (a.hero) hero = true;
                     }
-                    if (hit) want.push({ s: s, hero: hero });
+                    // 村莊 NPC（shield）不被蓋：只有擋到玩家本人才疊（半透明）
+                    if (hit && (hero || !shield)) want.push({ s: s, hero: hero });
                 }
             }
         }
@@ -377,6 +408,13 @@
             layer.appendChild(el);
             _objEls.push(el);
         }
+        var veilBox = layer.querySelector('.explore-linobj-veil');
+        if (!veilBox) {
+            veilBox = document.createElement('div');
+            veilBox.className = 'explore-linobj-veil';
+            layer.appendChild(veilBox);
+        }
+        var veilZ = Infinity;
         for (var j = 0; j < _objEls.length; j++) {
             var e = _objEls[j];
             if (j >= want.length) {
@@ -405,8 +443,14 @@
             var z = String(depthZ(sp.wbase));
             if (e._z !== z) { e.style.zIndex = z; e._z = z; }
             if (e.classList.contains('is-veil') !== w.hero) e.classList.toggle('is-veil', w.hero);
+            var home = w.hero ? veilBox : layer;
+            if (e.parentNode !== home) home.appendChild(e);
+            if (w.hero) veilZ = Math.min(veilZ, +z);
             if (e.hidden) e.hidden = false;
         }
+        var vz = veilZ < Infinity ? String(veilZ) : '';
+        if (veilBox._z !== vz) { veilBox.style.zIndex = vz; veilBox._z = vz; }
+        veilBox.hidden = !(veilZ < Infinity);
     }
 
     global.linmapObjSync = linmapObjSync;
@@ -416,6 +460,7 @@
     global.linmapTileAt = linmapTileAt;
     global.linmapTileCenter = linmapTileCenter;
     global.linmapWalkable = linmapWalkable;
+    global.linmapCanStep = linmapCanStep;
     global.linmapSafeZone = linmapSafeZone;
     global.linmapRegionAt = linmapRegionAt;
     global.linmapSync = linmapSync;

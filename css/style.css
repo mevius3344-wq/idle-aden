@@ -1799,7 +1799,15 @@
             overflow: visible;
         }
         #battle-view:not(.is-linmap) > #explore-linobj { display: none; }
-        #explore-linobj > .explore-linobj-spr {
+        /* 擋到玩家本人的物件收進同一個半透明盒：多片屋頂重疊也只淡一次（逐片 .5 會疊到看不見人） */
+        #explore-linobj > .explore-linobj-veil {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: .5;
+        }
+        #explore-linobj > .explore-linobj-spr,
+        #explore-linobj > .explore-linobj-veil > .explore-linobj-spr {
             position: absolute;
             left: 50%;
             bottom: 0;

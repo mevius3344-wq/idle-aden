@@ -133,12 +133,13 @@ function cellPos(b, cx, cy) {
       walk[(b.j * 64 + my) * tnx + (b.i * 64 + mx)] = v;
     }
   }
-  fs.writeFileSync(path.join(outDir, "walk.bin"), walk);
   const meta = {
     linMap: Number(mapId), w: W, h: H, chunk: CH, cols, rows, chunks,
     tiles: { nx: tnx, ny: tny, bx0: minBx, by0: minBy },
     iso: { ox: M + 24, oy: M + offY + 756 + 12 }
   };
+  if (require("./l1j-walk").applyL1jWalk(walk, meta)) console.log("walk: l1j 邊界通行");
+  fs.writeFileSync(path.join(outDir, "walk.bin"), walk);
   fs.writeFileSync(path.join(outDir, "meta.json"), JSON.stringify(meta), "utf8");
   const top = Object.entries(attrStat).sort((a, b) => b[1] - a[1]).slice(0, 16);
   console.log("done", outDir, "W", W, "H", H, "chunks", chunks.length, (bytes / 1048576).toFixed(1) + "MB", "attr", JSON.stringify(top));

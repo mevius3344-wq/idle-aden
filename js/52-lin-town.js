@@ -14,6 +14,7 @@
     var _ents = [];
     var _raf = 0;
     var _dlgHome = null;
+    var _walkWait = '';
 
     function curMap() {
         try { return (typeof mapState !== 'undefined' && mapState) ? String(mapState.current || '') : ''; } catch (e) { return ''; }
@@ -66,9 +67,22 @@
             }
             if (hit >= 0) { taken[hit] = true; out.push({ o: orig[hit], npc: g }); } else rest.push(g);
         });
+        // 接手的原版站位要走得到（原版有些商人站在封閉屋內，看起來像站在屋頂上）；可走格資料載入後才篩
+        var walkOk = !!(L && typeof linmapWalkReady === 'function' && linmapWalkReady(def.lin));
+        var reachable = function (o) {
+            if (!walkOk) return true;
+            var t = linmapTileAt(def.lin, o.x, o.y);
+            for (var dy = -1; dy <= 1; dy++) {
+                for (var dx = -1; dx <= 1; dx++) {
+                    var c = linmapTileCenter(def.lin, t.gx + dx, t.gy + dy);
+                    if (c && linmapWalkable(def.lin, c.x, c.y)) return true;
+                }
+            }
+            return false;
+        };
         var free = [];
         for (var j = 0; j < orig.length; j++) {
-            if (!taken[j] && orig[j].n && SPOT_KINDS[orig[j].k]) free.push(j);
+            if (!taken[j] && orig[j].n && SPOT_KINDS[orig[j].k] && reachable(orig[j])) free.push(j);
         }
         free.sort(function (a, b) {
             var da = Math.pow(orig[a].x - cx, 2) + Math.pow(orig[a].y - cy, 2);
@@ -221,6 +235,7 @@
         if (layer) layer.innerHTML = '';
         _town = '';
         _layerKey = '';
+        _walkWait = '';
     }
 
     /** mapId＝目前地圖：原版村莊，或整張大地圖上的野外（同圖各村 NPC 照樣站著，只有所在村可點） */
@@ -233,9 +248,12 @@
         setWalkClass(inTown);
         var layer = ensureLayer();
         if (!layer) return;
-        var key = towns.join(',') + '|' + (inTown ? mapId : '');
+        _walkWait = !!(def && def.lin && typeof linmapWalkReady === 'function' && !linmapWalkReady(def.lin)) ? def.lin : '';
+        var key = towns.join(',') + '|' + (inTown ? mapId : '') + (_walkWait ? '' : '|w');
         _town = mapId;
         layer.classList.remove('hidden');
+        // 圖層被換掉／清空（換圖重建戰場）但村莊沒變 → 照樣重建，不然整村 NPC 消失
+        if (_ents.length && (!layer.firstChild || _ents[0].el.parentNode !== layer)) _layerKey = '';
         if (key !== _layerKey) {
             _ents = [];
             layer.innerHTML = '';
@@ -266,7 +284,8 @@
         _raf = 0;
         var cur = curMap();
         if (!_town) return;
-        if (cur !== _town) {
+        if (!cur) { _raf = requestAnimationFrame(frame); return; }
+        if (cur !== _town || (_ents.length && !_ents[0].el.isConnected) || (_walkWait && linmapWalkReady(_walkWait))) {
             linTownEnter(cur);
             if (!_town) return;
         }
@@ -292,13 +311,19 @@
         _raf = requestAnimationFrame(frame);
     }
 
-    /** 原版遮擋物件用：畫面上的 NPC 腳底框（世界座標） */
+    /** 畫面上的 NPC 腳底框（世界座標）；shield＝原版遮擋物件不蓋 NPC（很多 NPC 站在原版屋簷／攤位底下） */
     global.linTownActors = function () {
         var out = [];
         for (var i = 0; i < _ents.length; i++) {
-            if (!_ents[i].el.hidden) out.push({ x: _ents[i].x, y: _ents[i].y, w: 40, h: 72 });
+            if (!_ents[i].el.hidden) out.push({ x: _ents[i].x, y: _ents[i].y, w: 40, h: 72, shield: true });
         }
         return out;
+    };
+    /** 原版地圖每畫面呼叫：該有村莊 NPC 卻沒進（換圖流程漏叫）→ 補進 */
+    global.linTownEnsure = function (mapId) {
+        if (!mapId || _town === mapId) return;
+        var def = (typeof mapdefOf === 'function') ? mapdefOf(mapId) : null;
+        if (def && def.lin && (def.world || def.townLin)) linTownEnter(mapId);
     };
     global.linTownEnter = linTownEnter;
     global.linTownLeave = linTownLeave;

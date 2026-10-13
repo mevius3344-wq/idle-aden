@@ -4664,6 +4664,8 @@ const GZIP_EXT = new Set([".js", ".css", ".html", ".json", ".svg", ".txt", ".map
 const _gzipCache = new Map();
 function gzipCached(full, size, data) {
   if (size == null) return zlib.gzipSync(data, { level: 6 });
+  // 同大小改內容（數字換數字）也要重壓：鍵加上修改時間
+  try { size = size + ":" + fs.statSync(full).mtimeMs; } catch (e) {}
   const hit = _gzipCache.get(full);
   if (hit && hit.size === size) return hit.gz;
   const gz = zlib.gzipSync(data, { level: 9 });

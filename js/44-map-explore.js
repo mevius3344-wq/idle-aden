@@ -1453,7 +1453,9 @@
             var ngx = t.gx + cx, ngy = t.gy + cy;
             var c = exploreLinMobFree(name, m, ngx, ngy, occ, pt);
             if (!c) continue;
-            if (cx && cy) {
+            if (typeof linmapCanStep === 'function') {
+                if (!linmapCanStep(name, t.gx, t.gy, cx, cy)) continue;
+            } else if (cx && cy) {
                 var a1 = linmapTileCenter(name, ngx, t.gy), a2 = linmapTileCenter(name, t.gx, ngy);
                 if (!linmapWalkable(name, a1.x, a1.y) && !linmapWalkable(name, a2.x, a2.y)) continue;
             }
@@ -1974,7 +1976,9 @@
         for (var j = 0; j < opts.length; j++) {
             var o = opts[j];
             if (!linmapWalkable(name, o.c.x, o.c.y)) continue;
-            if (o.diag) {
+            if (typeof linmapCanStep === 'function') {
+                if (!linmapCanStep(name, t.gx, t.gy, o.gx - t.gx, o.gy - t.gy)) continue;
+            } else if (o.diag) {
                 var a1 = linmapTileCenter(name, o.gx, t.gy), a2 = linmapTileCenter(name, t.gx, o.gy);
                 if (!linmapWalkable(name, a1.x, a1.y) && !linmapWalkable(name, a2.x, a2.y)) continue;
             }
@@ -2986,6 +2990,7 @@
             var linName = on ? exploreLinName() : '';
             if (linName && typeof linmapSync === 'function') {
                 linmapSync(bv, linName, _cx, _cy, exploreGroundYLive() - FOOT_CONTACT_SINK);
+                if (typeof linTownEnsure === 'function') linTownEnsure(mapState.current);
                 if (typeof linmapObjSync === 'function') linmapObjSync(bv, linName, _cx, _cy, exploreOccluders(), exploreDepthZ, exploreMobScreenBottom);
             } else if (typeof linmapHide === 'function') {
                 linmapHide(bv);
