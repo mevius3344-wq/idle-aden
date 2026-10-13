@@ -26,6 +26,9 @@ const nX = meta.tiles.nx / 64, nY = meta.tiles.ny / 64;
 const minBx = meta.tiles.bx0, minBy = meta.tiles.by0;
 const offY = (nX - 1) * 768;
 const blocks = R.listBlocks(mapId).filter((b) => b.bx >= minBx && b.bx < minBx + nX && b.by >= minBy && b.by < minBy + nY);
+// 房屋外殼（tools/lin/linhouse.js，同 export-linhouse.js）：外殼切出的遮擋圖第 8 欄＝房子編號，進屋時不疊
+const walkPath = path.join(outDir, "walk.bin");
+const { shellOf } = require("./linhouse").detectHouses(mapId, meta, blocks, fs.existsSync(walkPath) ? fs.readFileSync(walkPath) : null);
 
 function tile(v) {
   const t = loadTil(v >> 8);
@@ -45,7 +48,8 @@ for (const b of blocks) {
     if (!groups.has(o.g)) groups.set(o.g, []);
     groups.get(o.g).push(o);
   }
-  for (const ps of groups.values()) {
+  for (const [gKey, ps] of groups) {
+    const house = shellOf.get(b.file + ":" + gKey);
     const pieces = [];
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const o of ps) {
@@ -107,7 +111,7 @@ for (const b of blocks) {
       const ix = x0 + s.sx, iy = y0 + top;
       const key = Math.floor((ix + s.sw / 2) / CH) + "_" + Math.floor(s.base / CH);
       if (!byChunk.has(key)) byChunk.set(key, []);
-      byChunk.get(key).push({ w: s.sw, h: sh, px, ix, iy, base: s.base });
+      byChunk.get(key).push({ w: s.sw, h: sh, px, ix, iy, base: s.base, house });
       nSprites++;
     }
   }
@@ -139,7 +143,7 @@ for (const b of blocks) {
     }
     const out = await sharp(atlas, { raw: { width: AW, height: AH, channels: 2 } }).webp({ lossless: true, effort: 6 }).toBuffer();
     fs.writeFileSync(path.join(outDir, "o_" + key + ".webp"), out);
-    const idx = list.map((s) => [s.ax, s.ay, s.w, s.h, s.ix, s.iy, s.base]);
+    const idx = list.map((s) => (s.house == null ? [s.ax, s.ay, s.w, s.h, s.ix, s.iy, s.base] : [s.ax, s.ay, s.w, s.h, s.ix, s.iy, s.base, s.house]));
     fs.writeFileSync(path.join(outDir, "o_" + key + ".json"), JSON.stringify(idx), "utf8");
     bytes += out.length;
     keys.push(key);

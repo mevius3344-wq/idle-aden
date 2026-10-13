@@ -95,11 +95,15 @@ async function main() {
         ok('玩家點地走進迪歐的店', arrived, JSON.stringify(cur) + ' → ' + inside.x + ',' + inside.y);
     }
     await sleep(600);
-    const veil = await ev(`(()=>{const L=document.getElementById('explore-linobj');const box=L&&L.querySelector('.explore-linobj-veil');
+    const inH = await ev(`(()=>{const L=document.getElementById('explore-linobj');const box=L&&L.querySelector('.explore-linobj-veil');
         const pb=document.querySelector('#player-morph-sprite .pm-body').getBoundingClientRect();
+        const hid=typeof linmapHouseActive==='function'?linmapHouseActive():null;
+        const hp=document.getElementById('explore-linhouse');
         const over=[...L.querySelectorAll('.explore-linobj-spr')].filter(o=>!o.hidden).filter(o=>{const q=o.getBoundingClientRect();return q.right>pb.left+6&&q.left<pb.right-6&&q.bottom>pb.top+6&&q.top<pb.bottom-6;});
-        return {inBox:over.filter(o=>o.parentNode===box).length,loose:over.filter(o=>o.parentNode!==box&&o.classList.contains('is-veil')).length,boxOp:box?getComputedStyle(box).opacity:null,boxHidden:box?box.hidden:null};})()`);
-    ok('屋內玩家：蓋到的屋頂收進同一個半透明盒（只淡一次、看得到人）', veil && veil.inBox >= 1 && veil.loose === 0 && veil.boxOp === '0.5' && !veil.boxHidden, JSON.stringify(veil));
+        return {house:hid,patch:!!(hp&&!hp.hidden&&hp.complete&&hp.naturalWidth>0&&getComputedStyle(hp).display!=='none'),
+            shellOver:over.filter(o=>o.getAttribute('data-house')===String(hid)).length,
+            loose:over.filter(o=>o.parentNode!==box&&o.classList.contains('is-veil')).length};})()`);
+    ok('進屋＝收掉外殼（屋內補圖顯示、屋頂不再蓋在人身上）', inH && inH.house != null && inH.patch && inH.shellOver === 0 && inH.loose === 0, JSON.stringify(inH));
     await shot('house_inside.jpg');
 
     // 3) 牆擋得住：找「兩邊都可走、隔著牆、繞路很遠」的一對格，站一邊點另一邊 → 不可直接穿過去
@@ -134,6 +138,10 @@ async function main() {
     if (covered.length) console.log('  info', JSON.stringify(await ev(`({cur:mapState.current,act:linTownActive(),n:document.querySelectorAll('#lin-town-npcs .lin-npc').length,live:document.querySelectorAll('#lin-town-npcs .lin-npc.is-game').length,vis:document.querySelectorAll('#lin-town-npcs .lin-npc:not([hidden])').length,names:[...document.querySelectorAll('#lin-town-npcs .lin-npc.is-game .lin-npc-name')].slice(0,3).map(e=>e.textContent)})`)));
     ok('奇岩 NPC 都看得到、不被屋頂／攤位蓋住', covered.length === 0, covered.join(' '));
     await shot('house_npc.jpg');
+    await ev(`exploreTeleportTo('town_giran', LINTOWN_START.town_giran.x, LINTOWN_START.town_giran.y)`);
+    await sleep(900);
+    const outH = await ev(`(()=>{const hp=document.getElementById('explore-linhouse');return {house:linmapHouseActive(),patch:!!(hp&&!hp.hidden)};})()`);
+    ok('出屋＝外殼回來（屋內補圖收起）', outH && outH.house == null && !outH.patch, JSON.stringify(outH));
 
     ok('無 JS 例外', exc.length === 0, exc.slice(0, 3).join(' | '));
     try { ws.close(); } catch (e2) {} try { br.kill(); } catch (e3) {}

@@ -321,7 +321,7 @@
                 var url = base + '.webp?v=' + linmapVer();
                 _objIdx[key] = (rows || []).map(function (s, i) {
                     return {
-                        id: key + ':' + i, url: url, ax: s[0], ay: s[1], w: s[2], h: s[3], ix: s[4], iy: s[5],
+                        id: key + ':' + i, url: url, ax: s[0], ay: s[1], w: s[2], h: s[3], ix: s[4], iy: s[5], house: s[7],
                         wl: s[4] - d.w / 2, wt: d.h / 2 - s[5], wb: d.h / 2 - s[5] - s[3], wbase: d.h / 2 - s[6]
                     };
                 });
@@ -343,6 +343,73 @@
             }
         }
         return { img: imgs.join(','), pos: pos.join(','), size: size.join(',') };
+    }
+
+    /* ---------- 進屋收外殼（tools/lin/export-linhouse.js）----------
+     * 原版房子＝屋內（地板／內牆／櫃台）＋外殼（屋頂＋前牆）；玩家站在屋內地板格＝進屋：
+     * 底圖上疊「扣掉外殼重畫」的屋內補圖，外殼的遮擋圖不疊，其他遮擋物件顏色改取補圖。 */
+    var _houses = Object.create(null);
+    var _houseOn = null;
+
+    function linmapHouseLoad(name, d) {
+        if (_houses[name] || typeof fetch !== 'function') return;
+        _houses[name] = 'loading';
+        fetch('assets/linmap/' + name + '/houses.json?v=' + linmapVer())
+            .then(function (r) { return r.ok ? r.json() : []; })
+            .then(function (rows) {
+                var list = [], cell = Object.create(null);
+                (rows || []).forEach(function (h, id) {
+                    list.push({ id: id, ix: h[0], iy: h[1], w: h[2], h: h[3], url: 'assets/linmap/' + name + '/h_' + id + '.webp?v=' + linmapVer() });
+                    var cs = h[4] || [];
+                    for (var k = 0; k + 1 < cs.length; k += 2) cell[cs[k + 1] * d.nx + cs[k]] = id;
+                });
+                _houses[name] = { list: list, cell: cell };
+            })
+            .catch(function () { _houses[name] = { list: [], cell: Object.create(null) }; });
+    }
+
+    /** 玩家所在的房子（沒進屋＝null） */
+    function linmapHouseAt(name, d, actors) {
+        if (!d.houses) return null;
+        var hs = _houses[name];
+        if (!hs) { linmapHouseLoad(name, d); return null; }
+        if (hs === 'loading') return null;
+        for (var k = 0; k < actors.length; k++) {
+            if (!actors[k].hero) continue;
+            var t = linmapTileAt(name, actors[k].x, actors[k].y);
+            var id = t ? hs.cell[t.gy * d.nx + t.gx] : undefined;
+            return id == null ? null : hs.list[id];
+        }
+        return null;
+    }
+
+    function linmapHouseSync(name, d, house) {
+        var map = document.getElementById('explore-linmap');
+        var el = document.getElementById('explore-linhouse');
+        if (!house) {
+            if (el && !el.hidden) el.hidden = true;
+            return;
+        }
+        if (!map) return;
+        if (!el || el.parentNode !== map) {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            el = document.createElement('img');
+            el.id = 'explore-linhouse';
+            el.className = 'explore-linhouse';
+            el.alt = '';
+            el.draggable = false;
+            map.appendChild(el);
+        }
+        if (el._hid !== name + ':' + house.id) {
+            el._hid = name + ':' + house.id;
+            el.src = house.url;
+            el.style.left = (house.ix - d.w / 2) + 'px';
+            el.style.bottom = (d.h / 2 - house.iy - house.h) + 'px';
+            el.style.width = house.w + 'px';
+            el.style.height = house.h + 'px';
+            el.setAttribute('data-house', String(house.id));
+        }
+        if (el.hidden) el.hidden = false;
     }
 
     /**
@@ -368,6 +435,9 @@
             _objSet = Object.create(null);
             for (var q = 0; q < d.objChunks.length; q++) _objSet[d.objChunks[q]] = true;
         }
+        var house = linmapHouseAt(name, d, actors);
+        linmapHouseSync(name, d, house);
+        _houseOn = house;
         var cx = Number(camX) || 0, cy = Number(camY) || 0;
         var vw = bv.clientWidth || 1280, vh = bv.clientHeight || 720;
         var ch = d.chunk;
@@ -387,6 +457,7 @@
                 for (var i = 0; i < list.length; i++) {
                     var s = list[i];
                     if (s.wl > xr || s.wl + s.w < xl) continue;
+                    if (house && s.house === house.id) continue;
                     var hit = false, hero = false, shield = false;
                     for (var k = 0; k < actors.length; k++) {
                         var a = actors[k];
@@ -422,9 +493,16 @@
                 continue;
             }
             var w = want[j], sp = w.s;
-            if (e._sid !== sp.id) {
-                e._sid = sp.id;
+            var inHouse = house && sp.ix < house.ix + house.w && sp.ix + sp.w > house.ix && sp.iy < house.iy + house.h && sp.iy + sp.h > house.iy;
+            var sid = sp.id + (inHouse ? '|h' + house.id : '');
+            if (e._sid !== sid) {
+                e._sid = sid;
                 var bg = linmapObjBg(name, d, sp);
+                if (inHouse) {
+                    bg.img = 'url("' + house.url + '"),' + bg.img;
+                    bg.pos = (house.ix - sp.ix) + 'px ' + (house.iy - sp.iy) + 'px,' + bg.pos;
+                    bg.size = house.w + 'px ' + house.h + 'px,' + bg.size;
+                }
                 e.style.width = sp.w + 'px';
                 e.style.height = sp.h + 'px';
                 e.style.backgroundImage = bg.img;
@@ -437,6 +515,8 @@
                 e.style.webkitMaskPosition = mpos;
                 e.style.maskPosition = mpos;
                 e.setAttribute('data-base', String(Math.round(sp.wbase)));
+                if (sp.house != null) e.setAttribute('data-house', String(sp.house));
+                else e.removeAttribute('data-house');
             }
             var tr = 'translate3d(' + (sp.wl - cx).toFixed(1) + 'px,' + (-screenBottom(sp.wb)).toFixed(1) + 'px,0)';
             if (e._tr !== tr) { e.style.transform = tr; e._tr = tr; }
@@ -454,6 +534,7 @@
     }
 
     global.linmapObjSync = linmapObjSync;
+    global.linmapHouseActive = function () { return _houseOn ? _houseOn.id : null; };
     global.linmapData = linmapData;
     global.linmapLoadWalk = linmapLoadWalk;
     global.linmapWalkReady = linmapWalkReady;

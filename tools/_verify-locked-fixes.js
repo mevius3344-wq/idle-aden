@@ -707,6 +707,18 @@ section("62) GM 刪除帳號＋線上實測不留測試帳號");
   ok("實測註冊的線上帳號結束時自動刪除（_gm-cleanup autoCleanup）", exists("tools/_gm-cleanup.js") && /autoCleanup\(\)/.test(rd("tools/_audit-start-menu.js")) && /autoCleanup\(\)/.test(rd("tools/_audit-stale-loop.js")) && /if \(account && !isLocal\(origin\)\)/.test(rd("tools/_gm-cleanup.js")));
 }
 
+section("64) 進屋收外殼（原版天堂）");
+{
+  const lm = rd("js/49-linmap.js");
+  ok("執行期：進屋判定＋屋內補圖＋外殼遮擋不疊＋遮擋顏色取補圖", /function linmapHouseAt\(name, d, actors\)/.test(lm) && /el\.id = 'explore-linhouse';/.test(lm) && /if \(house && s\.house === house\.id\) continue;/.test(lm) && /bg\.img = 'url\("' \+ house\.url \+ '"\),' \+ bg\.img;/.test(lm) && /house: s\[7\]/.test(lm));
+  ok("匯出工具（linhouse 偵測、export-linhouse、export-linobj 標外殼）", exists("tools/lin/linhouse.js") && exists("tools/lin/export-linhouse.js") && /shellOf\.get\(b\.file \+ ":" \+ gKey\)/.test(rd("tools/lin/export-linobj.js")) && /FLOOR_SAFE_MIN = 0\.5/.test(rd("tools/lin/linhouse.js")));
+  const sb = { window: {} };
+  require("vm").runInNewContext(rd("js/49-linmap-data.js"), sb);
+  const LD = sb.window.LINMAP_DATA || {};
+  ok("大地圖有房子資料（wd_main／ti_island houses＋houses.json）", LD.wd_main && LD.wd_main.houses > 100 && LD.ti_island && LD.ti_island.houses > 0 && exists("assets/linmap/wd_main/houses.json") && exists("assets/linmap/wd_main/h_0.webp"));
+  ok("屋內補圖樣式（在人物底下）", /#explore-linmap > \.explore-linhouse \{[^}]*z-index: 1;/.test(rd("css/style.css")));
+}
+
 section("63) 說話頭上冒對話泡泡");
 {
   const cb = exists("js/57-chat-bubble.js") ? rd("js/57-chat-bubble.js") : "";

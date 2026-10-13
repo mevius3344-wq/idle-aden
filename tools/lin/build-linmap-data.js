@@ -66,7 +66,10 @@ const FIELDS = require("./fields-config");
 }
 
 // 遮擋物件圖集清單（tools/lin/export-linobj.js）
-const objOf = (meta) => (meta.objChunks && meta.objChunks.length ? { objChunks: meta.objChunks } : {});
+const objOf = (meta) => ({
+  ...(meta.objChunks && meta.objChunks.length ? { objChunks: meta.objChunks } : {}),
+  ...(meta.houses ? { houses: meta.houses } : {}),
+});
 
 function load(name) {
   const dir = path.join(LIN_DIR, name);

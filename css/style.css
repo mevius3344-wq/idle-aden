@@ -1797,6 +1797,17 @@
             pointer-events: none;
             filter: none;
         }
+        /* 進屋：屋內補圖疊在底圖上（外殼收掉），仍在人物底下 */
+        #explore-linmap > .explore-linhouse {
+            position: absolute;
+            display: block;
+            z-index: 1;
+            max-width: none;
+            max-height: none;
+            user-select: none;
+            pointer-events: none;
+        }
+        #explore-linmap > .explore-linhouse[hidden] { display: none; }
         #battle-view.is-linmap {
             background-color: #0b1418 !important;
             background-image: none !important;
