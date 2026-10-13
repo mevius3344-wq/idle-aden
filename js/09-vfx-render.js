@@ -1709,6 +1709,34 @@ function setShowPlayerId(on) {
     try { localStorage.setItem(_PLAYER_ID_PREF_KEY, on ? '1' : '0'); } catch (e) {}
     _applyPlayerIdPref();
 }
+// 🪪 角色 ID 點到才顯示：點自己／同圖玩家＝顯示該角色名字，點地面／怪／別的角色＝換人或收起
+window.__nameShowKey = null;
+function _nameShowSet(key) {
+    window.__nameShowKey = key || null;
+    try { document.body.classList.toggle('self-name-on', key === 'self'); } catch (e) {}
+    try {
+        document.querySelectorAll('#battle-view .party-sprite.remote-party').forEach(function (el) {
+            el.classList.toggle('name-on', !!key && el.getAttribute('data-peer-key') === key);
+        });
+    } catch (e2) {}
+}
+document.addEventListener('pointerdown', function (ev) {
+    try {
+        var t = ev.target;
+        if (!t || !t.closest || !t.closest('#battle-view')) return;
+        var rp = t.closest('.party-sprite.remote-party');
+        if (rp) { _nameShowSet(rp.getAttribute('data-peer-key')); return; }
+        var bd = document.querySelector('#player-morph-sprite .pm-body');
+        if (bd) {
+            var r = bd.getBoundingClientRect();
+            if (r.width > 0 && ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+                _nameShowSet('self');
+                return;
+            }
+        }
+        _nameShowSet(null);
+    } catch (e) {}
+}, true);
 /** 精靈圖頭頂高度：圖底到最上面不透明列的畫面 px（原版幀下方留白多，用圖高會把名字放到腳底）；依圖檔快取 */
 const _sprTopCache = new Map();
 let _sprTopCv = null;
@@ -5117,6 +5145,7 @@ function _remotePartySpritesApply() {
         } else if (st.el.parentElement !== bv) bv.appendChild(st.el);
         st.el.classList.toggle('is-party', !!mem.party);
         st.el.classList.toggle('is-peer', !mem.party);
+        st.el.classList.toggle('name-on', window.__nameShowKey === mem.key);
         st.el.classList.toggle('is-pvp-ready', !!(!mem.party && (typeof fieldPvpSelfOn === 'function' ? fieldPvpSelfOn() : mem.pvpOn)));
         st.el.setAttribute('data-peer-key', mem.key);
         st.el.setAttribute('data-peer-name', mem.name || '冒險者');

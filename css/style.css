@@ -640,6 +640,11 @@
         body.hide-player-id #player-morph-sprite .pm-name {
             display: none !important;
         }
+        /* 🪪 角色 ID 點到才顯示（自己＝body.self-name-on；同圖玩家＝.name-on） */
+        body:not(.self-name-on) #player-morph-sprite .pm-name,
+        .party-sprite.remote-party:not(.name-on) .remote-party-tag {
+            display: none !important;
+        }
         /* 鏡射朝向時反翻文字，避免名字左右顛倒（由 JS 寫 transform；此處作後援） */
         #player-morph-sprite.q-face-d0 .pm-name,
         #player-morph-sprite.q-face-d6 .pm-name,

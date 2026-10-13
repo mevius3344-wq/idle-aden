@@ -666,6 +666,7 @@ section("36) 原版地圖畫面放大");
   ok("整個 #battle-view 以 scale 屬性放大（短邊 340 世界像素、上限 1.6 倍，v3.10.1 拉遠）", /var LIN_VIEW_SPAN = 340;/.test(ex) && /var LIN_ZOOM_MAX = 1\.6;/.test(ex) && /bv\.style\.setProperty\('scale', String\(z\)\);/.test(ex));
   ok("不可對各世界層各自 transform／scale（會拆散前後遮擋）", !/LIN_ZOOM_IDS/.test(ex));
   ok("點地換算含放大（exploreLinZoomPivot）＋反函數 exploreWorldToClient", /_tapMove\.tx = _cx \+ \(clientX - \(r\.left \+ pv\.x \* lz\)\) \/ lz;/.test(ex) && /window\.exploreWorldToClient = exploreWorldToClient;/.test(ex));
+  ok("角色 ID 點到才顯示（自己 self-name-on／同圖玩家 name-on）", /body:not\(\.self-name-on\) #player-morph-sprite \.pm-name,\s*\.party-sprite\.remote-party:not\(\.name-on\) \.remote-party-tag \{\s*display: none !important;/.test(css) && /function _nameShowSet\(key\)/.test(rd("js/09-vfx-render.js")) && /classList\.toggle\('name-on', window\.__nameShowKey === mem\.key\)/.test(rd("js/09-vfx-render.js")));
   ok("名牌字級反向縮回（--lin-zoom）", /#battle-view\.is-lin-zoom #player-morph-sprite \.pm-name \{\s*font-size: calc\(13px \/ var\(--lin-zoom, 1\)\);/.test(css));
 }
 
