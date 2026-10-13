@@ -2329,6 +2329,12 @@ function _chatDeliver(payload, fromRemote, isHistory) {
         if (keys.length > 200) keys.slice(0, keys.length - 100).forEach(k => { delete _chatSeenIds[k]; });
     }
     _chatAppend(payload.ch, _chatRenderLine(payload, !fromRemote), fromRemote ? 'wc-remote' : 'wc-local');
+    if (!isHistory && payload.ch === 'world' && payload.name !== '系統' && !payload.pandoraDraw && typeof chatBubbleShow === 'function') {
+        try {
+            const bMe = !fromRemote && typeof player !== 'undefined' && player && payload.name === player.name;
+            if (bMe || fromRemote) chatBubbleShow(payload.name, payload.text, bMe);
+        } catch (eB) {}
+    }
     if (fromRemote) {
         _chatNotifyUnread(payload.ch);
         // 歷史回補／過舊訊息：只進聊天，不推跑馬燈

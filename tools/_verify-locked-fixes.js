@@ -707,6 +707,15 @@ section("62) GM 刪除帳號＋線上實測不留測試帳號");
   ok("實測註冊的線上帳號結束時自動刪除（_gm-cleanup autoCleanup）", exists("tools/_gm-cleanup.js") && /autoCleanup\(\)/.test(rd("tools/_audit-start-menu.js")) && /autoCleanup\(\)/.test(rd("tools/_audit-stale-loop.js")) && /if \(account && !isLocal\(origin\)\)/.test(rd("tools/_gm-cleanup.js")));
 }
 
+section("63) 說話頭上冒對話泡泡");
+{
+  const cb = exists("js/57-chat-bubble.js") ? rd("js/57-chat-bubble.js") : "";
+  const wc = rd("js/26-world-channel.js");
+  ok("js/57-chat-bubble.js 載入（chatBubbleShow、5 秒消失）", /js\/57-chat-bubble\.js/.test(F.html) && /window\.chatBubbleShow = chatBubbleShow;/.test(cb) && /var SHOW_MS = 5000;/.test(cb));
+  ok("_chatDeliver 一般頻道（自己／同圖玩家）冒泡泡，歷史訊息不冒", /if \(!isHistory && payload\.ch === 'world' && payload\.name !== '系統' && !payload\.pandoraDraw && typeof chatBubbleShow === 'function'\)/.test(wc) && /if \(bMe \|\| fromRemote\) chatBubbleShow\(payload\.name, payload\.text, bMe\);/.test(wc));
+  ok("泡泡樣式（字級隨 --lin-zoom 縮回、不擋點擊）", /#battle-view \.chat-bubble \{[^}]*pointer-events: none;[^}]*font-size: calc\(13px \/ var\(--lin-zoom, 1\)\);/.test(rd("css/style.css")));
+}
+
 section("35) 名字在頭上");
 {
   const fx = rd("js/09-vfx-render.js");

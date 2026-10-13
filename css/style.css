@@ -669,6 +669,24 @@
         #battle-view.is-lin-zoom .party-sprite.remote-party .remote-party-tag {
             font-size: calc(10px / var(--lin-zoom, 1));
         }
+        /* 對話泡泡（原版天堂一般說話）：角色頭上深色半透明框＋小尾巴 */
+        #battle-view .chat-bubble {
+            position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%);
+            z-index: 60; pointer-events: none;
+            width: max-content; max-width: calc(200px / var(--lin-zoom, 1));
+            padding: calc(4px / var(--lin-zoom, 1)) calc(8px / var(--lin-zoom, 1));
+            background: rgba(10, 8, 6, .72); border: 1px solid rgba(214, 186, 120, .75); border-radius: 6px;
+            color: #fff; font-size: calc(13px / var(--lin-zoom, 1)); line-height: 1.35;
+            text-align: center; white-space: normal; word-break: break-all;
+            text-shadow: 0 0 2px #000, 1px 1px 1px #000;
+            font-family: "Noto Serif TC", "PMingLiU", serif;
+            animation: chatBubbleIn .15s ease-out;
+        }
+        #battle-view .chat-bubble::after {
+            content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+            border: 6px solid transparent; border-top-color: rgba(214, 186, 120, .75);
+        }
+        @keyframes chatBubbleIn { from { opacity: 0; } to { opacity: 1; } }
         .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
         .party-sprite.remote-party .remote-party-tag {
             position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
