@@ -94,12 +94,34 @@
     function exploreGroundYLive() {
         if (_groundYCache) return _groundYCache;
         var bv = document.getElementById('battle-view');
-        var h = (bv && bv.clientHeight) || GROUND_Y_REF_H;
+        var h = (bv && exploreBvSize(bv).h) || GROUND_Y_REF_H;
         if (!(h > 80)) h = GROUND_Y_REF_H;
         _groundYCache = Math.max(80, Math.round(h * 0.48));
         queueMicrotask(function () { _groundYCache = 0; });
         return _groundYCache;
     }
+    // #battle-view 版面大小：走路每幀地圖／遮擋／縮放／腳錨都要用，夾在寫樣式之間讀 clientWidth／clientHeight＝每幀多次整頁重排（走路一頓一頓）；
+    // 只在大小真的變了（ResizeObserver、視窗改變、改縮放）才重量
+    var _bvSize = null, _bvSizeEl = null, _bvSizeRo = null;
+    function exploreBvSize(bv) {
+        bv = bv || document.getElementById('battle-view');
+        if (!bv) return { w: 0, h: 0 };
+        if (_bvSize && _bvSizeEl === bv) return _bvSize;
+        if (_bvSizeEl !== bv) {
+            _bvSizeEl = bv;
+            if (_bvSizeRo) _bvSizeRo.disconnect();
+            _bvSizeRo = null;
+            if (typeof ResizeObserver === 'function') {
+                _bvSizeRo = new ResizeObserver(function () { _bvSize = null; });
+                _bvSizeRo.observe(bv);
+            }
+        }
+        var s = { w: bv.clientWidth || 0, h: bv.clientHeight || 0 };
+        if (_bvSizeRo && s.w > 0 && s.h > 0) _bvSize = s;
+        return s;
+    }
+    function exploreBvSizeReset() { _bvSize = null; }
+    try { window.addEventListener('resize', exploreBvSizeReset); } catch (eRs) {}
     var PACK_PER_SPOT = 2; // v3.8.478 denser walk space
     var PORTAL_HOLD_TICKS = 8;
     var _portalBusy = false;
@@ -576,6 +598,8 @@
     /** 滯後轉向：相鄰方向需連續確認；相差 ≥2 格（約 90°+）立即轉 */
     function exploreSetFaceFromVec(dx, dy) {
         if (Math.abs(dx) < 0.02 && Math.abs(dy) < 0.02) return;
+        // 原版格步走路中朝向＝這一步的方向；朝終點向量轉會跟步向每幀來回翻（走路圖 E↔SE 閃）
+        if (_linStep && _linStep.cyc >= 1) return;
         var nd = exploreVec2Dir(dx, dy);
         if (nd === _faceD) {
             _facePending = nd;
@@ -1490,6 +1514,7 @@
         occ[o.gx + ',' + o.gy] = m;
         exploreLinMobFace(m, o.c.x - m._fx, o.c.y - (m._fy || 0), now);
         m._linFaceHold = true;
+        m._animMoving = true;
         exploreLinMobAdvance(m, now);
     }
     /** 一步＝一整輪走路幀；位移跟著幀一格格跳（同玩家 #34）；走完回 false */
@@ -1503,6 +1528,7 @@
             m._lsEnd = s.t0 + s.dur;
             m._ls = null;
             m._linWalkF = null;
+            m._linFrameDirty = true;
             return false;
         }
         var t = exploreLinMobTiming(m);
@@ -1516,11 +1542,55 @@
             for (j = 0; j < n; j++) { acc += wd[j]; if (pos < acc) { f = j; break; } }
         }
         var kd = (f + 1) / n;
+        if (m._linWalkF !== f || !s.on) { s.on = true; m._linFrameDirty = true; }
         m._fx = s.fx + (s.tx - s.fx) * kd;
         m._fy = s.fy + (s.ty - s.fy) * kd;
         m._gridFx = m._fx; m._gridFy = m._fy;
         m._linWalkF = f;
+        exploreLinMobRafKick();
         return true;
+    }
+    /**
+     * 怪物格步跟畫面幀同步（同玩家 #34）：33ms 計時器推進＋25fps 換圖＝位移與換幀落在不同畫面、間隔忽長忽短（滑動走跳）。
+     * 有怪在走時每個畫面幀推進，跳格與換幀寫在同一幀；一步走完當幀接下一步。
+     */
+    var _linMobRaf = 0;
+    function exploreLinMobRafKick() {
+        if (!_linMobRaf && typeof requestAnimationFrame === 'function') _linMobRaf = requestAnimationFrame(exploreLinMobRafFrame);
+    }
+    function exploreLinMobRafFrame() {
+        _linMobRaf = 0;
+        var name = exploreLinName();
+        if (!name || !exploreFieldCombatActive() || typeof mapState === 'undefined' || !mapState.mobs) return;
+        var now = Date.now(), occ = null, tgt = null, pt = null, busy = false;
+        for (var i = 0; i < mapState.mobs.length; i++) {
+            var m = mapState.mobs[i];
+            if (!m || !m._ls || m._dead || !(m.curHp > 0)) continue;
+            if (exploreLinMobAdvance(m, now)) { busy = true; continue; }
+            if (!occ) {
+                occ = exploreLinMobOccupy(name);
+                pt = linmapTileAt(name, _tx, _ty);
+                try { tgt = mapState.mobs[mapState.targetIdx]; } catch (e0) {}
+                if (tgt && (tgt._dead || !(tgt.curHp > 0))) tgt = null;
+            }
+            if (m._homeFx == null || Math.hypot(m._homeFx - _tx, (m._homeFy || 0) - _ty) > SIM_PX + 80) { m._animMoving = false; continue; }
+            exploreMobLinTick(name, m, now, tgt, occ, pt);
+            if (m._ls) busy = true;
+        }
+        exploreLinMobFlush();
+        if (busy) exploreLinMobRafKick();
+    }
+    /** 位置寫進怪卡＋同一幀換精靈圖（只換這一步有變的怪） */
+    function exploreLinMobFlush(posDone) {
+        if (typeof mapState === 'undefined' || !mapState.mobs) return;
+        var dirty = null;
+        for (var i = 0; i < mapState.mobs.length; i++) {
+            var m = mapState.mobs[i];
+            if (m && m._linFrameDirty) { m._linFrameDirty = false; (dirty || (dirty = new Set())).add(String(m.uid)); }
+        }
+        if (!dirty) return;
+        if (!posDone) { try { exploreApplyFieldDomPos(); } catch (eP) {} }
+        if (typeof window._mobAnimApplyUids === 'function') { try { window._mobAnimApplyUids(dirty); } catch (eA) {} }
     }
     function exploreLinMobWander(name, m, now, occ, pt) {
         m._linFaceHold = true;
@@ -3060,16 +3130,19 @@
     var _linZoomOutOk = true;
     function exploreLinZoom() { return _linZoom; }
     function exploreLinZoomPivot(bv) {
-        return { x: (bv.clientWidth || 0) / 2, y: (bv.clientHeight || 0) - (exploreGroundYLive() - FOOT_CONTACT_SINK) };
+        var sz = exploreBvSize(bv);
+        return { x: sz.w / 2, y: sz.h - (exploreGroundYLive() - FOOT_CONTACT_SINK) };
     }
     function exploreApplyLinZoom(bv, on) {
         var k = _linZoom < 1 ? _linZoom : 1;
-        var w = (bv.clientWidth || 0) * k, h = (bv.clientHeight || 0) * k;
+        var sz = exploreBvSize(bv);
+        var w = sz.w * k, h = sz.h * k;
         var z = 1;
         if (on && w > 40 && h > 40) z = Math.max(_linZoomOutOk ? LIN_ZOOM_MIN : 1, Math.min(LIN_ZOOM_MAX, Math.min(w, h) / LIN_VIEW_SPAN));
         z = Math.round(z * 100) / 100;
         if (z !== _linZoom) {
             _linZoom = z;
+            exploreBvSizeReset();
             bv.style.setProperty('--lin-zoom', String(z));
             bv.classList.toggle('is-lin-zoom', z !== 1);
             if (z > 1) bv.style.setProperty('scale', String(z));
@@ -3918,6 +3991,7 @@
         }
         exploreEngageRetarget();
         exploreApplyFieldDomPos();
+        exploreLinMobFlush(true);
         // 🌐 MMORPG：移動時推送座標給同圖玩家
         try {
             if ((wantMove || autoDrive || _camMoved || _moving) && typeof rtWorldPushMove === 'function') rtWorldPushMove(false);
@@ -4159,6 +4233,7 @@
     window.exploreLinZoom = exploreLinZoom;
     window.exploreDepthZ = exploreDepthZ;
     window.exploreLinName = exploreLinName;
+    window.exploreBvSize = exploreBvSize;
     window.exploreWorldToClient = exploreWorldToClient;
     window.exploreClearTapMove = exploreClearTapMove;
     window.exploreWorldActive = exploreWorldActive;

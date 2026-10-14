@@ -1,4 +1,5 @@
 // 實測：原版地圖怪物一格一步（l1j passispeed）、一格一隻、站定才攻擊、打中幀才扣血、玩家鄰格才近戰
+// 　　＋走路節奏：位置與走路圖同一畫面幀、間隔≈原版走路幀、相機移動時怪不相對地面抖
 // 用法：node tools/_audit-mob-step.js [baseUrl] [--maps zone_13,talking_island]
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -8,7 +9,8 @@ const path = require('path');
 const _mi = process.argv.indexOf('--maps');
 const MAPS = _mi > 0 ? process.argv[_mi + 1].split(',') : ['talking_island', 'zone_14'];
 const BASE = (process.argv[2] && !process.argv[2].startsWith('--')) ? process.argv[2] : 'http://localhost:5199';
-const PORT = 9343;
+let PORT = 9343;
+const freePort = () => new Promise((r) => { const s = require('net').createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); s.on('error', () => r(9343)); });
 const OUT = path.join(__dirname, 'lin', '_out');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
@@ -21,6 +23,7 @@ const ok = (name, cond, detail) => {
 
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
+    PORT = await freePort();
     const exe = ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'].find((p) => fs.existsSync(p));
     const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'mobstep-'));
     const br = spawn(exe, ['--headless=new', '--remote-debugging-port=' + PORT, '--user-data-dir=' + udd, '--window-size=1280,900', '--no-first-run', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
@@ -141,6 +144,59 @@ async function main() {
         // 瞬移落地可能剛好落在怪格（怪下一步會讓開），最多容許 1 次
         ok(mapId + ' 玩家鄰格才近戰、不踩怪格', S.patk.length >= 1 && S.patk.every((p) => p.td <= 1) && S.patk.filter((p) => p.same).length <= 1,
             'n=' + S.patk.length + ' ' + S.patk.slice(0, 6).map((p) => p.td).join(','));
+
+        // 節奏：每個畫面幀記怪卡位置＋圖檔＋地圖相機；位置與走路圖要同一幀換、間隔≈走路各幀時間、相機移動時靜止怪不相對地面抖
+        await ev(`(()=>{ (mapState.mobs||[]).forEach(m=>{ if(m) m.beh='被動'; }); try{ mapState.targetIdx=-1; }catch(e){} })()`);
+        await sleep(1500);
+        const rhythm = async (walk) => {
+            await ev(`(()=>{const map=document.getElementById('explore-linmap');window.__mr=[];window.__mrOn=true;
+                const loop=(t)=>{const m=/translate3d\\((-?[\\d.]+)px,\\s*(-?[\\d.]+)px/.exec(map.style.transform)||[0,0,0];const cx=-Number(m[1]),cy=Number(m[2]);
+                    const byU={};for(const mb of (mapState.mobs||[])) if(mb) byU[mb.uid]=mb;
+                    const row=[t,cx,cy];
+                    for(const c of document.querySelectorAll('#mob-list.is-field-combat > .mob-target.field-mob[data-uid]')){
+                        if(c.style.visibility==='hidden') continue;
+                        const u=c.getAttribute('data-uid'),mb=byU[u];if(!mb) continue;
+                        const lm=/calc\\(50% \\+ (-?[\\d.]+)px\\)/.exec(c.style.left);if(!lm) continue;
+                        const img=c.querySelector('.mob-img-inner img:not(.mob-anim-shadow)');
+                        row.push([u,Number(lm[1]),parseFloat(c.style.bottom)||0,img?(img.getAttribute('src')||''):'',mb._ls?1:0,mb.n]);
+                    }
+                    window.__mr.push(row);if(window.__mrOn)requestAnimationFrame(loop);};requestAnimationFrame(loop);})()`);
+            if (walk) {
+                const p = await ev(`(()=>{const r=document.querySelector('#player-morph-sprite .pm-body').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.bottom)};})()`);
+                for (let k = 0; k < 3; k++) {
+                    const dx = k % 2 ? -260 : 260;
+                    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: p.x + dx, y: p.y + 30, button: 'left', clickCount: 1 });
+                    await sleep(2300);
+                }
+            } else await sleep(7000);
+            return ev(`(()=>{window.__mrOn=false;const R=window.__mr;const T=LIN_MOB_TIMING;const per={};
+                for(const row of R){const t=row[0],cx=row[1],cy=row[2];for(let i=3;i<row.length;i++){const [u,sx,b,src,ls,n]=row[i];(per[u]||(per[u]={n,f:[]})).f.push({t,wx:sx+cx,wy:b+cy,src,ls});}}
+                let both=0,posOnly=0,jit=0,still=0,camMv=0;const err=[];
+                for(const u in per){const f=per[u].f;const wd=(T[per[u].n]||[])[4];let last=null;
+                    for(let i=1;i<f.length;i++){const a=f[i-1],b=f[i];if(b.t-a.t>40){last=null;continue;}
+                        const pc=Math.abs(b.wx-a.wx)>0.5||Math.abs(b.wy-a.wy)>0.5;
+                        if(pc&&(a.ls||b.ls)){ if(b.src!==a.src&&/walk_/.test(a.src+b.src)) both++; else posOnly++;
+                            if(last!=null&&wd&&b.t-last<600) err.push(Math.abs(b.t-last-wd.reduce((s,x)=>s+x,0)/wd.length)); last=b.t; }
+                        if(!a.ls&&!b.ls){ still++; if(pc) jit++; }
+                    }}
+                for(let i=1;i<R.length;i++) if(R[i][1]!==R[i-1][1]||R[i][2]!==R[i-1][2]) camMv++;
+                err.sort((a,b)=>a-b);
+                return {both,posOnly,jit,still,camMv,ivN:err.length,errMed:err.length?Math.round(err[err.length>>1]):-1};})()`);
+        };
+        // 怪閒逛是隨機的：7 秒內走不夠就再取樣（最多 3 段）
+        let rs = await rhythm(false);
+        for (let t = 0; t < 2 && (rs.both < 10 || rs.ivN < 5); t++) {
+            const r2 = await rhythm(false);
+            rs = { both: rs.both + r2.both, posOnly: rs.posOnly + r2.posOnly, jit: rs.jit + r2.jit, still: rs.still + r2.still, camMv: rs.camMv + r2.camMv,
+                ivN: rs.ivN + r2.ivN, errMed: r2.ivN > rs.ivN ? r2.errMed : rs.errMed };
+        }
+        const rw = await rhythm(true);
+        const sync = (r) => r.both + r.posOnly ? r.both / (r.both + r.posOnly) : 0;
+        console.log('   rhythm still', JSON.stringify(rs), 'walk', JSON.stringify(rw));
+        ok(mapId + ' 怪走路：位置與走路圖同一畫面幀換（≥90%）', rs.both >= 10 && sync(rs) >= 0.9 && (rw.both < 10 || sync(rw) >= 0.9),
+            'still ' + rs.both + '/' + (rs.both + rs.posOnly) + ' walk ' + rw.both + '/' + (rw.both + rw.posOnly));
+        ok(mapId + ' 怪走路：每次跳位間隔≈原版走路幀時間（中位誤差 ≤25ms）', rs.ivN >= 5 && rs.errMed <= 25, 'n=' + rs.ivN + ' errMed=' + rs.errMed);
+        ok(mapId + ' 相機移動時靜止怪不相對地面抖', rw.camMv >= 5 && rw.still > 0 && rw.jit <= 2, 'cam=' + rw.camMv + ' jit=' + rw.jit + '/' + rw.still);
     }
     const relevant = exc.filter((e) => !/Failed to load|404|net::/.test(e));
     ok('無 JS 例外', relevant.length === 0, relevant.slice(0, 5).join(' | '));

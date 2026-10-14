@@ -1613,7 +1613,7 @@ function _petAnimApply() {
         let show = _petInWild() && !(bv && bv.classList.contains('hidden'));
         // 清掉不在場的
         layer.querySelectorAll('[data-pet]').forEach(el => { if (!show || !outs.some(p => p.uid === el.getAttribute('data-pet'))) el.remove(); });
-        if (!show) return;
+        if (!show || !outs.length) return;
         let hostRect = host.getBoundingClientRect();
         for (let p of outs) {
             if (!p._downed) _petWanderStep(p, host, hostRect);   // 倒地/死亡殘影不再移動（v3.2.19 修：原本倒地仍會閒晃漂移）

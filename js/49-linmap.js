@@ -217,6 +217,11 @@
         linmapSetOldFloor(false);
     }
 
+    /** 畫面大小走 exploreBvSize 快取（每幀直接讀 clientWidth＝強制重排） */
+    function linmapViewSize(bv) {
+        if (typeof window.exploreBvSize === 'function') return window.exploreBvSize(bv);
+        return { w: bv.clientWidth, h: bv.clientHeight };
+    }
     /**
      * 每幀同步：anchorBottom＝世界 y＝camY 對應的畫面 bottom（與角色腳底同一錨點）
      */
@@ -242,8 +247,9 @@
         layer.style.bottom = ab.toFixed(1) + 'px';
         layer.style.transform = 'translate3d(' + (-cx).toFixed(1) + 'px,' + cy.toFixed(1) + 'px,0)';
 
-        var vw = bv.clientWidth || 1280;
-        var vh = bv.clientHeight || 720;
+        var vs = linmapViewSize(bv);
+        var vw = vs.w || 1280;
+        var vh = vs.h || 720;
         var ch = d.chunk;
         var ix0 = cx - vw / 2 - PAD_PX + d.w / 2;
         var ix1 = cx + vw / 2 + PAD_PX + d.w / 2;
@@ -439,7 +445,8 @@
         linmapHouseSync(name, d, house);
         _houseOn = house;
         var cx = Number(camX) || 0, cy = Number(camY) || 0;
-        var vw = bv.clientWidth || 1280, vh = bv.clientHeight || 720;
+        var vs = linmapViewSize(bv);
+        var vw = vs.w || 1280, vh = vs.h || 720;
         var ch = d.chunk;
         var c0 = Math.max(0, Math.floor((cx - vw / 2 - OBJ_PAD + d.w / 2) / ch));
         var c1 = Math.floor((cx + vw / 2 + OBJ_PAD + d.w / 2) / ch);

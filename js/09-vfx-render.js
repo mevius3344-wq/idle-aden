@@ -1739,6 +1739,7 @@ document.addEventListener('pointerdown', function (ev) {
 }, true);
 /** 精靈圖頭頂高度：圖底到最上面不透明列的畫面 px（原版幀下方留白多，用圖高會把名字放到腳底）；依圖檔快取 */
 const _sprTopCache = new Map();
+const _sprScaleCache = new Map();
 let _sprTopCv = null;
 function _sprHeadPx(img) {
     if (!img || !img.complete || !(img.naturalWidth > 0)) return null;
@@ -1763,8 +1764,16 @@ function _sprHeadPx(img) {
         _sprTopCache.set(key, top);
     }
     if (top == null) return null;
-    let rh = img.offsetHeight || img.naturalHeight;
-    return (img.naturalHeight - top) * (rh / img.naturalHeight);
+    // 顯示高度依圖檔＋地圖種類快取：每換一幀讀 offsetHeight＝強制重排（走路一頓一頓）
+    let bvL = document.getElementById('battle-view');
+    let sk = key + ((bvL && bvL.classList.contains('is-linmap')) ? '|L' : '');
+    let rk = _sprScaleCache.get(sk);
+    if (rk === undefined) {
+        let oh = img.offsetHeight;
+        rk = oh > 0 ? oh / img.naturalHeight : 1;
+        if (oh > 0) { if (_sprScaleCache.size > 800) _sprScaleCache.clear(); _sprScaleCache.set(sk, rk); }
+    }
+    return (img.naturalHeight - top) * rk;
 }
 
 function _playerNameplateApply() {
@@ -3540,7 +3549,7 @@ function _mob8Apply(c, m, uid, now) {
     // 🩹 v3.8.403：遠處凍結 idle＋鎖已載向（禁探鄰向／狂換幀＝閃圖）
     let _farFreeze8 = false;
     try {
-        if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m)) _farFreeze8 = true;
+        if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m) && !m._ls) _farFreeze8 = true;
     } catch (eFf8) {}
     if (_farFreeze8) {
         m._animMoving = false;
@@ -3700,7 +3709,7 @@ function _mob8Apply(c, m, uid, now) {
         else if (_simg.style.visibility !== 'hidden') _simg.style.visibility = 'hidden';
     }
 }
-function _mobAnimApply() {
+function _mobAnimApply(onlyUids) {
     try { _expandMob8DirFromLegacyManifest(); } catch (eEx8) {}
     let ml = document.getElementById('mob-list'); if (!ml) return;
     if (typeof mapState === 'undefined' || !mapState.mobs) return;
@@ -3712,6 +3721,7 @@ function _mobAnimApply() {
     for (let c of cards) {
         try {
         let uid = c.getAttribute('data-uid');
+        if (onlyUids && !onlyUids.has(String(uid))) continue;
         let m = mobByUid.get(String(uid));
         if (!m) continue;
         // 🩹 v3.8.408：場戰一律套面向翻轉（含靜態圖怪）
@@ -3728,7 +3738,7 @@ function _mobAnimApply() {
         // 🩹 v3.8.403：遠處怪凍結為 idle（禁 walk／狂換向＝閃圖）
         let _farFreeze = false;
         try {
-            if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m)) _farFreeze = true;
+            if (typeof exploreMobShouldSim === 'function' && !exploreMobShouldSim(m) && !m._ls) _farFreeze = true;
         } catch (eFar) {}
         if (_farFreeze) {
             m._animMoving = false;
@@ -5237,6 +5247,7 @@ try {
     window._playerMorphApply = _playerMorphApply;
     window._playerMorphTrigger = _playerMorphTrigger;
     window._mobAnimApply = _mobAnimApply;
+    window._mobAnimApplyUids = _mobAnimApply;
     window._mobAnimTrigger = _mobAnimTrigger;
     window._animSetImgFrame = _animSetImgFrame;
     window._remotePartySpritesApply = _remotePartySpritesApply;

@@ -67,6 +67,8 @@ async function main() {
     const p = await ev(`(()=>{const r=document.querySelector('#player-morph-sprite .pm-body').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.bottom)};})()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x + 320, y: p.y + 60, button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x + 320, y: p.y + 60, button: 'left', clickCount: 1 });
+    await ev(`(()=>{window.__lr=0;const hook=(proto,k)=>{const d=Object.getOwnPropertyDescriptor(proto,k);Object.defineProperty(proto,k,{configurable:true,get(){if(window.__wrOn&&(this.id==='battle-view'||(this.classList&&this.classList.contains('pm-body'))))window.__lr++;return d.get.call(this);}});};
+        hook(Element.prototype,'clientWidth');hook(Element.prototype,'clientHeight');hook(HTMLElement.prototype,'offsetHeight');hook(HTMLElement.prototype,'offsetWidth');})()`);
     await ev(`(()=>{const map=document.getElementById('explore-linmap');const pm=document.getElementById('player-morph-sprite');window.__wr=[];window.__wrOn=true;
         const loop=(t)=>{const b=pm.querySelector('img.pm-body');window.__wr.push([t,map.style.transform,b?b.src:'']);if(window.__wrOn)requestAnimationFrame(loop);};requestAnimationFrame(loop);})()`);
     let seenWalk = false, bad = [];
@@ -80,7 +82,9 @@ async function main() {
     ok('有走起來（is-explore-walking）', seenWalk);
     const rhythm = await ev(`(()=>{window.__wrOn=false;const r=window.__wr;const ch=[];let both=0,split=0;
         for(let i=1;i<r.length;i++){const pc=r[i][1]!==r[i-1][1],sc=r[i][2]!==r[i-1][2];if(pc)ch.push(r[i][0]);if(pc&&sc)both++;else if(pc||sc)split++;}
-        const iv=ch.slice(2).map((t,i)=>t-ch[i+1]).sort((a,b)=>a-b);return {n:iv.length,med:iv.length?Math.round(iv[iv.length>>1]):0,both,split};})()`);
+        const iv=ch.slice(2).map((t,i)=>t-ch[i+1]).sort((a,b)=>a-b);return {n:iv.length,med:iv.length?Math.round(iv[iv.length>>1]):0,both,split,frames:r.length,layoutReads:window.__lr};})()`);
+    // 每幀讀 #battle-view／人物圖的版面大小＝夾在寫樣式之間強制重排（走路一頓一頓）；快取後整段走路只剩換新圖時量一次
+    ok('走路不每幀讀版面大小（#battle-view／人物圖，強制重排）', rhythm && rhythm.frames > 60 && rhythm.layoutReads <= 12, 'reads=' + (rhythm && rhythm.layoutReads) + ' frames=' + (rhythm && rhythm.frames));
     ok('走路節奏穩（每幀約 160ms、位移與換幀同一畫面）', rhythm && rhythm.n >= 4 && rhythm.med >= 145 && rhythm.med <= 175 && rhythm.split <= 2, JSON.stringify(rhythm));
     ok('原版地圖走路腳下無大陰影圈／草屑（foot-patch、CSS 橢圓）', bad.length === 0, bad.slice(0, 2).join(' | '));
     const st = await probe();

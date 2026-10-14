@@ -293,8 +293,9 @@
         var on = bv && !bv.classList.contains('hidden') && typeof exploreCamX === 'function' && typeof exploreMobScreenBottom === 'function';
         if (on) {
             var cx = exploreCamX(), cy = exploreCamY();
-            var halfW = (bv.clientWidth || 1280) / 2 + 160;
-            var vh = (bv.clientHeight || 720) + 200;
+            var vs = (typeof window.exploreBvSize === 'function') ? window.exploreBvSize(bv) : { w: bv.clientWidth, h: bv.clientHeight };
+            var halfW = (vs.w || 1280) / 2 + 160;
+            var vh = (vs.h || 720) + 200;
             for (var i = 0; i < _ents.length; i++) {
                 var e = _ents[i];
                 var dx = e.x - cx;

@@ -593,6 +593,13 @@ section("55) 原版地圖怪物一格一步／打中幀才扣血");
     /if \(!wantChase && !passiveFull && !pSafe && toPlayerT <= LIN_MOB_SIGHT_T\)/.test(ex) &&
     fs.existsSync(path.join(ROOT, "tools/_audit-mob-aggro.js")));
   ok("攻擊動作照原版各幀時長、不被受擊打斷、原版地圖 ~25fps 換幀", /function _linMobActFrame\(/.test(vr) && /\(k === 'attack' \|\| k === 'hurt'\) && m\._linAtkHold && Date\.now\(\) < m\._linAtkHold\) return;/.test(vr) && /classList\.contains\('is-linmap'\)\) \? 38 :/.test(vr));
+  ok("怪走路跟畫面幀同步：RAF 每幀推進、跳格當幀同時換位置＋走路圖（exploreLinMobFlush）、起步即走路動作、走路中不遠距凍結（v3.10.29 怪滑動走跳）",
+    /function exploreLinMobRafFrame\(\)/.test(ex) && /function exploreLinMobFlush\(posDone\)/.test(ex) &&
+    /if \(m\._linWalkF !== f \|\| !s\.on\) \{ s\.on = true; m\._linFrameDirty = true; \}/.test(ex) &&
+    /m\._animMoving = true;\s*exploreLinMobAdvance\(m, now\);/.test(ex) && /exploreLinMobFlush\(true\);/.test(ex) &&
+    /function _mobAnimApply\(onlyUids\)/.test(vr) && /window\._mobAnimApplyUids = _mobAnimApply;/.test(vr) &&
+    /!exploreMobShouldSim\(m\) && !m\._ls\) _farFreeze8 = true;/.test(vr) && /!exploreMobShouldSim\(m\) && !m\._ls\) _farFreeze = true;/.test(vr) &&
+    /怪走路：位置與走路圖同一畫面幀換/.test(rd("tools/_audit-mob-step.js")));
 }
 
 section("54) 設定／內掛選單／輔助設定 視窗（照新創）");
@@ -740,6 +747,15 @@ section("34b) 格步跟畫面幀同步（走路不飄跳）");
 {
   const ex = rd("js/44-map-explore.js");
   ok("走一步期間 RAF 每幀推進、走完當幀補跑 tick", /function exploreLinRafFrame\(\)/.test(ex) && /if \(!_linStep\) \{ try \{ exploreTick\(\); \} catch \(eT\) \{\} return; \}/.test(ex) && /if \(k >= 1\) _linStep = null;\s*else exploreLinRafKick\(\);/.test(ex));
+  const lm = rd("js/49-linmap.js"), vr = rd("js/09-vfx-render.js");
+  ok("走路路徑不每幀讀版面大小：#battle-view 大小快取（exploreBvSize，ResizeObserver／改縮放才重量）、地圖／遮擋／縮放／腳錨都用它；頭頂高度比例依圖檔快取（v3.10.29 走路一頓一頓）",
+    /function exploreBvSize\(bv\)/.test(ex) && /new ResizeObserver\(function \(\) \{ _bvSize = null; \}\)/.test(ex) &&
+    /var h = \(bv && exploreBvSize\(bv\)\.h\) \|\| GROUND_Y_REF_H;/.test(ex) && !/bv\.clientWidth \* k/.test(ex) &&
+    /function linmapViewSize\(bv\)/.test(lm) && (lm.match(/linmapViewSize\(bv\)/g) || []).length >= 3 &&
+    /_sprScaleCache\.get\(sk\)/.test(vr) && !/let rh = img\.offsetHeight \|\| img\.naturalHeight;/.test(vr) &&
+    /exploreBvSize\(bv\)/.test(rd("js/52-lin-town.js")) && /走路不每幀讀版面大小/.test(rd("tools/_audit-walk-shadow.js")));
+  ok("格步走一步期間朝向＝步向（終點／追怪向量不改朝向，走路圖不 E↔SE 閃）",
+    /function exploreSetFaceFromVec\(dx, dy\) \{\s*if \(Math\.abs\(dx\) < 0\.02 && Math\.abs\(dy\) < 0\.02\) return;[\s\S]{0,120}if \(_linStep && _linStep\.cyc >= 1\) return;/.test(ex));
 }
 
 section("65) 變形卷軸不卡畫面（腳錨不在迴圈裡強制重排）");
