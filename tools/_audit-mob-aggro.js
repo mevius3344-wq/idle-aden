@@ -9,7 +9,7 @@ const path = require('path');
 const _mi = process.argv.indexOf('--maps');
 const MAPS = _mi > 0 ? process.argv[_mi + 1].split(',') : ['zone_06', 'zone_13', 'zone_01', 'elf_forest'];
 const BASE = (process.argv[2] && !process.argv[2].startsWith('--')) ? process.argv[2] : 'http://localhost:5199';
-const PORT = 9467;
+const PORT = require('./_cdp-port')(9467);
 const SECS = 22;
 const OUT = path.join(__dirname, 'lin', '_out');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

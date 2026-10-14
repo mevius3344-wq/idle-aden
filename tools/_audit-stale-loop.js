@@ -4,7 +4,7 @@ require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
 const fs = require('fs'); const os = require('os'); const path = require('path');
 const BASE = process.argv[2] || 'http://localhost:5199';
-const PORT = 9391;
+const PORT = require('./_cdp-port')(9391);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
     const acct = 'sl' + (Date.now() % 1000000); const pwd = 'sltest123';

@@ -8,7 +8,7 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 const GAME_PORT = 9346;
-const CDP_PORT = 9347;
+const CDP_PORT = require('./_cdp-port')(9347);
 const BASE = "http://127.0.0.1:" + GAME_PORT;
 const OUT = path.join(__dirname, "lin", "_out");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 
 const BASE = process.argv[2] || 'http://localhost:5199';
-const PORT = 9412;
+const PORT = require('./_cdp-port')(9412);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
 const ok = (name, cond, detail) => {

@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const BASE = process.argv[2] || 'http://localhost:5699';
-const PORT = 9373;
+const PORT = require('./_cdp-port')(9373);
 const OUT = path.join(__dirname, 'lin', '_out');
 const FIELD = 'talking_island';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

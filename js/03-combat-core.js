@@ -839,8 +839,10 @@ function tick() {
         if(state.pDmgTick >= aspdTicks) {
             // 🎮 AUTO OFF：只打玩家點過的目標（技能快捷列仍可手動施放）
             var _autoOn = !(state && state.autoHunt === false) || !!getTarget();
-            if (_autoOn && !bindSelfBlocked(player) && !playerAttackLinBegin()) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
-            state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
+            let _linBeg = (_autoOn && !bindSelfBlocked(player)) ? playerAttackLinBegin() : true;
+            if (!_linBeg) playerAttack();   // 🕸️ v3.7.75 束縛：非遠距離武器時打不出一般攻擊（攻擊節奏照跑·施法/技能不受影響）
+            if (_linBeg === 'wait') state.pDmgTick = aspdTicks;   // 原版地圖：等站定／怪走完這一步，攻擊保持就緒
+            else state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
             state._pStunCycle = false;   // ⚔️ 硬直：每次攻擊後重置「本週期已硬直」旗標（下週期被擊可再延遲一次）
         }
 

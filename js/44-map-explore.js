@@ -1879,15 +1879,21 @@
         var dx = t._fx - _tx;
         var dy = (t._fy || 0) - _ty;
         var dist = Math.hypot(dx, dy);
-        if (!(dist > 1)) return false;
-        var dirx = dx / dist;
-        var diry = dy / dist;
         if (engaged && exploreLinName()) {
             _vx = 0;
             _vy = 0;
-            if (!exploreLinStepping()) exploreSetFaceNow(dx, -dy);
+            if (exploreLinStepping()) return false;
+            // 普攻要站在格子中心、不跟怪同一格（playerAttackInRange）：傳送／出生偏離格心先對齊，同格先讓開一格
+            var lnE = exploreLinName(), ptE = linmapTileAt(lnE, _tx, _ty), pcE = ptE && linmapTileCenter(lnE, ptE.gx, ptE.gy);
+            if (pcE && Math.hypot(pcE.x - _tx, pcE.y - _ty) > 1.5) return explorePlayerWalkStep(pcE.x - _tx, pcE.y - _ty, { x: pcE.x, y: pcE.y }) > 0.08;
+            var mtE = linmapTileAt(lnE, t._fx, t._fy || 0);
+            if (ptE && mtE && ptE.gx === mtE.gx && ptE.gy === mtE.gy) return explorePlayerWalkStep(dist > 1 ? -dx / dist : 1, dist > 1 ? -dy / dist : 0, null) > 0.08;
+            if (dist > 1) exploreSetFaceNow(dx, -dy);
             return false;
         }
+        if (!(dist > 1)) return false;
+        var dirx = dx / dist;
+        var diry = dy / dist;
         if (dist <= COMBAT_STAND_OFF) {
             _vx = 0;
             _vy = 0;
@@ -2018,7 +2024,9 @@
         var el = Math.max(0, Math.min(120, now - s.t));
         s.t = now;
         var k = Math.min(1, s.k + el / s.dur);
-        var kd = s.cyc >= 1 ? Math.min(1, (Math.floor(k * LIN_STEP_FRAMES) + 1) / LIN_STEP_FRAMES) : k;
+        // 對齊格心的半步（cyc 0.5＝2 幀）也跟著幀跳，不平滑滑行
+        var nf = Math.max(1, Math.round(LIN_STEP_FRAMES * s.cyc));
+        var kd = Math.min(1, (Math.floor(k * nf) + 1) / nf);
         var nx = s.fx + (s.tx - s.fx) * kd;
         var ny = s.fy + (s.ty - s.fy) * kd;
         var moved = Math.hypot(nx - _tx, ny - _ty);
@@ -2033,7 +2041,7 @@
             _walkPhase += moved * WALK_PHASE_DIST;
             if (s.cyc >= 1) exploreSetFaceNow(s.tx - s.fx, -(s.ty - s.fy));
             // 換幀與位移要同一畫面（新創同幀），不等 25fps 的 RAF
-            if (s.cyc >= 1 && typeof _playerMorphApply === 'function') {
+            if (typeof _playerMorphApply === 'function') {
                 try { queueMicrotask(function () { try { _playerMorphApply(); } catch (e) {} }); } catch (e2) {}
             }
         }
@@ -2079,18 +2087,23 @@
     }
     /** 回傳本 tick 位移（>0.08 視為移動中）；不想走時把走到一半的那步走完 */
     function exploreLinWalkStep(name, dirx, diry, goal) {
-        if (_linStep) return exploreLinStepAdvance(name);
+        var mv0 = 0;
+        // 一步在這次走完就當場接下一步（等下一個 33ms tick 才起步＝換幀與跳位差一個畫面）
+        if (_linStep) { mv0 = exploreLinStepAdvance(name); if (_linStep) return mv0; }
         var want = goal || Math.abs(dirx) > 0.001 || Math.abs(diry) > 0.001;
-        if (!want) return 0;
+        if (!want) return mv0;
+        // 出生／傳送點離格子中心只差幾 px：直接對齊，不播半步走路（平滑對齊時位移與換幀不同畫面）
+        var t0 = linmapTileAt(name, _tx, _ty), c0 = t0 && linmapTileCenter(name, t0.gx, t0.gy);
+        if (c0) { var off0 = Math.hypot(c0.x - _tx, c0.y - _ty); if (off0 > 0.01 && off0 <= 6) { _tx = c0.x; _ty = c0.y; } }
         var o = exploreLinStepPick(name, dirx, diry, goal);
-        if (!o) return 0;
+        if (!o) return mv0;
         var dur = Math.max(60, (LIN_STEP_MS * (o.cyc < 1 ? 0.5 : 1)) / explorePlayerSpeedMult(true));
         var now = performance.now();
         var carry = (_linCarry && now - _linCarry.t < 100) ? Math.min(dur * 0.5, Math.max(0, _linCarry.ms) + (now - _linCarry.t)) : 0;
         _linCarry = null;
-        _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: dur, cyc: o.cyc, lx: _tx, ly: _ty, t: now - carry, c0: o.cyc >= 1 ? Math.ceil(_walkCycle - 1e-6) : _walkCycle };
+        _linStep = { fx: _tx, fy: _ty, tx: o.c.x, ty: o.c.y, k: 0, dur: dur, cyc: o.cyc, lx: _tx, ly: _ty, t: now - carry, c0: Math.ceil(_walkCycle - 1e-6) };
         if (o.cyc >= 1) exploreSetFaceNow(o.c.x - _tx, -(o.c.y - _ty));
-        return exploreLinStepAdvance(name);
+        return Math.max(mv0, exploreLinStepAdvance(name));
     }
     function exploreWalkCycle() { return exploreLinName() ? _walkCycle : null; }
 

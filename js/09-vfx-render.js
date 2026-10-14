@@ -3564,6 +3564,16 @@ function _mob8Apply(c, m, uid, now) {
         let lockDir = (m._face8Loaded != null) ? m._face8Loaded : ((m._face8 != null) ? m._face8 : 6);
         let imgF = c.querySelector('.mob-img-wrap .mob-img-inner img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)') || c.querySelector('.mob-img-wrap img:not(.mob-anim-shadow):not(.mob-anim-weapon):not(.mob-anim-weapon2)');
         if (!imgF) return;
+        // 遠處凍結（>SIM_PX，縮小畫面時仍在畫面內）也要掛八向／lin-spr 樣式，否則原版怪縮放、腳底錯位
+        try {
+            let _innerF = imgF.closest('.mob-img-inner');
+            if (_innerF) {
+                _innerF.classList.remove('q-mob-art', 'q-classic-chibi', 'mob-face-flip');
+                if (!_innerF.classList.contains('mob-anim')) _innerF.classList.add('mob-anim');
+                let _linF = (typeof _linSprMobSet === 'function') && _linSprMobSet().has(m.n);
+                if (_innerF.classList.contains('lin-spr') !== _linF) _innerF.classList.toggle('lin-spr', _linF);
+            }
+        } catch (eLf) {}
         let freezeKey = '8:' + lockDir + ':idle:0';
         try {
             if (imgF.dataset && imgF.dataset.animF === freezeKey) return;
@@ -4430,7 +4440,8 @@ function _atkFrameMs(intervalSec, seqLen) {
 function _linPcAtkProfile(form, n) {
     if (!(n > 0) || !form || !form.classAnim) return null;
     if ((typeof state !== 'undefined' && state && state.ff) || typeof exploreLinName !== 'function' || !exploreLinName()) return null;
-    let total = Math.max(380, ((typeof playerAttackIntervalTicks === 'function') ? playerAttackIntervalTicks(true) : 10) * 100);
+    // 攻擊在整數 tick 出手（間隔 9.2 tick＝實際 900／1000ms 交替），動作長度取進位，慢的那一拍才不會播完閃待機
+    let total = Math.max(380, Math.ceil(((typeof playerAttackIntervalTicks === 'function') ? playerAttackIntervalTicks(true) : 10) - 1e-6) * 100);
     let t = (typeof LIN_PC_ATK !== 'undefined' && player) ? LIN_PC_ATK[player.avatar + '|' + form.wpn] : null;
     let durs = (t && t[0].length === n) ? t[0] : null;
     let hi = durs ? t[1] : Math.max(0, Math.floor(n * 0.6));

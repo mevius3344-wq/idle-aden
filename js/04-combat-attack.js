@@ -24,14 +24,16 @@ function playerAttackInRange(target) {
     return true;
 }
 // ⚔️ 原版地圖普攻（同 #55 怪物）：先播攻擊動作，播到打中幀（LIN_PC_ATK 的 "!"）才結算；回 true＝已開始揮
+// 回 'wait'＝有目標但還不能揮（未站定／不在鄰格／怪走到一半）：呼叫端保留攻擊進度，一站定就揮，不可吃掉整個攻擊間隔
 function playerAttackLinBegin() {
     if (state.ff || typeof exploreLinName !== 'function' || !exploreLinName()) return false;
     if (typeof fieldPvpTargetKey === 'function' && fieldPvpTargetKey()) return false;
     if (typeof _linPcAtkProfile !== 'function' || typeof _playerBattleForm !== 'function') return false;
     let target = getTarget();
-    if (!target || !playerAttackInRange(target)) return !!target;
+    if (!target) return false;
+    if (!playerAttackInRange(target)) return 'wait';
     // 近戰等怪走完這一步、站上鄰格才揮（不打走到一半的怪）
-    if (target._ls && !(typeof exploreEngageLimit === 'function' && exploreEngageLimit() > 48)) return true;
+    if (target._ls && !(typeof exploreEngageLimit === 'function' && exploreEngageLimit() > 48)) return 'wait';
     let form = _playerBattleForm();
     let n = (typeof _pmAtkSeqLen === 'function') ? _pmAtkSeqLen(form) : 0;
     let prof = _linPcAtkProfile(form, n);

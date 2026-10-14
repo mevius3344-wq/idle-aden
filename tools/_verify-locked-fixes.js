@@ -314,7 +314,7 @@ section("24) 原版 .spr 八向怪物");
   });
   ok("原版怪 d0..d7 idle／walk／attack／death 幀齊全", miss.length === 0, miss.slice(0, 5).join(","));
   ok("_mob8Apply 掛 lin-spr", /_linSprMobSet\(\)\.has\(m\.n\)/.test(F.vfx) && /toggle\('lin-spr', _lin\)/.test(F.vfx));
-  ok("lin-spr 圖下移 32px、不縮放、無 CSS 橢圓影",
+  ok("lin-spr 圖下移 32px（原版拼塊地圖另補 4px＝36px）、不縮放、無 CSS 橢圓影",
     /\.mob-img-inner\.lin-spr\.lin-spr img \{\s*translate: 0 32px;\s*padding: 0 !important;\s*max-width: none !important;\s*max-height: none !important;/.test(css)
     && /\.mob-img-inner\.lin-spr::after \{\s*display: none !important;/.test(css));
 }
@@ -479,7 +479,7 @@ section("34) 原版格步走路");
   ok("原版地圖玩家走格步（explorePlayerWalkStep → exploreLinWalkStep）", /function explorePlayerWalkStep\(dirx, diry, goal\) \{\s*var linW = exploreLinName\(\);\s*if \(linW && typeof linmapTileCenter === 'function'\)/.test(ex) && /var LIN_STEP_MS = \d+;/.test(ex));
   ok("只走 8 個格線方向（LIN_NB）＋格心（linmapTileCenter）", /var LIN_NB = \[\[1, 0\], \[1, 1\], \[0, 1\], \[-1, 1\], \[-1, 0\], \[-1, -1\], \[0, -1\], \[1, -1\]\];/.test(ex) && /global\.linmapTileCenter = linmapTileCenter;/.test(rd("js/49-linmap.js")));
   ok("點地／追怪帶 goal（先斜後直）", /explorePlayerWalkStep\(wdx, wdy, inp\.fromTap \? \{ x: _tapMove\.tx, y: _tapMove\.ty \} : null\)/.test(ex) && /explorePlayerWalkStep\(dirx, diry, \{ x: t\._fx, y: t\._fy \|\| 0 \}\)/.test(ex));
-  ok("每格 640ms（加速 480）＋第 k 幀跳到 (k+1)/4 格＋每步從第 0 幀起播＋實際時間", /var LIN_STEP_MS = 640;/.test(ex) && /var kd = s\.cyc >= 1 \? Math\.min\(1, \(Math\.floor\(k \* LIN_STEP_FRAMES\) \+ 1\) \/ LIN_STEP_FRAMES\) : k;/.test(ex) && /_walkCycle = s\.c0 \+ k \* s\.cyc;/.test(ex) && /var el = Math\.max\(0, Math\.min\(120, now - s\.t\)\);/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
+  ok("每格 640ms（加速 480）＋第 k 幀跳到 (k+1)/4 格＋每步從第 0 幀起播＋實際時間", /var LIN_STEP_MS = 640;/.test(ex) && /var nf = Math\.max\(1, Math\.round\(LIN_STEP_FRAMES \* s\.cyc\)\);\s*var kd = Math\.min\(1, \(Math\.floor\(k \* nf\) \+ 1\) \/ nf\);/.test(ex) && /_walkCycle = s\.c0 \+ k \* s\.cyc;/.test(ex) && /var el = Math\.max\(0, Math\.min\(120, now - s\.t\)\);/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
   ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
   ok("格步跳位同時換幀（queueMicrotask _playerMorphApply）", /queueMicrotask\(function \(\) \{ try \{ _playerMorphApply\(\); \} catch \(e\) \{\} \}\)/.test(ex));
 }
@@ -709,13 +709,17 @@ section("59) 原版地圖玩家普攻（原版節奏＋打中幀才扣血）");
   const core = rd("js/03-combat-core.js");
   ok("index 載入 49-linpc-atk（list.spr 各幀 dur＋打中幀）", /js\/49-linpc-atk\.js/.test(F.html) && /var LIN_PC_ATK = \{/.test(rd("js/49-linpc-atk.js")) && exists("tools/lin/export-pc-atk.js") && /"男騎士\|sword1":\[\[3,6,5,1,4,3\],4\]/.test(rd("js/49-linpc-atk.js")));
   ok("攻擊動作照原版各幀、整段＝攻擊間隔", /function _linPcAtkProfile\(form, n\)/.test(fx) && /function _pmAtkFrameAt\(form, elapsed, n\)/.test(fx) && (fx.match(/_pmAtkFrameAt\(form, Date\.now\(\) - /g) || []).length >= 1 && /_pmAtkFrameAt\(form, Date\.now\(\) - _pmState\.t, _nA\)/.test(fx));
-  ok("先揮後算：playerAttackLinBegin 播動作、打中幀 playerAttackLinHit 才結算", /function playerAttackLinBegin\(\)/.test(atk) && /state\._pLinHitAt = Date\.now\(\) \+ prof\.hit;/.test(atk) && /function playerAttackLinHit\(\)/.test(atk) && /!playerAttackLinBegin\(\)\) playerAttack\(\);/.test(core) && /playerAttackLinHit\(\);/.test(core));
+  ok("先揮後算：playerAttackLinBegin 播動作、打中幀 playerAttackLinHit 才結算", /function playerAttackLinBegin\(\)/.test(atk) && /state\._pLinHitAt = Date\.now\(\) \+ prof\.hit;/.test(atk) && /function playerAttackLinHit\(\)/.test(atk) && /playerAttackLinBegin\(\) : true;\s*if \(!_linBeg\) playerAttack\(\);/.test(core) && /playerAttackLinHit\(\);/.test(core));
+  ok("等站定／怪走完一步＝攻擊保持就緒（'wait' 不吃掉攻擊間隔，一站定就揮）", /if \(!playerAttackInRange\(target\)\) return 'wait';/.test(atk) && /if \(_linBeg === 'wait'\) state\.pDmgTick = aspdTicks;/.test(core));
+  ok("攻擊動作長度＝攻擊間隔進位到整數 tick（900／1000ms 交替的慢拍不閃待機）", /Math\.ceil\(\(\(typeof playerAttackIntervalTicks === 'function'\) \? playerAttackIntervalTicks\(true\) : 10\) - 1e-6\) \* 100/.test(fx));
+  ok("交戰中偏離格心先對齊、跟怪同格先讓開一格（否則永遠不揮）", /var lnE = exploreLinName\(\), ptE = linmapTileAt\(lnE, _tx, _ty\)/.test(rd("js/44-map-explore.js")) && /ptE\.gx === mtE\.gx && ptE\.gy === mtE\.gy\) return explorePlayerWalkStep\(/.test(rd("js/44-map-explore.js")));
   ok("原版地圖普攻不被受擊打斷", /if \(k === 'hurt' && st\.act === 'attack' && curP === _PM_PRIO\.attack\) return;/.test(fx));
   ok("職業圖原版站立點 LIN_PC_FOOT 對到格子中心（人物不浮在怪北邊兩格）", /js\/49-linpc-foot\.js/.test(F.html) && /"男騎士":\[-1\.5,44\]/.test(rd("js/49-linpc-foot.js")) && exists("tools/lin/export-pc-foot.js") && /function _linPcFootOfs\(form\)/.test(fx) && /let _lf = _realMap \? _linPcFootOfs\(form\) : null;/.test(fx) && /var rf = _linPcFootOfs\(form\);/.test(fx));
   ok("原版地圖面向用世界座標（玩家揮砍、怪出手都正面相對）", /player\._faceD = _vec2dir\(_wx, -_wy\);/.test(atk) && /who\._faceD = _vec2dir\(wx, -wy\); return who\._faceD;/.test(fx) && /m\._face8 = _vec2dir\(wx, -wy\);/.test(fx));
   ok("八向預載走路＋攻擊幀（轉向打新方向不卡在舊面向）", /\['walk', 'attack'\]\.forEach\(function \(act\) \{/.test(fx) && /im\.src = base \+ form\.wpn \+ '_' \+ act \+ '_' \+ f \+ '\.png' \+ bust;/.test(fx));
-  ok("近戰不打走路途中的怪、怪不在同一格出手", /if \(target\._ls && !\(typeof exploreEngageLimit === 'function' && exploreEngageLimit\(\) > 48\)\) return true;/.test(atk) && /return td >= 1 && td <= exploreLinMobRange\(mob\);/.test(rd("js/44-map-explore.js")));
+  ok("近戰不打走路途中的怪、怪不在同一格出手", /if \(target\._ls && !\(typeof exploreEngageLimit === 'function' && exploreEngageLimit\(\) > 48\)\) return 'wait';/.test(atk) && /return td >= 1 && td <= exploreLinMobRange\(mob\);/.test(rd("js/44-map-explore.js")));
   ok("怪卡底 4px 補回：lin-spr img 下移 36px", /\.mob-img-inner\.lin-spr\.lin-spr img \{\s*translate: 0 36px;/.test(rd("css/style.css")) && exists("tools/_audit-atk-align.js"));
+  ok("遠處凍結（>SIM_PX、仍在畫面內）的原版怪也掛 lin-spr（不縮放、腳底不錯位）", /if \(_innerF\.classList\.contains\('lin-spr'\) !== _linF\) _innerF\.classList\.toggle\('lin-spr', _linF\);/.test(fx));
 }
 
 section("60) 排行榜（照新創：職業分頁＋血盟、自己固定在最底）");
@@ -761,6 +765,10 @@ section("34b) 格步跟畫面幀同步（走路不飄跳）");
     /exploreBvSize\(bv\)/.test(rd("js/52-lin-town.js")) && /走路不每幀讀版面大小/.test(rd("tools/_audit-walk-shadow.js")));
   ok("格步走一步期間朝向＝步向（終點／追怪向量不改朝向，走路圖不 E↔SE 閃）",
     /function exploreSetFaceFromVec\(dx, dy\) \{\s*if \(Math\.abs\(dx\) < 0\.02 && Math\.abs\(dy\) < 0\.02\) return;[\s\S]{0,120}if \(_linStep && _linStep\.cyc >= 1\) return;/.test(ex));
+  ok("一步走完當場接下一步（不等下一個 33ms tick＝換幀與跳位差一畫面）、偏離格心 ≤6px 直接對齊、對齊半步也跟幀跳",
+    /if \(_linStep\) \{ mv0 = exploreLinStepAdvance\(name\); if \(_linStep\) return mv0; \}/.test(ex) &&
+    /if \(off0 > 0\.01 && off0 <= 6\) \{ _tx = c0\.x; _ty = c0\.y; \}/.test(ex) &&
+    /var nf = Math\.max\(1, Math\.round\(LIN_STEP_FRAMES \* s\.cyc\)\);\s*var kd = Math\.min\(1, \(Math\.floor\(k \* nf\) \+ 1\) \/ nf\);/.test(ex));
 }
 
 section("65) 變形卷軸不卡畫面（腳錨不在迴圈裡強制重排）");
