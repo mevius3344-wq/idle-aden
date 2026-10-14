@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const BASE = process.argv[2] || 'http://localhost:5199';
-const PORT = 9394;
+let PORT = 9394;
 const OUT = path.join(__dirname, 'lin', '_out');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
@@ -18,6 +18,7 @@ const ok = (name, cond, detail) => {
 
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
+    PORT = await new Promise((r) => { const s = require('net').createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
     const exe = ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'].find((p) => fs.existsSync(p));
     const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'gdum-'));
     const br = spawn(exe, ['--headless=new', '--remote-debugging-port=' + PORT, '--user-data-dir=' + udd, '--no-first-run', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
@@ -53,7 +54,7 @@ async function main() {
         let slot=1; for(let s=1;s<=8;s++){ try{ if(!slotSummary(s)){slot=s;break;} }catch(e){} }
         currentSlot=slot; curCreate.rawCls='m_knight'; curCreate.cls='knight';
         document.getElementById('create-name-input').value=${JSON.stringify('木' + stamp)};
-        startGame(); for(let i=0;i<40&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
+        startGame(); for(let i=0;i<80&&!(player&&player.inv&&player.inv.length&&typeof explorePlayerX==='function');i++) await new Promise(r=>setTimeout(r,250));
         try{ setPowerSaveOn(false); }catch(e){} })()`);
     await sleep(3000);
 
@@ -62,13 +63,21 @@ async function main() {
         const sel=document.getElementById('map-select');
         const autoDef=state.autoHunt, autoLab=(document.getElementById('chud-auto-label')||{}).textContent;
         state.autoHunt=false; mapState.targetIdx=-1;
-        return {autoDef, autoLab, map:mapState.current, n:ds.length, pos:ds.map(m=>m._fx+','+m._fy).join(' '), names:ds.map(m=>m.n).join(','),
+        const def=exploreActiveMapDef()||{}, sx=Math.round(explorePlayerX()), sy=Math.round(explorePlayerY());
+        return {autoDef, autoLab, map:mapState.current, spawn:sx+','+sy, start:def.start?def.start.x+','+def.start.y:'', n:ds.length, pos:ds.map(m=>m._fx+','+m._fy).join(' '), names:ds.map(m=>m.n).join(','),
             cards:document.querySelectorAll('#mob-list .mob-target').length,
             spots:JSON.stringify(townDummySpots('town_giran')),
             zoom:exploreLinZoom(), trainingOpt:[...sel.options].some(o=>o.value==='training'),
             regionTraining:JSON.stringify(MAP_REGIONS).indexOf('"training"')>=0};
     })()`);
     ok('創角出生在奇岩', a.map === 'town_giran', a.map);
+    // 可走格（walk.bin）非同步載入，載完前 linmapSafeZone 一律 false
+    let spawnSafe = false;
+    for (let i = 0; i < 20 && !spawnSafe; i++) {
+        spawnSafe = await ev(`(()=>{const def=exploreActiveMapDef()||{};const [x,y]=${JSON.stringify(a.spawn)}.split(',').map(Number);return !!(def.lin&&typeof linmapSafeZone==='function'&&linmapSafeZone(def.lin,x,y));})()`) === true;
+        if (!spawnSafe) await sleep(250);
+    }
+    ok('出生點在奇岩安全區', spawnSafe, 'spawn ' + a.spawn + '  start ' + a.start);
     ok('自動練功預設關（按鈕顯示手動）', a.autoDef === false && a.autoLab === '手動', a.autoDef + ' ' + a.autoLab);
     ok('奇岩有 3 個木頭人', a.n === 3 && /^木頭人,木頭人,木頭人$/.test(a.names), a.n + ' ' + a.names);
     ok('木頭人站在指定格子', a.pos === '600,1080 504,1080 408,1080', a.pos);
@@ -81,7 +90,7 @@ async function main() {
     const p0 = await ev(`(()=>{state.autoHunt=true;mapState.targetIdx=-1;return Math.round(explorePlayerX())+','+Math.round(explorePlayerY())})()`);
     await sleep(6000);
     const p1 = await ev(`(()=>{const t=mapState.mobs[mapState.targetIdx];return Math.round(explorePlayerX())+','+Math.round(explorePlayerY())+(t&&t._townDummy?' 鎖定木頭人':'')})()`);
-    ok('AUTO 不會自動打城鎮木頭人（停在出生點）', p0 === '744,1056' && p0 === p1, p0 + ' → ' + p1);
+    ok('AUTO 不會自動打城鎮木頭人（停在出生點）', p0 === a.spawn && p0 === p1, a.spawn + ' / ' + p0 + ' → ' + p1);
     await ev('state.autoHunt=false;mapState.targetIdx=-1');
 
     // 木頭人不走動：5 秒後位置不變

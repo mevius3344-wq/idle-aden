@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const BASE = process.argv[2] || 'http://localhost:5199';
-const PORT = 9421;
+let PORT = 9421;
 const OUT = path.join(__dirname, 'lin', '_out');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
@@ -18,6 +18,7 @@ const ok = (name, cond, detail) => {
 
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
+    PORT = await new Promise((r) => { const s = require('net').createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
     const exe = ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'].find((p) => fs.existsSync(p));
     const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'death-'));
     const br = spawn(exe, ['--headless=new', '--remote-debugging-port=' + PORT, '--user-data-dir=' + udd, '--no-first-run', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
@@ -50,7 +51,7 @@ async function main() {
     if (!lr || !lr.authToken) throw new Error('login failed');
     await send('Page.enable'); await send('Runtime.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(lr.authToken) + ')}catch(e){};window.__fb5AuthAccount=' + JSON.stringify(acct) + ';window.alert=function(){};window.confirm=function(){return true};' });
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(lr.authToken) + ')}catch(e){};window.__fb5AuthAccount=' + JSON.stringify(acct) + ';window.__alerts=[];window.alert=function(m){window.__alerts.push(String(m))};window.confirm=function(){return true};' });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 120; i++) { await sleep(500); if (await ev('typeof startGame==="function"&&typeof changeMap==="function"') === true) break; }
     await ev(`(async()=>{ window._authAccountForNames=()=>${JSON.stringify(acct)};
@@ -60,6 +61,8 @@ async function main() {
         startGame(); for(let i=0;i<40&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
         try{ setPowerSaveOn(false); }catch(e){} })()`);
     await sleep(2500);
+    const cr = await ev(`({inGame:!document.getElementById('game-screen').classList.contains('hidden')&&!!player.name,alerts:window.__alerts})`);
+    ok('創角進入遊戲', cr && cr.inGame, JSON.stringify(cr));
     await ev(`(()=>{const s=document.getElementById('map-select');if(![...s.options].some(o=>o.value==='silver_knight')){const o=document.createElement('option');o.value='silver_knight';s.appendChild(o);}s.value='silver_knight';changeMap(true);})()`);
     await sleep(3000);
     const field = await ev('mapState.current');
@@ -71,8 +74,14 @@ async function main() {
     ok('死亡 2.5 秒後仍在原地圖（不自動回村）', st.map === field && st.dead, JSON.stringify({ field, map: st.map, dead: st.dead }));
     ok('跳出「重新開始」視窗', st.dlg && st.btn && st.btn.w > 40);
     await shot('_death_dialog.jpg');
-    const corpse = await ev(`(()=>{const b=document.querySelector('#player-morph-sprite .pm-body');const f=document.querySelector('#lin-death .lin-death-frame');if(!b||!f)return null;
+    // 死亡幀第一次用到才下載，機器忙時晚 1～3 秒才換上（期間 _pmState.act 已是 death）
+    let corpse = null;
+    for (let i = 0; i < 24; i++) {
+        corpse = await ev(`(()=>{const b=document.querySelector('#player-morph-sprite .pm-body');const f=document.querySelector('#lin-death .lin-death-frame');if(!b||!f)return null;
         const r=b.getBoundingClientRect(),q=f.getBoundingClientRect();return {src:(b.getAttribute('src')||'').replace(/.*\\//,''),vis:getComputedStyle(b).visibility,body:[r.left|0,r.top|0,r.width|0,r.height|0],dlgTop:q.top|0,dlgBottom:q.bottom|0,pad:getComputedStyle(f.parentElement).paddingTop,ai:getComputedStyle(f.parentElement).alignItems};})()`);
+        if (corpse && /death/.test(corpse.src) && corpse.body[2] > 10) break;
+        await sleep(250);
+    }
     if (process.env.DBG) console.log(await ev(`(async()=>{const l=[...document.querySelectorAll('link[rel=stylesheet]')].find(x=>/lin-menus/.test(x.href));const t1=await (await fetch(l.href)).text();const t2=await (await fetch(l.href,{cache:'no-store'})).text();return l.href+' cached:'+/padding-top: max/.test(t1)+' fresh:'+/padding-top: max/.test(t2);})()`));
     if (process.env.DBG) console.log(await ev(`(()=>{const e=document.getElementById('lin-death');const out=[];for(const ss of document.styleSheets){let rs;try{rs=ss.cssRules}catch(x){continue}
         const walk=(rs)=>{for(const r of rs){if(r.cssRules&&!r.selectorText){walk(r.cssRules);continue;}if(!r.selectorText)continue;try{if(e.matches(r.selectorText)&&(r.style.alignItems||r.style.padding||r.style.paddingTop))out.push((ss.href||'inline').replace(/.*\\//,'')+' '+r.selectorText+' {'+r.style.cssText.slice(0,120)+'}');}catch(x){}}};walk(rs);}
@@ -89,11 +98,13 @@ async function main() {
     const tp = await ev('(()=>{const r=openTeleportMenu();return {r,map:mapState.current};})()');
     ok('死亡中傳送選單無效', tp.r === false && tp.map === field, JSON.stringify(tp));
 
+    // 甦醒當下的血量（之後自動喝紅水會補血，量 400ms 後的值會碰運氣）
+    await ev(`(()=>{const o=window.revive;window.revive=function(){const r=o.apply(this,arguments);window.__revHp=[player.hp,player.mhp];return r;};})()`);
     await click(st.btn.x, st.btn.y);
     await sleep(400);
-    const af = await ev(`(()=>{const d=document.getElementById('lin-death');return {map:mapState.current,dead:!!player.dead,hp:player.hp,mhp:player.mhp,dlg:!!d&&!d.classList.contains('hidden')};})()`);
+    const af = await ev(`(()=>{const d=document.getElementById('lin-death');return {map:mapState.current,dead:!!player.dead,hp:player.hp,mhp:player.mhp,rev:window.__revHp||null,dlg:!!d&&!d.classList.contains('hidden')};})()`);
     ok('按「重新開始」回到主城甦醒', af.map === 'town_giran' && !af.dead, JSON.stringify(af));
-    ok('甦醒 HP 不為 0 也不是滿血', af.hp >= 1 && af.hp < af.mhp, af.hp + '/' + af.mhp);
+    ok('甦醒 HP 不為 0 也不是滿血', !!af.rev && af.rev[0] >= 1 && af.rev[0] < af.rev[1], JSON.stringify(af.rev) + ' 400ms 後 ' + af.hp + '/' + af.mhp);
     ok('視窗收起', !af.dlg);
     await shot('_death_after.jpg');
 
