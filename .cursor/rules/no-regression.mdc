@@ -18,7 +18,7 @@ alwaysApply: true
 
 | # | 項目 | 正確行為 |
 |---|------|---------|
-| 1 | 新兵修練場 | 背景 `assets/area/1920x1080/新兵修練場.jpg`（`SPECIAL_AREA_BG.training`＋`ensureTrainingYardBackground`）；`training-yard` class；不開探索；木頭人置中、玩家在旁、兩者抬高；木頭人 HP 40；**v3.10.1 起修練場下架**（不在地圖選單，出發回退改主城），木頭人改放**奇岩村莊 3 個**（`TOWN_DUMMY_SPOTS`：原版地圖固定格子一排、不走不還手、約 1.5 秒原位重生、縮到人物大小 `.town-dummy`、點擊範圍只留本體不蓋 NPC）；自動狩獵不挑木頭人，只打玩家點過的（`_picked`，回村不被拖去打）；城鎮開 AUTO＝提示＋開傳送選單（再按＝關）（實測 `tools/_audit-giran-dummy.js`）；舊修練場程式保留不刪；**v3.10.2 起自動練功 AUTO 預設關**（`state.autoHunt: false`）：關時不自動找怪，只打玩家點過的怪（`_picked`，會追過去、不因 1.5 秒卡住放棄），點地走路＝取消；關時進場戰圖照樣開戰鬥迴圈（不然場上沒怪）；`exploreEngageRetarget` 關時不改鎖 |
+| 1 | 新兵修練場 | 背景 `assets/area/1920x1080/新兵修練場.jpg`（`SPECIAL_AREA_BG.training`＋`ensureTrainingYardBackground`）；`training-yard` class；不開探索；木頭人置中、玩家在旁、兩者抬高；木頭人 HP 40；**v3.10.1 起修練場下架**（不在地圖選單，出發回退改主城），木頭人改放**奇岩村莊 3 個**（`TOWN_DUMMY_SPOTS`：原版地圖固定格子一排、不走不還手、約 1.5 秒原位重生、縮到人物大小 `.town-dummy`、點擊範圍只留本體不蓋 NPC）；自動狩獵不挑木頭人，只打玩家點過的（`_picked`，回村不被拖去打）；城鎮開 AUTO＝提示＋開傳送選單（再按＝關）（實測 `tools/_audit-giran-dummy.js`）；舊修練場程式保留不刪；**v3.10.2 起自動練功 AUTO 預設關**（`state.autoHunt: false`）：關時不自動找怪，只打玩家點過的怪（`_picked`，會追過去、不因 1.5 秒卡住放棄），點地走路＝取消；關時進場戰圖照樣開戰鬥迴圈（不然場上沒怪）；`exploreEngageRetarget` 關時不改鎖；**AUTO 開時附近（`APPROACH_WORLD` 420）沒怪也要自己走去找怪**：改找 `HUNT_SEARCH_WORLD` 3200 內最近的怪、鎖定後黏著走過去（原版大地圖出生點常離怪 1000px 以上，舊版只等怪走進 420＝站著不動），被地形擋照 #32 換目標（v3.10.23，實測 `tools/_audit-auto-hunt.js`） |
 | 2 | 村莊背景 | 無原版圖的村莊（如 hyperia）：`TOWN_BG_1920` → `_townMapBg`／`ensureTownMapBackground`，不受 `AREA_1920` 白名單影響，不可消失；有原版圖的村莊改走 #26 |
 | 3 | 玩家人物 | 螢幕置中（不偏左右）、移動不半身、不下沉；固定站位分支必設容器 `width`（`.pm-body` 為 max-width:100%，寬 0＝人物消失，v3.9.55） |
 | 4 | 怪物目標 | 名稱＋血條只在鎖定的怪頭上；頂部 `#chud-target` 永久隱藏；怪物 ID 不重複、不過高 |

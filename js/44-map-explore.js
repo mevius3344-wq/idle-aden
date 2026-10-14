@@ -36,6 +36,8 @@
     // 🪄 v3.9.48：場戰範圍技半徑（約 5 格）——target:'all' 不可掃全圖，只打錨點附近集群
     var AOE_RADIUS_PX = GRID_PX * 5;
     var APPROACH_WORLD = 420;
+    // AUTO 掛機：附近（APPROACH_WORLD）沒怪就往這個範圍內最近的怪走過去（原版大地圖出生點常離練功怪 1000px 以上）
+    var HUNT_SEARCH_WORLD = 3200;
     // 自動追怪被地形擋住（直線走不過去）時，超過 STUCK_MS 沒拉近就暫時略過那隻怪
     var CHASE_STUCK_MS = 1500;
     var CHASE_UNREACH_MS = 10000;
@@ -1776,6 +1778,9 @@
         var engaged = !!(t && exploreMobInEngageRange(t));
         if (!engaged) {
             var ai = (t && t._picked && (t._townDummy || manualHunt)) ? mapState.targetIdx : exploreNearestApproachIdx(APPROACH_WORLD);
+            if (ai < 0 && !manualHunt) {
+                ai = (t && !(t._unreachUntil > Date.now()) && !t._townDummy) ? mapState.targetIdx : exploreNearestApproachIdx(HUNT_SEARCH_WORLD);
+            }
             if (ai < 0) return explorePatrolIdleTick();
             _noMobSince = 0;
             t = mapState.mobs[ai];
@@ -1805,7 +1810,7 @@
             exploreSetFaceFromVec(dirx, -diry);
             return false;
         }
-        if (!engaged && dist > APPROACH_WORLD && !(explorePatrolCells() > 0) && !manualHunt) return false;
+        if (!engaged && dist > HUNT_SEARCH_WORLD && !(explorePatrolCells() > 0) && !manualHunt) return false;
         var nowC = Date.now();
         var ti = mapState.mobs.indexOf(t);
         if (engaged || ti !== _chaseIdx || dist < _chaseBest - 6) {

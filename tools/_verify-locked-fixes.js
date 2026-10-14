@@ -111,6 +111,12 @@ section("3) 新兵修練場（回報壞過 5+ 次）");
   ok("AUTO 關＝只打點過的怪", /if \(state && state\.autoHunt === false\) \{\s*if \(!t \|\| !t\._picked/.test(cc) && /var _autoOn = !\(state && state\.autoHunt === false\) \|\| !!getTarget\(\);/.test(cc) && /if \(!pt \|\| !pt\._picked/.test(F.explore));
   ok("AUTO 關不自動改鎖、追點過的怪不放棄", /state\.autoHunt === false\) return;   \/\/ AUTO 關：不自動改鎖/.test(F.explore) && /else if \(!manualHunt && nowC - _chaseSince > CHASE_STUCK_MS\)/.test(F.explore));
   ok("AUTO 關也開戰鬥迴圈（不然場上沒怪）", !/if \(state\.autoHunt !== false\) \{\s*state\.running = true;/.test(wm));
+  // v3.10.23：AUTO 開時附近沒怪也會走去找遠一點的怪（不可只等怪走進 APPROACH_WORLD）
+  ok("AUTO 開＝附近沒怪也走去找怪（HUNT_SEARCH_WORLD）",
+    /var HUNT_SEARCH_WORLD = \d{4,};/.test(F.explore)
+    && /if \(ai < 0 && !manualHunt\) \{\s*ai = [^;]*exploreNearestApproachIdx\(HUNT_SEARCH_WORLD\);/.test(F.explore)
+    && /if \(!engaged && dist > HUNT_SEARCH_WORLD && /.test(F.explore)
+    && fs.existsSync(path.join(ROOT, "tools/_audit-auto-hunt.js")));
 }
 
 section("4) 村莊背景不可消失");
