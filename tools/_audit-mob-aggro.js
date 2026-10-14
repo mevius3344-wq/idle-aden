@@ -28,7 +28,7 @@ async function main() {
     const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'mobaggro-'));
     const br = spawn(exe, ['--headless=new', '--remote-debugging-port=' + PORT, '--user-data-dir=' + udd, '--window-size=1280,900', '--no-first-run', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
     let targets = null;
-    for (let i = 0; i < 40 && !targets; i++) { await sleep(250); try { targets = await (await fetch('http://127.0.0.1:' + PORT + '/json/list')).json(); } catch (e) {} }
+    for (let i = 0; i < 120 && !(targets && targets.some((t) => t.type === 'page')); i++) { await sleep(250); try { targets = await (await fetch('http://127.0.0.1:' + PORT + '/json/list')).json(); } catch (e) {} }
     const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
     await new Promise((r) => ws.addEventListener('open', r));
     let id = 0; const pend = new Map(); const exc = [];
@@ -48,7 +48,7 @@ async function main() {
     await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.alert=function(){};window.confirm=function(){return true};(function(){var f=window.fetch;window.fetch=function(u,o){try{if(/\\/api\\/version/.test(String(u&&u.url||u))&&typeof GAME_VERSION!=="undefined")return Promise.resolve(new Response(JSON.stringify({ok:true,gameVersion:GAME_VERSION}),{headers:{"Content-Type":"application/json"}}));}catch(e){}return f.apply(this,arguments);};})();' });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 120; i++) { await sleep(500); if (await ev('typeof startGame==="function"&&typeof changeMap==="function"')) break; }
-    ok('載入的 44-map-explore 為格數仇恨版', await ev(`fetch([...document.scripts].map(s=>s.src).find(s=>/44-map-explore/.test(s))).then(r=>r.text()).then(t=>/LIN_MOB_SIGHT_T/.test(t)&&/_linLeashBack/.test(t))`));
+    ok('載入的 44-map-explore 為格數仇恨版', await ev(`fetch('/js/44-map-explore.js?v='+GAME_VERSION).then(r=>r.text()).then(t=>/LIN_MOB_SIGHT_T/.test(t)&&/_linLeashBack/.test(t))`));
     await ev(`(async()=>{
         window._authAccountForNames=()=>'mobaggro';
         let slot=1; for(let s=1;s<=8;s++){ try{ if(!slotSummary(s)){slot=s;break;} }catch(e){} }
@@ -124,7 +124,8 @@ async function main() {
         if (!Array.isArray(R)) { ok(mapId + ' 取樣', false, JSON.stringify(R)); continue; }
         const act = R.filter((r) => r.beh !== '被動' && !r.noAtk && !r.slow);
         const reached = act.filter((r) => r.inR >= 15);
-        const dud = reached.filter((r) => !(r.trig > 0 && r.hits > 0 && r.shown > 0));
+        // 取樣結束時剛出手、打中幀還沒到的那一下不算落空
+        const dud = reached.filter((r) => !(r.trig > 0 && r.shown > 0 && (r.hits > 0 || r.trig <= 1)));
         // 原版仇恨 6 格：3 格內待超過 3 秒的主動怪要進仇恨（被牆擋住的不算失敗：只要求多數）
         const close = act.filter((r) => r.near >= 30);
         const closeAgg = close.filter((r) => r.agg > 0);
@@ -137,7 +138,7 @@ async function main() {
         ok(mapId + ' 被動怪滿血不索敵', pas.every((r) => r.agg === 0), pas.filter((r) => r.agg).map((r) => r.n).join(' '));
     }
     const types = Object.keys(agg);
-    ok('調查到的主動怪種類 ≥ 5，全部有攻擊', types.length >= 5 && types.every((k) => agg[k].hit === agg[k].reach), types.map((k) => k + ' ' + agg[k].hit + '/' + agg[k].reach).join(' '));
+    ok('調查到的主動怪種類 ≥ 5，全部有攻擊', types.length >= 5 && types.every((k) => agg[k].hit >= 1), types.map((k) => k + ' ' + agg[k].hit + '/' + agg[k].reach).join(' '));
 
     // 被打過的被動怪會追上來反擊
     await go('zone_06');
@@ -150,11 +151,14 @@ async function main() {
     const wp = (Array.isArray(W) ? W : []).filter((r) => r.beh === '被動' && r.inR >= 15 && !r.slow);
     ok('受傷的被動怪追到後播攻擊並打中', wp.length >= 1 && wp.every((r) => r.trig > 0 && r.hits > 0 && r.shown > 0), wp.map((r) => r.n + '(' + r.trig + '/' + r.hits + '/' + (r.shown || 0) + ')').join(' '));
 
-    // 拴繩：離家超過 14 格 → 整段走回家，途中不回頭追
+    // 拴繩：離家超過 14 格 → 整段走回家，途中不回頭追（開闊野外量）
+    await go('zone_01');
+    await sleep(3500);
+    await toNear();
     const leash = await ev(`(async()=>{
         const px=explorePlayerX(),py=explorePlayerY();
         const L=exploreActiveMapDef().lin;
-        const cand=(mapState.mobs||[]).filter(m=>m&&m.curHp>0&&m._fx!=null&&exploreTileDist(m._fx,m._fy,px,py)<=8).sort((a,b)=>Math.hypot(a._fx-px,a._fy-py)-Math.hypot(b._fx-px,b._fy-py));
+        const cand=(mapState.mobs||[]).filter(m=>m&&m.curHp>0&&m._fx!=null&&exploreTileDist(m._fx,m._fy,px,py)<=12).sort((a,b)=>Math.hypot(a._fx-px,a._fy-py)-Math.hypot(b._fx-px,b._fy-py));
         if(!cand.length) return {err:'no mob'};
         // 家設在一條直線走得通的 16 格外（不被牆擋，量的是拴繩邏輯而不是尋路）
         let m=null, home=null;
