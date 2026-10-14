@@ -10,6 +10,15 @@ function playerAttackInRange(target) {
                 if (_pd > _stop + 0.5) return false;
                 if (typeof exploreIsMoving === 'function' && exploreIsMoving() && _pd > _stop * 0.55) return false;
             }
+            // 原版地圖：人要站定在格子中心才揮（踏格途中＝還沒到鄰格）
+            let _ln = (typeof exploreLinName === 'function') ? exploreLinName() : '';
+            if (_ln && typeof linmapTileAt === 'function' && typeof explorePlayerX === 'function') {
+                let _px = explorePlayerX(), _py = explorePlayerY();
+                let _pt = linmapTileAt(_ln, _px, _py), _pc = _pt && linmapTileCenter(_ln, _pt.gx, _pt.gy);
+                if (_pc && Math.hypot(_pc.x - _px, _pc.y - _py) > 1.5) return false;
+                let _mt = (target._fx != null) ? linmapTileAt(_ln, target._fx, target._fy || 0) : null;
+                if (_pt && _mt && _mt.gx === _pt.gx && _mt.gy === _pt.gy) return false;
+            }
         } catch (eEng) {}
     }
     return true;
@@ -21,12 +30,18 @@ function playerAttackLinBegin() {
     if (typeof _linPcAtkProfile !== 'function' || typeof _playerBattleForm !== 'function') return false;
     let target = getTarget();
     if (!target || !playerAttackInRange(target)) return !!target;
+    // 近戰等怪走完這一步、站上鄰格才揮（不打走到一半的怪）
+    if (target._ls && !(typeof exploreEngageLimit === 'function' && exploreEngageLimit() > 48)) return true;
     let form = _playerBattleForm();
     let n = (typeof _pmAtkSeqLen === 'function') ? _pmAtkSeqLen(form) : 0;
     let prof = _linPcAtkProfile(form, n);
     if (!prof) return false;
     player._faceTgtUid = target.uid;
     delete player._faceTgt;
+    if (target._fx != null && typeof _vec2dir === 'function') {
+        let _wx = target._fx - explorePlayerX(), _wy = (target._fy || 0) - explorePlayerY();
+        if (Math.abs(_wx) >= 1 || Math.abs(_wy) >= 1) player._faceD = _vec2dir(_wx, -_wy);
+    }
     try { _playerMorphTrigger('attack'); } catch (e) {}
     state._pLinHitAt = Date.now() + prof.hit;
     state._pLinHitUid = target.uid;

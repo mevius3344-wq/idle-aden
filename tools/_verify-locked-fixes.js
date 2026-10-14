@@ -711,6 +711,11 @@ section("59) 原版地圖玩家普攻（原版節奏＋打中幀才扣血）");
   ok("攻擊動作照原版各幀、整段＝攻擊間隔", /function _linPcAtkProfile\(form, n\)/.test(fx) && /function _pmAtkFrameAt\(form, elapsed, n\)/.test(fx) && (fx.match(/_pmAtkFrameAt\(form, Date\.now\(\) - /g) || []).length >= 1 && /_pmAtkFrameAt\(form, Date\.now\(\) - _pmState\.t, _nA\)/.test(fx));
   ok("先揮後算：playerAttackLinBegin 播動作、打中幀 playerAttackLinHit 才結算", /function playerAttackLinBegin\(\)/.test(atk) && /state\._pLinHitAt = Date\.now\(\) \+ prof\.hit;/.test(atk) && /function playerAttackLinHit\(\)/.test(atk) && /!playerAttackLinBegin\(\)\) playerAttack\(\);/.test(core) && /playerAttackLinHit\(\);/.test(core));
   ok("原版地圖普攻不被受擊打斷", /if \(k === 'hurt' && st\.act === 'attack' && curP === _PM_PRIO\.attack\) return;/.test(fx));
+  ok("職業圖原版站立點 LIN_PC_FOOT 對到格子中心（人物不浮在怪北邊兩格）", /js\/49-linpc-foot\.js/.test(F.html) && /"男騎士":\[-1\.5,44\]/.test(rd("js/49-linpc-foot.js")) && exists("tools/lin/export-pc-foot.js") && /function _linPcFootOfs\(form\)/.test(fx) && /let _lf = _realMap \? _linPcFootOfs\(form\) : null;/.test(fx) && /var rf = _linPcFootOfs\(form\);/.test(fx));
+  ok("原版地圖面向用世界座標（玩家揮砍、怪出手都正面相對）", /player\._faceD = _vec2dir\(_wx, -_wy\);/.test(atk) && /who\._faceD = _vec2dir\(wx, -wy\); return who\._faceD;/.test(fx) && /m\._face8 = _vec2dir\(wx, -wy\);/.test(fx));
+  ok("八向預載走路＋攻擊幀（轉向打新方向不卡在舊面向）", /\['walk', 'attack'\]\.forEach\(function \(act\) \{/.test(fx) && /im\.src = base \+ form\.wpn \+ '_' \+ act \+ '_' \+ f \+ '\.png' \+ bust;/.test(fx));
+  ok("近戰不打走路途中的怪、怪不在同一格出手", /if \(target\._ls && !\(typeof exploreEngageLimit === 'function' && exploreEngageLimit\(\) > 48\)\) return true;/.test(atk) && /return td >= 1 && td <= exploreLinMobRange\(mob\);/.test(rd("js/44-map-explore.js")));
+  ok("怪卡底 4px 補回：lin-spr img 下移 36px", /\.mob-img-inner\.lin-spr\.lin-spr img \{\s*translate: 0 36px;/.test(rd("css/style.css")) && exists("tools/_audit-atk-align.js"));
 }
 
 section("60) 排行榜（照新創：職業分頁＋血盟、自己固定在最底）");

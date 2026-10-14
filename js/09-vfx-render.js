@@ -3099,6 +3099,8 @@ function _animSetImgFrame(img, fkey, url) {
         };
 
         let pre = new Image();
+        // 人物動作幀插隊：低優先圖片（地圖塊／怪幀）排隊時，轉向攻擊幀會晚好幾秒才換上
+        if (/assets\/classanim\//.test(wantUrl)) { try { pre.fetchPriority = 'high'; } catch (eFp) {} }
         pre.onload = function () {
             applySrc(wantUrl);
         };
@@ -3506,6 +3508,12 @@ function _mob8FaceDir(m, box) {
         }
         // 原版地圖閒逛中的怪維持自己的面向（不一直盯著玩家）
         if (m && m._linFaceHold && !m._animAct) return (m._face8 != null) ? m._face8 : 6;
+        // 原版地圖：打玩家的怪用世界格座標朝向玩家（不比圖框中心）
+        if (m && m._fx != null && (!m._facePartyKey || m._facePartyKey === 'P') && typeof exploreLinName === 'function' && exploreLinName() && typeof explorePlayerX === 'function') {
+            let wx = explorePlayerX() - m._fx, wy = explorePlayerY() - (m._fy || 0);
+            if (Math.abs(wx) >= 1 || Math.abs(wy) >= 1) m._face8 = _vec2dir(wx, -wy);
+            return (m._face8 != null) ? m._face8 : 6;
+        }
         let stickAdj = 180, stickTurn = 70;
         let tr = _mob8TargetRect(m); if (!tr) return (m._face8 != null) ? m._face8 : 6;
         let mr = box.getBoundingClientRect(); if (!mr.width) return (m._face8 != null) ? m._face8 : 6;
@@ -3968,6 +3976,15 @@ function _classFacing8(who, el) {
     try {
         let tgtUid = who && who._faceTgtUid;
         if (tgtUid == null) return cur;
+        // 原版地圖：用世界格座標（圖框中心隨圖高不同，斜鄰／正南的怪會被算成朝北）
+        if (who === player && typeof exploreLinName === 'function' && exploreLinName() && typeof explorePlayerX === 'function') {
+            let tm = ((typeof mapState !== 'undefined' && mapState.mobs) || []).find(x => x && x.uid === tgtUid);
+            if (tm && tm._fx != null) {
+                let wx = tm._fx - explorePlayerX(), wy = (tm._fy || 0) - explorePlayerY();
+                if (Math.abs(wx) < 1 && Math.abs(wy) < 1) return cur;
+                who._faceD = _vec2dir(wx, -wy); return who._faceD;
+            }
+        }
         let tr = (typeof _vfxSlotRect === 'function') ? _vfxSlotRect(tgtUid) : null;   // 目標怪格 rect（怪已死/離場→null）
         if (!tr || !tr.width) return cur;
         let er = (el && el.getBoundingClientRect) ? el.getBoundingClientRect() : null;
@@ -4289,13 +4306,16 @@ function _preloadPlayerWalkFrames(form) {
         let keep = [];
         for (let d = 0; d < 8; d++) {
             let base = 'assets/classanim/' + encodeURIComponent(m[1] + _animDirSfx(d, true)) + '/';
-            let n = _classAnimFrameCount({ base: base, wpn: form.wpn }, 'walk');
-            for (let f = 0; f < n; f++) {
-                let im = new Image();
-                im.decoding = 'async';
-                im.src = base + form.wpn + '_walk_' + f + '.png' + bust;
-                keep.push(im);
-            }
+            // 攻擊幀也要 8 向先載：轉向打新方向的怪時，圖沒到會停在舊面向的走路幀（看起來沒正面交戰）
+            ['walk', 'attack'].forEach(function (act) {
+                let n = _classAnimFrameCount({ base: base, wpn: form.wpn }, act);
+                for (let f = 0; f < n; f++) {
+                    let im = new Image();
+                    im.decoding = 'async';
+                    im.src = base + form.wpn + '_' + act + '_' + f + '.png' + bust;
+                    keep.push(im);
+                }
+            });
         }
         _pmState._walkPre = keep;
     } catch (e) {}
@@ -4387,6 +4407,12 @@ function _playerBattleCrownApply(crown, form, act) {
 function _playerMorphYOffset(form) {
     let k = (form && form.key) || '';
     return /^morph:萊肯(?:F|2)?$/.test(k) ? 18 : 0;
+}
+// 原版拼塊地圖：職業外形圖內的原版站立點（LIN_PC_FOOT，不在圖底中央）要對到所在格子中心；回 [距圖中心 x, 距圖底 y] 或 null
+function _linPcFootOfs(form) {
+    if (!form || !form.classAnim || typeof LIN_PC_FOOT === 'undefined') return null;
+    if (typeof exploreLinName !== 'function' || !exploreLinName()) return null;
+    return LIN_PC_FOOT[String(form.domKey || '').split(':')[1]] || null;
 }
 // ⚔️ v3.0.91 攻擊動畫播放速度隨攻速：攻擊動作每幀時長＝攻擊間隔(秒)÷幀數→整段動畫恰在一次攻擊間隔內播完（「播完對上攻速」）。
 //   只加速不放慢：慢攻取 min(base,…)＝維持預設 8fps（早播完後待機·不拖成慢動作）；下限 45ms/幀(≈22fps)防過快閃爍。
@@ -4634,7 +4660,9 @@ function _playerMorphApplyBody() {
                 } catch (eGy) {}
             }
             if (!(_gy > 40)) _gy = 186;
-            let _foot = ((_gy - _playerMorphYOffset(form)).toFixed(1)) + 'px';
+            let _lf = _realMap ? _linPcFootOfs(form) : null;
+            if (_lf) _sx -= _lf[0];
+            let _foot = ((_gy - _playerMorphYOffset(form) - (_lf ? _lf[1] : 0)).toFixed(1)) + 'px';
             // 🩹 v3.8.451：腳錨＝50%+sx，容器寬＝實際顯示寬（勿 width:auto 塌陷＋圖右溢＝看起來偏右）
             if (form.qSkin) _pw = 272;
             else _pw = Math.max(96, Math.min(Math.max(_pw || 100, 100), 272));
@@ -5200,8 +5228,9 @@ function _remotePartySpritesApply() {
         st.el.style.width = w + 'px';
         var pp = _remotePartySpritePos(i, mem.key, mem);
         if (pp.mode === 'field') {
-            st.el.style.left = 'calc(50% + ' + Math.round(pp.dx - w / 2) + 'px)';
-            st.el.style.bottom = Math.round(pp.bottom) + 'px';
+            var rf = _linPcFootOfs(form);
+            st.el.style.left = 'calc(50% + ' + Math.round(pp.dx - w / 2 - (rf ? rf[0] : 0)) + 'px)';
+            st.el.style.bottom = Math.round(pp.bottom - (rf ? rf[1] : 0)) + 'px';
             st.el.style.zIndex = String((typeof exploreLinName === 'function' && exploreLinName() && typeof exploreDepthZ === 'function')
                 ? exploreDepthZ(Number(mem.wy) || 0, 8, 40)
                 : Math.max(8, Math.min(40, Math.round(28 - (Number(mem.wy) || 0) * 0.04))));

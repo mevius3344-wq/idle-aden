@@ -2368,6 +2368,10 @@
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.lin-spr::after {
             display: none !important;
         }
+        /* 原版地圖：怪卡底有 2px padding＋2px 邊框，再補 4px，站立點才落在格子中心 */
+        #battle-view.is-linmap.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.lin-spr.lin-spr img {
+            translate: 0 36px;
+        }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.is-mob-walking .mob-img-inner.lin-spr.lin-spr {
             transform: none !important;
             animation: none !important;

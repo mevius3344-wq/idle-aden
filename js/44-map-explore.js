@@ -1667,7 +1667,8 @@
         var ln = exploreLinName();
         if (!ln || !exploreFieldCombatActive()) return exploreMobInEngageRange(mob);
         if (!mob || mob._dead || !(mob.curHp > 0) || mob._fx == null || mob._ls) return false;
-        return exploreTileDist(mob._fx, mob._fy || 0, _tx, _ty) <= exploreLinMobRange(mob);
+        var td = exploreTileDist(mob._fx, mob._fy || 0, _tx, _ty);
+        return td >= 1 && td <= exploreLinMobRange(mob);   // 同一格＝先讓開再打
     }
 
     /** 練功點內追逐：靠近點內怪會追；離巢太遠回家；不跨點亂追 */
