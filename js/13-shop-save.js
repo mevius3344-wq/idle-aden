@@ -2296,7 +2296,18 @@ function _mercMonotonicExpGuard() {}
 function saveGame() {
     // 死亡狀態不寫檔：避免把 player.dead=true 存進去，導致下次讀檔卡在死亡狀態而不出怪。
     // 死亡期間沒有可保存的進度，保留上一份「存活」存檔即可。
-    if (player && player.dead) return false;
+    // 例外：倒地沒按「重新開始」就關頁（__fb5CloseFlush）＝照 revive() 的結果存（回村、1 血、存活），死前進度不回溯；本頁仍維持倒地。
+    if (player && player.dead) {
+        if (!(typeof window !== 'undefined' && window.__fb5CloseFlush) || !player.cls) return false;
+        let _town = 'town_giran';
+        try { if (typeof getLastTown === 'function') _town = getLastTown() || _town; } catch (_tE) {}
+        if (String(_town).indexOf('town_') !== 0) _town = 'town_giran';
+        let _map = mapState ? mapState.current : null, _hp = player.hp, _mp = player.mp;
+        player.dead = false; player.hp = 1; player.mp = Math.max(0, Math.min(Number(player.mmp) || 0, 1));
+        if (mapState) mapState.current = _town;
+        try { return saveGame(); }
+        finally { player.dead = true; player.hp = _hp; player.mp = _mp; if (mapState) mapState.current = _map; }
+    }
     // 🛡️ v3.3.14 防「空殼玩家覆蓋既有存檔」資料遺失：標題／載入畫面的 player 是 cls:null 的空殼（尚未載入/創建角色）。
     //    5 分鐘自動存檔計時器（startGameTimers）在「返回主選單」後不會被清除、beforeunload／寵物名冊 dirty 也可能觸發 saveGame，
     //    這些背景觸發會把空殼 player 寫進 currentSlot（預設 1）→ 毀掉該格真正的角色（顯示為 null／Lv.1／預設王族／資料不完整）。

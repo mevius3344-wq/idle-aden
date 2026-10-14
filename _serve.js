@@ -80,6 +80,8 @@ try {
   _cloudWallet = require("./lib/rt-cloud-wallet");
 } catch (e) {}
 
+const _saveOrder = require("./lib/rt-save-order");
+
 let _accountSessions = null;
 try {
   const _accountSessionsFile = path.join(
@@ -774,11 +776,14 @@ async function handleCloudApi(req, res, u) {
       const body = await readBody(req);
       let parsed = JSON.parse(body);
       let data = parsed && parsed.save ? parsed.save : parsed;
+      let saveSessionId = "";
+      let existingSave = null;
       if (!cloudAccountIsGuest(account) && _antiCheat) {
         const auth = _antiCheat.authFromBody(
           { account: parsed.account || account, authToken: parsed.authToken },
           ROOT
         );
+        saveSessionId = (auth && auth.sessionId) || "";
         if (!auth.ok) {
           return json(res, 401, {
             ok: false,
@@ -810,10 +815,11 @@ async function handleCloudApi(req, res, u) {
       if (!data || typeof data !== "object" || !data.p) {
         return json(res, 400, { ok: false, error: "invalid save object" });
       }
-      // 拒絕用較貧／較舊進度覆蓋雲端（防乙機空號／新角蓋掉甲機進度；刪角請先 DELETE）
+      // 拒絕較舊版本覆蓋雲端（先後見 lib/rt-save-order.js；防乙機空號／新角蓋掉甲機進度；刪角請先 DELETE）
       if (fs.existsSync(file)) {
         try {
           const existing = JSON.parse(fs.readFileSync(file, "utf8"));
+          existingSave = existing;
           // B2：伺服器錢包序號較新時，金幣以伺服器為準
           if (_cloudWallet && existing && existing.p && data.p) {
             _cloudWallet.mergeWalletAuthority(data, existing);
@@ -826,16 +832,18 @@ async function handleCloudApi(req, res, u) {
               meta: cloudFileMeta(file),
             });
           }
-          if (existing && existing.p && data.p && !cloudSaveBeats(data, existing)) {
+          if (existing && existing.p && data.p && !_saveOrder.saveOrderAccept(data, existing, saveSessionId, cloudSaveBeats)) {
             return json(res, 409, {
               ok: false,
               error: "stale_save",
-              message: "伺服器存檔較新或進度較高，已拒絕較舊上傳，避免覆蓋洗白。",
+              message: "伺服器存檔版本較新，已拒絕較舊上傳，避免覆蓋洗白。",
               meta: cloudFileMeta(file),
+              rev: _saveOrder.saveRevOf(existing),
             });
           }
         } catch (e) {}
       }
+      const saveRev = _saveOrder.saveOrderStamp(data, existingSave, saveSessionId);
       // 雲端存檔時同步鎖定角色名稱（全站唯一）；若被他人佔用或試圖改名則拒絕寫入
       const display = normalizeCharName(data.p && data.p.name);
       if (display) {
@@ -870,7 +878,7 @@ async function handleCloudApi(req, res, u) {
       }
       fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
       leaderboardCache.at = 0;
-      return json(res, 200, { ok: true, account, slot, meta: cloudFileMeta(file) });
+      return json(res, 200, { ok: true, account, slot, meta: cloudFileMeta(file), rev: saveRev });
     }
     if (req.method === "DELETE") {
       if (fs.existsSync(file)) {
@@ -4606,6 +4614,10 @@ const server = http.createServer(async (req, res) => {
     ) {
       await _neonLeaderboardHandler(req, res, u);
       return;
+    }
+    if (u === "/api/econ/status" && req.method === "GET") {
+      // 檔案模式沒有經濟權威 API：明確回關閉，客戶端才會照常同步倉庫／本地結算金幣
+      return json(res, 200, { ok: true, econAuth: false });
     }
     if (u.startsWith("/api/pandora") && _pandoraApiHandler) {
       await _pandoraApiHandler(req, res, u);

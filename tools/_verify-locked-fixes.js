@@ -658,7 +658,13 @@ section("48) 主畫面捷徑舊頁面自動更新");
   ok("主執行緒卡死由 Worker 看門狗代報 hard_freeze（附最後步驟）", /kind:"hard_freeze"/.test(F.html) && /new Worker\(URL\.createObjectURL/.test(F.html) && /window\.__phase = function/.test(F.html) && /'tap_any'/.test(F.html) && /window\.__phase\('applied'\)/.test(rd("js/35-cloud-save.js")) && /window\.__phase\('openLoadSelect'\)/.test(rd("js/13-shop-save.js")));
   ok("卡死回報附正在跑的計時器／動畫幀（task）＋長畫面幀歸因（loaf）", /task:info\.task/.test(F.html) && /wd\.postMessage\(\{ task: curTask/.test(F.html) && /type: 'long-animation-frame'/.test(F.html) && /window\.__clientLog\('loaf'/.test(F.html));
   { const cs = rd("js/35-cloud-save.js");
-    ok("存檔 409 改用雲端、不可回推（防同步 GET↔PUT 無限迴圈）", /function _adoptCloudSlotAsync\(slot\)/.test(cs) && /body\.error === 'stale_save'\)\) \{\s*_adoptCloudSlotAsync\(slot\);/.test(cs) && (cs.match(/cloudPullSlotIntoStorage\(slot, \{ adoptCloud: true \}\)/g) || []).length === 2 && /if \(opts\.adoptCloud\) \{/.test(cs)); }
+    ok("存檔 409 改用雲端、不可回推（防同步 GET↔PUT 無限迴圈）", /function _adoptCloudSlotAsync\(slot\)/.test(cs) && /body\.error === 'stale_save'\)\) \{\s*_adoptCloudSlotAsync\(slot\);/.test(cs) && (cs.match(/cloudPullSlotIntoStorage\(slot, \{ adoptCloud: true \}\)/g) || []).length === 2 && /if \(opts\.adoptCloud\) \{/.test(cs));
+    const so = exists("lib/rt-save-order.js") ? rd("lib/rt-save-order.js") : "";
+    const sv = rd("_serve.js"), ar = rd("lib/api-router.js");
+    ok("存檔不回溯：伺服器照版本號先後收檔（不再用等級／經驗／金幣猜）", /function saveOrderAccept\(incoming, existing, sessionId, legacyBeats\)/.test(so) && /return inRev >= exRev;/.test(so) && /incoming\.p\.srvSid = sessionTag\(sessionId\)/.test(so) && /_saveOrder\.saveOrderAccept\(data, existing, saveSessionId, cloudSaveBeats\)/.test(sv) && /_saveOrder\.saveOrderStamp\(data, existingSave, saveSessionId\)/.test(sv) && /saveOrderAccept\(data, existing, saveSessionId, cloudSaveBeats\)/.test(ar) && /rev: saveRev/.test(sv) && /rev: saveRev/.test(ar));
+    ok("存檔不回溯：客戶端記版本號、版本大者勝", /function _noteSavedRev\(slot, dataObj, rev\)/.test(cs) && /_noteSavedRev\(slot, dataObj, j && j\.rev\)/.test(cs) && /if \(ra !== rb\) return ra > rb;/.test(cs));
+    ok("存檔不回溯：PUT 不夾金幣只限經濟權威開；檔案模式回報經濟權威關", /inGold > exGold && require\("\.\/rt-shop"\)\.econAuthEnabled\(\)/.test(rd("lib/rt-cloud-wallet.js")) && /u === "\/api\/econ\/status"[\s\S]{0,200}econAuth: false/.test(sv));
+    ok("倒地關頁照 revive 結果存（回村 1 血），本頁仍倒地", /window\.__fb5CloseFlush\) \|\| !player\.cls\) return false;[\s\S]{0,500}player\.hp = 1;[\s\S]{0,200}mapState\.current = _town;[\s\S]{0,120}finally \{ player\.dead = true;/.test(rd("js/13-shop-save.js"))); }
   ok("回前景／頁面還原時檢查版本", /visibilitychange', function \(\) \{ if \(!document\.hidden\) _poll\(\); \}/.test(lu) && /ev\.persisted\) _poll\(\)/.test(lu));
 }
 

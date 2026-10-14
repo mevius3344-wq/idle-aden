@@ -243,12 +243,23 @@
     return !cloudSameCharacterIdentity(localData, cloudData);
   }
 
-  /** a 是否應取代 b（等級／經驗較高勝；同級則較新 savedAt 勝——不因花金幣／賣道具回朔） */
+  function cloudSaveRev(data) {
+    return Math.max(0, Math.floor(Number(data && data.p && data.p.srvRev) || 0));
+  }
+
+  /** a 是否應取代 b：雙方都有伺服器版本號（srvRev）時版本大者勝、同版本較新存檔時間勝（花錢／喝藥／死亡扣經驗不回溯）；
+   *  舊檔才退回等級／經驗較高勝、同級較新 savedAt 勝 */
   function cloudSaveBeats(a, b) {
     if (!a || !a.p) return false;
     if (!b || !b.p) return true;
     var ta = cloudSaveTime(a);
     var tb = cloudSaveTime(b);
+    var ra = cloudSaveRev(a);
+    var rb = cloudSaveRev(b);
+    if (ra > 0 && rb > 0) {
+      if (ra !== rb) return ra > rb;
+      if (ta || tb) return ta >= tb;
+    }
     // 明確較舊的存檔不可覆寫較新本機（即使雲端金幣較多）
     if (ta > 0 && tb > 0 && ta + 1500 < tb) return false;
     var sa = cloudSaveCombatScore(a);
@@ -299,18 +310,43 @@
     return JSON.stringify(wrap);
   }
 
+  // 伺服器收檔回傳新版本號：記到執行中角色與本機副本，下一次存檔（含重登換工作階段後）才會被認作源自最新雲端
+  function _noteSavedRev(slot, dataObj, rev) {
+    rev = Math.max(0, Math.floor(Number(rev) || 0));
+    if (!rev || !dataObj || !dataObj.p) return;
+    var seed = _seedOf(dataObj);
+    try {
+      if (typeof player !== 'undefined' && player && player.cls && typeof currentSlot !== 'undefined' &&
+          Number(currentSlot) === slot && String(player.enSeed || '') === seed && !(Number(player.srvRev) >= rev)) {
+        player.srvRev = rev;
+      }
+    } catch (eP) {}
+    try {
+      var loc = _readSlotLocal(slot);
+      if (loc && loc.p && _seedOf(loc) === seed && cloudSaveTime(loc) === cloudSaveTime(dataObj) && !(cloudSaveRev(loc) >= rev)) {
+        loc.p.srvRev = rev;
+        _writeSlotLocal(slot, loc);
+      }
+    } catch (eL) {}
+  }
+
   function cloudPushSlot(slot, dataObj) {
     if (!cloudCanSync()) return;
     slot = Math.max(1, Math.min(8, parseInt(slot, 10) || 1));
     if (!dataObj || typeof dataObj !== 'object' || !dataObj.p) return;
     if (isCloudDeletedSeed(_seedOf(dataObj))) return;   // 🪦 已刪角色禁止再上傳
     try {
+      var body = _cloudPutBody(dataObj);
       fetch(_base() + '/slot/' + slot, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: _cloudPutBody(dataObj),
+        body: body,
+        keepalive: body.length < 60000,
       })
         .then(function (res) {
+          if (res.ok) {
+            return res.json().then(function (j) { _noteSavedRev(slot, dataObj, j && j.rev); }).catch(function () {});
+          }
           if (res.status === 409) {
             return res.json().then(function (body) {
               if (body && (body.error === 'identity_conflict' || body.error === 'stale_save')) {
@@ -341,6 +377,7 @@
       cloudPullSlotIntoStorage(slot, { adoptCloud: true });
       return false;
     }
+    if (r && r.ok) _noteSavedRev(slot, dataObj, r.data && r.data.rev);
     return !!(r && r.ok);
   }
 
