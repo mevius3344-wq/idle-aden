@@ -737,6 +737,16 @@ section("65) 變形卷軸不卡畫面（腳錨不在迴圈裡強制重排）");
   ok("實測 tools/_audit-polymorph.js 存在", exists("tools/_audit-polymorph.js"));
 }
 
+section("66) 打怪掉落直接進背包（不落地，只有 PK 噴裝會掉）");
+{
+  const kp = rd("js/05-kill-progression.js");
+  const km = kp.slice(kp.indexOf("function killMob("));
+  const kmBody = km.slice(0, km.indexOf("\nfunction ", 10));
+  ok("killMob 固定不延遲入帳、不呼叫 vfxDropSpray", /_worldLootDefer = false;/.test(kmBody) && !/_worldLootDefer = !!/.test(kmBody) && !/vfxDropSpray\(/.test(kmBody));
+  ok("PK 噴裝轉交擊殺者仍在", /function pvpResolveDeathItemLoss\(/.test(rd("js/04-combat-attack.js")) && /function pvpGainTransferredItems\(/.test(rd("js/04-combat-attack.js")) && /\/api\/pvp\/loot-transfer/.test(rd("js/43-field-pvp.js")));
+  ok("實測 tools/_audit-loot-direct.js 存在", exists("tools/_audit-loot-direct.js"));
+}
+
 section("64) 進屋收外殼（原版天堂）");
 {
   const lm = rd("js/49-linmap.js");
