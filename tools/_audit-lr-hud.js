@@ -61,6 +61,8 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
         try{ setPowerSaveOn(false); }catch(e){}
     })()`);
     await changeMap('zone_13');
+    // 野外主動怪（v3.10.27 照格數索敵）會打 1 級新角色：版面／點地段先保住血量，免得倒地後快捷欄喝不了水
+    await ev(`window.__lrKeepHp=setInterval(()=>{ try{ if(player&&!player.dead) player.hp=player.mhp; }catch(e){} },50)`);
     await sleep(5000);
 
     // 1) 版面
@@ -96,7 +98,9 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     await shot('lrhud_field.png');
 
     // 3) 快捷欄：紅水
-    await ev('player.hp=1;try{updateUI&&updateUI()}catch(e){}');
+    // 半血就好：1 血常在點下去前就被怪打倒（倒地不可用道具）；自動喝水（HP<70%）先關，不然它先喝、手動那下撞到喝水間隔
+    await ev(`(()=>{const e=document.getElementById('set-hp-pot');window.__lrHpPot=e?e.value:null;if(e)e.value='0';})()`);
+    await ev('clearInterval(window.__lrKeepHp);player.hp=Math.max(1,Math.floor(player.mhp/2));try{updateUI&&updateUI()}catch(e){}');
     const cnt0 = await ev(`(player.inv.find(x=>x.id==='potion_heal')||{cnt:0}).cnt`);
     const q0 = await center('#lr-quick-slots .lr-slot:nth-child(1)');
     if (q0) await tap(q0[0], q0[1], 60);
@@ -105,6 +109,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
     ok(cnt1 === cnt0 - 1, '快捷欄點紅水會喝 (' + cnt0 + '→' + cnt1 + ')');
     const shown = await ev(`(document.querySelector('#lr-quick-slots .lr-slot:nth-child(1)')||{}).textContent`);
     ok(String(shown || '').indexOf(String(cnt1)) >= 0, '快捷欄數量更新 (' + shown + ')');
+    await ev(`(()=>{const e=document.getElementById('set-hp-pot');if(e&&window.__lrHpPot!=null)e.value=window.__lrHpPot;})()`);
 
     // 長按 → 選擇視窗
     const q2 = await center('#lr-quick-slots .lr-slot:nth-child(2)');
