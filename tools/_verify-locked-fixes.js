@@ -730,6 +730,13 @@ section("34b) 格步跟畫面幀同步（走路不飄跳）");
   ok("走一步期間 RAF 每幀推進、走完當幀補跑 tick", /function exploreLinRafFrame\(\)/.test(ex) && /if \(!_linStep\) \{ try \{ exploreTick\(\); \} catch \(eT\) \{\} return; \}/.test(ex) && /if \(k >= 1\) _linStep = null;\s*else exploreLinRafKick\(\);/.test(ex));
 }
 
+section("65) 變形卷軸不卡畫面（腳錨不在迴圈裡強制重排）");
+{
+  const ex = rd("js/44-map-explore.js");
+  ok("exploreGroundYLive 同一工作只量一次（queueMicrotask 清快取）", /function exploreGroundYLive\(\) \{\s*if \(_groundYCache\) return _groundYCache;[\s\S]{0,300}queueMicrotask\(function \(\) \{ _groundYCache = 0; \}\);/.test(ex));
+  ok("實測 tools/_audit-polymorph.js 存在", exists("tools/_audit-polymorph.js"));
+}
+
 section("64) 進屋收外殼（原版天堂）");
 {
   const lm = rd("js/49-linmap.js");

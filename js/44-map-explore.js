@@ -88,11 +88,17 @@
     var _footPlantUntil = 0;
 
     /** 腳錨：戰場垂直中央（正俯視） */
+    // 每隻怪／每個遮擋物件都會問腳錨；讀 clientHeight 會強制重排，夾在寫樣式的迴圈裡＝每幀上百次重排（變身後整個畫面卡住）
+    // 同一個工作（一次 tick／RAF）內只量一次，工作結束才清掉
+    var _groundYCache = 0;
     function exploreGroundYLive() {
+        if (_groundYCache) return _groundYCache;
         var bv = document.getElementById('battle-view');
         var h = (bv && bv.clientHeight) || GROUND_Y_REF_H;
         if (!(h > 80)) h = GROUND_Y_REF_H;
-        return Math.max(80, Math.round(h * 0.48));
+        _groundYCache = Math.max(80, Math.round(h * 0.48));
+        queueMicrotask(function () { _groundYCache = 0; });
+        return _groundYCache;
     }
     var PACK_PER_SPOT = 2; // v3.8.478 denser walk space
     var PORTAL_HOLD_TICKS = 8;
