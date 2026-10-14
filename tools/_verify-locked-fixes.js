@@ -586,6 +586,12 @@ section("55) 原版地圖怪物一格一步／打中幀才扣血");
   ok("一格一隻（佔格表）、不進玩家格、原版地圖不推擠", /function exploreLinMobOccupy\(/.test(ex) && /if \(pt && gx === pt\.gx && gy === pt\.gy\) return null;/.test(ex) && /if \(!linN\) try \{ exploreMobSeparateTick\(\); \}/.test(ex));
   ok("怪站定且在自身攻擊距離（格）內才攻擊；玩家近戰＝鄰格", /function exploreMobCanHitPlayer\(/.test(ex) && /mob\._ls\) return false;/.test(ex) && /exploreEngageLimit\(\) > ENGAGE_MELEE \? 8 : 1/.test(ex) && /exploreMobCanHitPlayer\(m\)/.test(cc));
   ok("攻擊先播動作、打中幀才結算", /m\._linHitAt = _now \+ _lt\.hit;/.test(cc) && /if \(m\._linHitAt && Date\.now\(\) >= m\._linHitAt\)/.test(cc));
+  ok("原版地圖仇恨／追擊／拴繩用格數（6／12／14），拴繩整段走回家；被動怪滿血不索敵、玩家在安全區不索敵（v3.10.25 怪來回跑不攻擊）",
+    /var LIN_MOB_SIGHT_T = 6, LIN_MOB_CHASE_T = 12, LIN_MOB_LEASH_T = 14, LIN_MOB_HOME_T = 2;/.test(ex) &&
+    /if \(!engaged && homeT > LIN_MOB_LEASH_T && !m\._linLeashBack\) \{ m\._linLeashBack = true; m\._linLeashT0 = now; \}/.test(ex) &&
+    /if \(m\._linLeashBack && \(engaged \|\| homeT <= LIN_MOB_HOME_T\)\) m\._linLeashBack = false;/.test(ex) &&
+    /if \(!wantChase && !passiveFull && !pSafe && toPlayerT <= LIN_MOB_SIGHT_T\)/.test(ex) &&
+    fs.existsSync(path.join(ROOT, "tools/_audit-mob-aggro.js")));
   ok("攻擊動作照原版各幀時長、不被受擊打斷、原版地圖 ~25fps 換幀", /function _linMobActFrame\(/.test(vr) && /\(k === 'attack' \|\| k === 'hurt'\) && m\._linAtkHold && Date\.now\(\) < m\._linAtkHold\) return;/.test(vr) && /classList\.contains\('is-linmap'\)\) \? 38 :/.test(vr));
 }
 

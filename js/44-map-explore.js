@@ -1396,6 +1396,8 @@
 
     // ===== 原版地圖怪物：一格一步（l1j passispeed）、八方向、站定才攻擊（js/49-linmob-timing.js） =====
     var LIN_MOB_DEF_WALK = 800;
+    // 原版地圖仇恨／追擊／拴繩用格數（像素版 MOB_SIGHT 78／LEASH 150 只有 2～3 格：主動怪看不到身旁的玩家、追一步就被拉回家＝來回跑不攻擊）
+    var LIN_MOB_SIGHT_T = 6, LIN_MOB_CHASE_T = 12, LIN_MOB_LEASH_T = 14, LIN_MOB_HOME_T = 2;
     function exploreLinMobTiming(m) {
         var T = (typeof LIN_MOB_TIMING !== 'undefined') ? LIN_MOB_TIMING : null;
         return (T && m && T[m.n]) || null;
@@ -1545,8 +1547,8 @@
         if (m._townDummy) return;
         if (m._linAtkHold && now < m._linAtkHold) return;
         var hx = m._homeFx, hy = m._homeFy || 0;
-        var homeDist = Math.hypot((m._fx || 0) - hx, (m._fy || 0) - hy);
-        var toPlayer = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
+        var homeT = exploreTileDist(m._fx, m._fy || 0, hx, hy);
+        var toPlayerT = exploreTileDist(m._fx, m._fy || 0, _tx, _ty);
         var engaged = !!(tgt && m === tgt && exploreMobInEngageRange(m));
         var o;
         var _hold = t0 && occ[t0.gx + ',' + t0.gy];
@@ -1558,21 +1560,26 @@
             if (o) exploreLinMobStartStep(name, m, o, now, occ);
             return;
         }
-        if (homeDist > LEASH) {
+        // 拴繩：跑太遠就整段走回家才重新索敵（不可走一步就回頭＝來回跑）；正在被玩家打的怪不拉回
+        if (!engaged && homeT > LIN_MOB_LEASH_T && !m._linLeashBack) { m._linLeashBack = true; m._linLeashT0 = now; }
+        if (m._linLeashBack && (engaged || homeT <= LIN_MOB_HOME_T)) m._linLeashBack = false;
+        if (m._linLeashBack) {
             m._aggro = false;
             m._wandMode = null;
             o = exploreLinMobPick(name, m, { x: hx, y: hy }, occ, pt);
             if (o) exploreLinMobStartStep(name, m, o, now, occ);
+            else if (now - (m._linLeashT0 || 0) > 10000) m._linLeashBack = false;
             return;
         }
         var wantChase = !!engaged;
+        // 被動怪滿血不索敵（原版：被打才反擊）；玩家在安全區不索敵
         var passiveFull = (m.beh === '被動' && m.curHp >= (m.hp || 1));
-        var sight = passiveFull ? MOB_SIGHT_PASSIVE : MOB_SIGHT;
+        var pSafe = typeof linmapSafeZone === 'function' && linmapSafeZone(name, _tx, _ty);
         if (m._aggro) {
-            if (toPlayer > CHASE_RANGE) m._aggro = false;
+            if (toPlayerT > LIN_MOB_CHASE_T || pSafe) m._aggro = false;
             else wantChase = true;
         }
-        if (!wantChase && toPlayer <= sight) { m._aggro = true; wantChase = true; }
+        if (!wantChase && !passiveFull && !pSafe && toPlayerT <= LIN_MOB_SIGHT_T) { m._aggro = true; wantChase = true; }
         if (engaged) m._aggro = true;
         if (!wantChase) { exploreLinMobWander(name, m, now, occ, pt); return; }
         m._wandMode = null;
