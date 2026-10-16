@@ -1004,6 +1004,9 @@ function tick() {
         if(player.dead) break;
         if(m.curHp <= 0) continue;   // 反擊使該怪在自己回合內死亡 → 跳過後續魔法施放
         if(m.st && (m.st.vacuum > 0 || m.st.magicseal > 0)) continue; // 真空 / 魔法封印：無法施放技能
+        // 場戰：距離／隔牆打不到＝普攻與魔法都不可穿牆（舊版 atkCd>0 仍施法＝牆後被戳）
+        let _fieldMag = typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive();
+        if (_fieldMag && typeof exploreMobCanHitPlayer === 'function' && !exploreMobCanHitPlayer(m)) continue;
         if(!m._magCd) m._magCd = {};
         // 🔮 v3.7.16 決鬥法師對手：先問 js/28「本 tick 已就緒的法術中傷害最高的是哪一招」→ 那一招必放且先放。
         //   ⚠️ 只有 `_pvpDuelFoe` 且職業為法師會拿到非 null，其餘怪物 _magBest 恆 null＝完全照舊。

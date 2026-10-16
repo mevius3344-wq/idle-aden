@@ -54,11 +54,27 @@ async function main() {
         let slot=1; for(let s=1;s<=8;s++){ try{ if(!slotSummary(s)){slot=s;break;} }catch(e){} }
         currentSlot=slot; curCreate.rawCls='m_knight'; curCreate.cls='knight';
         document.getElementById('create-name-input').value=${JSON.stringify('掛' + stamp)};
-        startGame(); for(let i=0;i<40&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
-        try{ setPowerSaveOn(false); }catch(e){} })()`);
-    await sleep(2500);
-    await ev(`(()=>{const s=document.getElementById('map-select');if(![...s.options].some(o=>o.value==='silver_knight')){const o=document.createElement('option');o.value='silver_knight';s.appendChild(o);}s.value='silver_knight';changeMap(true);})()`);
-    await sleep(3000);
+        startGame(); for(let i=0;i<80&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
+        try{ setPowerSaveOn(false); }catch(e){}
+        return {ok:!!(player&&player.inv&&player.inv.length),map:mapState&&mapState.current};
+    })()`);
+    await sleep(1500);
+    const went = await ev(`(async()=>{
+        // 實測只驗證「會自己找怪／換隔牆目標」，不要被 1 級銀騎士區秒殺干擾
+        try{ player.lv=30; player.hp=player.mhp=8000; player.mp=player.mmp=2000; player.str=40; player.dex=30; player.dead=false; }catch(e){}
+        const s=document.getElementById('map-select');
+        if(!s) return {err:'no-select'};
+        if(![...s.options].some(o=>o.value==='silver_knight')){const o=document.createElement('option');o.value='silver_knight';s.appendChild(o);}
+        s.value='silver_knight'; changeMap(true);
+        for(let i=0;i<40&&mapState.current!=='silver_knight';i++) await new Promise(r=>setTimeout(r,250));
+        try{ player.hp=player.mhp=8000; player.dead=false; if(typeof updateUI==='function')updateUI(); }catch(e2){}
+        return {map:mapState&&mapState.current,x:Math.round(explorePlayerX()),y:Math.round(explorePlayerY())};
+    })()`, 30000);
+    if (!(went && went.map === 'silver_knight')) {
+        ok('進原版野外 silver_knight、AUTO 預設關', false, JSON.stringify(went));
+        try { ws.close(); } catch (e2) {} try { br.kill(); } catch (e3) {}
+        process.exit(1);
+    }
 
     const snap = () => ev(`(()=>{const x=explorePlayerX(),y=explorePlayerY();
         const live=(mapState.mobs||[]).filter(m=>m&&!m._dead&&m.curHp>0&&m._fx!=null&&!m._townDummy);

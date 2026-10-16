@@ -2410,6 +2410,15 @@
             transform: none !important;
             animation: none !important;
         }
+        /* 原版拼塊：所有場戰怪走路都不疊 bob／sway／踏步動畫（含非 lin-spr、變身同圖感） */
+        #battle-view.is-linmap.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.is-mob-walking .mob-img-inner {
+            transform: none !important;
+            animation: none !important;
+        }
+        #battle-view.is-linmap.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.is-mob-walking .mob-img-inner.mob-face-flip {
+            transform: scaleX(-1) !important;
+            animation: none !important;
+        }
         /* 有精靈影子圖時隱藏橢圓影，避免雙重黑影跳 */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob .mob-img-inner.mob-anim-shadowed::after {
             display: none !important;
@@ -2441,27 +2450,13 @@
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage:not(.active) .mob-img-wrap {
             filter: drop-shadow(0 0 0 2px #fda4af);
         }
-        /* 🔴 v3.10.37／40 點選鎖定：紅金光暈＋腳底小選取環（環不可蓋過半個 192 框） */
+        /* 🔴 v3.10.37／43 點選鎖定：紅金光暈＋名／血條（無腳底選取環／光圈） */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap {
             filter: drop-shadow(0 0 2px #ef4444) drop-shadow(0 0 6px rgba(239, 68, 68, 0.85)) drop-shadow(0 0 10px rgba(251, 191, 36, 0.4)) !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap::before {
-            content: '';
-            position: absolute;
-            left: 50%;
-            bottom: 4px;
-            width: 36%;
-            height: 10px;
-            transform: translateX(-50%);
-            border-radius: 50%;
-            background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.7) 0%, rgba(251, 191, 36, 0.35) 45%, transparent 72%);
-            pointer-events: none;
-            z-index: 1;
-            animation: mobSelectPulse 0.9s ease-in-out infinite;
-        }
-        @keyframes mobSelectPulse {
-            0%, 100% { opacity: 0.8; transform: translateX(-50%) scale(1); }
-            50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+            content: none;
+            display: none;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name,
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name span {
@@ -2622,6 +2617,22 @@
         }
         #battle-view.is-scenic-3d.is-world-scroll.is-explore-walking > #player-morph-sprite:not(.q-act-attack):not(.q-act-skill) > .pm-body {
             transform: translateX(var(--walk-sway, 0px)) translateY(var(--walk-bob, 0px)) scaleY(var(--walk-squash, 1)) !important;
+        }
+        /* 原版拼塊：蓋過上方 is-explore-walking bob（人物／變身走路不顛） */
+        #battle-view.is-linmap.is-world-scroll > #player-morph-sprite,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > #player-morph-sprite,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > #player-morph-sprite.q-chibi-actor {
+            transform: translateX(-50%) !important;
+        }
+        #battle-view.is-linmap.is-world-scroll > .party-sprite,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > .party-sprite {
+            transform: none !important;
+        }
+        #battle-view.is-linmap.is-world-scroll > #player-morph-sprite > .pm-body,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > #player-morph-sprite > .pm-body,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > #player-morph-sprite:not(.q-act-attack):not(.q-act-skill) > .pm-body {
+            transform: none !important;
+            animation: none !important;
         }
         #battle-view.is-world-scroll.has-scenic-bg:not(.is-topdown-3d) #explore-world-bg-far.is-scenic-far {
             display: block !important;

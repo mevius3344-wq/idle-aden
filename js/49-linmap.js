@@ -108,8 +108,17 @@
     }
 
     /**
-     * 攻擊視線：從 (gx0,gy0) 到 (gx1,gy1) 逐步走過去，每一步都要 linmapCanStep。
-     * 牆是格子之間的線——鄰格隔牆＝切比雪夫距離 1 但仍不可打（防穿牆攻擊）。
+     * 攻擊視線一步：正交＝linmapCanStep；斜向不可切角（走路可走 L 形＝穿牆角偷看）。
+     * 牆是格子之間的線——鄰格隔牆＝距離 1 仍不可打。
+     */
+    function linmapAttackStep(name, gx, gy, dx, dy) {
+        if (!dx && !dy) return false;
+        if (!dx || !dy) return linmapCanStep(name, gx, gy, dx, dy);
+        return linmapCanStep(name, gx, gy, dx, 0) && linmapCanStep(name, gx, gy, 0, dy);
+    }
+
+    /**
+     * 攻擊視線：從 (gx0,gy0) 到 (gx1,gy1) 逐步走過去，每一步都要 linmapAttackStep。
      */
     function linmapAttackLos(name, gx0, gy0, gx1, gy1) {
         if (gx0 === gx1 && gy0 === gy1) return false;
@@ -119,14 +128,14 @@
         var sy = gy0 < gy1 ? 1 : -1;
         if (!dx) {
             while (y !== gy1) {
-                if (!linmapCanStep(name, x, y, 0, sy)) return false;
+                if (!linmapAttackStep(name, x, y, 0, sy)) return false;
                 y += sy;
             }
             return true;
         }
         if (!dy) {
             while (x !== gx1) {
-                if (!linmapCanStep(name, x, y, sx, 0)) return false;
+                if (!linmapAttackStep(name, x, y, sx, 0)) return false;
                 x += sx;
             }
             return true;
@@ -139,7 +148,7 @@
             if (e2 > -dy) { err -= dy; mx = sx; }
             if (e2 < dx) { err += dx; my = sy; }
             if (!mx && !my) return false;
-            if (!linmapCanStep(name, x, y, mx, my)) return false;
+            if (!linmapAttackStep(name, x, y, mx, my)) return false;
             x += mx;
             y += my;
         }

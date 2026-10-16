@@ -1,4 +1,4 @@
-// 實測：點選怪物＝鎖定目標明顯（.active、名＋血條、紅金光暈／腳底環），名貼頭、環不宜過大
+// 實測：點選怪物＝鎖定目標明顯（.active、名＋血條、紅金光暈），名貼頭、無腳底選取環
 // 用法：node tools/_audit-mob-select.js [baseUrl]
 require('./_gm-cleanup').autoCleanup();
 const { spawn } = require('child_process');
@@ -105,7 +105,7 @@ async function main() {
             nameShow:b.classList.contains('name-show'),active:b.classList.contains('active'),
             nameTop:nameTop!=null?Math.round(nameTop):null, ringW:Math.round(ringW), ringH:Math.round(ringH),
             wrapW:wr?Math.round(wr.width):0,
-            nameOk:nameTop!=null&&nameTop>=70, ringOk:ringW>0&&wr&&ringW<=wr.width*0.5&&ringH<=16};
+            nameOk:nameTop!=null&&nameTop>=70, noRing:ringW===0&&ringH===0};
     })()`);
     ok('奇岩至少 2 木頭人', giran && giran.n >= 2, JSON.stringify(giran));
     ok('點選後只有目標 .active', giran && giran.onlyB, JSON.stringify(giran));
@@ -113,10 +113,10 @@ async function main() {
     ok('鎖定目標顯示血條', giran && giran.hp && giran.hp !== 'none' && giran.hp !== 'null', JSON.stringify(giran && { hp: giran.hp }));
     ok('鎖定目標有紅金光暈（filter）', giran && giran.filt && /drop-shadow/i.test(giran.filt), giran && giran.filt);
     ok('名稱貼頭（不飄太高）', giran && giran.nameOk, JSON.stringify(giran && { nameTop: giran.nameTop }));
-    ok('腳底環不大於半框', giran && giran.ringOk, JSON.stringify(giran && { ringW: giran.ringW, ringH: giran.ringH, wrapW: giran.wrapW }));
+    ok('無腳底選取環', giran && giran.noRing, JSON.stringify(giran && { ringW: giran.ringW, ringH: giran.ringH }));
     await shot('_mob_select_giran.jpg');
 
-    // 野外（有卡才測；換圖失敗不擋名／環規格）
+    // 野外（有卡才測；換圖失敗不擋名規格）
     await ev(`(async()=>{const sel=document.getElementById('map-select');
         if(!sel) return;
         if(![...sel.options].some(o=>o.value==='zone_13')){const o=document.createElement('option');o.value='zone_13';sel.appendChild(o);}

@@ -212,16 +212,17 @@ section("7) 怪物目標：頂部目標列永久關閉＋點選鎖定明顯");
     /if \(field\) \{\s*c\.classList\.toggle\('active', locked\);/.test(core) &&
     /var isTgt = \(typeof mapState !== 'undefined' && mapState\.targetIdx === i\);/.test(ex) &&
     /card\.classList\.toggle\('active', isTgt\)/.test(ex));
-  ok("場戰鎖定目標：紅金光暈＋腳底選取環＋名／血條",
-    /mobSelectPulse/.test(css) &&
+  ok("場戰鎖定目標：紅金光暈＋名／血條、無腳底選取環",
+    !/mobSelectPulse/.test(css) &&
     /field-mob\.active > \.mob-img-wrap/.test(css) &&
+    /field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,120}(?:content:\s*none|display:\s*none)/.test(css) &&
     /field-mob\.active > \.mob-name/.test(css) &&
     /field-mob\.active > \.mob-hp-bar/.test(css));
-  ok("點選名貼頭、腳底環不宜過大（名 top≥80、環寬≤40%）",
+  ok("點選名貼頭（名 top≥80）、無腳底光圈",
     /field-mob > \.mob-name \{[\s\S]{0,160}top:\s*(?:8[6-9]|9\d|1\d\d)px/.test(css) &&
-    /field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,220}width:\s*3[0-9]%/.test(css) &&
-    !/field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,220}width:\s*(?:[5-9]\d|4[1-9])%/.test(css));
-  ok("實測 tools/_audit-mob-select.js 存在", exists("tools/_audit-mob-select.js") && /只有目標 \.active/.test(rd("tools/_audit-mob-select.js")) && /腳底環不大於半框/.test(rd("tools/_audit-mob-select.js")));
+    !/field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,220}width:\s*\d+%/.test(css) &&
+    !/radial-gradient\(ellipse at center,\s*rgba\(239,\s*68,\s*68/.test(css));
+  ok("實測 tools/_audit-mob-select.js 存在", exists("tools/_audit-mob-select.js") && /只有目標 \.active/.test(rd("tools/_audit-mob-select.js")) && /無腳底選取環/.test(rd("tools/_audit-mob-select.js")));
 }
 
 section("8) 潘朵拉：遺物搜尋／布告欄／收購 下架");
@@ -484,8 +485,14 @@ section("32) 整張原版大地圖（出村不用傳送門）");
     /try \{ exploreTryWalkRegion\(\); \} catch/.test(F.explore) && /if \(walkover\) \{\s*_pendingSpawn = \{ x: _tx, y: _ty \};/.test(F.explore));
   ok("#11 大地圖傳送術只落在本區", /if \(def && def\.world && typeof linmapRegionAt === 'function'\) \{\s*var rg = linmapRegionAt\(def\.lin, hx, hy\);/.test(F.explore));
   ok("大地圖野外仍看得到村莊 NPC（只有所在村可點）", /function worldTowns\(world, cur\)/.test(town) && /buildEntity\(p, tid, tid === mapId\)/.test(town));
-  ok("自動打怪被地形擋住會換目標（CHASE_STUCK_MS／_unreachUntil）",
-    /var CHASE_STUCK_MS = \d+;/.test(F.explore) && /t\._unreachUntil = nowC \+ CHASE_UNREACH_MS;/.test(F.explore) && /if \(m\._unreachUntil && m\._unreachUntil > now\) continue;/.test(F.explore));
+  ok("自動打怪被地形擋住會換目標（CHASE_STUCK_MS／隔牆 8 秒放棄／貼牆 0.7 秒換）",
+    /var CHASE_STUCK_MS = \d+;/.test(F.explore) && /var CHASE_WALL_GIVEUP_MS = 8000;/.test(F.explore) &&
+    /chaseMarkUnreach/.test(F.explore) &&
+    /_chaseWallAdjSince > 700/.test(F.explore) &&
+    /nowC - _chaseNoLosSince > CHASE_WALL_GIVEUP_MS/.test(F.explore) &&
+    /dist <= COMBAT_STAND_OFF && !\(linChase && !hasLos\)/.test(F.explore) &&
+    /losPen = 180/.test(F.explore) &&
+    /if \(m\._unreachUntil && m\._unreachUntil > now\) continue;/.test(F.explore));
   ok("怪物出生點不落在村莊安全區", /\|\| \(def\.lin && typeof linmapSafeZone === 'function' && linmapSafeZone\(def\.lin, hx, hy\)\)\) \{/.test(F.explore));
 }
 
@@ -517,7 +524,11 @@ section("34) 原版格步走路");
     /_wc2 != null \|\| \(Date\.now\(\) - _pmState\._walkHold\.t\) >= 95/.test(fx) &&
     !/\(_wc != null \? 40 : 95\)/.test(fx) &&
     (fx.match(/m\._linWalkF != null/g) || []).length >= 3);
-  ok("原版地圖不套 CSS 走路 bob／sway", /var linFeel = !!exploreLinName\(\);/.test(ex) && /if \(_moving && !linFeel\)/.test(ex) && /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite,[\s\S]{0,120}transform: translateX\(-50%\) !important;/.test(rd("css/style.css")));
+  ok("原版地圖不套 CSS 走路 bob／sway（人物／變身／怪）",
+    /var linFeel = !!exploreLinName\(\);/.test(ex) && /if \(_moving && !linFeel\)/.test(ex) &&
+    /var linNoBob = !!exploreLinName\(\);/.test(ex) && /if \(walking && !linNoBob\)/.test(ex) &&
+    /#battle-view\.is-linmap\.is-world-scroll\.is-explore-walking > #player-morph-sprite[\s\S]{0,80}transform: translateX\(-50%\) !important;/.test(rd("css/style.css")) &&
+    /#battle-view\.is-linmap\.is-world-scroll #mob-list\.is-field-combat > \.mob-target\.field-mob\.is-mob-walking \.mob-img-inner \{[\s\S]{0,80}transform: none !important;/.test(rd("css/style.css")));
   ok("原版地圖換幀 src 當幀寫入（不等 onload）", /linSync = !!\(bvL && bvL\.classList\.contains\('is-linmap'\)\);/.test(rd("js/09-vfx-render.js")) && /\(pre\.complete && pre\.naturalWidth > 0\) \|\| linSync/.test(rd("js/09-vfx-render.js")));
 }
 
@@ -622,11 +633,13 @@ section("55) 原版地圖怪物一格一步／打中幀才扣血");
   ok("怪一格一步：位移跟走路幀一格格跳、連續走接上一步結束時刻", /function exploreMobLinTick\(/.test(ex) && /var kd = \(f \+ 1\) \/ n;/.test(ex) && /now - m\._lsEnd < dur\) \? Math\.min\(dur \* 0\.9/.test(ex));
   ok("一格一隻（佔格表）、不進玩家格、原版地圖不推擠", /function exploreLinMobOccupy\(/.test(ex) && /if \(pt && gx === pt\.gx && gy === pt\.gy\) return null;/.test(ex) && /if \(!linN\) try \{ exploreMobSeparateTick\(\); \}/.test(ex));
   ok("怪站定且在自身攻擊距離（格）內才攻擊；玩家近戰＝鄰格", /function exploreMobCanHitPlayer\(/.test(ex) && /mob\._ls\) return false;/.test(ex) && /exploreEngageLimit\(\) > ENGAGE_MELEE \? 8 : 1/.test(ex) && /exploreMobCanHitPlayer\(m\)/.test(cc));
-  ok("#69 攻擊不可穿牆（linmapAttackLos／隔牆不站著空揮／打中幀再查）",
-    /function linmapAttackLos\(/.test(rd("js/49-linmap.js")) && /global\.linmapAttackLos = linmapAttackLos/.test(rd("js/49-linmap.js")) &&
+  ok("#69 攻擊不可穿牆（視線斜向不切角／普攻＋魔法／打中幀再查／掛機隔牆不站死）",
+    /function linmapAttackStep\(/.test(rd("js/49-linmap.js")) && /function linmapAttackLos\(/.test(rd("js/49-linmap.js")) && /global\.linmapAttackLos = linmapAttackLos/.test(rd("js/49-linmap.js")) &&
     /exploreLinAttackLos\(mob\._fx/.test(ex) && /toPlayerT <= exploreLinMobRange\(m\) && exploreLinAttackLos\(/.test(ex) &&
     /exploreLinAttackLos\(_px, _py, target\._fx/.test(rd("js/04-combat-attack.js")) &&
     /_hitOk[\s\S]{0,120}exploreMobCanHitPlayer\(m\)/.test(cc) &&
+    /_fieldMag[\s\S]{0,180}exploreMobCanHitPlayer\(m\)/.test(cc) &&
+    /engaged = !!\(inRange && hasLos\)/.test(ex) &&
     exists("tools/_audit-wall-atk.js"));
   ok("攻擊先播動作、打中幀才結算", /m\._linHitAt = _now \+ _lt\.hit;/.test(cc) && /if \(m\._linHitAt && Date\.now\(\) >= m\._linHitAt\)/.test(cc));
   ok("原版地圖仇恨／追擊／拴繩用格數（6／12／14），拴繩整段走回家；被動怪滿血不索敵、玩家在安全區不索敵（v3.10.25 怪來回跑不攻擊）",

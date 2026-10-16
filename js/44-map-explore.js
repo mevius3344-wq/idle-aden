@@ -40,8 +40,9 @@
     var HUNT_SEARCH_WORLD = 3200;
     // 自動追怪被地形擋住（直線走不過去）時，超過 STUCK_MS 沒拉近就暫時略過那隻怪
     var CHASE_STUCK_MS = 1500;
+    var CHASE_WALL_GIVEUP_MS = 8000; // 隔牆繞路最長；逾時換目標（防沿牆來回走不停）
     var CHASE_UNREACH_MS = 10000;
-    var _chaseIdx = -1, _chaseBest = Infinity, _chaseSince = 0;
+    var _chaseIdx = -1, _chaseBest = Infinity, _chaseSince = 0, _chaseNoLosSince = 0, _chaseWallAdjSince = 0, _chaseSlideX = 0, _chaseSlideY = 0;
     // 掛機巡邏範圍（設定 set-patrol 格數，原版格距）＋附近沒怪自動瞬移（set-nomob-tp）
     var NOMOB_TP_MS = 4000;
     var PATROL_HOME_STUCK_MS = 4000;
@@ -1817,15 +1818,21 @@
         var cells = explorePatrolCells();
         var anchor = cells > 0 ? _patrolAnchor : null;
         var lim = anchor ? Infinity : (maxDist == null ? APPROACH_WORLD : maxDist);
-        var best = -1, bestD = Infinity;
+        var best = -1, bestScore = Infinity;
         var now = Date.now();
+        var linN = exploreLinName();
         for (var i = 0; i < mapState.mobs.length; i++) {
             var m = mapState.mobs[i];
             if (!m || m._dead || !(m.curHp > 0) || m._fx == null || m._townDummy) continue;
             if (m._unreachUntil && m._unreachUntil > now) continue;
             if (anchor && exploreTileDist(anchor.x, anchor.y, m._fx, m._fy || 0) > cells) continue;
             var d = Math.hypot(m._fx - _tx, (m._fy || 0) - _ty);
-            if (d <= lim && d < bestD) { bestD = d; best = i; }
+            if (!(d <= lim)) continue;
+            // 隔牆無攻擊視線的怪略往後排（仍可繞過去；不要重罰到永遠不追附近怪）
+            var losPen = 0;
+            if (linN && typeof exploreLinAttackLos === 'function' && !exploreLinAttackLos(_tx, _ty, m._fx, m._fy || 0)) losPen = 180;
+            var score = d + losPen;
+            if (score < bestScore) { bestScore = score; best = i; }
         }
         return best;
     }
@@ -1871,7 +1878,10 @@
         if (!_patrolAnchor) _patrolAnchor = { x: _tx, y: _ty };
         var t = mapState.mobs[mapState.targetIdx];
         if (!t || t._dead || !(t.curHp > 0) || t._fx == null) t = null;
-        var engaged = !!(t && exploreMobInEngageRange(t));
+        // 原版地圖：距離夠但隔牆＝還不算交戰站定（否則掛機卡在牆邊揮不到、也不換目標）
+        var inRange = !!(t && exploreMobInEngageRange(t));
+        var hasLos = !!(t && (!exploreLinName() || (typeof exploreLinAttackLos === 'function' && exploreLinAttackLos(_tx, _ty, t._fx, t._fy || 0))));
+        var engaged = !!(inRange && hasLos);
         if (!engaged) {
             var ai = (t && t._picked && (t._townDummy || manualHunt)) ? mapState.targetIdx : exploreNearestApproachIdx(APPROACH_WORLD);
             if (ai < 0 && !manualHunt) {
@@ -1891,7 +1901,63 @@
         var dx = t._fx - _tx;
         var dy = (t._fy || 0) - _ty;
         var dist = Math.hypot(dx, dy);
-        if (engaged && exploreLinName()) {
+        var linChase = !!exploreLinName();
+        var nowC = Date.now();
+        var ti = mapState.mobs.indexOf(t);
+        function chaseMarkUnreach() {
+            if (manualHunt || !t) return false;
+            t._unreachUntil = nowC + CHASE_UNREACH_MS;
+            _chaseIdx = -1;
+            _chaseBest = Infinity;
+            _chaseNoLosSince = 0;
+            _chaseWallAdjSince = 0;
+            try {
+                if (typeof setTarget === 'function') setTarget(-1);
+                else mapState.targetIdx = -1;
+            } catch (eUn) { mapState.targetIdx = -1; }
+            return true;
+        }
+        if (ti !== _chaseIdx) {
+            _chaseSince = nowC;
+            _chaseIdx = ti;
+            _chaseBest = dist;
+            _chaseNoLosSince = hasLos ? 0 : nowC;
+            _chaseWallAdjSince = 0;
+            _chaseSlideX = _tx;
+            _chaseSlideY = _ty;
+        }
+        if (linChase && !hasLos) {
+            if (!_chaseNoLosSince) _chaseNoLosSince = nowC;
+            // 貼牆鄰格（距離夠但打不到）：從「貼上」起算 0.7 秒換目標（不可用整段繞路計時，否則一到牆邊就被略過）
+            if (inRange) {
+                if (!_chaseWallAdjSince) _chaseWallAdjSince = nowC;
+                if (nowC - _chaseWallAdjSince > 700) {
+                    if (chaseMarkUnreach()) return false;
+                }
+            } else {
+                _chaseWallAdjSince = 0;
+            }
+            // 繞路中：有位移就刷新短卡住計時；完全停住 1.5 秒或總共繞超過 8 秒 → 換目標
+            var slid = Math.hypot(_tx - _chaseSlideX, _ty - _chaseSlideY);
+            if (slid > 28) {
+                _chaseSlideX = _tx;
+                _chaseSlideY = _ty;
+                _chaseSince = nowC;
+            }
+            if (!manualHunt && (nowC - _chaseSince > CHASE_STUCK_MS || nowC - _chaseNoLosSince > CHASE_WALL_GIVEUP_MS)) {
+                if (chaseMarkUnreach()) return false;
+            }
+        } else {
+            _chaseNoLosSince = 0;
+            _chaseWallAdjSince = 0;
+            if (engaged || dist < _chaseBest - 6) {
+                _chaseSince = nowC;
+                _chaseBest = dist;
+            } else if (!manualHunt && nowC - _chaseSince > CHASE_STUCK_MS) {
+                if (chaseMarkUnreach()) return false;
+            }
+        }
+        if (engaged && linChase) {
             _vx = 0;
             _vy = 0;
             if (exploreLinStepping()) return false;
@@ -1906,29 +1972,14 @@
         if (!(dist > 1)) return false;
         var dirx = dx / dist;
         var diry = dy / dist;
-        if (dist <= COMBAT_STAND_OFF) {
+        // 隔牆近距離不可站定（舊 COMBAT_STAND_OFF 會跳過卡住判定＝永遠不換目標）
+        if (dist <= COMBAT_STAND_OFF && !(linChase && !hasLos)) {
             _vx = 0;
             _vy = 0;
             exploreSetFaceFromVec(dirx, -diry);
             return false;
         }
         if (!engaged && dist > HUNT_SEARCH_WORLD && !(explorePatrolCells() > 0) && !manualHunt) return false;
-        var nowC = Date.now();
-        var ti = mapState.mobs.indexOf(t);
-        if (engaged || ti !== _chaseIdx || dist < _chaseBest - 6) {
-            _chaseSince = nowC;
-            _chaseIdx = ti;
-            _chaseBest = dist;
-        } else if (!manualHunt && nowC - _chaseSince > CHASE_STUCK_MS) {
-            t._unreachUntil = nowC + CHASE_UNREACH_MS;
-            _chaseIdx = -1;
-            _chaseBest = Infinity;
-            try {
-                if (typeof setTarget === 'function') setTarget(-1);
-                else mapState.targetIdx = -1;
-            } catch (eUn) { mapState.targetIdx = -1; }
-            return false;
-        }
         exploreSetFaceFromVec(dirx, -diry);
         return explorePlayerWalkStep(dirx, diry, { x: t._fx, y: t._fy || 0 }) > 0.08;
     }
@@ -4155,13 +4206,20 @@
             var plant = Number(m._mobPlant) || 0;
             var plantOn = !!(walking && plant > 0.35);
             if (!!card.classList.contains('is-mob-plant') !== plantOn) card.classList.toggle('is-mob-plant', plantOn);
-            if (walking) {
+            // 原版拼塊：步伐在 sprite 內，禁止再疊 CSS bob／sway（怪／變身一顛一顛）
+            var linNoBob = !!exploreLinName();
+            if (walking && !linNoBob) {
                 var bobY = Number(m._mobBob) || 0;
                 var swayX = Math.sin((Number(m._walkPhase) || 0) * Math.PI) * 2.4;
                 card.style.setProperty('--mob-walk-bob', bobY.toFixed(2) + 'px');
                 card.style.setProperty('--mob-walk-sway', swayX.toFixed(2) + 'px');
                 card.style.setProperty('--mob-shadow-scale', (Number(m._mobShadow) || 0.94).toFixed(3));
                 card.style.setProperty('--mob-foot-plant', plant.toFixed(3));
+            } else {
+                card.style.setProperty('--mob-walk-bob', '0px');
+                card.style.setProperty('--mob-walk-sway', '0px');
+                card.style.setProperty('--mob-shadow-scale', '0.94');
+                card.style.setProperty('--mob-foot-plant', '0');
             }
         }
     }
