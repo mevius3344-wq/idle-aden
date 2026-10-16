@@ -2007,6 +2007,11 @@
         #battle-view.is-linmap.is-world-scroll > .party-sprite:not(.remote-party):not(:has(> .pm-shadow[style*="hidden"]))::after {
             display: none;
         }
+        /* 變身八向／本體已烙印影子：沒有獨立 .pm-shadow 時也不可再疊 CSS 橢圓（否則變身後腳下黑影「跑出來」） */
+        #battle-view.is-world-scroll > #player-morph-sprite.pm-no-ellipse::after,
+        #battle-view.area-fit > #player-morph-sprite.pm-no-ellipse::after {
+            display: none !important;
+        }
         /* 奇岩木頭人：縮到跟人物差不多高（v3.10.1） */
         #battle-view .mob-target.town-dummy .mob-img-inner {
             scale: 0.62;

@@ -771,11 +771,17 @@ section("34b) 格步跟畫面幀同步（走路不飄跳）");
     /var nf = Math\.max\(1, Math\.round\(LIN_STEP_FRAMES \* s\.cyc\)\);\s*var kd = Math\.min\(1, \(Math\.floor\(k \* nf\) \+ 1\) \/ nf\);/.test(ex));
 }
 
-section("65) 變形卷軸不卡畫面（腳錨不在迴圈裡強制重排）");
+section("65) 變形卷軸不卡畫面＋變身會走（腳錨快取／morph8 八向 walk／不疊橢圓）");
 {
   const ex = rd("js/44-map-explore.js");
+  const vfx = rd("js/09-vfx-render.js");
+  const css = rd("css/style.css");
+  const ap = rd("tools/_audit-polymorph.js");
   ok("exploreGroundYLive 同一工作只量一次（queueMicrotask 清快取）", /function exploreGroundYLive\(\) \{\s*if \(_groundYCache\) return _groundYCache;[\s\S]{0,300}queueMicrotask\(function \(\) \{ _groundYCache = 0; \}\);/.test(ex));
-  ok("實測 tools/_audit-polymorph.js 存在", exists("tools/_audit-polymorph.js"));
+  ok("_morphHasAnim8＋morph8 走 assets/anim 八向", /function _morphHasAnim8\(name\)/.test(vfx) && /morph8:\s*true/.test(vfx) && /assets\/anim\/' \+ encodeURIComponent\(m\) \+ '\/d'/.test(vfx));
+  ok("變身八向預載 walk／attack", /form\.morph8[\s\S]{0,200}_pmState\._walkPreTag = form\.domKey/.test(vfx));
+  ok("pm-no-ellipse 關掉 CSS 黑橢圓", /pm-no-ellipse/.test(vfx) && /#player-morph-sprite\.pm-no-ellipse::after/.test(css));
+  ok("實測 tools/_audit-polymorph.js 檢查 walk_ 與橢圓", exists("tools/_audit-polymorph.js") && /變身移動播 walk/.test(ap) && /pm-no-ellipse|afterDisp/.test(ap));
 }
 
 section("66) 打怪掉落直接進背包（不落地，只有 PK 噴裝會掉）");

@@ -4116,6 +4116,15 @@ function _qFaceAngleApply(el, faceD) {
     for (let i = 0; i < 8; i++) el.classList.remove('q-face-d' + i);
     el.classList.remove('q-face-left', 'q-face-right');
 }
+/** 變身同名怪物在 assets/anim/<名>/d0..d7 有 walk 時，戰場改走原版八向（morphanim 全無 walk_＝移動只播 idle＝「圖片在跑人不走」） */
+function _morphHasAnim8(name) {
+    if (!name || typeof ANIM_MANIFEST === 'undefined' || !ANIM_MANIFEST) return false;
+    try {
+        var ent = ANIM_MANIFEST['assets/anim/' + name];
+        if (!ent) return false;
+        return ((ent['d0/walk_'] | 0) > 1 && (ent['d6/walk_'] | 0) > 1);
+    } catch (e) { return false; }
+}
 function _actorBattleForm(actor, allyGrp) {   // 玩家／傭兵戰場形態：真變身優先 → 玩家 Q 多幀 → 職業動態 → null
     // 🧝 v3.5.21 真夏納（classMorph）：職業式變身→走 _classForm 管線但用專屬資料夾 <形態名><avatar>（速度資料仍由 js/02 套用）
     let _pf = actor && (actor._setPoly || ((actor.buffs && actor.buffs.poly > 0 && actor.poly) ? actor.poly : null));
@@ -4125,6 +4134,21 @@ function _actorBattleForm(actor, allyGrp) {   // 玩家／傭兵戰場形態：�
     }
     let m = _actorMorphName(actor);
     if (m) {
+        // 原版八向怪物圖（含 walk／_s 影子）：優先於無走路幀的 morphanim
+        if (_morphHasAnim8(m)) {
+            let faceD = (actor && actor._faceD != null) ? (actor._faceD | 0) : 2;
+            faceD = ((faceD % 8) + 8) % 8;
+            let ver = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'c';
+            return {
+                key: 'morph8:' + m + ':' + ver,
+                domKey: 'morph8:' + m,
+                base: 'assets/anim/' + encodeURIComponent(m) + '/d' + faceD + '/',
+                wpn: null,
+                classAnim: true,
+                morph8: true,
+                faceD: faceD
+            };
+        }
         if (MORPH_ANIM_3DIR.has(m)) {   // 🧭 v3.5.10 三方向變身：key 含朝向資料夾·domKey 不含 → 換向只換幀（同 _classForm 機制）·v3.7.65 八方向朝向折回三夾
             let folder = m + _animDirSfx((actor && actor._faceD != null) ? actor._faceD : 2, false);
             return { key: 'morph:' + folder, domKey: 'morph:' + m, base: 'assets/morphanim/' + encodeURIComponent(folder) + '/', wpn: null };
@@ -4268,7 +4292,7 @@ function _prefetchPlayerFaceDirs(actor) {
     if (!actor) return;
     try {
         let form0 = _actorBattleForm(actor, false);
-        if (!form0 || !(form0.q8 || (form0.key && form0.key.indexOf('class:') === 0 && CLASS_ANIM_8DIR.has(actor.avatar)))) return;
+        if (!form0 || !(form0.q8 || form0.morph8 || (form0.key && form0.key.indexOf('class:') === 0 && CLASS_ANIM_8DIR.has(actor.avatar)))) return;
         let tag = (form0.domKey || form0.key) + '';
         if (_pmState.facePrefetched === tag) return;
         _pmState.facePrefetched = tag;
@@ -4307,13 +4331,34 @@ function _exploreWalkCycleNow(mv) {
 
 function _preloadPlayerWalkFrames(form) {
     try {
-        if (!form || !form.classAnim || form.faceD == null || !form.wpn || !form.domKey) return;
+        if (!form || !form.classAnim || form.faceD == null || !form.domKey) return;
         if (_pmState._walkPreTag === form.domKey) return;
+        let bust = '?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'c');
+        let keep = [];
+        // 變身八向：assets/anim/<名>/d0..d7/walk_（無武器前綴）
+        if (form.morph8) {
+            let mm = /^morph8:(.+)$/.exec(form.domKey);
+            if (!mm) return;
+            _pmState._walkPreTag = form.domKey;
+            for (let d = 0; d < 8; d++) {
+                let base = 'assets/anim/' + encodeURIComponent(mm[1]) + '/d' + d + '/';
+                ['walk', 'attack'].forEach(function (act) {
+                    let n = _classAnimFrameCount({ base: base, wpn: null }, act);
+                    for (let f = 0; f < n; f++) {
+                        let im = new Image();
+                        im.decoding = 'async';
+                        im.src = base + act + '_' + f + '.png' + bust;
+                        keep.push(im);
+                    }
+                });
+            }
+            _pmState._walkPre = keep;
+            return;
+        }
+        if (!form.wpn) return;
         let m = /^class:(.+):[^:]+$/.exec(form.domKey);
         if (!m) return;
         _pmState._walkPreTag = form.domKey;
-        let bust = '?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'c');
-        let keep = [];
         for (let d = 0; d < 8; d++) {
             let base = 'assets/classanim/' + encodeURIComponent(m[1] + _animDirSfx(d, true)) + '/';
             // 攻擊幀也要 8 向先載：轉向打新方向的怪時，圖沒到會停在舊面向的走路幀（看起來沒正面交戰）
@@ -4743,7 +4788,7 @@ function _playerMorphApplyBody() {
     // 🧭 朝向：職業／變身八方向；Q 真八向靠 d0..d7 資料夾換圖（不透視扭轉）
     // 🩹 v3.8.343：攻擊／施法／受傷期間勿改朝向（換 dN＝換 form.key＝清空幀＝只剩左右晃）
     let _faceLocked = !!(_pmState.act === 'attack' || _pmState.act === 'skill' || _pmState.act === 'hurt' || _pmState.act === 'death');
-    if (!_faceLocked && !form.qSkin && !_pmState.moving && (CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
+    if (!_faceLocked && !form.qSkin && !_pmState.moving && (form.morph8 || CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
     if (form.qSkin) {
         try {
             if (!_faceLocked && !_pmState.moving) _classFacing8(player, _pmState.el);
@@ -4898,9 +4943,37 @@ function _playerMorphApplyBody() {
     } catch (eAct) {}
     _playerBattleCrownApply(I.cr, form, act);
     try { _playerNameplateApply(); } catch (eNm) {}
-    let ss = (a.shadow && ((act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act]));
-    if (ss && ss.length) { let sf = f < ss.length ? f : (f % ss.length); if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = ''; if (I.sh.src !== ss[sf].src) I.sh.src = ss[sf].src; }
-    else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';
+    // 職業／變身八向：影子跟本體同一 form.base（cache 的 _animPath 停在首探方向＝轉向後影子錯位／CSS 橢圓又露出）
+    if ((form.classAnim || form.morph8) && form.base && !form.qSkin) {
+        let _sbust = '?v=' + (typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 'c');
+        let _spfx = (form.wpn && act !== 'skill' && act !== 'death') ? (form.wpn + '_' + act + '_s_') : (act + '_s_');
+        let _sbase = form.base;
+        let _sn = null;
+        try { _sn = _manifestCount(_sbase + _spfx + '0.png'); } catch (eSn) { _sn = null; }
+        // morph8 的 d0..d7 常無獨立 _s（影子烙在本體圖內，同 MOB_ANIM_BAKED_SHADOW）；勿改抓根目錄 _s＝雙重黑影
+        if (typeof _sn === 'number' && _sn > 0) {
+            let sf = f < _sn ? f : (f % _sn);
+            let _sp = _sbase + _spfx + sf + '.png' + _sbust;
+            let _spk = form.domKey + ':sh:' + (form.faceD != null ? form.faceD : '') + ':' + act + ':' + sf;
+            if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = '';
+            _animSetImgFrame(I.sh, _spk, _sp);
+        } else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';
+    } else {
+        let ss = (a.shadow && ((act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act]));
+        if (ss && ss.length) { let sf = f < ss.length ? f : (f % ss.length); if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = ''; if (I.sh.src !== ss[sf].src) I.sh.src = ss[sf].src; }
+        else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';
+    }
+    // 變身八向／烙印影：關掉 CSS 黑橢圓（不然 shadow 隱藏時 ::after 會「跑出來」）
+    try {
+        if (_pmState.el) {
+            var _noEll = !!(form.morph8 && I.sh && I.sh.style.visibility === 'hidden');
+            if (!_noEll) {
+                var _mnEll = (typeof _playerMorphName === 'function') ? _playerMorphName() : null;
+                if (_mnEll && typeof MOB_ANIM_BAKED_SHADOW !== 'undefined' && MOB_ANIM_BAKED_SHADOW.has(_mnEll)) _noEll = true;
+            }
+            _pmState.el.classList.toggle('pm-no-ellipse', _noEll);
+        }
+    } catch (eEll) {}
     let ws = a.weapon && a.weapon[act];
     if (ws && ws[f]) { if (I.wp.style.visibility === 'hidden') I.wp.style.visibility = ''; if (I.wp.src !== ws[f].src) I.wp.src = ws[f].src; }
     else if (I.wp.style.visibility !== 'hidden') I.wp.style.visibility = 'hidden';

@@ -86,13 +86,13 @@ async function main() {
             const a = await ev(`(()=>{const b=document.querySelector('#player-morph-sprite img.pm-body');return b?(b.getAttribute('src')||''):''})()`, 4000);
             const now = Date.now(); maxGap = Math.max(maxGap, now - last); last = now;
             if (a && a.__timeout) { maxGap = 99999; break; }
-            if (/morphanim/.test(a)) morphSrc = a;
+            if (/morphanim|assets\/anim\//.test(a)) morphSrc = a;
         }
         ok('頁面一直有回應（輪詢間隔 < 2 秒）', maxGap < 2000, 'max ' + maxGap + 'ms');
         for (let i = 0; i < 24 && !morphSrc; i++) {
             await sleep(500);
             const a = await ev(`(()=>{const b=document.querySelector('#player-morph-sprite img.pm-body');return b?(b.getAttribute('src')||''):''})()`, 4000);
-            if (/morphanim/.test(a)) morphSrc = a;
+            if (/morphanim|assets\/anim\//.test(a)) morphSrc = a;
         }
         const n = await frames();
         const m1 = await metrics();
@@ -104,16 +104,49 @@ async function main() {
             Object.defineProperty(bv,'clientHeight',{configurable:true,get(){reads++;return d.get.call(this);}});
             return new Promise(res=>setTimeout(()=>{delete bv.clientHeight;res(reads)},1000));})()`, 8000);
         ok('戰場高度每秒讀取次數不爆量（< 600）', typeof fy === 'number' && fy < 600, String(fy));
-        ok('人物換成變身圖（morphanim）', !!morphSrc, morphSrc.split('/').slice(-2).join('/'));
+        ok('人物換成變身圖（morphanim 或 anim 八向）', !!morphSrc, morphSrc.split('/').slice(-3).join('/'));
         const p = await ev(`(()=>{const r=document.querySelector('#player-morph-sprite .pm-body').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.bottom),w:Math.round(r.width)};})()`);
         ok('變身人物看得到（寬 > 0）', p && p.w > 0, JSON.stringify(p));
         const pos0 = await ev(`[explorePlayerX(),explorePlayerY()].map(Math.round).join(',')`);
-        const tx = Math.max(20, Math.min(sc.w - 20, p.x + (sc.w < 700 ? 100 : 260))), ty = sc.w < 700 ? p.y - 150 : p.y + 30;
+        const tx = Math.max(20, Math.min(sc.w - 20, p.x + (sc.w < 700 ? 80 : 260))), ty = sc.w < 700 ? Math.max(80, p.y - 80) : p.y + 30;
+        // 有 assets/anim 八向 walk 的變身：邊走邊取樣，不可只循環 idle（「圖片在跑人不走」）
+        const walkChk = await ev(`(async()=>{
+            const name=player.poly&&player.poly.n;
+            const has8=typeof _morphHasAnim8==='function'&&_morphHasAnim8(name);
+            const el=document.getElementById('player-morph-sprite');
+            const afterDisp=el?getComputedStyle(el,'::after').display:'';
+            const noEll=!!(el&&el.classList.contains('pm-no-ellipse'));
+            if(!has8) return {skip:true,name,noEll,afterDisp};
+            // 用程式下令走路（手機點地座標容易點到 UI）
+            try{
+                const wx=explorePlayerX()+240, wy=explorePlayerY()+120;
+                const c=typeof exploreWorldToClient==='function'?exploreWorldToClient(wx,wy):null;
+                if(c&&typeof exploreSetTapMoveFromScreen==='function') exploreSetTapMoveFromScreen(c.x,c.y);
+            }catch(e){}
+            const samples=[];
+            for(let i=0;i<14;i++){
+                await new Promise(r=>setTimeout(r,120));
+                const bd=document.querySelector('#player-morph-sprite img.pm-body');
+                const src=bd?(bd.getAttribute('src')||''):'';
+                const mov=typeof exploreIsMoving==='function'&&exploreIsMoving();
+                samples.push({mov,src:src.replace(/^.*assets\\//,'assets/').split('?')[0]});
+            }
+            const whileMove=samples.filter(s=>s.mov);
+            const walkN=whileMove.filter(s=>/walk_/.test(s.src)).length;
+            const idleN=whileMove.filter(s=>/idle_/.test(s.src)).length;
+            return {name,has8,moveSamples:whileMove.length,walkN,idleN,noEll,afterDisp,src0:samples[0]&&samples[0].src};
+        })()`, 10000);
         await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: tx, y: ty, button: 'left', clickCount: 1 });
         await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: tx, y: ty, button: 'left', clickCount: 1 });
         await sleep(2500);
         const pos1 = await ev(`[explorePlayerX(),explorePlayerY()].map(Math.round).join(',')`);
         ok('變身後點地照樣走', pos0 !== pos1, pos0 + ' → ' + pos1);
+        if (walkChk && !walkChk.skip && !walkChk.__timeout && !walkChk.__err) {
+            ok('變身移動播 walk 幀（非 idle 空跑）', walkChk.moveSamples >= 3 && walkChk.walkN >= 2 && walkChk.idleN === 0, JSON.stringify(walkChk));
+            ok('變身不疊 CSS 腳下黑橢圓', walkChk.noEll || walkChk.afterDisp === 'none', JSON.stringify({ noEll: walkChk.noEll, afterDisp: walkChk.afterDisp }));
+        } else if (walkChk && walkChk.skip) {
+            ok('變身不疊 CSS 腳下黑橢圓', walkChk.noEll || walkChk.afterDisp === 'none', JSON.stringify(walkChk));
+        }
         try { const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70 }); fs.mkdirSync(path.join(__dirname, 'lin', '_out'), { recursive: true }); fs.writeFileSync(path.join(__dirname, 'lin', '_out', '_poly_' + sc.map + '_' + sc.w + '.jpg'), Buffer.from(s.result.data, 'base64')); } catch (eS) {}
     }
 
