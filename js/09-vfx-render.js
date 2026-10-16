@@ -967,6 +967,8 @@ function vfxKill(mob) {
 const LEVELUP_FX = {
     dir: '升級', prefix: 'lu', n: 26,
     canvasW: 192, canvasH: 192, ox: 72, oy: 132,
+    // 畫面已拉遠（LIN_VIEW_SPAN）；原版 192 在腳邊偏小，略放大仍維持腳底錨點
+    scale: 1.45,
     unitMs: 1000 / 24,
     // list.spr #2127 0.animation 順序（frame,dur）
     seq: [
@@ -978,6 +980,7 @@ const LEVELUP_FX = {
 };
 let _levelUpFxEl = null;
 let _levelUpFxRaf = 0;
+let _levelUpFxTimer = 0;
 function _levelUpFxZoom() {
     try {
         if (typeof exploreLinZoom === 'function') {
@@ -996,36 +999,50 @@ function _levelUpFxFoot() {
     if (pr && pr.width > 0 && pr.height > 0) {
         return { x: pr.left + pr.width * 0.5, y: pr.bottom };
     }
+    // 原版地圖／換圖瞬間 _pmCasterRect 可能還沒就緒→直接量人物節點
+    try {
+        let bd = document.querySelector('#player-morph-sprite .pm-body') || document.querySelector('#player-morph-sprite img') || document.getElementById('player-morph-sprite');
+        if (bd) {
+            let r = bd.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) return { x: r.left + r.width * 0.5, y: r.bottom };
+        }
+    } catch (ePm) {}
     let bv = document.getElementById('battle-view');
     let br = bv && bv.getBoundingClientRect();
-    if (br && br.width > 0) {
+    if (br && br.width > 0 && br.height > 0) {
         return { x: br.left + br.width * 0.5, y: br.top + br.height * 0.72 };
     }
-    return null;
+    let gs = document.getElementById('game-screen');
+    let gr = gs && gs.getBoundingClientRect();
+    if (gr && gr.width > 0 && gr.height > 0) {
+        return { x: gr.left + gr.width * 0.5, y: gr.top + gr.height * 0.55 };
+    }
+    return { x: (typeof window !== 'undefined' ? window.innerWidth : 640) * 0.5, y: (typeof window !== 'undefined' ? window.innerHeight : 480) * 0.55 };
 }
 function vfxLevelUp() {
     try {
-        if (_vfxMute()) return;
+        // 升級慶祝不吃 __vfxOff／省電（省電 CSS 會藏 #vfx-layer>*，另有 .vfx-levelup 例外）
+        if (typeof document !== 'undefined' && document.hidden) return;
+        if (typeof state !== 'undefined' && state.ff) return;
         let foot = _levelUpFxFoot();
         if (!foot) return;
         let layer = _vfxLayer();
-        if (layer.childElementCount > 220) return;
         let frames = _preloadFxFrames(LEVELUP_FX.dir, LEVELUP_FX.prefix, LEVELUP_FX.n);
         if (!frames || !frames[0]) return;
         if (_levelUpFxRaf) { try { cancelAnimationFrame(_levelUpFxRaf); } catch (eC) {} _levelUpFxRaf = 0; }
+        if (_levelUpFxTimer) { try { clearTimeout(_levelUpFxTimer); } catch (eT0) {} _levelUpFxTimer = 0; }
         if (_levelUpFxEl && _levelUpFxEl.parentNode) { try { _levelUpFxEl.remove(); } catch (eR) {} }
         _levelUpFxEl = null;
-        let z = _levelUpFxZoom();
-        let fxW = LEVELUP_FX.canvasW * z, fxH = LEVELUP_FX.canvasH * z;
-        let ox = LEVELUP_FX.ox * z, oy = LEVELUP_FX.oy * z;
+        let sc = (LEVELUP_FX.scale > 0 ? LEVELUP_FX.scale : 1) * _levelUpFxZoom();
+        let fxW = LEVELUP_FX.canvasW * sc, fxH = LEVELUP_FX.canvasH * sc;
+        let ox = LEVELUP_FX.ox * sc, oy = LEVELUP_FX.oy * sc;
         let el = document.createElement('img');
-        el.className = 'vfx-spell vfx-levelup';
+        el.className = 'vfx-levelup';
         el.alt = '';
         el.draggable = false;
         el.src = frames[LEVELUP_FX.seq[0][0]].src;
         el.style.width = fxW + 'px';
         el.style.height = fxH + 'px';
-        el.style.mixBlendMode = 'screen';
         el.style.pointerEvents = 'none';
         let _place = (f) => {
             let _loc = _vfxToLocal(f.x - ox, f.y - oy);
@@ -1034,6 +1051,11 @@ function vfxLevelUp() {
         };
         _place(foot);
         layer.appendChild(el);
+        // plus-lighter 更亮；不支援則 screen（原版加亮）
+        el.style.mixBlendMode = 'plus-lighter';
+        try {
+            if (getComputedStyle(el).mixBlendMode !== 'plus-lighter') el.style.mixBlendMode = 'screen';
+        } catch (eBl) { el.style.mixBlendMode = 'screen'; }
         _levelUpFxEl = el;
         let seq = LEVELUP_FX.seq;
         let unit = LEVELUP_FX.unitMs;
@@ -1059,9 +1081,9 @@ function vfxLevelUp() {
                 if (frames[fi] && el.src !== frames[fi].src) el.src = frames[fi].src;
                 let f2 = _levelUpFxFoot();
                 if (f2) {
-                    z = _levelUpFxZoom();
-                    fxW = LEVELUP_FX.canvasW * z; fxH = LEVELUP_FX.canvasH * z;
-                    ox = LEVELUP_FX.ox * z; oy = LEVELUP_FX.oy * z;
+                    sc = (LEVELUP_FX.scale > 0 ? LEVELUP_FX.scale : 1) * _levelUpFxZoom();
+                    fxW = LEVELUP_FX.canvasW * sc; fxH = LEVELUP_FX.canvasH * sc;
+                    ox = LEVELUP_FX.ox * sc; oy = LEVELUP_FX.oy * sc;
                     el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
                     _place(f2);
                 }
@@ -1072,7 +1094,8 @@ function vfxLevelUp() {
             }
         };
         _levelUpFxRaf = requestAnimationFrame(step);
-        setTimeout(() => {
+        _levelUpFxTimer = setTimeout(() => {
+            _levelUpFxTimer = 0;
             try { if (el.parentNode) el.remove(); } catch (eT) {}
             if (_levelUpFxEl === el) _levelUpFxEl = null;
         }, Math.ceil(total) + 400);

@@ -832,11 +832,12 @@ section("67) 升級特效原版天堂（gfx 2127，腳底錨定，無英文 LEVE
   const vfx = rd("js/09-vfx-render.js");
   const kill = rd("js/05-kill-progression.js");
   const meta = exists("assets/fx/升級/meta.json") ? rd("assets/fx/升級/meta.json") : "";
-  ok("LEVELUP_FX＝#2127／26 幀／站立點 72,132／list.spr 時序", /const LEVELUP_FX = \{/.test(vfx) && /dir: '升級'/.test(vfx) && /canvasW: 192/.test(vfx) && /ox: 72, oy: 132/.test(vfx) && /unitMs: 1000 \/ 24/.test(vfx) && /\[25, 2\], \[0, 2\]/.test(vfx));
-  ok("vfxLevelUp 播 lu_*＋screen，不用 LEVEL UP!／vfx-lvring", /function vfxLevelUp\(\)/.test(vfx) && /vfx-levelup/.test(vfx) && /mixBlendMode = 'screen'/.test(vfx) && !/textContent = 'LEVEL UP!/.test(vfx) && !/vfx-lvring/.test(vfx.slice(vfx.indexOf("function vfxLevelUp()"), vfx.indexOf("function vfxLevelUp()") + 2500)));
+  ok("LEVELUP_FX＝#2127／26 幀／站立點 72,132／list.spr 時序", /const LEVELUP_FX = \{/.test(vfx) && /dir: '升級'/.test(vfx) && /canvasW: 192/.test(vfx) && /ox: 72, oy: 132/.test(vfx) && /scale: 1\.45/.test(vfx) && /unitMs: 1000 \/ 24/.test(vfx) && /\[25, 2\], \[0, 2\]/.test(vfx));
+  ok("vfxLevelUp 播 lu_*＋加亮，不用 CSS LEVEL UP!／vfx-lvring", /function vfxLevelUp\(\)/.test(vfx) && /vfx-levelup/.test(vfx) && /mixBlendMode = 'screen'/.test(vfx) && !/textContent = 'LEVEL UP!/.test(vfx) && !/vfx-lvring/.test(vfx.slice(vfx.indexOf("function vfxLevelUp()"), vfx.indexOf("function vfxLevelUp()") + 2800)));
+  ok("升級特效省電仍播（不被 #vfx-layer>* 整層關掉）", /body\.power-save #vfx-layer > \.vfx-levelup \{ display: block !important; \}/.test(rd("css/style.css")) && /className = 'vfx-levelup'/.test(vfx));
   ok("資源 assets/fx/升級/lu_*＋meta.json gfx 2127", exists("assets/fx/升級/lu_0.png") && exists("assets/fx/升級/lu_25.png") && /"gfx": 2127/.test(meta) && exists("tools/lin/export-levelup-fx.js"));
   ok("checkLvUp 仍呼叫 vfxLevelUp＋playSfx('levelup')", /vfxLevelUp\(\)/.test(kill) && /playSfx\('levelup'\)/.test(kill));
-  ok("實測 tools/_audit-levelup-fx.js 存在", exists("tools/_audit-levelup-fx.js") && /vfx-levelup/.test(rd("tools/_audit-levelup-fx.js")));
+  ok("實測 tools/_audit-levelup-fx.js 存在", exists("tools/_audit-levelup-fx.js") && /省電模式仍播出升級特效/.test(rd("tools/_audit-levelup-fx.js")));
 }
 
 section("64) 進屋收外殼（原版天堂）");

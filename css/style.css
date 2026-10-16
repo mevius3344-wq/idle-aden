@@ -3399,7 +3399,15 @@
         .vfx-hurt { animation: vfxHurt .5s ease-out; }
         /* 🗑️ v3.5.83 移除死 CSS：.vfx-ring / @keyframes vfxRing——v3.0.104 取消白色命中衝擊環，
            v3.5.48 已清掉對應的 _vfxImpact JS，只剩這兩條沒人引用的樣式。 */
-        /* 升級慶祝 */
+        /* 升級慶祝：原版 #2127（.vfx-levelup）；舊 CSS 金環／LEVEL UP! 樣式保留不刪 */
+        .vfx-levelup {
+            position: absolute;
+            pointer-events: none;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            will-change: opacity, left, top;
+            z-index: 40;
+        }
         .vfx-lvring { position: absolute; border-radius: 50%; transform: translate(-50%,-50%); border: 3px solid #ffd54f; box-shadow: 0 0 18px #ffca28, inset 0 0 18px #ffca28; will-change: transform,opacity; }
         @keyframes vfxLvRing { 0% { opacity: 1; transform: translate(-50%,-50%) scale(.15); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1); } }
         .vfx-lvtext { position: absolute; transform: translate(-50%,-50%); font-weight: 900; font-family: 'Arial Black','Segoe UI',system-ui,sans-serif; color: #ffe082; text-shadow: 0 0 9px #ff9800, 0 2px 3px rgba(0,0,0,.9); white-space: nowrap; will-change: transform,opacity; }
@@ -3757,6 +3765,8 @@ body.power-save .vfx-ghost,
 body.power-save .vfx-spell,
 body.power-save .vfx-boss-banner,
 body.power-save #vfx-layer > * { display:none !important; }
+/* 升級特效：省電仍播（原版慶祝；不被上面 #vfx-layer>* 整層關掉） */
+body.power-save #vfx-layer > .vfx-levelup { display: block !important; }
 body.power-save #battle-view,
 body.power-save #mob-list,
 body.power-save .mob-target,

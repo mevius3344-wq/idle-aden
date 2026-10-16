@@ -66,19 +66,62 @@ async function main() {
     await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try{localStorage.setItem("gameWipeEpoch","2026-10-12");sessionStorage.setItem("fb5_auth_token",' + JSON.stringify(lr.authToken) + ')}catch(e){};window.__fb5AuthAccount=' + JSON.stringify(acct) + ';window.alert=function(){};window.confirm=function(){return true};' });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 120; i++) { await sleep(500); if (await ev('typeof startGame==="function"&&typeof changeMap==="function"')) break; }
-    await ev(`(async()=>{ window._authAccountForNames=()=>${JSON.stringify(acct)};
+    const started = await ev(`(async()=>{ window._authAccountForNames=()=>${JSON.stringify(acct)};
         let slot=1; for(let s=1;s<=8;s++){ try{ if(!slotSummary(s)){slot=s;break;} }catch(e){} }
         currentSlot=slot; curCreate.rawCls='m_knight'; curCreate.cls='knight';
         document.getElementById('create-name-input').value=${JSON.stringify('升' + stamp)};
-        startGame(); for(let i=0;i<40&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
-        try{ setPowerSaveOn(false); }catch(e){} try{ window.__vfxOff=false; }catch(e2){} })()`);
-    await sleep(3000);
+        startGame(); for(let i=0;i<60&&!(player&&player.inv&&player.inv.length);i++) await new Promise(r=>setTimeout(r,250));
+        try{ setPowerSaveOn(false); }catch(e){} try{ window.__vfxOff=false; }catch(e2){}
+        return { ok:!!(player&&player.inv&&player.inv.length), map:mapState&&mapState.current,
+            gs:!!(document.getElementById('game-screen')&&!document.getElementById('game-screen').classList.contains('hidden')) };
+    })()`, 45000);
+    ok('進遊戲成功', !!(started && started.ok && started.gs), JSON.stringify(started));
+    await sleep(1500);
 
-    ok('vfxLevelUp／LEVELUP_FX 已載入', await ev('typeof vfxLevelUp==="function"&&typeof LEVELUP_FX==="object"&&LEVELUP_FX.n===26'));
+    ok('vfxLevelUp／LEVELUP_FX 已載入', await ev('typeof vfxLevelUp==="function"&&typeof LEVELUP_FX==="object"&&LEVELUP_FX.n===26&&LEVELUP_FX.scale>1'));
 
-    const goMap = (mid) => ev(`(async()=>{const sel=document.getElementById('map-select');const id=${JSON.stringify(mid)};
+    const goMap = (mid) => ev(`(async()=>{const id=${JSON.stringify(mid)};
+        if(mapState&&mapState.current===id){
+            await new Promise(r=>setTimeout(r,400));
+            return id;
+        }
+        const sel=document.getElementById('map-select');
+        if(!sel) return mapState&&mapState.current;
         if(![...sel.options].some(o=>o.value===id)){const o=document.createElement('option');o.value=id;sel.appendChild(o);}
-        sel.value=id; changeMap(true); await new Promise(r=>setTimeout(r,1500)); return mapState.current;})()`);
+        sel.value=id; changeMap(true);
+        for(let i=0;i<40;i++){
+            await new Promise(r=>setTimeout(r,250));
+            if(mapState&&mapState.current===id){
+                const bv=document.getElementById('battle-view');
+                const br=bv&&bv.getBoundingClientRect();
+                if(br&&br.width>40&&br.height>40) break;
+            }
+        }
+        await new Promise(r=>setTimeout(r,600));
+        return mapState&&mapState.current;})()`, 30000);
+
+    const readFx = () => ev(`(()=>{
+        const el=document.querySelector('#vfx-layer img.vfx-levelup')||document.querySelector('img.vfx-levelup');
+        if(!el) return null;
+        const pr=(typeof _pmCasterRect==='function')?_pmCasterRect():null;
+        const er=el.getBoundingClientRect();
+        const src=String(el.currentSrc||el.src||'');
+        const fake=!!document.querySelector('.vfx-lvtext,.vfx-lvring');
+        const textHit=[...document.querySelectorAll('#vfx-layer *')].some(n=>/LEVEL\\s*UP!/i.test(n.textContent||''));
+        const foot=(typeof _levelUpFxFoot==='function')?_levelUpFxFoot():null;
+        const ox=er.left+(72/192)*er.width, oy=er.top+(132/192)*er.height;
+        return {
+            srcOk:/assets\\/fx\\/%E5%8D%87%E7%B4%9A\\/lu_|assets\\/fx\\/升級\\/lu_/.test(src)||(src.indexOf('lu_')>=0&&src.indexOf('fx')>=0),
+            blend:getComputedStyle(el).mixBlendMode,
+            fake, textHit,
+            w:Math.round(er.width), h:Math.round(er.height),
+            dx:foot?Math.abs(ox-foot.x):null,
+            dy:foot?Math.abs(oy-foot.y):null,
+            hasMorph:!!(pr||document.getElementById('player-morph-sprite')),
+            vis:er.width>0&&getComputedStyle(el).display!=='none',
+            power:document.body.classList.contains('power-save')
+        };
+    })()`);
 
     for (const sc of [
         { tag: '奇岩村莊', map: 'town_giran', shot: '_levelup_giran.jpg' },
@@ -87,38 +130,31 @@ async function main() {
         console.log('\n[' + sc.tag + ']');
         const cur = await goMap(sc.map);
         ok('進入 ' + sc.map, cur === sc.map, String(cur));
-        await sleep(1200);
-        await ev(`(()=>{try{window.__vfxOff=false;}catch(e){} vfxLevelUp();})()`);
-        await sleep(200);
-        const info = await ev(`(()=>{
-            const el=document.querySelector('#vfx-layer img.vfx-levelup')||document.querySelector('img.vfx-levelup');
-            if(!el) return null;
-            const pr=(typeof _pmCasterRect==='function')?_pmCasterRect():null;
-            const er=el.getBoundingClientRect();
-            const src=String(el.currentSrc||el.src||'');
-            const fake=!!document.querySelector('.vfx-lvtext,.vfx-lvring');
-            const textHit=[...document.querySelectorAll('#vfx-layer *')].some(n=>/LEVEL\\s*UP/i.test(n.textContent||''));
-            let footY=pr?pr.bottom:null, footX=pr?pr.left+pr.width/2:null;
-            const ox=er.left+(72/192)*er.width, oy=er.top+(132/192)*er.height;
-            return {
-                srcOk:/assets\\/fx\\/%E5%8D%87%E7%B4%9A\\/lu_|assets\\/fx\\/升級\\/lu_/.test(src)||src.indexOf('lu_')>=0&&src.indexOf('fx')>=0,
-                blend:getComputedStyle(el).mixBlendMode,
-                fake, textHit,
-                w:Math.round(er.width), h:Math.round(er.height),
-                dx:footX!=null?Math.abs(ox-footX):null,
-                dy:footY!=null?Math.abs(oy-footY):null,
-                vis:er.width>0&&getComputedStyle(el).display!=='none'
-            };
-        })()`);
+        await sleep(800);
+        // 等人物圖進場（換圖後 _pmCasterRect／#player-morph-sprite 可能晚一點）
+        await ev(`(async()=>{for(let i=0;i<30;i++){const el=document.querySelector('#player-morph-sprite .pm-body')||document.getElementById('player-morph-sprite');const r=el&&el.getBoundingClientRect();if(r&&r.width>2&&r.height>2)return true;await new Promise(x=>setTimeout(x,100));}return false;})()`);
+        await ev(`(()=>{try{window.__vfxOff=false;}catch(e){} try{setPowerSaveOn(false);}catch(e2){} try{if(typeof _playerMorphApply==='function')_playerMorphApply();}catch(e3){} vfxLevelUp();})()`);
+        await sleep(400);
+        let info = await readFx();
         ok('播出原版幀（lu_*）', info && info.srcOk && info.vis, JSON.stringify(info));
-        ok('screen 加亮混合', info && info.blend === 'screen', info && info.blend);
-        ok('無舊 CSS 金環／LEVEL UP 文字', info && !info.fake && !info.textHit, JSON.stringify(info && { fake: info.fake, textHit: info.textHit }));
-        ok('錨在腳底附近（origin 對齊）', info && info.dx != null && info.dx < 40 && info.dy < 40, JSON.stringify(info && { dx: info.dx, dy: info.dy, w: info.w }));
+        ok('加亮混合（screen／plus-lighter）', info && (info.blend === 'screen' || info.blend === 'plus-lighter'), info && info.blend);
+        ok('無舊 CSS 金環／LEVEL UP! 文字', info && !info.fake && !info.textHit, JSON.stringify(info && { fake: info.fake, textHit: info.textHit }));
+        ok('錨在腳底附近（origin 對齊）', info && info.dx != null && info.dx < 48 && info.dy < 48, JSON.stringify(info && { dx: info.dx, dy: info.dy, w: info.w }));
         await shot(sc.shot);
-        await sleep(3200);
+        await sleep(2800);
         const gone = await ev(`!document.querySelector('img.vfx-levelup')`);
         ok('播完自動消失', gone === true, String(gone));
     }
+
+    // 省電仍要看得到升級特效（獨立測，避免與上一段動畫搶 timer）
+    console.log('\n[省電]');
+    await ev(`(()=>{try{setPowerSaveOn(true);}catch(e){} window.__vfxOff=false;})()`);
+    await sleep(200);
+    await ev(`vfxLevelUp()`);
+    await sleep(400);
+    const ps = await readFx();
+    ok('省電模式仍播出升級特效', ps && ps.vis && ps.srcOk, JSON.stringify(ps));
+    await ev(`(()=>{try{setPowerSaveOn(false);}catch(e){}})()`);
 
     // 確認升級路徑仍呼叫 vfxLevelUp（不改數值邏輯，只觸發一次視覺）
     const wired = await ev(`(()=>{const s=String(checkLvUp);return /vfxLevelUp\\(\\)/.test(s)&&/playSfx\\(['"]levelup['"]\\)/.test(s);})()`);
