@@ -404,6 +404,8 @@
         _tapMoveId = null;
         if (typeof exploreClearTapMove === 'function') exploreClearTapMove();
     }
+    // 點怪鎖定時清掉點地走路，避免「點到怪卻還往別處走／取消攻擊」
+    window.chudCancelTapMove = cancelTapMove;
 
     function isUiBlockTarget(el) {
         if (!el || !el.closest) return false;

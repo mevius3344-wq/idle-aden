@@ -2040,9 +2040,9 @@
         if (moved > 0.01) {
             _walkPhase += moved * WALK_PHASE_DIST;
             if (s.cyc >= 1) exploreSetFaceNow(s.tx - s.fx, -(s.ty - s.fy));
-            // 換幀與位移要同一畫面（新創同幀），不等 25fps 的 RAF
+            // 換幀與位移要同一畫面（新創同幀）：當幀同步套用，勿只靠微任務／25fps RAF（會晚一畫面）
             if (typeof _playerMorphApply === 'function') {
-                try { queueMicrotask(function () { try { _playerMorphApply(); } catch (e) {} }); } catch (e2) {}
+                try { _playerMorphApply(); } catch (eSync) {}
             }
         }
         return Math.max(moved, 0.09);
@@ -2126,7 +2126,12 @@
         if (_tx !== bx || _ty !== by) {
             _cx = Math.max(-CAM_MAX_X, Math.min(CAM_MAX_X, _tx - exploreViewCenterBiasX()));
             _cy = Math.max(-CAM_MAX_Y, Math.min(CAM_MAX_Y, _ty));
-            try { exploreApplyWorld(); exploreApplyFieldDomPos(); } catch (eW) {}
+            try {
+                exploreApplyWorld();
+                exploreApplyFieldDomPos();
+                // 相機跳格當幀把已髒的怪圖也刷上（只寫位置不換圖＝怪相對地面滑）
+                exploreLinMobFlush(true);
+            } catch (eW) {}
         }
     }
 
@@ -2499,11 +2504,13 @@
         exploreUpdatePropOcclusion();
         bv.classList.toggle('is-explore-walking', !!_moving);
         // 🩹 v3.8.416：步伐相位用 π＝兩幀一步，踩地起伏明顯（消滑冰）
+        // 原版拼塊地圖：步伐在 sprite 裡，禁止再疊 CSS bob／sway（人物在螢幕上下飄＝失去還原感）
         var bob = 0;
         var shScale = 1;
         var footPlant = 0;
         var realFeel = exploreIsRealMap();
-        if (_moving) {
+        var linFeel = !!exploreLinName();
+        if (_moving && !linFeel) {
             var wave = Math.sin(_walkPhase * Math.PI);
             bob = realFeel ? (wave * PLAYER_BOB_PX) : (wave * PLAYER_BOB_PX_SOFT);
             var plant = Math.max(0, -wave);
@@ -2522,8 +2529,8 @@
         bv.style.setProperty('--walk-bob', bob.toFixed(2) + 'px');
         bv.style.setProperty('--walk-shadow-scale', shScale.toFixed(3));
         bv.style.setProperty('--foot-plant', footPlant.toFixed(3));
-        bv.classList.toggle('is-foot-plant', !!(realFeel && footPlant > 0.55));
-        exploreSyncFootPatch(!!(realFeel && _moving));
+        bv.classList.toggle('is-foot-plant', !!(realFeel && !linFeel && footPlant > 0.55));
+        exploreSyncFootPatch(!!(realFeel && !linFeel && _moving));
         var inCombat = false;
         try {
             var t = mapState.mobs && mapState.mobs[mapState.targetIdx];
@@ -3941,10 +3948,18 @@
         if (wantMove && inp.manual) {
             _patrolAnchor = null;
             _noMobSince = 0;
-            // AUTO 關：點地走路＝取消攻擊點過的怪
+            // AUTO 關：點地走路＝取消攻擊點過的怪；但點在鎖定怪附近／朝怪走＝微調站位，不取消（不然難控制）
             if (typeof state !== 'undefined' && state && state.autoHunt === false && typeof mapState !== 'undefined' && mapState.mobs) {
                 var _mt = mapState.mobs[mapState.targetIdx];
-                if (_mt && _mt._picked) _mt._picked = false;
+                if (_mt && _mt._picked) {
+                    var _cancelPick = true;
+                    if (inp.fromTap && _mt._fx != null) {
+                        var _dTap = Math.hypot(_tapMove.tx - _mt._fx, _tapMove.ty - (_mt._fy || 0));
+                        var _dMe = Math.hypot(_tx - _mt._fx, _ty - (_mt._fy || 0));
+                        if (_dTap < Math.max(140, _dMe * 0.9)) _cancelPick = false;
+                    }
+                    if (_cancelPick) _mt._picked = false;
+                }
             }
             var wdx = inp.dx;
             var wdy = -inp.dy;
@@ -4062,6 +4077,23 @@
             if (card.style.zIndex !== zStr) card.style.zIndex = zStr;
             var eng = exploreMobInEngageRange(m);
             if (!!card.classList.contains('is-engage') !== eng) card.classList.toggle('is-engage', eng);
+            // 鎖定目標：場戰卡不重建，每 tick 同步 .active＋血條（點選哪一隻要一眼看出）
+            var isTgt = (typeof mapState !== 'undefined' && mapState.targetIdx === i);
+            if (!!card.classList.contains('active') !== isTgt) card.classList.toggle('active', isTgt);
+            if (isTgt) {
+                if (!card.classList.contains('name-show')) card.classList.add('name-show');
+                var fill = card.querySelector('.mob-hp-fill');
+                if (fill) {
+                    var pct = Math.max(0, Math.min(100, Math.round((m.curHp / (m.hp || 1)) * 100)));
+                    var pctStr = pct + '%';
+                    if (fill.style.width !== pctStr) fill.style.width = pctStr;
+                }
+            } else if (card.classList.contains('name-show')) {
+                // 名稱只留鎖定／hover（#4）；自動換鎖時清掉舊目標的 name-show
+                var uidNs = card.getAttribute('data-uid');
+                var hover = (typeof _hoverMobUid !== 'undefined' && _hoverMobUid && uidNs === String(_hoverMobUid));
+                if (!hover) card.classList.remove('name-show');
+            }
             var walking = !!m._animMoving;
             if (!!card.classList.contains('is-mob-walking') !== walking) card.classList.toggle('is-mob-walking', walking);
             var plant = Number(m._mobPlant) || 0;

@@ -60,10 +60,13 @@ async function main() {
     const probe = () => ev(`(()=>{const bv=document.getElementById('battle-view');const pm=document.getElementById('player-morph-sprite');
         const fp=document.getElementById('explore-foot-patch');const fr=fp?fp.getBoundingClientRect():null;const af=getComputedStyle(pm,'::after');
         const puffs=[...document.querySelectorAll('#battle-view .explore-grass-puff')].filter(e=>getComputedStyle(e).display!=='none').length;
+        const bob=parseFloat(bv.style.getPropertyValue('--walk-bob'))||0;
+        const sway=parseFloat(bv.style.getPropertyValue('--walk-sway'))||0;
+        const br=pm.getBoundingClientRect();
         return {walking:bv.classList.contains('is-explore-walking'),lin:bv.classList.contains('is-linmap'),
             patch:fp&&getComputedStyle(fp).display!=='none'&&Number(getComputedStyle(fp).opacity)>0?Math.round(fr.width)+'x'+Math.round(fr.height):'',
             after:af.display!=='none'&&af.content!=='none'?af.width+'x'+af.height:'',puffs,
-            shadow:!!pm.querySelector('.pm-shadow[src]')};})()`);
+            shadow:!!pm.querySelector('.pm-shadow[src]'),bob,sway,sy:Math.round(br.bottom)};})()`);
     const p = await ev(`(()=>{const r=document.querySelector('#player-morph-sprite .pm-body').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.bottom)};})()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x + 320, y: p.y + 60, button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x + 320, y: p.y + 60, button: 'left', clickCount: 1 });
@@ -71,15 +74,19 @@ async function main() {
         hook(Element.prototype,'clientWidth');hook(Element.prototype,'clientHeight');hook(HTMLElement.prototype,'offsetHeight');hook(HTMLElement.prototype,'offsetWidth');})()`);
     await ev(`(()=>{const map=document.getElementById('explore-linmap');const pm=document.getElementById('player-morph-sprite');window.__wr=[];window.__wrOn=true;
         const loop=(t)=>{const b=pm.querySelector('img.pm-body');window.__wr.push([t,map.style.transform,b?b.src:'']);if(window.__wrOn)requestAnimationFrame(loop);};requestAnimationFrame(loop);})()`);
-    let seenWalk = false, bad = [];
+    let seenWalk = false, bad = [], bobBad = [], sys = [];
     for (let i = 0; i < 16; i++) {
         await sleep(120);
         const r = await probe();
         if (r.walking) seenWalk = true;
         if (r.patch || r.after || r.puffs) bad.push(JSON.stringify(r));
+        if (r.walking && (Math.abs(r.bob) > 0.01 || Math.abs(r.sway) > 0.01)) bobBad.push(r.bob + '/' + r.sway);
+        if (r.walking && r.sy != null) sys.push(r.sy);
         if (i === 5) await shot('_walk_shadow.jpg');
     }
     ok('有走起來（is-explore-walking）', seenWalk);
+    const ySpan = sys.length ? Math.max(...sys) - Math.min(...sys) : 99;
+    ok('原版地圖走路無 CSS bob／sway（人物不在螢幕上下飄）', bobBad.length === 0 && ySpan <= 4, 'bobHits=' + bobBad.length + ' ySpan=' + ySpan);
     const rhythm = await ev(`(()=>{window.__wrOn=false;const r=window.__wr;const ch=[];let both=0,split=0;
         for(let i=1;i<r.length;i++){const pc=r[i][1]!==r[i-1][1],sc=r[i][2]!==r[i-1][2];if(pc)ch.push(r[i][0]);if(pc&&sc)both++;else if(pc||sc)split++;}
         const iv=ch.slice(2).map((t,i)=>t-ch[i+1]).sort((a,b)=>a-b);return {n:iv.length,med:iv.length?Math.round(iv[iv.length>>1]):0,both,split,frames:r.length,layoutReads:window.__lr};})()`);

@@ -511,18 +511,30 @@ let _hoverMobUid = null, _mobPointerDown = false, _mobRebuildPending = false;
 function _applyHoverName() {   // 🩹 v3.9.40：hover 或鎖定目標皆顯怪名（頂部 chud-target 已關）
     let ml = document.getElementById('mob-list'); if (!ml) return;
     let lockUid = null;
+    let lockMob = null;
     try {
         if (typeof mapState !== 'undefined' && mapState && mapState.targetIdx >= 0 && mapState.mobs) {
             let tm = mapState.mobs[mapState.targetIdx];
-            if (tm && !tm._dead && tm.uid != null) lockUid = String(tm.uid);
+            if (tm && !tm._dead && tm.uid != null) { lockUid = String(tm.uid); lockMob = tm; }
         }
     } catch (eLock) {}
+    let field = ml.classList.contains('is-field-combat');
     ml.querySelectorAll('.mob-target').forEach(c => {
         let uid = c.getAttribute('data-uid');
+        let locked = (!!lockUid && uid === lockUid);
         let show = (!!_hoverMobUid && uid === _hoverMobUid)
-            || (!!lockUid && uid === lockUid)
+            || locked
             || c.classList.contains('active');
         c.classList.toggle('name-show', show);
+        // 場戰卡永不 outerHTML→鎖定必須用 class 切換，玩家才看得出點到哪一隻
+        if (field) {
+            c.classList.toggle('active', locked);
+            let fill = c.querySelector('.mob-hp-fill');
+            if (fill && locked && lockMob) {
+                let pct = Math.max(0, Math.min(100, Math.round((lockMob.curHp / (lockMob.hp || 1)) * 100)));
+                fill.style.width = pct + '%';
+            }
+        }
     });
 }
 function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 innerHTML)上掛委派事件，跨重繪存活
@@ -537,13 +549,19 @@ function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 inn
     });
     ml.addEventListener('mouseleave', () => { if (_hoverMobUid !== null) { _hoverMobUid = null; _applyHoverName(); } });   // 真正離開整個怪物列才清(不受內部重繪影響)
     ml.addEventListener('click', e => {   // 🖱️ v2.6.46 點擊怪物卡＝手動指定攻擊目標(依 uid 找 index·僅活怪)。setTarget 後 getTarget 只在該目標死亡/消失才自動改鎖→手動鎖定會維持到目標死亡。委派於穩定父節點·跨重繪存活。
-        let card = e.target.closest && e.target.closest('.mob-target');
+        // 🩹 v3.10.38：只認本體熱區（.mob-img-wrap），空白框不搶點地走路
+        let hit = e.target.closest && e.target.closest('.mob-img-wrap');
+        let card = hit && e.target.closest && e.target.closest('.mob-target');
         if (!card) return;
         let uid = card.getAttribute('data-uid');
         if (!uid) return;   // 空格(無 data-uid·pointer-events:none)→略過
         let idx = mapState.mobs.findIndex(m => m && String(m.uid) === String(uid) && !m._dead);
-        if (idx >= 0) mapState.mobs[idx]._picked = true;   // 🪵 城鎮木頭人／AUTO 關時只打玩家點過的
-        if (idx >= 0 && idx !== mapState.targetIdx) setTarget(idx);
+        if (idx < 0) return;
+        mapState.mobs[idx]._picked = true;   // 🪵 城鎮木頭人／AUTO 關時只打玩家點過的
+        try { if (typeof window.chudCancelTapMove === 'function') window.chudCancelTapMove(); } catch (eTap) {}
+        try { if (typeof exploreClearTapMove === 'function') exploreClearTapMove(); } catch (eTap2) {}
+        if (idx !== mapState.targetIdx) setTarget(idx);
+        else { try { if (typeof _applyHoverName === 'function') _applyHoverName(); } catch (eHn0) {} }
     });
     let release = () => { if (!_mobPointerDown) return; _mobPointerDown = false; if (_mobRebuildPending) { _mobRebuildPending = false; setTimeout(() => _renderMobsImpl(), 0); } };   // 放開後(讓 click→setTarget 先在存活節點上觸發)再補一次重繪
     document.addEventListener('pointerup', release);

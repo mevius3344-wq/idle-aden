@@ -1,0 +1,122 @@
+{
+  "gfx": 2127,
+  "name": "level up effect",
+  "canvas": {
+    "w": 192,
+    "h": 192
+  },
+  "latticeOrigin": {
+    "x": 72,
+    "y": 132
+  },
+  "unitMs": 41.666666666666664,
+  "seq": [
+    {
+      "frame": 25,
+      "dur": 2
+    },
+    {
+      "frame": 0,
+      "dur": 2
+    },
+    {
+      "frame": 1,
+      "dur": 2
+    },
+    {
+      "frame": 2,
+      "dur": 3
+    },
+    {
+      "frame": 3,
+      "dur": 3
+    },
+    {
+      "frame": 4,
+      "dur": 3
+    },
+    {
+      "frame": 5,
+      "dur": 3
+    },
+    {
+      "frame": 6,
+      "dur": 3
+    },
+    {
+      "frame": 7,
+      "dur": 3
+    },
+    {
+      "frame": 8,
+      "dur": 3
+    },
+    {
+      "frame": 9,
+      "dur": 3
+    },
+    {
+      "frame": 10,
+      "dur": 3
+    },
+    {
+      "frame": 11,
+      "dur": 3
+    },
+    {
+      "frame": 12,
+      "dur": 3
+    },
+    {
+      "frame": 13,
+      "dur": 3
+    },
+    {
+      "frame": 14,
+      "dur": 3
+    },
+    {
+      "frame": 15,
+      "dur": 3
+    },
+    {
+      "frame": 16,
+      "dur": 2
+    },
+    {
+      "frame": 17,
+      "dur": 2
+    },
+    {
+      "frame": 18,
+      "dur": 2
+    },
+    {
+      "frame": 19,
+      "dur": 2
+    },
+    {
+      "frame": 20,
+      "dur": 2
+    },
+    {
+      "frame": 21,
+      "dur": 2
+    },
+    {
+      "frame": 22,
+      "dur": 2
+    },
+    {
+      "frame": 23,
+      "dur": 2
+    },
+    {
+      "frame": 24,
+      "dur": 2
+    }
+  ],
+  "n": 26,
+  "prefix": "lu",
+  "note": "原版 list.spr #2127；站立點＝角色腳底"
+}

@@ -2007,6 +2007,19 @@
         #battle-view.is-linmap.is-world-scroll > .party-sprite:not(.remote-party):not(:has(> .pm-shadow[style*="hidden"]))::after {
             display: none;
         }
+        /* 原版拼塊地圖：禁止 CSS 走路 bob／sway／squash（步伐在圖內；疊加＝人物在螢幕上下飄） */
+        #battle-view.is-linmap.is-world-scroll > #player-morph-sprite,
+        #battle-view.is-linmap.is-world-scroll > #player-morph-sprite.q-chibi-actor {
+            transform: translateX(-50%) !important;
+        }
+        #battle-view.is-linmap.is-world-scroll > .party-sprite,
+        #battle-view.is-linmap.is-world-scroll > .party-sprite.q-chibi-actor {
+            transform: none !important;
+        }
+        #battle-view.is-linmap.is-world-scroll > #player-morph-sprite > .pm-body,
+        #battle-view.is-linmap.is-world-scroll.is-explore-walking > #player-morph-sprite:not(.q-act-attack):not(.q-act-skill) > .pm-body {
+            transform: none !important;
+        }
         /* 變身八向／本體已烙印影子：沒有獨立 .pm-shadow 時也不可再疊 CSS 橢圓（否則變身後腳下黑影「跑出來」） */
         #battle-view.is-world-scroll > #player-morph-sprite.pm-no-ellipse::after,
         #battle-view.area-fit > #player-morph-sprite.pm-no-ellipse::after {
@@ -2017,7 +2030,7 @@
             scale: 0.62;
             transform-origin: 50% 100%;
         }
-        /* 點擊範圍只留本體，免得 192 框蓋住旁邊 NPC */
+        /* 點擊範圍只留本體，免得 192 框蓋住旁邊 NPC／擋點地走路（v3.10.38 場戰怪同規） */
         #battle-view .mob-target.town-dummy,
         #battle-view .mob-target.town-dummy * { pointer-events: none !important; }
         #battle-view .mob-target.town-dummy > .mob-img-wrap::after {
@@ -2029,6 +2042,22 @@
             height: 70px;
             translate: -50% 0;
             pointer-events: auto !important;
+        }
+        /* 場戰怪：192 框透明區不可擋走路；只留腳底本體熱區可點選 */
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob:not(.town-dummy),
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob:not(.town-dummy) * {
+            pointer-events: none !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob:not(.town-dummy) > .mob-img-wrap::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 78px;
+            height: 100px;
+            translate: -50% 0;
+            pointer-events: auto !important;
+            z-index: 6;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-name { top: 102px; }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-hp-bar { top: 118px; }
@@ -2409,8 +2438,47 @@
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage .mob-img-inner {
             filter: none;
         }
-        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage .mob-img-wrap {
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage:not(.active) .mob-img-wrap {
             filter: drop-shadow(0 0 0 2px #fda4af);
+        }
+        /* 🔴 v3.10.37 點選鎖定目標：場戰／原版地圖不靠 has-bg——紅金光暈＋腳底選取環，一眼看出點到哪一隻 */
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap {
+            filter: drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 9px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 16px rgba(251, 191, 36, 0.55)) !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: 2px;
+            width: 78%;
+            height: 20px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.62) 0%, rgba(251, 191, 36, 0.4) 40%, transparent 74%);
+            pointer-events: none;
+            z-index: 1;
+            animation: mobSelectPulse 0.9s ease-in-out infinite;
+        }
+        @keyframes mobSelectPulse {
+            0%, 100% { opacity: 0.75; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name,
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name span {
+            opacity: 1 !important;
+            color: #ffe082 !important;
+            text-shadow: 0 0 6px rgba(239, 68, 68, 0.85), 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000 !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-hp-bar {
+            display: flex !important;
+            width: 56px;
+            height: 8px !important;
+        }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-hp-bar > div {
+            width: 56px !important;
+            height: 7px !important;
+            border: 1px solid rgba(255, 224, 130, 0.75);
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.55);
         }
         /* 🎨 v3.8.207：經典怪不再套 q-classic-chibi 壓扁；僅真 Q 包怪用 .q-mob-art */
         #battle-view.q-chibi .mob-img-inner.q-classic-chibi {
@@ -2720,27 +2788,54 @@
         }
         .peer-menu-name { color: #e8c675; font-weight: 700; text-align: center; padding: 2px 4px 4px; text-shadow: 0 0 2px #000, 0 1px 2px #000; }
         .peer-menu button, .trade-btn {
-            min-height: 34px; padding: 4px 12px; border-radius: 4px; color: #f5e6c0; font-weight: 700;
-            border: 1px solid rgba(232, 198, 117, 0.6); background: linear-gradient(180deg, #4a3a22, #241a0e);
+            min-height: 34px; padding: 5px 14px; border-radius: 4px; color: #f5e6c0; font-weight: 700;
+            border: 1px solid rgba(232, 198, 117, 0.65);
+            background: linear-gradient(180deg, #554022 0%, #2a2014 48%, #181208 100%);
+            box-shadow: inset 0 1px 0 rgba(255, 230, 160, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.4);
             text-shadow: 0 1px 2px #000; cursor: pointer;
         }
-        .peer-menu button:active, .trade-btn:active { filter: brightness(1.3); }
-        .trade-btn-main { border-color: #e8c675; background: linear-gradient(180deg, #7a5a1e, #3d2a0c); color: #fff2c4; }
+        .peer-menu button:hover, .trade-btn:hover { border-color: #e8c675; color: #ffe9a8; filter: brightness(1.06); }
+        .peer-menu button:active, .trade-btn:active {
+            filter: none;
+            background: linear-gradient(180deg, #181208 0%, #3a2a16 100%);
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.65);
+        }
+        .trade-btn-main {
+            border-color: #e8c675;
+            background: linear-gradient(180deg, #a07828 0%, #6a4a16 45%, #3d2a0c 100%);
+            color: #fff2c4;
+            box-shadow: inset 0 1px 0 rgba(255, 240, 180, 0.35), 0 1px 3px rgba(0, 0, 0, 0.45);
+        }
         .trade-btn-sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
         .trade-win {
             position: fixed; inset: 0; z-index: 180; display: flex; align-items: center; justify-content: center;
-            background: rgba(0, 0, 0, 0.45); padding: 8px;
+            background: radial-gradient(ellipse at center, rgba(40, 28, 12, 0.18) 0%, rgba(0, 0, 0, 0.55) 70%);
+            padding: 8px;
         }
         .trade-win.hidden, .trade-ask.hidden { display: none !important; }
         .trade-box {
-            width: min(420px, 100%); max-height: calc(100dvh - 16px); overflow-y: auto; padding: 8px 10px 10px;
+            position: relative;
+            width: min(440px, 100%); max-height: calc(100dvh - 16px); overflow-y: auto; padding: 10px 12px 12px;
             display: flex; flex-direction: column; gap: 8px; color: #e9dcc0;
-            border: 10px solid transparent; border-image: url('../assets/ui/lin/frame.png') 34 / 10px stretch;
-            background: linear-gradient(180deg, rgba(20, 16, 10, 0.5), rgba(0, 0, 0, 0.82)), url('../assets/ui/lin/stone.webp') center / cover;
-            background-clip: padding-box; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            border: 12px solid transparent; border-image: url('../assets/ui/lin/frame.png') 34 / 12px / 2px stretch;
+            background:
+                linear-gradient(180deg, rgba(28, 20, 10, 0.72) 0%, rgba(10, 8, 5, 0.88) 40%, rgba(4, 3, 2, 0.94) 100%),
+                url('../assets/ui/lin/stone.webp') center / 256px auto repeat;
+            background-clip: padding-box;
+            box-shadow: 0 0 0 1px rgba(255, 220, 140, 0.12), 0 14px 40px rgba(0, 0, 0, 0.78), 0 0 48px rgba(160, 110, 40, 0.14);
             font-family: 'Noto Serif TC', 'PMingLiU', serif;
+            scrollbar-width: thin; scrollbar-color: #8a6a38 #120e08;
         }
-        .trade-head { text-align: center; font-size: 18px; font-weight: 700; color: #e8c675; text-shadow: 0 0 2px #000, 0 1px 2px #000; }
+        .trade-box::before {
+            content: ""; position: absolute; inset: 3px; border: 1px solid rgba(232, 198, 117, 0.28);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 230, 160, 0.1);
+            pointer-events: none;
+        }
+        .trade-head {
+            text-align: center; font-size: 18px; font-weight: 700; letter-spacing: 0.28em; text-indent: 0.28em;
+            color: #ffe9a8; text-shadow: 0 0 1px #000, 0 1px 2px #000, 0 0 12px rgba(232, 180, 70, 0.3);
+            padding: 2px 0 6px; border-bottom: 1px solid rgba(106, 78, 40, 0.75);
+        }
         .trade-with { font-size: 13px; color: #d6c8a8; margin-left: 6px; }
         .trade-side { border: 1px solid rgba(232, 198, 117, 0.35); border-radius: 4px; padding: 6px; background: rgba(0, 0, 0, 0.35); }
         .trade-side.is-locked { border-color: #e8c675; box-shadow: inset 0 0 10px rgba(232, 198, 117, 0.35); }
@@ -6996,33 +7091,34 @@ button.classic-skill-cell { cursor:pointer; }
   width: 100%;
   box-sizing: border-box;
   padding: 22px 20px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(214, 170, 78, 0.88);
+  border-radius: 0;
+  border: 12px solid transparent;
+  border-image: url('../assets/ui/lin/frame.png') 34 / 12px / 2px stretch;
   background:
-    linear-gradient(180deg, rgba(48, 36, 18, 0.96) 0%, rgba(16, 12, 7, 0.97) 48%, rgba(8, 6, 3, 0.99) 100%);
+    linear-gradient(180deg, rgba(36, 26, 14, 0.92) 0%, rgba(14, 10, 6, 0.96) 48%, rgba(6, 4, 2, 0.98) 100%),
+    url('../assets/ui/lin/stone.webp') center / 256px auto repeat;
+  background-clip: padding-box;
   box-shadow:
-    0 0 0 1px rgba(255, 232, 167, 0.1) inset,
-    0 1px 0 rgba(255, 220, 140, 0.18) inset,
+    0 0 0 1px rgba(255, 220, 140, 0.12),
     0 18px 42px rgba(0, 0, 0, 0.78),
-    0 0 32px rgba(180, 130, 40, 0.16);
-  backdrop-filter: blur(3px);
+    0 0 36px rgba(180, 130, 40, 0.18);
   text-align: center;
   overflow: hidden;
+  font-family: "PMingLiU", "新細明體", "MingLiU", "Noto Serif TC", "Microsoft JhengHei", serif;
 }
 .account-auth-box::before {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(247, 218, 140, 0.65), transparent);
+  inset: 3px;
+  border: 1px solid rgba(232, 198, 117, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 230, 160, 0.1);
   pointer-events: none;
 }
 .account-auth-box::after {
   content: "";
   position: absolute;
-  inset: 6px;
-  border: 1px solid rgba(198, 156, 74, 0.22);
-  border-radius: 5px;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 230, 160, 0.07) 0%, transparent 20%, transparent 80%, rgba(0, 0, 0, 0.2) 100%);
   pointer-events: none;
 }
 .account-auth-box-ornament {

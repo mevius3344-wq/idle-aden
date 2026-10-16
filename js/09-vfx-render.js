@@ -962,52 +962,120 @@ function vfxKill(mob) {
         }
     } catch (e) {}
 }
-// 升級慶祝：金色擴散圓環 + 上升文字 + 戰場金光 + 金色火花
+// 升級特效：原版天堂 list.spr #2127（assets/fx/升級/lu_*；站立點＝腳底；screen 加亮）
+// 時長單位＝1/24 秒（與 list.spr 相同）；舊 CSS 金環／LEVEL UP! 文字已廢止（樣式保留不刪）。
+const LEVELUP_FX = {
+    dir: '升級', prefix: 'lu', n: 26,
+    canvasW: 192, canvasH: 192, ox: 72, oy: 132,
+    unitMs: 1000 / 24,
+    // list.spr #2127 0.animation 順序（frame,dur）
+    seq: [
+        [25, 2], [0, 2], [1, 2],
+        [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [9, 3],
+        [10, 3], [11, 3], [12, 3], [13, 3], [14, 3], [15, 3],
+        [16, 2], [17, 2], [18, 2], [19, 2], [20, 2], [21, 2], [22, 2], [23, 2], [24, 2]
+    ]
+};
+let _levelUpFxEl = null;
+let _levelUpFxRaf = 0;
+function _levelUpFxZoom() {
+    try {
+        if (typeof exploreLinZoom === 'function') {
+            let z = Number(exploreLinZoom());
+            if (z > 0.1 && z < 4) return z;
+        }
+        let bv = document.getElementById('battle-view');
+        let cs = bv && getComputedStyle(bv).getPropertyValue('--lin-zoom');
+        let z2 = parseFloat(cs);
+        if (z2 > 0.1 && z2 < 4) return z2;
+    } catch (eZ) {}
+    return 1;
+}
+function _levelUpFxFoot() {
+    let pr = (typeof _pmCasterRect === 'function') ? _pmCasterRect() : null;
+    if (pr && pr.width > 0 && pr.height > 0) {
+        return { x: pr.left + pr.width * 0.5, y: pr.bottom };
+    }
+    let bv = document.getElementById('battle-view');
+    let br = bv && bv.getBoundingClientRect();
+    if (br && br.width > 0) {
+        return { x: br.left + br.width * 0.5, y: br.top + br.height * 0.72 };
+    }
+    return null;
+}
 function vfxLevelUp() {
     try {
         if (_vfxMute()) return;
-        let bv = document.getElementById('battle-view');
-        let r = bv ? bv.getBoundingClientRect() : null;
-        if (!r || r.width === 0) { let hb = document.getElementById('bar-hp'); r = hb ? hb.getBoundingClientRect() : null; }
-        if (!r || r.width === 0) return;
-        let cx = r.left + r.width / 2, cy = r.top + r.height * 0.5;
+        let foot = _levelUpFxFoot();
+        if (!foot) return;
         let layer = _vfxLayer();
-        let _cxy = _vfxToLocal(cx, cy);
-        if (bv && bv.getBoundingClientRect().width > 0) {
-            let br = bv.getBoundingClientRect();
-            let fl = document.createElement('div'); fl.className = 'vfx-areaflash';
-            let _floc = _vfxToLocal(br.left, br.top);
-            fl.style.left = _floc.x + 'px'; fl.style.top = _floc.y + 'px'; fl.style.width = br.width + 'px'; fl.style.height = br.height + 'px';
-            fl.style.background = 'radial-gradient(circle, rgba(255,213,79,.42), rgba(255,213,79,0) 70%)';
-            fl.style.animation = 'vfxLvFlash .9s ease-out forwards';
-            layer.appendChild(fl); fl.addEventListener('animationend', () => fl.remove(), { once: true }); setTimeout(() => { if (fl.parentNode) fl.remove(); }, 1500);
-        }
-        for (let i = 0; i < 2; i++) {
-            let ring = document.createElement('div'); ring.className = 'vfx-lvring';
-            let sz = 90 + i * 44;
-            ring.style.left = _cxy.x + 'px'; ring.style.top = _cxy.y + 'px'; ring.style.width = sz + 'px'; ring.style.height = sz + 'px';
-            ring.style.animation = 'vfxLvRing ' + (0.7 + i * 0.15) + 's ease-out forwards';
-            layer.appendChild(ring); ring.addEventListener('animationend', () => ring.remove(), { once: true }); setTimeout(() => { if (ring.parentNode) ring.remove(); }, 1500);
-        }
-        let t = document.createElement('div'); t.className = 'vfx-lvtext';
-        t.style.left = _cxy.x + 'px'; t.style.top = _cxy.y + 'px'; t.style.fontSize = '26px';
-        t.textContent = 'LEVEL UP!  Lv.' + player.lv;
-        t.style.animation = 'vfxLvText 1.5s ease-out forwards';
-        layer.appendChild(t); t.addEventListener('animationend', () => t.remove(), { once: true }); setTimeout(() => { if (t.parentNode) t.remove(); }, 2200);
-        let n = 18;
-        for (let i = 0; i < n; i++) {
-            let sp = document.createElement('div'); sp.className = 'vfx-particle';
-            let sz = 4 + Math.random() * 4; sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-            sp.style.left = _cxy.x + 'px'; sp.style.top = _cxy.y + 'px'; sp.style.background = '#ffd54f'; sp.style.boxShadow = '0 0 7px #ffca28';
-            layer.appendChild(sp);
-            let ang = Math.PI * 2 * (i / n) + Math.random() * 0.4; let dist = 60 + Math.random() * 70;
-            let dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist;
-            sp.animate(
-                [ { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
-                  { transform: 'translate(calc(-50% + ' + dx.toFixed(1) + 'px), calc(-50% + ' + dy.toFixed(1) + 'px)) scale(.2)', opacity: 0 } ],
-                { duration: 650 + Math.random() * 350, easing: 'cubic-bezier(.15,.7,.3,1)' }
-            ).onfinish = () => sp.remove();
-        }
+        if (layer.childElementCount > 220) return;
+        let frames = _preloadFxFrames(LEVELUP_FX.dir, LEVELUP_FX.prefix, LEVELUP_FX.n);
+        if (!frames || !frames[0]) return;
+        if (_levelUpFxRaf) { try { cancelAnimationFrame(_levelUpFxRaf); } catch (eC) {} _levelUpFxRaf = 0; }
+        if (_levelUpFxEl && _levelUpFxEl.parentNode) { try { _levelUpFxEl.remove(); } catch (eR) {} }
+        _levelUpFxEl = null;
+        let z = _levelUpFxZoom();
+        let fxW = LEVELUP_FX.canvasW * z, fxH = LEVELUP_FX.canvasH * z;
+        let ox = LEVELUP_FX.ox * z, oy = LEVELUP_FX.oy * z;
+        let el = document.createElement('img');
+        el.className = 'vfx-spell vfx-levelup';
+        el.alt = '';
+        el.draggable = false;
+        el.src = frames[LEVELUP_FX.seq[0][0]].src;
+        el.style.width = fxW + 'px';
+        el.style.height = fxH + 'px';
+        el.style.mixBlendMode = 'screen';
+        el.style.pointerEvents = 'none';
+        let _place = (f) => {
+            let _loc = _vfxToLocal(f.x - ox, f.y - oy);
+            el.style.left = _loc.x + 'px';
+            el.style.top = _loc.y + 'px';
+        };
+        _place(foot);
+        layer.appendChild(el);
+        _levelUpFxEl = el;
+        let seq = LEVELUP_FX.seq;
+        let unit = LEVELUP_FX.unitMs;
+        let t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        let ends = [];
+        let acc = 0;
+        for (let i = 0; i < seq.length; i++) { acc += seq[i][1] * unit; ends.push(acc); }
+        let total = acc;
+        let step = () => {
+            try {
+                if (!el.isConnected) { _levelUpFxEl = null; _levelUpFxRaf = 0; return; }
+                let now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                let elapsed = now - t0;
+                if (elapsed >= total) {
+                    try { el.remove(); } catch (eRm) {}
+                    if (_levelUpFxEl === el) _levelUpFxEl = null;
+                    _levelUpFxRaf = 0;
+                    return;
+                }
+                let si = 0;
+                while (si < ends.length - 1 && elapsed >= ends[si]) si++;
+                let fi = seq[si][0];
+                if (frames[fi] && el.src !== frames[fi].src) el.src = frames[fi].src;
+                let f2 = _levelUpFxFoot();
+                if (f2) {
+                    z = _levelUpFxZoom();
+                    fxW = LEVELUP_FX.canvasW * z; fxH = LEVELUP_FX.canvasH * z;
+                    ox = LEVELUP_FX.ox * z; oy = LEVELUP_FX.oy * z;
+                    el.style.width = fxW + 'px'; el.style.height = fxH + 'px';
+                    _place(f2);
+                }
+                _levelUpFxRaf = requestAnimationFrame(step);
+            } catch (eStep) {
+                try { el.remove(); } catch (e2) {}
+                _levelUpFxEl = null; _levelUpFxRaf = 0;
+            }
+        };
+        _levelUpFxRaf = requestAnimationFrame(step);
+        setTimeout(() => {
+            try { if (el.parentNode) el.remove(); } catch (eT) {}
+            if (_levelUpFxEl === el) _levelUpFxEl = null;
+        }, Math.ceil(total) + 400);
     } catch (e) {}
 }
 // 取得某怪物格的螢幕矩形（不存在/未布局回 null）
@@ -1862,6 +1930,10 @@ function _renderMobsImpl() {
     let _back = backSlotsActive();                                   // 🆕 五格模式：原三格(前排)＋後排兩格
     let _fieldSlots = 0;
     try { if (typeof exploreFieldSlotCount === 'function') _fieldSlots = exploreFieldSlotCount() || 0; } catch (eFs2) {}
+    // 🩹 v3.10.37：村莊場戰（奇岩木頭人）fieldSlots=0 但仍是 field-mob→血條／鎖定 UI 要走場戰路徑
+    let _fieldUi = false;
+    try { _fieldUi = (typeof exploreFieldCombatActive === 'function' && exploreFieldCombatActive()); } catch (eFu) {}
+    try { if (mapState.current === 'training') _fieldUi = false; } catch (eTrFu) {}
     // 🩹 v3.8.361：場戰關閉時維持舊版 3／5 格，勿用 world-scroll 硬灌場戰槽數
     let _order;
     if (_fieldSlots > 0) {
@@ -1893,7 +1965,8 @@ function _renderMobsImpl() {
         let m = mapState.mobs[i];
         let _rowCls = (_fieldSlots > 0) ? '' : ((i >= 3) ? ' mob-back' : (_back ? ' mob-front' : ''));   // 場戰不走前後排 flex
         if (m) {
-            let act = (_fieldSlots > 0) ? '' : ((i === mapState.targetIdx) ? 'active' : '');
+            // 場戰既有卡不重建→.active 另由 _applyHoverName／exploreApplyFieldDomPos 切換；新建卡仍寫入正確初始狀態
+            let act = (i === mapState.targetIdx) ? 'active' : '';
             // 🩹 v3.8.317 場戰：靜態幀鎖 idle_0（勿 preferSpawn——探測完成會改字串→outerHTML 砍動畫）
             let _mi = (_fieldSlots > 0) ? mobStillImg(m.n, m.img, false) : mobStillImg(m.n, m.img, true);   // 🎬 戰鬥初始幀：有動畫→優先 spawn_0（無 spawn 退 idle_0·再退舊靜態）；無動畫→舊靜態
             // 🩹 v3.8.359：場戰有經典 anim 的怪勿把 icons 塞進 data-fb（onerror 一退就整場靜態）
@@ -1952,9 +2025,11 @@ function _renderMobsImpl() {
             // 🩹 狀態列（出血/猛爆毒/鈍擊/硬皮）：狀態開關關閉時清空內容（保留固定高度列避免版面跳動）
             let _statRow = (!_showMobStatus || _fieldSlots > 0) ? '' : `${(m.bleeds && m.bleeds.length) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;" title="出血層數">🩸×${m.bleeds.length}</span>` : ''}${(m._burstPoison && m._burstPoison.left > 0) ? `<span class="text-[11px] font-bold" style="display:inline-flex;align-items:center;line-height:1;color:#a3e635;" title="猛爆劇毒：每秒100固定傷害（5秒）">💥毒</span>` : ''}${(m._bluntShow && state.ticks < m._bluntShow) ? `<span class="text-[11px] font-bold text-amber-300" style="display:inline-flex;align-items:center;line-height:1;" title="鈍擊：攻擊延遲中">🔨鈍</span>` : ''}${(m.hardSkin > 0) ? `<span class="text-[11px] font-bold text-stone-300" style="display:inline-flex;align-items:center;line-height:1;" title="硬皮值：額外物理減傷（魔法不減），可用鈍器/重擊消磨">🛡${m.hardSkin}</span>` : ''}`;
             // 🩹 v3.8.321：場戰血條永遠建 DOM，僅 .active（攻擊目標）顯示；經典列仍尊重 _showMobHp
+            // 🩹 v3.10.37：場戰 UI（含村莊木頭人 fieldSlots=0）血條寫真實 HP%；鎖定後才顯示
             let _hpBar;
-            if (_fieldSlots > 0) {
-                _hpBar = `<div class="mob-hp-bar flex justify-center mb-1" style="height:6px;"><div style="width:50px;height:5px;background:transparent;border-radius:3px;overflow:hidden;"><div class="mob-hp-fill" style="height:100%;background:#ef4444;width:100%;"></div></div></div>`;
+            if (_fieldUi) {
+                let _hpPctF = Math.max(0, Math.min(100, Math.round((m.curHp / (m.hp || 1)) * 100)));
+                _hpBar = `<div class="mob-hp-bar flex justify-center mb-1" style="height:6px;"><div style="width:50px;height:5px;background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden;"><div class="mob-hp-fill" style="height:100%;background:#ef4444;width:${_hpPctF}%;"></div></div></div>`;
             } else if (!_showMobHp) {
                 _hpBar = '';
             } else {
@@ -3136,7 +3211,13 @@ function _animSetImgFrame(img, fkey, url) {
         };
         pre.src = wantUrl;
         // 快取命中：同步套用（無閃）
-        if (pre.complete && pre.naturalWidth > 0) applySrc(wantUrl);
+        // 原版地圖：src 屬性當幀更新（等 onload＝位置已跳、圖還舊＝滑動走跳／稽核 posOnly）
+        let linSync = false;
+        try {
+            let bvL = document.getElementById('battle-view');
+            linSync = !!(bvL && bvL.classList.contains('is-linmap'));
+        } catch (eLs) {}
+        if ((pre.complete && pre.naturalWidth > 0) || linSync) applySrc(wantUrl);
     } catch (e) {}
 }
 function _mobDirectFrameUrl(name, act, f, faceDir) {

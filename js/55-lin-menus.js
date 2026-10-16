@@ -245,6 +245,12 @@
         return w;
     }
 
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Escape') return;
+        var open = document.querySelector('.lm-win:not(.hidden)');
+        if (open) { ev.preventDefault(); linMenuClose(); }
+    });
+
     window.linMenuOpen = linMenuOpen;
     window.linMenuClose = linMenuClose;
 })();

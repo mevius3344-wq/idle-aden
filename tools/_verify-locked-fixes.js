@@ -103,7 +103,7 @@ section("3) 新兵修練場（回報壞過 5+ 次）");
   ok("spawnMob 生城鎮木頭人（不還手、_townDummy）", /let _tds = townDummySpots\(\);[\s\S]{0,400}trainingDummy: true, noAttack: true, _townDummy: true/.test(cc));
   ok("進奇岩就生木頭人", /_tds\.forEach\(\(p, k\) => spawnMob\(k\)\);/.test(wm));
   ok("城鎮木頭人不走動、不重排出生點", /m\._linOnGrid = true;\s*if \(m\._townDummy\) return;/.test(F.explore) && /if \(mob\._townDummy\) return;/.test(F.explore));
-  ok("自動狩獵不挑城鎮木頭人、只打玩家點過的", /\|\| m\._townDummy\) continue;/.test(F.explore) && /if \(t && t\._townDummy && !t\._picked\) t = null;/.test(cc) && /if \(idx >= 0\) mapState\.mobs\[idx\]\._picked = true;/.test(cc));
+  ok("自動狩獵不挑城鎮木頭人、只打玩家點過的", /\|\| m\._townDummy\) continue;/.test(F.explore) && /if \(t && t\._townDummy && !t\._picked\) t = null;/.test(cc) && (/if \(idx >= 0\) mapState\.mobs\[idx\]\._picked = true;/.test(cc) || /if \(idx < 0\) return;\s*mapState\.mobs\[idx\]\._picked = true;/.test(cc)));
   ok("木頭人點擊範圍只留本體（不蓋 NPC）", /#battle-view \.mob-target\.town-dummy > \.mob-img-wrap::after \{/.test(rd("css/style.css")));
   ok("城鎮開 AUTO＝提示＋開傳送選單", /if \(inTown && state\.autoHunt\) \{/.test(hud) && /openTeleportMenu\(\)/.test(hud));
   // v3.10.2：AUTO 預設關；關時只打玩家點過的怪（點地取消），進場戰圖照樣開戰鬥迴圈
@@ -117,6 +117,15 @@ section("3) 新兵修練場（回報壞過 5+ 次）");
     && /if \(ai < 0 && !manualHunt\) \{\s*ai = [^;]*exploreNearestApproachIdx\(HUNT_SEARCH_WORLD\);/.test(F.explore)
     && /if \(!engaged && dist > HUNT_SEARCH_WORLD && /.test(F.explore)
     && fs.existsSync(path.join(ROOT, "tools/_audit-auto-hunt.js")));
+  // v3.10.38：點地／點怪好控制（熱區只留本體、點怪清點地、朝怪走不取消）
+  ok("場戰怪點擊熱區只留本體（192 框不擋走路）",
+    /field-mob:not\(\.town-dummy\)\*?\s*\{\s*pointer-events: none !important/.test(F.css.replace(/\s+/g, " "))
+    || /field-mob:not\(\.town-dummy\),\s*#battle-view[\s\S]{0,120}pointer-events: none !important/.test(F.css));
+  ok("點怪清點地＋朝怪附近點地不取消 _picked",
+    /window\.chudCancelTapMove = cancelTapMove/.test(rd("js/46-combat-hud.js"))
+    && /chudCancelTapMove/.test(cc)
+    && /_dTap < Math\.max\(140, _dMe \* 0\.9\)/.test(F.explore));
+  ok("實測 tools/_audit-tap-control.js 存在", exists("tools/_audit-tap-control.js"));
 }
 
 section("4) 村莊背景不可消失");
@@ -192,10 +201,23 @@ section("6) 玩家人物：置中、不消失、不半身");
     /_pmState\.el\.style\.left\s*=\s*'calc\('\s*\+\s*_pp\.x\s*\+\s*' - '\s*\+\s*Math\.round\(_pw \/ 2\)/.test(F.vfx));
 }
 
-section("7) 怪物目標：頂部目標列永久關閉");
+section("7) 怪物目標：頂部目標列永久關閉＋點選鎖定明顯");
 {
   ok("#chud-target 永久 display:none",
     /#game-screen\.combat-hud #chud-target,\s*\n\.chud-target\s*\{\s*\n\s*display:\s*none !important/.test(F.hud));
+  const core = rd("js/03-combat-core.js");
+  const ex = rd("js/44-map-explore.js");
+  const css = rd("css/style.css");
+  ok("場戰鎖定用 class 切換 .active（卡不重建也能看出點到哪一隻）",
+    /if \(field\) \{\s*c\.classList\.toggle\('active', locked\);/.test(core) &&
+    /var isTgt = \(typeof mapState !== 'undefined' && mapState\.targetIdx === i\);/.test(ex) &&
+    /card\.classList\.toggle\('active', isTgt\)/.test(ex));
+  ok("場戰鎖定目標：紅金光暈＋腳底選取環＋名／血條",
+    /mobSelectPulse/.test(css) &&
+    /field-mob\.active > \.mob-img-wrap/.test(css) &&
+    /field-mob\.active > \.mob-name/.test(css) &&
+    /field-mob\.active > \.mob-hp-bar/.test(css));
+  ok("實測 tools/_audit-mob-select.js 存在", exists("tools/_audit-mob-select.js") && /只有目標 \.active/.test(rd("tools/_audit-mob-select.js")));
 }
 
 section("8) 潘朵拉：遺物搜尋／布告欄／收購 下架");
@@ -481,7 +503,9 @@ section("34) 原版格步走路");
   ok("點地／追怪帶 goal（先斜後直）", /explorePlayerWalkStep\(wdx, wdy, inp\.fromTap \? \{ x: _tapMove\.tx, y: _tapMove\.ty \} : null\)/.test(ex) && /explorePlayerWalkStep\(dirx, diry, \{ x: t\._fx, y: t\._fy \|\| 0 \}\)/.test(ex));
   ok("每格 640ms（加速 480）＋第 k 幀跳到 (k+1)/4 格＋每步從第 0 幀起播＋實際時間", /var LIN_STEP_MS = 640;/.test(ex) && /var nf = Math\.max\(1, Math\.round\(LIN_STEP_FRAMES \* s\.cyc\)\);\s*var kd = Math\.min\(1, \(Math\.floor\(k \* nf\) \+ 1\) \/ nf\);/.test(ex) && /_walkCycle = s\.c0 \+ k \* s\.cyc;/.test(ex) && /var el = Math\.max\(0, Math\.min\(120, now - s\.t\)\);/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
   ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
-  ok("格步跳位同時換幀（queueMicrotask _playerMorphApply）", /queueMicrotask\(function \(\) \{ try \{ _playerMorphApply\(\); \} catch \(e\) \{\} \}\)/.test(ex));
+  ok("格步跳位同時換幀（當幀 _playerMorphApply）", /if \(moved > 0\.01\) \{[\s\S]{0,400}try \{ _playerMorphApply\(\); \}/.test(ex));
+  ok("原版地圖不套 CSS 走路 bob／sway", /var linFeel = !!exploreLinName\(\);/.test(ex) && /if \(_moving && !linFeel\)/.test(ex) && /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite,[\s\S]{0,120}transform: translateX\(-50%\) !important;/.test(rd("css/style.css")));
+  ok("原版地圖換幀 src 當幀寫入（不等 onload）", /linSync = !!\(bvL && bvL\.classList\.contains\('is-linmap'\)\);/.test(rd("js/09-vfx-render.js")) && /\(pre\.complete && pre\.naturalWidth > 0\) \|\| linSync/.test(rd("js/09-vfx-render.js")));
 }
 
 section("43) 新手禮包 200%經驗藥水／伺服器壞網址");
@@ -620,6 +644,14 @@ section("54) 設定／內掛選單／輔助設定 視窗（照新創）");
   ok("自動購買一次買幾個（仍只在 0 個時才買）", /autoBuyQty\('set-buy-qty-pot', 100, 1, 1000\)/.test(sc) && /autoBuyQty\('set-buy-qty-arrow'/.test(rd("js/03-combat-core.js")));
   ok("寵物補血預設門檻（個別寵物設定優先）", /p\.potPct > 0 \? p\.potPct : \(parseInt\(\(typeof document !== 'undefined' && document\.getElementById\('set-pet-heal-hp'\)/.test(rd("js/22-pets.js")));
   ok("新設定會存檔", ["setEmergHp", "setEmergItem", "setAutoCure", "setPetHealHp", "setBuyQtyPot", "setBuyQtyArrow"].every((k) => ss.includes(k + ":")));
+  const lmc = rd("css/lin-menus.css");
+  ok("視窗細緻化：內雙金線／標題◆飾／金邊關閉鈕／立體按鈕／自訂勾選框",
+    /\.lm-frame::before/.test(lmc) && /content: "◆"/.test(lmc) && /#f0d090/.test(lmc) &&
+    /\.lm-btn::after/.test(lmc) && /appearance: none/.test(lmc) && /input\[type="checkbox"\]:checked::after/.test(lmc));
+  ok("Escape 關閉設定視窗", /ev\.key !== 'Escape'/.test(lm) && /linMenuClose\(\)/.test(lm));
+  ok("登入框／交易框同石紋金框（border-image frame）",
+    /\.account-auth-box \{[\s\S]{0,400}border-image: url\('\.\.\/assets\/ui\/lin\/frame\.png'\)/.test(rd("css/style.css")) &&
+    /\.trade-box \{[\s\S]{0,500}border-image: url\('\.\.\/assets\/ui\/lin\/frame\.png'\) 34 \/ 12px/.test(rd("css/style.css")));
 }
 
 section("51) 主城奇岩");
@@ -793,6 +825,18 @@ section("66) 打怪掉落直接進背包（不落地，只有 PK 噴裝會掉）
   ok("killMob 固定不延遲入帳、不呼叫 vfxDropSpray", /_worldLootDefer = false;/.test(kmBody) && !/_worldLootDefer = !!/.test(kmBody) && !/vfxDropSpray\(/.test(kmBody));
   ok("PK 噴裝轉交擊殺者仍在", /function pvpResolveDeathItemLoss\(/.test(rd("js/04-combat-attack.js")) && /function pvpGainTransferredItems\(/.test(rd("js/04-combat-attack.js")) && /\/api\/pvp\/loot-transfer/.test(rd("js/43-field-pvp.js")));
   ok("實測 tools/_audit-loot-direct.js 存在", exists("tools/_audit-loot-direct.js"));
+}
+
+section("67) 升級特效原版天堂（gfx 2127，腳底錨定，無英文 LEVEL UP）");
+{
+  const vfx = rd("js/09-vfx-render.js");
+  const kill = rd("js/05-kill-progression.js");
+  const meta = exists("assets/fx/升級/meta.json") ? rd("assets/fx/升級/meta.json") : "";
+  ok("LEVELUP_FX＝#2127／26 幀／站立點 72,132／list.spr 時序", /const LEVELUP_FX = \{/.test(vfx) && /dir: '升級'/.test(vfx) && /canvasW: 192/.test(vfx) && /ox: 72, oy: 132/.test(vfx) && /unitMs: 1000 \/ 24/.test(vfx) && /\[25, 2\], \[0, 2\]/.test(vfx));
+  ok("vfxLevelUp 播 lu_*＋screen，不用 LEVEL UP!／vfx-lvring", /function vfxLevelUp\(\)/.test(vfx) && /vfx-levelup/.test(vfx) && /mixBlendMode = 'screen'/.test(vfx) && !/textContent = 'LEVEL UP!/.test(vfx) && !/vfx-lvring/.test(vfx.slice(vfx.indexOf("function vfxLevelUp()"), vfx.indexOf("function vfxLevelUp()") + 2500)));
+  ok("資源 assets/fx/升級/lu_*＋meta.json gfx 2127", exists("assets/fx/升級/lu_0.png") && exists("assets/fx/升級/lu_25.png") && /"gfx": 2127/.test(meta) && exists("tools/lin/export-levelup-fx.js"));
+  ok("checkLvUp 仍呼叫 vfxLevelUp＋playSfx('levelup')", /vfxLevelUp\(\)/.test(kill) && /playSfx\('levelup'\)/.test(kill));
+  ok("實測 tools/_audit-levelup-fx.js 存在", exists("tools/_audit-levelup-fx.js") && /vfx-levelup/.test(rd("tools/_audit-levelup-fx.js")));
 }
 
 section("64) 進屋收外殼（原版天堂）");

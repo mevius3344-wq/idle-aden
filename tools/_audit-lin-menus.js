@@ -74,6 +74,28 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
         const tg=w.querySelector('.lm-auto-toggle'); out.toggleTxt=tg&&tg.textContent;
         return out; })()`);
     console.log('INFO auto ' + asc(JSON.stringify(a)));
+    const polish = await ev(`(()=>{
+        const w=document.querySelector('#lm-win-auto .lm-frame');
+        if(!w) return null;
+        const cs=getComputedStyle(w);
+        const x=w.querySelector('.lm-x'); const xc=x&&getComputedStyle(x);
+        const btn=w.querySelector('.lm-auto-toggle')||w.querySelector('.lm-btn');
+        const bc=btn&&getComputedStyle(btn);
+        const before=getComputedStyle(w,'::before');
+        return {
+          bi: String(cs.borderImageSource||''),
+          bg: String(cs.backgroundImage||''),
+          xBg: xc ? String(xc.backgroundImage||'') : '',
+          btnShadow: bc ? String(bc.boxShadow||'') : '',
+          beforeBorder: before ? String(before.borderTopWidth||'') : ''
+        };
+    })()`);
+    console.log('INFO polish ' + asc(JSON.stringify(polish)));
+    ok(polish && /frame\.png/.test(polish.bi || ''), '視窗外框用原版 frame.png');
+    ok(polish && /stone/.test(polish.bg || ''), '視窗底用原版 stone 石紋');
+    ok(polish && /gradient/.test(polish.xBg || ''), '關閉鈕為金色漸層（非扁平紅鈕）');
+    ok(polish && polish.btnShadow && polish.btnShadow !== 'none', '按鈕有立體陰影');
+    ok(polish && parseFloat(polish.beforeBorder) > 0, '視窗內雙金線（::before）');
     ok(a && a.open, '內掛道具開內掛選單');
     ok(a && a.tabs === '狩獵,補給,魔法,召喚', '分頁：狩獵／補給／魔法／召喚');
     ok(a && a.patrol && a.tp && a.nomob && a.patrolVisible, '狩獵：巡邏範圍／看見頭目瞬移／沒怪瞬移');
@@ -109,17 +131,24 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + asc(msg)); 
 
     // 設定（遊戲選單）
     const c = await ev(`(async()=>{
-        linMenuClose(); switchMobileTabGroup('settings'); await new Promise(r=>setTimeout(r,400));
-        const w=document.getElementById('lm-win-settings');
+        try{
+        if(typeof window.linMenuClose==='function') window.linMenuClose();
+        try{ if(typeof switchMobileTabGroup==='function') switchMobileTabGroup('settings'); }catch(e){}
+        await new Promise(r=>setTimeout(r,400));
+        let w=document.getElementById('lm-win-settings');
+        if(!w||w.classList.contains('hidden')){ window.linMenuOpen('settings'); await new Promise(r=>setTimeout(r,200)); w=document.getElementById('lm-win-settings'); }
         const btns=w?[...w.querySelectorAll('.lm-list .lm-btn')].map(b=>b.textContent):[];
         const open=!!w&&!w.classList.contains('hidden');
-        const audio=[...w.querySelectorAll('.lm-btn')].find(b=>/音樂/.test(b.textContent)); if(audio) audio.click(); await new Promise(r=>setTimeout(r,100));
-        const vol=!!document.getElementById('set-bgm-vol').closest('#lm-win-settings') && !!document.getElementById('set-bgm-vol').offsetParent;
-        const back=[...w.querySelectorAll('.lm-btn')].find(b=>/返回/.test(b.textContent)); if(back) back.click();
+        const audio=w&&[...w.querySelectorAll('.lm-btn')].find(b=>/音樂/.test(b.textContent)); if(audio) audio.click(); await new Promise(r=>setTimeout(r,120));
+        const volEl=document.getElementById('set-bgm-vol');
+        const vol=!!(volEl&&volEl.closest('#lm-win-settings')&&volEl.offsetParent);
+        const back=w&&[...w.querySelectorAll('.lm-btn')].find(b=>/返回/.test(b.textContent)); if(back) back.click();
         switchTab('automation'); await new Promise(r=>setTimeout(r,200));
-        const viaTab=!document.getElementById('lm-win-settings').classList.contains('hidden');
+        const viaTab=!!document.getElementById('lm-win-settings')&&!document.getElementById('lm-win-settings').classList.contains('hidden');
         const sub=[...document.querySelectorAll('#mobile-tab-sub [data-sub]')].map(b=>b.getAttribute('data-sub')).join(',');
-        return {open,n:btns.length,btns:btns.join('|'),vol,viaTab,sub}; })()`);
+        return {open,n:btns.length,btns:btns.join('|'),vol,viaTab,sub};
+        }catch(e){ return {err:String(e&&e.message||e)}; }
+    })()`);
     console.log('INFO settings ' + asc(JSON.stringify(c)));
     ok(c && c.open, '右側選單「設定」開遊戲選單視窗');
     ok(c && c.n === 11 && /輔助設定/.test(c.btns) && /內掛選單/.test(c.btns) && /書籤/.test(c.btns) && /排行榜/.test(c.btns) && /回選角/.test(c.btns), '遊戲選單 11 項（輔助設定／內掛／自動賣出／書籤／排行榜／音量／畫面／全螢幕／回選角／刪除角色／離開）');
