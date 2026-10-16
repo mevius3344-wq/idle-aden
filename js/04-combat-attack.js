@@ -18,6 +18,8 @@ function playerAttackInRange(target) {
                 if (_pc && Math.hypot(_pc.x - _px, _pc.y - _py) > 1.5) return false;
                 let _mt = (target._fx != null) ? linmapTileAt(_ln, target._fx, target._fy || 0) : null;
                 if (_pt && _mt && _mt.gx === _pt.gx && _mt.gy === _pt.gy) return false;
+                // 隔牆不可普攻（同怪攻擊視線）
+                if (target._fx != null && typeof exploreLinAttackLos === 'function' && !exploreLinAttackLos(_px, _py, target._fx, target._fy || 0)) return false;
             }
         } catch (eEng) {}
     }

@@ -107,6 +107,45 @@
         return (ex(gx, gy, dx) && ny(gx + dx, gy, dy)) || (ny(gx, gy, dy) && ex(gx, gy + dy, dx));
     }
 
+    /**
+     * 攻擊視線：從 (gx0,gy0) 到 (gx1,gy1) 逐步走過去，每一步都要 linmapCanStep。
+     * 牆是格子之間的線——鄰格隔牆＝切比雪夫距離 1 但仍不可打（防穿牆攻擊）。
+     */
+    function linmapAttackLos(name, gx0, gy0, gx1, gy1) {
+        if (gx0 === gx1 && gy0 === gy1) return false;
+        var x = gx0, y = gy0;
+        var dx = Math.abs(gx1 - gx0), dy = Math.abs(gy1 - gy0);
+        var sx = gx0 < gx1 ? 1 : -1;
+        var sy = gy0 < gy1 ? 1 : -1;
+        if (!dx) {
+            while (y !== gy1) {
+                if (!linmapCanStep(name, x, y, 0, sy)) return false;
+                y += sy;
+            }
+            return true;
+        }
+        if (!dy) {
+            while (x !== gx1) {
+                if (!linmapCanStep(name, x, y, sx, 0)) return false;
+                x += sx;
+            }
+            return true;
+        }
+        var err = dx - dy;
+        var guard = dx + dy + 2;
+        while ((x !== gx1 || y !== gy1) && guard-- > 0) {
+            var e2 = err * 2;
+            var mx = 0, my = 0;
+            if (e2 > -dy) { err -= dy; mx = sx; }
+            if (e2 < dx) { err += dx; my = sy; }
+            if (!mx && !my) return false;
+            if (!linmapCanStep(name, x, y, mx, my)) return false;
+            x += mx;
+            y += my;
+        }
+        return x === gx1 && y === gy1;
+    }
+
     function linmapSafeZone(name, wx, wy) {
         var c = linmapCell(name, wx, wy);
         return c > 0 && (c & 2) === 2;
@@ -549,6 +588,7 @@
     global.linmapTileCenter = linmapTileCenter;
     global.linmapWalkable = linmapWalkable;
     global.linmapCanStep = linmapCanStep;
+    global.linmapAttackLos = linmapAttackLos;
     global.linmapSafeZone = linmapSafeZone;
     global.linmapRegionAt = linmapRegionAt;
     global.linmapSync = linmapSync;

@@ -217,7 +217,11 @@ section("7) 怪物目標：頂部目標列永久關閉＋點選鎖定明顯");
     /field-mob\.active > \.mob-img-wrap/.test(css) &&
     /field-mob\.active > \.mob-name/.test(css) &&
     /field-mob\.active > \.mob-hp-bar/.test(css));
-  ok("實測 tools/_audit-mob-select.js 存在", exists("tools/_audit-mob-select.js") && /只有目標 \.active/.test(rd("tools/_audit-mob-select.js")));
+  ok("點選名貼頭、腳底環不宜過大（名 top≥80、環寬≤40%）",
+    /field-mob > \.mob-name \{[\s\S]{0,160}top:\s*(?:8[6-9]|9\d|1\d\d)px/.test(css) &&
+    /field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,220}width:\s*3[0-9]%/.test(css) &&
+    !/field-mob\.active > \.mob-img-wrap::before \{[\s\S]{0,220}width:\s*(?:[5-9]\d|4[1-9])%/.test(css));
+  ok("實測 tools/_audit-mob-select.js 存在", exists("tools/_audit-mob-select.js") && /只有目標 \.active/.test(rd("tools/_audit-mob-select.js")) && /腳底環不大於半框/.test(rd("tools/_audit-mob-select.js")));
 }
 
 section("8) 潘朵拉：遺物搜尋／布告欄／收購 下架");
@@ -413,6 +417,10 @@ section("27) 野外／地監原版拼塊");
     return !meta.chunks.every((k) => exists(dir + "/c_" + k + ".webp"));
   });
   ok("野外＋地監原版圖塊／資料齊全（" + ids.length + " 張）", ids.length >= 70 && miss.length === 0, miss.slice(0, 8).join(","));
+  ok("#68 地監下上樓走樓梯（不畫傳送門拱門）",
+    /function exploreIsStairPortal\(p\)/.test(F.explore) && /var STAIR_HOLD_TICKS = 2;/.test(F.explore) &&
+    /!exploreIsStairPortal\(portals\[mi\]\)/.test(F.explore) && /你走上了樓梯，來到/.test(F.explore) &&
+    exists("tools/_audit-stair-portal.js"));
 }
 
 section("28) GM API 檔案模式（Railway 無 Neon）");
@@ -504,6 +512,11 @@ section("34) 原版格步走路");
   ok("每格 640ms（加速 480）＋第 k 幀跳到 (k+1)/4 格＋每步從第 0 幀起播＋實際時間", /var LIN_STEP_MS = 640;/.test(ex) && /var nf = Math\.max\(1, Math\.round\(LIN_STEP_FRAMES \* s\.cyc\)\);\s*var kd = Math\.min\(1, \(Math\.floor\(k \* nf\) \+ 1\) \/ nf\);/.test(ex) && /_walkCycle = s\.c0 \+ k \* s\.cyc;/.test(ex) && /var el = Math\.max\(0, Math\.min\(120, now - s\.t\)\);/.test(ex) && /explorePlayerSpeedMult\(true\)/.test(ex));
   ok("一步＝一整輪走路幀＋走路中 RAF 換幀", /window\.exploreWalkCycle = exploreWalkCycle;/.test(ex) && /Math\.floor\(_wc \* base\.length\)/.test(fx) && /_pmWalkRafWas/.test(fx));
   ok("格步跳位同時換幀（當幀 _playerMorphApply）", /if \(moved > 0\.01\) \{[\s\S]{0,400}try \{ _playerMorphApply\(\); \}/.test(ex));
+  ok("#68 格步走路幀不卡 40ms＋怪吃 _linWalkF",
+    /_wc != null \|\| \(Date\.now\(\) - _pmState\._walkHold\.t\) >= 95/.test(fx) &&
+    /_wc2 != null \|\| \(Date\.now\(\) - _pmState\._walkHold\.t\) >= 95/.test(fx) &&
+    !/\(_wc != null \? 40 : 95\)/.test(fx) &&
+    (fx.match(/m\._linWalkF != null/g) || []).length >= 3);
   ok("原版地圖不套 CSS 走路 bob／sway", /var linFeel = !!exploreLinName\(\);/.test(ex) && /if \(_moving && !linFeel\)/.test(ex) && /#battle-view\.is-linmap\.is-world-scroll > #player-morph-sprite,[\s\S]{0,120}transform: translateX\(-50%\) !important;/.test(rd("css/style.css")));
   ok("原版地圖換幀 src 當幀寫入（不等 onload）", /linSync = !!\(bvL && bvL\.classList\.contains\('is-linmap'\)\);/.test(rd("js/09-vfx-render.js")) && /\(pre\.complete && pre\.naturalWidth > 0\) \|\| linSync/.test(rd("js/09-vfx-render.js")));
 }
@@ -609,6 +622,12 @@ section("55) 原版地圖怪物一格一步／打中幀才扣血");
   ok("怪一格一步：位移跟走路幀一格格跳、連續走接上一步結束時刻", /function exploreMobLinTick\(/.test(ex) && /var kd = \(f \+ 1\) \/ n;/.test(ex) && /now - m\._lsEnd < dur\) \? Math\.min\(dur \* 0\.9/.test(ex));
   ok("一格一隻（佔格表）、不進玩家格、原版地圖不推擠", /function exploreLinMobOccupy\(/.test(ex) && /if \(pt && gx === pt\.gx && gy === pt\.gy\) return null;/.test(ex) && /if \(!linN\) try \{ exploreMobSeparateTick\(\); \}/.test(ex));
   ok("怪站定且在自身攻擊距離（格）內才攻擊；玩家近戰＝鄰格", /function exploreMobCanHitPlayer\(/.test(ex) && /mob\._ls\) return false;/.test(ex) && /exploreEngageLimit\(\) > ENGAGE_MELEE \? 8 : 1/.test(ex) && /exploreMobCanHitPlayer\(m\)/.test(cc));
+  ok("#69 攻擊不可穿牆（linmapAttackLos／隔牆不站著空揮／打中幀再查）",
+    /function linmapAttackLos\(/.test(rd("js/49-linmap.js")) && /global\.linmapAttackLos = linmapAttackLos/.test(rd("js/49-linmap.js")) &&
+    /exploreLinAttackLos\(mob\._fx/.test(ex) && /toPlayerT <= exploreLinMobRange\(m\) && exploreLinAttackLos\(/.test(ex) &&
+    /exploreLinAttackLos\(_px, _py, target\._fx/.test(rd("js/04-combat-attack.js")) &&
+    /_hitOk[\s\S]{0,120}exploreMobCanHitPlayer\(m\)/.test(cc) &&
+    exists("tools/_audit-wall-atk.js"));
   ok("攻擊先播動作、打中幀才結算", /m\._linHitAt = _now \+ _lt\.hit;/.test(cc) && /if \(m\._linHitAt && Date\.now\(\) >= m\._linHitAt\)/.test(cc));
   ok("原版地圖仇恨／追擊／拴繩用格數（6／12／14），拴繩整段走回家；被動怪滿血不索敵、玩家在安全區不索敵（v3.10.25 怪來回跑不攻擊）",
     /var LIN_MOB_SIGHT_T = 6, LIN_MOB_CHASE_T = 12, LIN_MOB_LEASH_T = 14, LIN_MOB_HOME_T = 2;/.test(ex) &&
@@ -749,7 +768,7 @@ section("59) 原版地圖玩家普攻（原版節奏＋打中幀才扣血）");
   ok("職業圖原版站立點 LIN_PC_FOOT 對到格子中心（人物不浮在怪北邊兩格）", /js\/49-linpc-foot\.js/.test(F.html) && /"男騎士":\[-1\.5,44\]/.test(rd("js/49-linpc-foot.js")) && exists("tools/lin/export-pc-foot.js") && /function _linPcFootOfs\(form\)/.test(fx) && /let _lf = _realMap \? _linPcFootOfs\(form\) : null;/.test(fx) && /var rf = _linPcFootOfs\(form\);/.test(fx));
   ok("原版地圖面向用世界座標（玩家揮砍、怪出手都正面相對）", /player\._faceD = _vec2dir\(_wx, -_wy\);/.test(atk) && /who\._faceD = _vec2dir\(wx, -wy\); return who\._faceD;/.test(fx) && /m\._face8 = _vec2dir\(wx, -wy\);/.test(fx));
   ok("八向預載走路＋攻擊幀（轉向打新方向不卡在舊面向）", /\['walk', 'attack'\]\.forEach\(function \(act\) \{/.test(fx) && /im\.src = base \+ form\.wpn \+ '_' \+ act \+ '_' \+ f \+ '\.png' \+ bust;/.test(fx));
-  ok("近戰不打走路途中的怪、怪不在同一格出手", /if \(target\._ls && !\(typeof exploreEngageLimit === 'function' && exploreEngageLimit\(\) > 48\)\) return 'wait';/.test(atk) && /return td >= 1 && td <= exploreLinMobRange\(mob\);/.test(rd("js/44-map-explore.js")));
+  ok("近戰不打走路途中的怪、怪不在同一格出手", /if \(target\._ls && !\(typeof exploreEngageLimit === 'function' && exploreEngageLimit\(\) > 48\)\) return 'wait';/.test(atk) && /if \(!\(td >= 1 && td <= exploreLinMobRange\(mob\)\)\) return false;/.test(rd("js/44-map-explore.js")));
   ok("怪卡底 4px 補回：lin-spr img 下移 36px", /\.mob-img-inner\.lin-spr\.lin-spr img \{\s*translate: 0 36px;/.test(rd("css/style.css")) && exists("tools/_audit-atk-align.js"));
   ok("遠處凍結（>SIM_PX、仍在畫面內）的原版怪也掛 lin-spr（不縮放、腳底不錯位）", /if \(_innerF\.classList\.contains\('lin-spr'\) !== _linF\) _innerF\.classList\.toggle\('lin-spr', _linF\);/.test(fx));
 }

@@ -2059,9 +2059,9 @@
             pointer-events: auto !important;
             z-index: 6;
         }
-        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-name { top: 102px; }
-        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-hp-bar { top: 118px; }
-        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-badge-row { top: 84px; }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-name { top: 118px; }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-hp-bar { top: 132px; }
+        #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.town-dummy > .mob-badge-row { top: 100px; }
         /* 非原版地圖也一樣：人物圖自帶影子層就不疊 CSS 黑橢圓（v3.10.1） */
         #battle-view > #player-morph-sprite:has(> .pm-shadow[src]:not([style*="hidden"]))::after,
         #battle-view > .party-sprite:not(.remote-party):has(> .pm-shadow[src]:not([style*="hidden"]))::after {
@@ -2211,9 +2211,9 @@
             z-index: 4;
             margin: 0 !important;
         }
-        /* 🏷️ 場戰怪名／血條：貼精靈頭頂（192 框上方多透明空白，改用 top 對齊實際頭） */
+        /* 🏷️ 場戰怪名／血條：貼精靈頭頂（192 框上方多透明；lin-spr 下移後頭約在中下，top 不可太小＝名字飄太高） */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-name {
-            top: 52px;
+            top: 86px;
             bottom: auto;
             left: 50%;
             transform: translateX(-50%);
@@ -2237,7 +2237,7 @@
             height: auto !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-badge-row {
-            top: 34px;
+            top: 68px;
             bottom: auto;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob > .mob-img-wrap {
@@ -2279,8 +2279,8 @@
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
-            /* 🩹 v3.9.44：名下方緊貼頭頂 */
-            top: 68px;
+            /* 名下方緊貼頭頂（隨名 top 下移） */
+            top: 102px;
             bottom: auto;
             z-index: 19;
             margin: 0 !important;
@@ -2441,27 +2441,27 @@
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.is-engage:not(.active) .mob-img-wrap {
             filter: drop-shadow(0 0 0 2px #fda4af);
         }
-        /* 🔴 v3.10.37 點選鎖定目標：場戰／原版地圖不靠 has-bg——紅金光暈＋腳底選取環，一眼看出點到哪一隻 */
+        /* 🔴 v3.10.37／40 點選鎖定：紅金光暈＋腳底小選取環（環不可蓋過半個 192 框） */
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap {
-            filter: drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 9px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 16px rgba(251, 191, 36, 0.55)) !important;
+            filter: drop-shadow(0 0 2px #ef4444) drop-shadow(0 0 6px rgba(239, 68, 68, 0.85)) drop-shadow(0 0 10px rgba(251, 191, 36, 0.4)) !important;
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-img-wrap::before {
             content: '';
             position: absolute;
             left: 50%;
-            bottom: 2px;
-            width: 78%;
-            height: 20px;
+            bottom: 4px;
+            width: 36%;
+            height: 10px;
             transform: translateX(-50%);
             border-radius: 50%;
-            background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.62) 0%, rgba(251, 191, 36, 0.4) 40%, transparent 74%);
+            background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.7) 0%, rgba(251, 191, 36, 0.35) 45%, transparent 72%);
             pointer-events: none;
             z-index: 1;
             animation: mobSelectPulse 0.9s ease-in-out infinite;
         }
         @keyframes mobSelectPulse {
-            0%, 100% { opacity: 0.75; transform: translateX(-50%) scale(1); }
-            50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+            0%, 100% { opacity: 0.8; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
         }
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name,
         #battle-view.is-world-scroll #mob-list.is-field-combat > .mob-target.field-mob.active > .mob-name span {

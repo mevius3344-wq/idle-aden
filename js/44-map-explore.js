@@ -124,6 +124,8 @@
     try { window.addEventListener('resize', exploreBvSizeReset); } catch (eRs) {}
     var PACK_PER_SPOT = 2; // v3.8.478 denser walk space
     var PORTAL_HOLD_TICKS = 8;
+    /** 下上樓／地監樓梯：走近就換層（不必像拱門停那麼久） */
+    var STAIR_HOLD_TICKS = 2;
     var _portalBusy = false;
     var _portalHoldL = 0;
     var _portalHoldR = 0;
@@ -1654,7 +1656,8 @@
         if (!wantChase) { exploreLinMobWander(name, m, now, occ, pt); return; }
         m._wandMode = null;
         m._linFaceHold = false;
-        if (exploreTileDist(m._fx, m._fy || 0, _tx, _ty) <= exploreLinMobRange(m)) {
+        // 距離夠但隔牆＝不可站著空揮，繼續繞路（穿牆攻擊見 exploreMobCanHitPlayer）
+        if (toPlayerT <= exploreLinMobRange(m) && exploreLinAttackLos(m._fx, m._fy || 0, _tx, _ty)) {
             exploreLinMobFace(m, _tx - m._fx, _ty - (m._fy || 0), now);
             return;
         }
@@ -1662,13 +1665,22 @@
         if (o) exploreLinMobStartStep(name, m, o, now, occ);
         else exploreLinMobFace(m, _tx - m._fx, _ty - (m._fy || 0), now);
     }
-    /** 怪能不能打到玩家：原版地圖＝站定且在自身攻擊距離（格）內；其他地圖同交戰圈 */
+    /** 原版地圖攻擊視線（世界座標）：逐步 linmapCanStep，隔牆不可打 */
+    function exploreLinAttackLos(ax, ay, bx, by) {
+        var ln = exploreLinName();
+        if (!ln || typeof linmapTileAt !== 'function' || typeof linmapAttackLos !== 'function') return true;
+        var a = linmapTileAt(ln, ax, ay), b = linmapTileAt(ln, bx, by);
+        if (!a || !b) return false;
+        return linmapAttackLos(ln, a.gx, a.gy, b.gx, b.gy);
+    }
+    /** 怪能不能打到玩家：原版地圖＝站定、攻擊距離內、且視線無牆；其他地圖同交戰圈 */
     function exploreMobCanHitPlayer(mob) {
         var ln = exploreLinName();
         if (!ln || !exploreFieldCombatActive()) return exploreMobInEngageRange(mob);
         if (!mob || mob._dead || !(mob.curHp > 0) || mob._fx == null || mob._ls) return false;
         var td = exploreTileDist(mob._fx, mob._fy || 0, _tx, _ty);
-        return td >= 1 && td <= exploreLinMobRange(mob);   // 同一格＝先讓開再打
+        if (!(td >= 1 && td <= exploreLinMobRange(mob))) return false;   // 同一格＝先讓開再打
+        return exploreLinAttackLos(mob._fx, mob._fy || 0, _tx, _ty);
     }
 
     /** 練功點內追逐：靠近點內怪會追；離巢太遠回家；不跨點亂追 */
@@ -3581,9 +3593,11 @@
             else if (typeof mapState !== 'undefined') mapState.current = dest;
             try {
                 if (typeof logSys === 'function') {
+                    var nmLog = (typeof mapDisplayName === 'function' && mapDisplayName(dest)) || (DB.towns && DB.towns[dest] && DB.towns[dest].n) || dest;
                     if (walkover) {
-                        var nm = (typeof mapDisplayName === 'function' && mapDisplayName(dest)) || (DB.towns && DB.towns[dest] && DB.towns[dest].n) || dest;
-                        logSys('<span class="text-sky-300">你走進了 ' + nm + '。</span>');
+                        logSys('<span class="text-sky-300">你走進了 ' + nmLog + '。</span>');
+                    } else if (meta && exploreIsStairPortal(meta)) {
+                        logSys('<span class="text-sky-300">你走上了樓梯，來到 ' + nmLog + '。</span>');
                     } else logSys('<span class="text-sky-300">你進入了傳送門。</span>');
                 }
             } catch (eL) {}
@@ -3610,12 +3624,13 @@
                 portal = mapdefPortalAt(mapState.current, _tx, _ty);
             }
         } catch (ePr) {}
+        var stairHere = !!(portal && exploreIsStairPortal(portal));
         if (leftBtn) {
-            leftBtn.classList.toggle('hidden', !(portal && portal.side === 'west'));
-            if (portal && portal.side === 'west') leftBtn.textContent = portal.label || '← 傳送';
+            leftBtn.classList.toggle('hidden', !(portal && portal.side === 'west' && !stairHere));
+            if (portal && portal.side === 'west' && !stairHere) leftBtn.textContent = portal.label || '← 傳送';
         }
         if (rightBtn) {
-            var rightSide = !!(portal && portal.side && portal.side !== 'west');
+            var rightSide = !!(portal && portal.side && portal.side !== 'west' && !stairHere);
             rightBtn.classList.toggle('hidden', !rightSide);
             if (rightSide) rightBtn.textContent = portal.label || '傳送 →';
         }
@@ -3666,7 +3681,42 @@
         return 'wild';
     }
 
-    /** 地圖上標出傳送門入口（相機相對，每幀更新） */
+    /** 原版地監拼塊（dg_*／ti_dungeon*）＝樓梯換層，不用拱門傳送門 */
+    function exploreMapIsDungeonLin(def) {
+        if (!def) return false;
+        var lin = String(def.lin || '');
+        return /^(dg_|ti_dungeon)/.test(lin) || /dungeon/i.test(lin);
+    }
+
+    /**
+     * 下上樓／進出地監：走在樓梯格上換圖（照原版），不畫拱門、不顯示傳送鈕。
+     * 港口船運、回村、野外互連仍用傳送門。
+     */
+    function exploreIsStairPortal(p) {
+        if (!p || !p.dest) return false;
+        if (String(p.dest).indexOf('town_') === 0) return false;
+        var lab = String(p.label || '');
+        var id = String(p.id || '');
+        if (/港口|船|出村/.test(lab)) return false;
+        if (/樓|樓梯/.test(lab)) return true;
+        if (/^to_b\d+$/.test(id)) return true;
+        var src = (typeof mapState !== 'undefined' && mapState) ? mapState.current : '';
+        var sd = null, dd = null;
+        try {
+            if (typeof mapdefOf === 'function') {
+                sd = mapdefOf(src);
+                dd = mapdefOf(p.dest);
+            }
+        } catch (eSt) {}
+        if (exploreMapIsDungeonLin(sd) && exploreMapIsDungeonLin(dd)) return true;
+        if (exploreMapIsDungeonLin(sd) || exploreMapIsDungeonLin(dd)) {
+            if (explorePortalKind(p) === 'dungeon') return true;
+            if (exploreMapIsDungeonLin(sd) && explorePortalKind(p) !== 'town') return true;
+        }
+        return false;
+    }
+
+    /** 地圖上標出傳送門入口（相機相對，每幀更新）；樓梯不畫拱門 */
     function exploreSyncPortalMarkers() {
         var layer = document.getElementById('explore-portal-markers');
         if (!layer) return;
@@ -3682,18 +3732,23 @@
         try {
             if (typeof mapdefPortals === 'function') portals = mapdefPortals(mid) || [];
         } catch (ePm) {}
-        var key = mid + ':' + portals.length + ':gate441';
+        var markIdx = [];
+        for (var mi = 0; mi < portals.length; mi++) {
+            if (portals[mi] && !exploreIsStairPortal(portals[mi])) markIdx.push(mi);
+        }
+        var key = mid + ':' + markIdx.join(',') + ':stair41041';
         if (layer.getAttribute('data-key') !== key) {
             var html = '';
-            for (var i = 0; i < portals.length; i++) {
-                var p = portals[i];
+            for (var i = 0; i < markIdx.length; i++) {
+                var pi = markIdx[i];
+                var p = portals[pi];
                 if (!p) continue;
                 var side = p.side || 'gate';
                 var kind = explorePortalKind(p);
                 var lab = String(p.label || '傳送門').replace(/</g, '&lt;');
                 html += '<div class="explore-portal-mark explore-portal-mark-' + side
                     + ' explore-portal-kind-' + kind
-                    + '" data-pi="' + i + '">'
+                    + '" data-pi="' + pi + '">'
                     + '<div class="explore-portal-arch" aria-hidden="true">'
                     + '<span class="explore-portal-pillar explore-portal-pillar-l"></span>'
                     + '<span class="explore-portal-mouth"><span class="explore-portal-mist"></span></span>'
@@ -3729,7 +3784,7 @@
         }
     }
 
-    /** 走進傳送門熱區並停留 → 切圖 */
+    /** 走進傳送門／樓梯熱區並停留 → 切圖 */
     function exploreTryPortal() {
         if (!exploreAllowed() || explorePlayerDead() || _portalBusy) return false;
         if (!exploreIsRealMap()) return false;
@@ -3742,14 +3797,15 @@
             _portalHoldR = 0;
             return false;
         }
+        var need = exploreIsStairPortal(portal) ? STAIR_HOLD_TICKS : PORTAL_HOLD_TICKS;
         if (portal.side === 'west') {
             _portalHoldL++;
             _portalHoldR = 0;
-            if (_portalHoldL >= PORTAL_HOLD_TICKS) return exploreDoPortal(portal.dest, portal);
+            if (_portalHoldL >= need) return exploreDoPortal(portal.dest, portal);
         } else {
             _portalHoldR++;
             _portalHoldL = 0;
-            if (_portalHoldR >= PORTAL_HOLD_TICKS) return exploreDoPortal(portal.dest, portal);
+            if (_portalHoldR >= need) return exploreDoPortal(portal.dest, portal);
         }
         return true;
     }
@@ -4301,6 +4357,7 @@
     window.exploreMobScreenDistPx = exploreMobScreenDistPx;
     window.exploreMobInEngageRange = exploreMobInEngageRange;
     window.exploreMobCanHitPlayer = exploreMobCanHitPlayer;
+    window.exploreLinAttackLos = exploreLinAttackLos;
     window.exploreLinMobAttackTiming = exploreLinMobAttackTiming;
     window.exploreNearestEngageIdx = exploreNearestEngageIdx;
     window.exploreEngageRetarget = exploreEngageRetarget;
@@ -4313,6 +4370,7 @@
     window.exploreEngagePx = function () { return exploreEngageLimit(); };
     window.exploreEngageLimit = exploreEngageLimit;
     window.exploreTryPortal = exploreTryPortal;
+    window.exploreIsStairPortal = exploreIsStairPortal;
     window.exploreOnMapChange = exploreOnMapChange;
     window.exploreSanitizeDisplay = exploreSanitizeDisplay;
     window.exploreReset = exploreReset;

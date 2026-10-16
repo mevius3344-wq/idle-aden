@@ -3911,7 +3911,9 @@ function _mobAnimApply(onlyUids) {
                 _act0 = _ra0.act;
                 let _n0 = _ra0.n;
                 try { c.classList.toggle('is-mob-walk-synth', !!_ra0.synth); } catch (eSy0) {}
-                if (_mv0 && m._walkPhase > 0) {
+                if (_mv0 && m._linWalkF != null) {
+                    _f0 = m._linWalkF % Math.max(1, _n0);
+                } else if (_mv0 && m._walkPhase > 0) {
                     _f0 = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, _n0);
                 } else {
                     _f0 = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs0) % Math.max(1, _n0);
@@ -3944,7 +3946,9 @@ function _mobAnimApply(onlyUids) {
             let seqW = a[_act];
             let nW = (seqW && seqW.length) ? seqW.length : _ra.n;
             if (!(nW > 0)) nW = _ra.n || 4;
-            if (_mv && m._walkPhase > 0) {
+            if (_mv && m._linWalkF != null) {
+                _f = m._linWalkF % Math.max(1, nW || 4);
+            } else if (_mv && m._walkPhase > 0) {
                 _f = Math.floor(Math.abs(m._walkPhase) * 2) % Math.max(1, nW || 4);
             } else {
                 _f = (Math.floor(now / (1000 / MOB_ANIM_FPS)) + _ofs) % Math.max(1, nW || 4);
@@ -4983,10 +4987,11 @@ function _playerMorphApplyBody() {
             let _wc = _exploreWalkCycleNow(mv);
             if (mv && (_wp > 0 || _wc != null)) {
                 let wantF = (_wc != null ? Math.floor(_wc * base.length) : Math.floor(_wp)) % base.length;
-                // 🩹 v3.8.447：走路幀至少停留 95ms，避免換幀快過解碼＝閃圖（原版格步已預載，放寬到 40ms）
+                // 格步（_wc）：跳位當幀就換走路圖，不可再卡 40ms（會跟位移差一拍＝不順）
+                // 非格步：至少 95ms，避免換幀快過解碼＝閃圖
                 if (!_pmState._walkHold || _pmState._walkHold.n !== base.length) {
                     _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
-                } else if (wantF !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= (_wc != null ? 40 : 95)) {
+                } else if (wantF !== _pmState._walkHold.f && (_wc != null || (Date.now() - _pmState._walkHold.t) >= 95)) {
                     _pmState._walkHold = { f: wantF, t: Date.now(), n: base.length };
                 }
                 f = _pmState._walkHold.f;
@@ -5008,7 +5013,7 @@ function _playerMorphApplyBody() {
                 let wantF2 = (_wc2 != null ? Math.floor(_wc2 * _dnSafe) : Math.floor(_wp2)) % _dnSafe;
                 if (!_pmState._walkHold || _pmState._walkHold.n !== _dnSafe) {
                     _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
-                } else if (wantF2 !== _pmState._walkHold.f && (Date.now() - _pmState._walkHold.t) >= (_wc2 != null ? 40 : 95)) {
+                } else if (wantF2 !== _pmState._walkHold.f && (_wc2 != null || (Date.now() - _pmState._walkHold.t) >= 95)) {
                     _pmState._walkHold = { f: wantF2, t: Date.now(), n: _dnSafe };
                 }
                 f = _pmState._walkHold.f;

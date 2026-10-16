@@ -968,7 +968,9 @@ function tick() {
             let _late = Date.now() - m._linHitAt;
             m._linHitAt = 0;
             if (_late < 1500 && !player.dead && m.curHp > 0) {
-                _dpsReactWrap(() => enemyAttackChooseVictim(m, i));
+                // 打中幀再查一次：揮刀期間玩家躲到牆後＝落空（防穿牆）
+                let _hitOk = (typeof exploreMobCanHitPlayer !== 'function') || exploreMobCanHitPlayer(m);
+                if (_hitOk) _dpsReactWrap(() => enemyAttackChooseVictim(m, i));
                 m._bluntDelayed = false;
                 if (player.dead) break;
                 if (m.curHp <= 0) continue;
