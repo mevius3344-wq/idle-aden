@@ -4149,9 +4149,19 @@ function _actorBattleForm(actor, allyGrp) {   // 玩家／傭兵戰場形態：�
                 faceD: faceD
             };
         }
-        if (MORPH_ANIM_3DIR.has(m)) {   // 🧭 v3.5.10 三方向變身：key 含朝向資料夾·domKey 不含 → 換向只換幀（同 _classForm 機制）·v3.7.65 八方向朝向折回三夾
-            let folder = m + _animDirSfx((actor && actor._faceD != null) ? actor._faceD : 2, false);
-            return { key: 'morph:' + folder, domKey: 'morph:' + m, base: 'assets/morphanim/' + encodeURIComponent(folder) + '/', wpn: null };
+        if (MORPH_ANIM_3DIR.has(m)) {   // 三方向變身：base 隨朝向換夾，key／domKey 不含朝向（舊 key 含 2/F＝每次轉向重探＝卡住不轉向）
+            let faceD = (actor && actor._faceD != null) ? (actor._faceD | 0) : 2;
+            faceD = ((faceD % 8) + 8) % 8;
+            let folder = m + _animDirSfx(faceD, false);
+            let ver = (typeof GAME_VERSION !== 'undefined') ? GAME_VERSION : 'c';
+            return {
+                key: 'morph3:' + m + ':' + ver,
+                domKey: 'morph:' + m,
+                base: 'assets/morphanim/' + encodeURIComponent(folder) + '/',
+                wpn: null,
+                faceD: faceD,
+                morph3: true
+            };
         }
         return { key: 'morph:' + m, domKey: 'morph:' + m, base: 'assets/morphanim/' + encodeURIComponent(m) + '/', wpn: null };
     }
@@ -4574,6 +4584,15 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
     try { _playerMorphApplyBody(); } finally { _pmState._inApply = false; }
 }
 function _playerMorphApplyBody() {
+    // 探索移動中先同步面向再解析形態（否則 form.base 仍是上一幀朝向＝變身／職業圖不會轉向）
+    try {
+        if (typeof player !== 'undefined' && player
+            && typeof exploreIsMoving === 'function' && exploreIsMoving()
+            && typeof exploreFaceDir === 'function') {
+            let _earlyLock = !!(_pmState.act === 'attack' || _pmState.act === 'skill' || _pmState.act === 'hurt' || _pmState.act === 'death');
+            if (!_earlyLock) player._faceD = exploreFaceDir();
+        }
+    } catch (eEarlyFace) {}
     let form = _playerBattleForm();
     let bv = document.getElementById('battle-view');
     // 🩹 v3.8.317：有戰鬥框即可；area-fit 閃爍不再整隻拔掉 sprite（否則移動瞬間半身／消失）
@@ -4788,7 +4807,7 @@ function _playerMorphApplyBody() {
     // 🧭 朝向：職業／變身八方向；Q 真八向靠 d0..d7 資料夾換圖（不透視扭轉）
     // 🩹 v3.8.343：攻擊／施法／受傷期間勿改朝向（換 dN＝換 form.key＝清空幀＝只剩左右晃）
     let _faceLocked = !!(_pmState.act === 'attack' || _pmState.act === 'skill' || _pmState.act === 'hurt' || _pmState.act === 'death');
-    if (!_faceLocked && !form.qSkin && !_pmState.moving && (form.morph8 || CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
+    if (!_faceLocked && !form.qSkin && !_pmState.moving && (form.morph8 || form.morph3 || CLASS_ANIM_8DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || ''))) _classFacing8(player, _pmState.el);
     if (form.qSkin) {
         try {
             if (!_faceLocked && !_pmState.moving) _classFacing8(player, _pmState.el);
@@ -4798,6 +4817,13 @@ function _playerMorphApplyBody() {
                 _pmState.el.classList.remove('q-face-left', 'q-face-right');
             }
         } catch (eFace) {}
+    }
+    // 走路／鎖定目標剛改完 _faceD：同一幀重取 form.base（否則仍畫舊朝向＝變身「不會轉向」）
+    if (form && (form.morph8 || form.morph3 || form.classAnim || form.qSkin || form.q8)) {
+        try {
+            let formFace = _playerBattleForm();
+            if (formFace && formFace.domKey === form.domKey) form = formFace;
+        } catch (eFf) {}
     }
     // 動作＋幀（比照 _mobAnimApply：單次動作播一輪回待機·death 凍結最後一幀）
     let act = null, f = 0, _useW = false;
@@ -4907,6 +4933,9 @@ function _playerMorphApplyBody() {
         } else if (form.classAnim && form.base) {
             let pfx = (form.wpn && act !== 'skill' && act !== 'death') ? (form.wpn + '_' + act + '_') : (act + '_');
             _pp = form.base + pfx + f + '.png' + bust;
+        } else if (form.morph3 && form.base) {
+            // 三方向變身：必須用當前朝向的 base（不可吃首探方向的 _animPath）
+            _pp = form.base + act + '_' + f + '.png' + bust;
         } else {
             if (seq && seq[f]) _pp = seq[f]._animPath || seq[f].src;
             if (!_pp && form.base) {

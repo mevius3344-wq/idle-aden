@@ -781,6 +781,7 @@ section("65) 變形卷軸不卡畫面＋變身會走（腳錨快取／morph8 八
   ok("_morphHasAnim8＋morph8 走 assets/anim 八向", /function _morphHasAnim8\(name\)/.test(vfx) && /morph8:\s*true/.test(vfx) && /assets\/anim\/' \+ encodeURIComponent\(m\) \+ '\/d'/.test(vfx));
   ok("變身八向預載 walk／attack", /form\.morph8[\s\S]{0,200}_pmState\._walkPreTag = form\.domKey/.test(vfx));
   ok("pm-no-ellipse 關掉 CSS 黑橢圓", /pm-no-ellipse/.test(vfx) && /#player-morph-sprite\.pm-no-ellipse::after/.test(css));
+  ok("變身轉向：移動先同步 exploreFaceDir、同幀重取 form.base；三方向 key 不含朝向", /player\._faceD = exploreFaceDir\(\)/.test(vfx) && /formFace\.domKey === form\.domKey/.test(vfx) && /key: 'morph3:' \+ m/.test(vfx));
   ok("實測 tools/_audit-polymorph.js 檢查 walk_ 與橢圓", exists("tools/_audit-polymorph.js") && /變身移動播 walk/.test(ap) && /pm-no-ellipse|afterDisp/.test(ap));
 }
 

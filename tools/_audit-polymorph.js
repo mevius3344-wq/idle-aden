@@ -147,6 +147,34 @@ async function main() {
         } else if (walkChk && walkChk.skip) {
             ok('變身不疊 CSS 腳下黑橢圓', walkChk.noEll || walkChk.afterDisp === 'none', JSON.stringify(walkChk));
         }
+        // 變身八向：東走與西走的 dN 必須不同（不會轉向＝一直同一面）
+        if (walkChk && walkChk.has8) {
+            const faceChk = await ev(`(async()=>{
+                const stop=async()=>{try{exploreClearTapMove&&exploreClearTapMove()}catch(e){};
+                    for(let i=0;i<20&&exploreIsMoving();i++) await new Promise(r=>setTimeout(r,100));
+                    await new Promise(r=>setTimeout(r,200));
+                };
+                const dirs=async(dx,dy)=>{
+                    await stop();
+                    try{const wx=explorePlayerX()+dx,wy=explorePlayerY()+dy;const c=exploreWorldToClient(wx,wy);if(c)exploreSetTapMoveFromScreen(c.x,c.y);}catch(e){}
+                    const got=new Set();
+                    for(let i=0;i<14;i++){await new Promise(r=>setTimeout(r,120));
+                        const bd=document.querySelector('#player-morph-sprite img.pm-body');
+                        const src=bd?(bd.getAttribute('src')||''):'';
+                        const m=/\\/d(\\d)\\//.exec(src); if(m&&exploreIsMoving()) got.add(+m[1]);
+                    }
+                    await stop();
+                    return [...got];
+                };
+                const east=await dirs(320,0);
+                const west=await dirs(-320,0);
+                const differ=east.some(d=>west.indexOf(d)<0)||west.some(d=>east.indexOf(d)<0);
+                return {east,west,ok:!!(east.length&&west.length&&differ)};
+            })()`, 20000);
+            if (faceChk && !faceChk.__timeout && !faceChk.__err) {
+                ok('變身東／西走朝向不同（會轉向）', !!faceChk.ok, JSON.stringify(faceChk));
+            }
+        }
         try { const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70 }); fs.mkdirSync(path.join(__dirname, 'lin', '_out'), { recursive: true }); fs.writeFileSync(path.join(__dirname, 'lin', '_out', '_poly_' + sc.map + '_' + sc.w + '.jpg'), Buffer.from(s.result.data, 'base64')); } catch (eS) {}
     }
 
